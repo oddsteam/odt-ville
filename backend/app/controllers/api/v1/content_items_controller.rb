@@ -1,0 +1,52 @@
+module Api
+  module V1
+    class ContentItemsController < BaseController
+      # POST /api/v1/content_items/:id/open
+      # Marks an item opened. Already-opened / acknowledged items are untouched.
+      def open
+        item = find_item
+        state = state_for(item)
+        if state.unread?
+          state.state = "opened"
+          state.opened_at ||= Time.current
+        end
+        state.save!
+        render json: state_json(item, state)
+      end
+
+      # POST /api/v1/content_items/:id/acknowledge
+      # Marks an item acknowledged (implies it was also opened).
+      def acknowledge
+        item = find_item
+        state = state_for(item)
+        state.state = "acknowledged"
+        state.opened_at ||= Time.current
+        state.acknowledged_at ||= Time.current
+        state.save!
+        render json: state_json(item, state)
+      end
+
+      private
+
+      # Scoped to the current user's company so ids from other companies 404.
+      def find_item
+        ContentItem.joins(board: :house)
+                   .where(houses: { company_id: current_user.company_id })
+                   .find(params[:id])
+      end
+
+      def state_for(item)
+        current_user.user_content_states.find_or_initialize_by(content_item: item)
+      end
+
+      def state_json(item, state)
+        {
+          id: item.id,
+          state: state.state,
+          opened_at: state.opened_at,
+          acknowledged_at: state.acknowledged_at
+        }
+      end
+    end
+  end
+end

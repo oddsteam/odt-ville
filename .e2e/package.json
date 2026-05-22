@@ -1,0 +1,8 @@
+{
+  "name": "one-rev-village-e2e",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "playwright-core": "^1.60.0"
+  }
+}

@@ -1,0 +1,334 @@
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import {
+  TILE,
+  MOVE_MS,
+  TOWN_MAP,
+  TOWN_ROWS,
+  TOWN_COLS,
+  isGroundWalkable,
+  tileChar,
+} from '../constants.js'
+import PlayerSprite from './PlayerSprite.jsx'
+import Building from './Building.jsx'
+import DialogueBox from './DialogueBox.jsx'
+import MobileDpad from './MobileDpad.jsx'
+import DailyBriefShortcut from './DailyBriefShortcut.jsx'
+import AdminPanel from './AdminPanel.jsx'
+
+const DELTAS = {
+  up: { dx: 0, dy: -1 },
+  down: { dx: 0, dy: 1 },
+  left: { dx: -1, dy: 0 },
+  right: { dx: 1, dy: 0 },
+}
+
+const KEY_DIR = {
+  arrowup: 'up', w: 'up',
+  arrowdown: 'down', s: 'down',
+  arrowleft: 'left', a: 'left',
+  arrowright: 'right', d: 'right',
+}
+
+const WELCOME = [
+  'ONE REV VILLAGE — welcome aboard!',
+  'Walk up to a house and step into its doorway to read the boards inside.',
+  'A red "!" means urgent MUST-KNOW news. The DAILY BRIEF lists everything.',
+]
+
+const TILE_CLASS = { '.': 'grass', ':': 'path', '*': 'flower', T: 'tree', s: 'sign' }
+
+// Clamp the camera to the town; centre the town if it is smaller than the view.
+function clampCamera(value, town, view) {
+  if (town <= view) return (town - view) / 2
+  return Math.min(Math.max(value, 0), town - view)
+}
+
+export default function VillageMap({
+  buildings,
+  houses,
+  townSpawn,
+  dailyBrief,
+  onEnterHouse,
+  onRefetch,
+}) {
+  const [player, setPlayer] = useState({ x: townSpawn.x, y: townSpawn.y })
+  const [facing, setFacing] = useState(townSpawn.facing || 'down')
+  const [moving, setMoving] = useState(false)
+  const [stepCount, setStepCount] = useState(0)
+  const [dialogue, setDialogue] = useState(null) // { lines, idx } | null
+  const [adminOpen, setAdminOpen] = useState(false)
+  const [view, setView] = useState({ w: 720, h: 520 })
+  const [ready, setReady] = useState(false)
+
+  const screenRef = useRef(null)
+  const movingRef = useRef(false)
+  const heldRef = useRef([])
+  const playerRef = useRef(player)
+  const facingRef = useRef(facing)
+  const dialogueRef = useRef(dialogue)
+  const adminOpenRef = useRef(adminOpen)
+  const buildingsRef = useRef(buildings)
+  const enterRef = useRef(onEnterHouse)
+
+  playerRef.current = player
+  facingRef.current = facing
+  dialogueRef.current = dialogue
+  adminOpenRef.current = adminOpen
+  buildingsRef.current = buildings
+  enterRef.current = onEnterHouse
+
+  // ---- collision -----------------------------------------------------
+  function doorAt(x, y) {
+    return buildingsRef.current.find((b) => b.doorCol === x && b.doorRow === y)
+  }
+  function insideBuilding(x, y) {
+    return buildingsRef.current.some(
+      (b) => x >= b.col && x < b.col + b.w && y >= b.row && y < b.row + b.h,
+    )
+  }
+  function walkable(x, y) {
+    if (!isGroundWalkable(x, y)) return false
+    if (doorAt(x, y)) return true
+    return !insideBuilding(x, y)
+  }
+
+  // ---- one tile step -------------------------------------------------
+  function step(dir) {
+    setFacing(dir)
+    facingRef.current = dir
+    const { x, y } = playerRef.current
+    const { dx, dy } = DELTAS[dir]
+    const tx = x + dx
+    const ty = y + dy
+    const door = doorAt(tx, ty)
+    if (door) {
+      enterRef.current(door.house.id) // walk into a doorway -> enter
+      return
+    }
+    if (!walkable(tx, ty)) return // bumped a wall — turned in place
+    movingRef.current = true
+    setMoving(true)
+    setStepCount((s) => s + 1)
+    const np = { x: tx, y: ty }
+    playerRef.current = np
+    setPlayer(np)
+    window.setTimeout(() => {
+      movingRef.current = false
+      setMoving(false)
+    }, MOVE_MS)
+  }
+
+  // ---- A button: advance dialogue, read a sign, or enter a door ------
+  function pressA() {
+    if (dialogueRef.current) {
+      setDialogue((d) => {
+        if (!d) return null
+        return d.idx >= d.lines.length - 1 ? null : { ...d, idx: d.idx + 1 }
+      })
+      return
+    }
+    const { x, y } = playerRef.current
+    const { dx, dy } = DELTAS[facingRef.current]
+    const fx = x + dx
+    const fy = y + dy
+    if (tileChar(fx, fy) === 's') {
+      setDialogue({ lines: WELCOME, idx: 0 })
+      return
+    }
+    const door = doorAt(fx, fy)
+    if (door) enterRef.current(door.house.id)
+  }
+
+  function pressDir(dir) {
+    if (!heldRef.current.includes(dir)) heldRef.current.push(dir)
+    if (!movingRef.current && !dialogueRef.current) step(dir)
+  }
+  function releaseDir(dir) {
+    heldRef.current = heldRef.current.filter((d) => d !== dir)
+  }
+
+  // ---- walk loop (keeps moving while a direction is held) ------------
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      if (adminOpenRef.current || dialogueRef.current || movingRef.current) return
+      const held = heldRef.current
+      if (held.length) step(held[held.length - 1])
+    }, 40)
+    return () => window.clearInterval(id)
+  }, [])
+
+  // ---- keyboard ------------------------------------------------------
+  useEffect(() => {
+    function onDown(e) {
+      if (adminOpenRef.current) return // let the admin form keep its keystrokes
+      const k = e.key.toLowerCase()
+      const dir = KEY_DIR[k]
+      if (dir) {
+        e.preventDefault()
+        pressDir(dir)
+      } else if (k === 'enter' || k === ' ') {
+        e.preventDefault()
+        pressA()
+      }
+    }
+    function onUp(e) {
+      const dir = KEY_DIR[e.key.toLowerCase()]
+      if (dir) releaseDir(dir)
+    }
+    window.addEventListener('keydown', onDown)
+    window.addEventListener('keyup', onUp)
+    return () => {
+      window.removeEventListener('keydown', onDown)
+      window.removeEventListener('keyup', onUp)
+    }
+  }, [])
+
+  // ---- viewport measurement (for the camera) -------------------------
+  useLayoutEffect(() => {
+    const el = screenRef.current
+    if (!el) return undefined
+    const measure = () => setView({ w: el.clientWidth, h: el.clientHeight })
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  // Enable slide transitions only after the first paint (no spawn slide-in).
+  useEffect(() => {
+    const r = requestAnimationFrame(() => setReady(true))
+    return () => cancelAnimationFrame(r)
+  }, [])
+
+  // ---- ground tiles (static) -----------------------------------------
+  const tiles = useMemo(() => {
+    const out = []
+    for (let y = 0; y < TOWN_ROWS; y++) {
+      for (let x = 0; x < TOWN_COLS; x++) {
+        const cls = TILE_CLASS[TOWN_MAP[y][x]] || 'grass'
+        out.push(<div key={`${x}-${y}`} className={`t t-${cls}`} />)
+      }
+    }
+    return out
+  }, [])
+
+  // ---- camera --------------------------------------------------------
+  const camX = clampCamera(
+    player.x * TILE + TILE / 2 - view.w / 2,
+    TOWN_COLS * TILE,
+    view.w,
+  )
+  const camY = clampCamera(
+    player.y * TILE + TILE / 2 - view.h / 2,
+    TOWN_ROWS * TILE,
+    view.h,
+  )
+
+  // ---- what the player is facing -------------------------------------
+  const fd = DELTAS[facing]
+  const interactionTarget = buildings.find(
+    (b) => b.doorCol === player.x + fd.dx && b.doorRow === player.y + fd.dy,
+  )
+  const facingSign = tileChar(player.x + fd.dx, player.y + fd.dy) === 's'
+  const actionArmed = Boolean(interactionTarget) || facingSign || Boolean(dialogue)
+
+  return (
+    <div className="village-map">
+      <div className="gb-shell">
+        <div className="gb-topbar">
+          <span className="gb-led" />
+          <span className="gb-topbar-label">ONE REV VILLAGE</span>
+          <span className="gb-topbar-tag">GAME BOY</span>
+        </div>
+
+        <div className="gb-screen" ref={screenRef}>
+          <div
+            className={`town${ready ? ' town-animate' : ''}`}
+            style={{
+              width: TOWN_COLS * TILE,
+              height: TOWN_ROWS * TILE,
+              transform: `translate(${-camX}px, ${-camY}px)`,
+            }}
+          >
+            <div
+              className="town-ground"
+              style={{ gridTemplateColumns: `repeat(${TOWN_COLS}, ${TILE}px)` }}
+            >
+              {tiles}
+            </div>
+
+            {buildings.map((b) => (
+              <Building
+                key={b.house.id}
+                building={b}
+                isTarget={interactionTarget && interactionTarget.house.id === b.house.id}
+              />
+            ))}
+
+            <div
+              className={`player${ready ? ' player-animate' : ''}`}
+              style={{
+                transform: `translate(${player.x * TILE}px, ${player.y * TILE}px)`,
+                zIndex: player.y * 10 + 5,
+              }}
+            >
+              <PlayerSprite facing={facing} moving={moving} step={stepCount} />
+            </div>
+          </div>
+
+          {/* Overlay controls — fixed on the screen, not scrolled with the map */}
+          <div className="screen-overlay">
+            <p className="overlay-hint">Arrows / WASD walk · A to enter</p>
+
+            <div className="overlay-slot overlay-tr">
+              <DailyBriefShortcut items={dailyBrief} onClose={onRefetch} />
+              <button
+                type="button"
+                className="admin-btn"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => setAdminOpen(true)}
+              >
+                ⚙ ADMIN
+              </button>
+            </div>
+
+            <div className="overlay-slot overlay-bl">
+              <MobileDpad onPress={pressDir} onRelease={releaseDir} />
+            </div>
+
+            <div className="overlay-slot overlay-br">
+              {interactionTarget && (
+                <span className="action-label">{interactionTarget.house.title}</span>
+              )}
+              <button
+                type="button"
+                className={`action-btn${actionArmed ? ' action-btn-ready' : ''}`}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={pressA}
+                aria-label="A button"
+              >
+                A
+              </button>
+            </div>
+          </div>
+
+          {dialogue && (
+            <DialogueBox
+              key={dialogue.idx}
+              line={dialogue.lines[dialogue.idx]}
+              onAdvance={pressA}
+            />
+          )}
+
+          {adminOpen && (
+            <AdminPanel
+              houses={houses}
+              onClose={() => setAdminOpen(false)}
+              onChanged={onRefetch}
+            />
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
