@@ -1,16 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { getVillage, getHouse, saveLocation } from './api.js'
-import { PLOTS, ENTRANCE } from './constants.js'
+import { buildTown } from './constants.js'
 import VillageMap from './components/VillageMap.jsx'
 import HouseInterior from './components/HouseInterior.jsx'
 
-// Houses (sorted by position_order) drop onto the fixed building plots in
-// order — admins never place buildings, which keeps the "no admin x/y" rule.
-function buildBuildings(houses) {
+// Houses (sorted by position_order) drop onto the town's plots in order.
+// The town is sized to the community count, so every house gets a building —
+// there is no cap. Admins never place buildings (keeps the "no admin x/y" rule).
+function buildBuildings(houses, town) {
   return [...houses]
     .sort((a, b) => a.position_order - b.position_order)
-    .slice(0, PLOTS.length)
-    .map((house, i) => ({ house, ...PLOTS[i] }))
+    .map((house, i) => ({ house, ...town.plots[i] }))
 }
 
 export default function App() {
@@ -24,9 +24,15 @@ export default function App() {
   const [error, setError] = useState(null)
   const [houseLoading, setHouseLoading] = useState(false)
 
-  const buildings = useMemo(
-    () => (villageData ? buildBuildings(villageData.houses) : []),
+  // The town is regenerated from the live community count — it grows endlessly,
+  // wrapping buildings onto new street rows as communities are added.
+  const town = useMemo(
+    () => buildTown(villageData ? villageData.houses.length : 1),
     [villageData],
+  )
+  const buildings = useMemo(
+    () => (villageData ? buildBuildings(villageData.houses, town) : []),
+    [villageData, town],
   )
 
   // Load the village. `applySpawn` recomputes where the avatar starts.
@@ -37,7 +43,8 @@ export default function App() {
       const data = await getVillage()
       setVillageData(data)
       if (applySpawn) {
-        const b = buildBuildings(data.houses)
+        const t = buildTown(data.houses.length)
+        const b = buildBuildings(data.houses, t)
         const spawnHouse =
           data.spawn && data.spawn.house_id != null
             ? b.find((x) => x.house.id === data.spawn.house_id)
@@ -47,7 +54,7 @@ export default function App() {
         setTownSpawn(
           spawnHouse
             ? { x: spawnHouse.doorCol, y: spawnHouse.doorRow + 1, facing: 'up' }
-            : { x: ENTRANCE.x, y: ENTRANCE.y, facing: 'up' },
+            : { x: t.entrance.x, y: t.entrance.y, facing: 'up' },
         )
       }
     } catch (e) {
@@ -154,6 +161,7 @@ export default function App() {
       <main className="app-main">
         {currentScene === 'town' && (
           <VillageMap
+            town={town}
             buildings={buildings}
             houses={villageData.houses}
             townSpawn={townSpawn}

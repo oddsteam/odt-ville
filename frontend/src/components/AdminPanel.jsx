@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { createHouse, deleteHouse } from '../api.js'
-import { categoryEmoji, N_PLOTS } from '../constants.js'
+import { categoryEmoji } from '../constants.js'
 
 const CATEGORIES = [
   { key: 'compliance', label: 'Compliance' },
@@ -26,7 +26,6 @@ export default function AdminPanel({ houses, onClose, onChanged }) {
   const [error, setError] = useState(null)
 
   const used = houses.length
-  const full = used >= N_PLOTS
 
   async function handleAdd(e) {
     e.preventDefault()
@@ -87,7 +86,7 @@ export default function AdminPanel({ houses, onClose, onChanged }) {
 
         <div className="modal-body">
           <p className="admin-count">
-            {used} of {N_PLOTS} town plots used
+            {used} {used === 1 ? 'community' : 'communities'} in the village
           </p>
 
           <ul className="admin-list">
@@ -163,12 +162,6 @@ export default function AdminPanel({ houses, onClose, onChanged }) {
             </label>
 
             {error && <p className="admin-error">{error}</p>}
-            {full && (
-              <p className="admin-warn">
-                All plots are full — a new community is created but only gets a
-                building once one is deleted.
-              </p>
-            )}
 
             <button
               type="submit"

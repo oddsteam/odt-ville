@@ -1,13 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import {
-  TILE,
-  MOVE_MS,
-  TOWN_MAP,
-  TOWN_ROWS,
-  TOWN_COLS,
-  isGroundWalkable,
-  tileChar,
-} from '../constants.js'
+import { TILE, MOVE_MS, isGroundWalkable, tileChar } from '../constants.js'
 import PlayerSprite from './PlayerSprite.jsx'
 import Building from './Building.jsx'
 import DialogueBox from './DialogueBox.jsx'
@@ -44,6 +36,7 @@ function clampCamera(value, town, view) {
 }
 
 export default function VillageMap({
+  town,
   buildings,
   houses,
   townSpawn,
@@ -69,6 +62,7 @@ export default function VillageMap({
   const adminOpenRef = useRef(adminOpen)
   const buildingsRef = useRef(buildings)
   const enterRef = useRef(onEnterHouse)
+  const townRef = useRef(town)
 
   playerRef.current = player
   facingRef.current = facing
@@ -76,6 +70,7 @@ export default function VillageMap({
   adminOpenRef.current = adminOpen
   buildingsRef.current = buildings
   enterRef.current = onEnterHouse
+  townRef.current = town
 
   // ---- collision -----------------------------------------------------
   function doorAt(x, y) {
@@ -87,7 +82,7 @@ export default function VillageMap({
     )
   }
   function walkable(x, y) {
-    if (!isGroundWalkable(x, y)) return false
+    if (!isGroundWalkable(townRef.current, x, y)) return false
     if (doorAt(x, y)) return true
     return !insideBuilding(x, y)
   }
@@ -131,7 +126,7 @@ export default function VillageMap({
     const { dx, dy } = DELTAS[facingRef.current]
     const fx = x + dx
     const fy = y + dy
-    if (tileChar(fx, fy) === 's') {
+    if (tileChar(townRef.current, fx, fy) === 's') {
       setDialogue({ lines: WELCOME, idx: 0 })
       return
     }
@@ -200,27 +195,40 @@ export default function VillageMap({
     return () => cancelAnimationFrame(r)
   }, [])
 
-  // ---- ground tiles (static) -----------------------------------------
+  // ---- ground tiles (rebuilt when the town changes) ------------------
   const tiles = useMemo(() => {
     const out = []
-    for (let y = 0; y < TOWN_ROWS; y++) {
-      for (let x = 0; x < TOWN_COLS; x++) {
-        const cls = TILE_CLASS[TOWN_MAP[y][x]] || 'grass'
+    for (let y = 0; y < town.rows; y++) {
+      for (let x = 0; x < town.cols; x++) {
+        const cls = TILE_CLASS[town.map[y][x]] || 'grass'
         out.push(<div key={`${x}-${y}`} className={`t t-${cls}`} />)
       }
     }
     return out
-  }, [])
+  }, [town])
+
+  // If the town was rebuilt (a community added/removed) and the player's tile
+  // is no longer valid, snap them back to the entrance.
+  useEffect(() => {
+    const { x, y } = playerRef.current
+    if (x < 0 || x >= town.cols || y < 0 || y >= town.rows || !walkable(x, y)) {
+      const e = town.entrance
+      playerRef.current = { x: e.x, y: e.y }
+      setPlayer({ x: e.x, y: e.y })
+      setFacing('up')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [town, buildings])
 
   // ---- camera --------------------------------------------------------
   const camX = clampCamera(
     player.x * TILE + TILE / 2 - view.w / 2,
-    TOWN_COLS * TILE,
+    town.cols * TILE,
     view.w,
   )
   const camY = clampCamera(
     player.y * TILE + TILE / 2 - view.h / 2,
-    TOWN_ROWS * TILE,
+    town.rows * TILE,
     view.h,
   )
 
@@ -229,7 +237,7 @@ export default function VillageMap({
   const interactionTarget = buildings.find(
     (b) => b.doorCol === player.x + fd.dx && b.doorRow === player.y + fd.dy,
   )
-  const facingSign = tileChar(player.x + fd.dx, player.y + fd.dy) === 's'
+  const facingSign = tileChar(town, player.x + fd.dx, player.y + fd.dy) === 's'
   const actionArmed = Boolean(interactionTarget) || facingSign || Boolean(dialogue)
 
   return (
@@ -245,14 +253,14 @@ export default function VillageMap({
           <div
             className={`town${ready ? ' town-animate' : ''}`}
             style={{
-              width: TOWN_COLS * TILE,
-              height: TOWN_ROWS * TILE,
+              width: town.cols * TILE,
+              height: town.rows * TILE,
               transform: `translate(${-camX}px, ${-camY}px)`,
             }}
           >
             <div
               className="town-ground"
-              style={{ gridTemplateColumns: `repeat(${TOWN_COLS}, ${TILE}px)` }}
+              style={{ gridTemplateColumns: `repeat(${town.cols}, ${TILE}px)` }}
             >
               {tiles}
             </div>

@@ -120,9 +120,10 @@ API calls to it.)
   fallback so the playful map never blocks important content.
 - **Admin** — the **⚙ Admin** button opens a panel to **add or delete
   communities**. Adding one (name, category, roof colour, optional logo) creates
-  a house with its three boards and drops a new building on the next free town
-  plot; deleting one removes its building. The town has **8 plots**, so a new
-  community is immediately visible as long as a plot is free.
+  a house with its three boards and drops a new building onto the map; deleting
+  one removes its building. There is **no cap** — the town regenerates to fit
+  the community count, with buildings wrapping onto new street rows (5 per row)
+  as more are added.
 - **Exit** — use the Exit door inside a house to return to the map; counts and
   badges refresh.
 

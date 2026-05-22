@@ -25,14 +25,14 @@ await page.waitForSelector('.building', { timeout: 15000 })
 await page.waitForTimeout(700)
 await page.screenshot({ path: `${OUT}/01-town.png` })
 
-// Town Entrance (17,18) -> up the path to the main path row, then west.
-await press('ArrowUp', 8) // -> (17, 10)
-await press('ArrowLeft', 14) // -> (3, 10)  in front of Compliance House
+// Town Entrance -> up the entrance stem to the street, then west.
+await press('ArrowUp', 4) // up to the street-path row
+await press('ArrowLeft', 9) // along the street, below Compliance House
 await page.waitForTimeout(300)
 await page.screenshot({ path: `${OUT}/02-at-door.png` })
 
-// Up the door stub and into the doorway -> enters the house.
-await press('ArrowUp', 3)
+// Step up into the doorway -> enters the house.
+await press('ArrowUp', 1)
 await page.waitForSelector('.house-interior', { timeout: 15000 })
 await page.waitForSelector('.interior-title', { timeout: 5000 })
 await page.waitForTimeout(400)
