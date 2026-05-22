@@ -6,6 +6,8 @@ import DialogueBox from './DialogueBox.jsx'
 import MobileDpad from './MobileDpad.jsx'
 import DailyBriefShortcut from './DailyBriefShortcut.jsx'
 import AdminPanel from './AdminPanel.jsx'
+import EncounterScreen from './EncounterScreen.jsx'
+import { rollEncounter, pickWildPokemon, GRACE_STEPS } from '../encounters.js'
 
 const DELTAS = {
   up: { dx: 0, dy: -1 },
@@ -25,9 +27,17 @@ const WELCOME = [
   'ONE REV VILLAGE — welcome aboard!',
   'Walk up to a house and step into its doorway to read the boards inside.',
   'A red "!" means urgent MUST-KNOW news. The DAILY BRIEF lists everything.',
+  'Wild Pokémon hide in the dark TALL GRASS — wander in to find them!',
 ]
 
-const TILE_CLASS = { '.': 'grass', ':': 'path', '*': 'flower', T: 'tree', s: 'sign' }
+const TILE_CLASS = {
+  '.': 'grass',
+  ':': 'path',
+  '*': 'flower',
+  g: 'tallgrass',
+  T: 'tree',
+  s: 'sign',
+}
 
 // Clamp the camera to the town; centre the town if it is smaller than the view.
 function clampCamera(value, town, view) {
@@ -50,6 +60,7 @@ export default function VillageMap({
   const [stepCount, setStepCount] = useState(0)
   const [dialogue, setDialogue] = useState(null) // { lines, idx } | null
   const [adminOpen, setAdminOpen] = useState(false)
+  const [encounter, setEncounter] = useState(null) // wild Pokémon | null
   const [view, setView] = useState({ w: 720, h: 520 })
   const [ready, setReady] = useState(false)
 
@@ -60,6 +71,8 @@ export default function VillageMap({
   const facingRef = useRef(facing)
   const dialogueRef = useRef(dialogue)
   const adminOpenRef = useRef(adminOpen)
+  const encounterRef = useRef(null) // set manually — must be live for the walk loop
+  const graceRef = useRef(0) // steps remaining where encounters are suppressed
   const buildingsRef = useRef(buildings)
   const enterRef = useRef(onEnterHouse)
   const townRef = useRef(town)
@@ -110,7 +123,29 @@ export default function VillageMap({
     window.setTimeout(() => {
       movingRef.current = false
       setMoving(false)
+      maybeEncounter(tx, ty)
     }, MOVE_MS)
+  }
+
+  // ---- wild encounters (rolled when a step lands on tall grass) ------
+  function maybeEncounter(x, y) {
+    if (encounterRef.current) return
+    if (tileChar(townRef.current, x, y) !== 'g') return
+    if (graceRef.current > 0) {
+      graceRef.current -= 1 // walking out of the grass after one — stay calm
+      return
+    }
+    if (rollEncounter()) {
+      const wild = pickWildPokemon()
+      encounterRef.current = wild // sync — the 40ms walk loop reads this
+      setEncounter(wild)
+    }
+  }
+
+  function endEncounter() {
+    graceRef.current = GRACE_STEPS // grace steps to leave the grass
+    encounterRef.current = null
+    setEncounter(null)
   }
 
   // ---- A button: advance dialogue, read a sign, or enter a door ------
@@ -145,7 +180,13 @@ export default function VillageMap({
   // ---- walk loop (keeps moving while a direction is held) ------------
   useEffect(() => {
     const id = window.setInterval(() => {
-      if (adminOpenRef.current || dialogueRef.current || movingRef.current) return
+      if (
+        adminOpenRef.current ||
+        dialogueRef.current ||
+        movingRef.current ||
+        encounterRef.current
+      )
+        return
       const held = heldRef.current
       if (held.length) step(held[held.length - 1])
     }, 40)
@@ -156,6 +197,7 @@ export default function VillageMap({
   useEffect(() => {
     function onDown(e) {
       if (adminOpenRef.current) return // let the admin form keep its keystrokes
+      if (encounterRef.current) return // encounter screen owns the keyboard
       const k = e.key.toLowerCase()
       const dir = KEY_DIR[k]
       if (dir) {
@@ -335,6 +377,8 @@ export default function VillageMap({
               onChanged={onRefetch}
             />
           )}
+
+          {encounter && <EncounterScreen wild={encounter} onRun={endEncounter} />}
         </div>
       </div>
     </div>

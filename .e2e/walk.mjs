@@ -25,8 +25,9 @@ await page.waitForSelector('.building', { timeout: 15000 })
 await page.waitForTimeout(700)
 await page.screenshot({ path: `${OUT}/01-town.png` })
 
-// Town Entrance -> up the entrance stem to the street, then west.
-await press('ArrowUp', 4) // up to the street-path row
+// Town Entrance -> up the entrance stem (which crosses the tall-grass field
+// safely) to the street, then west.
+await press('ArrowUp', 10) // up to the street-path row
 await press('ArrowLeft', 9) // along the street, below Compliance House
 await page.waitForTimeout(300)
 await page.screenshot({ path: `${OUT}/02-at-door.png` })

@@ -39,6 +39,8 @@ export const PER_ROW = 5 // buildings per street row
 const BAND_H = 7 // per row band: 4 building + 1 street-path + 2 grass gap
 const TOP_MARGIN = 2 // grass rows above the first building row
 const BOTTOM_MARGIN = 2 // grass rows below the last street, before the gate
+const FIELD_GAP = 1 // grass row between the last street row and the field
+const FIELD_H = 5 // height of the tall-grass field block (wild encounters)
 
 // Build the whole town for a given number of building plots. Returns a `town`
 // object: { cols, rows, map (string[]), plots, entrance }.
@@ -47,7 +49,8 @@ export function buildTown(plotCount) {
   const numRows = Math.ceil(count / PER_ROW)
   const colsUsed = Math.max(Math.min(count, PER_ROW), 3)
   const cols = 4 * colsUsed + 4
-  const rows = 1 + TOP_MARGIN + numRows * BAND_H + BOTTOM_MARGIN + 1
+  const rows =
+    1 + TOP_MARGIN + numRows * BAND_H + FIELD_GAP + FIELD_H + BOTTOM_MARGIN + 1
 
   // Each plot: 3 wide x 4 tall; door is the bottom-centre tile.
   const plots = []
@@ -69,7 +72,15 @@ export function buildTown(plotCount) {
   const lastStreetPath = 1 + TOP_MARGIN + (numRows - 1) * BAND_H + 4
   const entranceCol = Math.floor(cols / 2)
 
-  // Ground tile for (x,y): T tree / s sign (blocked) · . grass / : path (walk).
+  // Tall-grass field — a reserved patch inside the town where wild Pokémon are
+  // encountered. The entrance stem cuts a safe (no-encounter) path through it.
+  const fieldTop = 1 + TOP_MARGIN + numRows * BAND_H + FIELD_GAP
+  const fieldBottom = fieldTop + FIELD_H - 1
+  const fieldLeft = 3
+  const fieldRight = cols - 4
+
+  // Ground tile for (x,y): T tree / s sign (blocked) · . grass / : path /
+  // g tall grass (all walkable; g rolls for wild encounters).
   function tileFor(x, y) {
     if (y === 0) return 'T'
     if (y === rows - 1) return x === entranceCol ? ':' : 'T' // gate
@@ -77,6 +88,8 @@ export function buildTown(plotCount) {
     if (streetPathRows.has(y)) return ':' // street under each building row
     if (x === 1) return ':' // side avenue linking the streets
     if (x === entranceCol && y >= lastStreetPath) return ':' // entrance stem
+    if (y >= fieldTop && y <= fieldBottom && x >= fieldLeft && x <= fieldRight)
+      return 'g' // tall-grass field
     if (y === rows - 2 && x === entranceCol - 1) return 's' // signpost
     if (!buildingRows.has(y) && (x * 5 + y * 3) % 11 === 0) return '*' // flowers
     return '.'
@@ -92,7 +105,7 @@ export function buildTown(plotCount) {
   return { cols, rows, map, plots, entrance: { x: entranceCol, y: rows - 2 } }
 }
 
-const WALKABLE = new Set(['.', ':', '*'])
+const WALKABLE = new Set(['.', ':', '*', 'g'])
 
 export function tileChar(town, x, y) {
   if (y < 0 || y >= town.rows || x < 0 || x >= town.cols) return 'T'
