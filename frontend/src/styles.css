@@ -284,6 +284,35 @@ button:disabled {
   border-radius: 4px 4px 14px 4px;
 }
 
+/* When the GB shell is in the browser's Fullscreen API, the bezel chrome
+   disappears and the canvas claims the whole viewport — same TILE size, more
+   tiles in view. The fullscreen-btn icon toggles via React state, not CSS. */
+.gb-shell:fullscreen {
+  max-width: none;
+  width: 100vw;
+  height: 100vh;
+  padding: 0;
+  border-radius: 0;
+  background: var(--screen-edge);
+  box-shadow: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.gb-shell:fullscreen .gb-topbar {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+}
+
+.gb-shell:fullscreen .gb-screen {
+  flex: 1 1 auto;
+  width: 100%;
+  height: auto;
+  max-width: none;
+  border: 0;
+  border-radius: 0;
+}
+
 /* ---- the scrolling town ----------------------------------- */
 
 .town {
@@ -583,6 +612,23 @@ button:disabled {
   pointer-events: auto;
 }
 
+/* Idle: overlay controls fade so the map remains visible beneath them.
+   Hover / focus / press brings them back to full opacity for clarity. */
+.screen-overlay > .overlay-slot,
+.screen-overlay > .overlay-hint {
+  transition: opacity 0.18s ease;
+}
+
+.screen-overlay > .overlay-slot {
+  opacity: 0.6;
+}
+
+.screen-overlay > .overlay-slot:hover,
+.screen-overlay > .overlay-slot:focus-within,
+.screen-overlay > .overlay-slot:active {
+  opacity: 1;
+}
+
 .overlay-hint {
   position: absolute;
   top: 8px;
@@ -594,6 +640,11 @@ button:disabled {
   color: var(--paper);
   background: rgba(11, 13, 18, 0.78);
   border: 2px solid var(--ink);
+  opacity: 0.55;
+}
+
+.overlay-hint:hover {
+  opacity: 1;
 }
 
 .overlay-tr {
@@ -1216,6 +1267,13 @@ button:disabled {
 
 .admin-btn {
   background: #d8e6ff;
+  border-color: var(--ink);
+  box-shadow: 3px 3px 0 var(--ink);
+  font-size: 8px;
+}
+
+.fullscreen-btn {
+  background: #d4e6c4;
   border-color: var(--ink);
   box-shadow: 3px 3px 0 var(--ink);
   font-size: 8px;

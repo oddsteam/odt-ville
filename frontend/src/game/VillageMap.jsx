@@ -76,7 +76,9 @@ export default function VillageMap({
   const [encounter, setEncounter] = useState(null) // wild Pokémon | null
   const [view, setView] = useState({ w: 720, h: 520 })
   const [ready, setReady] = useState(false)
+  const [isFullscreen, setIsFullscreen] = useState(false)
 
+  const shellRef = useRef(null)
   const screenRef = useRef(null)
   const movingRef = useRef(false)
   const heldRef = useRef([])
@@ -233,6 +235,25 @@ export default function VillageMap({
     }
   }, [])
 
+  // ---- fullscreen toggle --------------------------------------------
+  function toggleFullscreen() {
+    const root = shellRef.current
+    if (!root) return
+    if (document.fullscreenElement) {
+      document.exitFullscreen?.()
+    } else if (root.requestFullscreen) {
+      root.requestFullscreen().catch(() => {})
+    }
+  }
+
+  useEffect(() => {
+    function onChange() {
+      setIsFullscreen(Boolean(document.fullscreenElement))
+    }
+    document.addEventListener('fullscreenchange', onChange)
+    return () => document.removeEventListener('fullscreenchange', onChange)
+  }, [])
+
   // ---- viewport measurement (for the camera) -------------------------
   useLayoutEffect(() => {
     const el = screenRef.current
@@ -297,7 +318,7 @@ export default function VillageMap({
 
   return (
     <div className="village-map">
-      <div className="gb-shell">
+      <div className="gb-shell" ref={shellRef}>
         <div className="gb-topbar">
           <span className="gb-led" />
           <span className="gb-topbar-label">ONE REV VILLAGE</span>
@@ -354,6 +375,16 @@ export default function VillageMap({
                 onClick={() => setAdminOpen(true)}
               >
                 ⚙ ADMIN
+              </button>
+              <button
+                type="button"
+                className="fullscreen-btn"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={toggleFullscreen}
+                aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+                title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+              >
+                {isFullscreen ? '⊟ EXIT' : '⛶ FULL'}
               </button>
             </div>
 
