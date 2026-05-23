@@ -53,12 +53,15 @@ export function buildTown(plotCount) {
     1 + TOP_MARGIN + numRows * BAND_H + FIELD_GAP + FIELD_H + BOTTOM_MARGIN + 1
 
   // Each plot: 3 wide x 4 tall; door is the bottom-centre tile.
+  // The first plots (by position_order) sit on the bottom-most building row —
+  // closest to the entrance — and each new row extends the town *upward*, so
+  // existing buildings stay anchored where they were as the town grows.
   const plots = []
   for (let i = 0; i < count; i++) {
     const slot = i % PER_ROW
     const r = Math.floor(i / PER_ROW)
     const col = 2 + slot * 4
-    const row = 1 + TOP_MARGIN + r * BAND_H
+    const row = 1 + TOP_MARGIN + (numRows - 1 - r) * BAND_H
     plots.push({ col, row, w: 3, h: 4, doorCol: col + 1, doorRow: row + 3 })
   }
 
