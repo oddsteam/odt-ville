@@ -1,4 +1,4 @@
-import { SPRITES } from '../constants.js'
+import { SPRITES } from './constants.js'
 
 // The walking avatar — Pokémon Red protagonist sprites (from the pokemon-js
 // reference repo). Shows a still frame when idle, alternating step frames

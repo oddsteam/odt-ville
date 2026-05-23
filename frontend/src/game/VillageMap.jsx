@@ -1,13 +1,12 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { TILE, MOVE_MS, isGroundWalkable, tileChar } from '../constants.js'
+import { TILE, MOVE_MS, isGroundWalkable, tileChar } from './constants.js'
 import PlayerSprite from './PlayerSprite.jsx'
 import Building from './Building.jsx'
 import DialogueBox from './DialogueBox.jsx'
 import MobileDpad from './MobileDpad.jsx'
-import DailyBriefShortcut from './DailyBriefShortcut.jsx'
 import AdminPanel from './AdminPanel.jsx'
 import EncounterScreen from './EncounterScreen.jsx'
-import { rollEncounter, pickWildPokemon, GRACE_STEPS } from '../encounters.js'
+import { rollEncounter, pickWildPokemon, GRACE_STEPS } from './encounters.js'
 
 const DELTAS = {
   up: { dx: 0, dy: -1 },
@@ -25,7 +24,7 @@ const KEY_DIR = {
 
 const WELCOME = [
   'ONE REV VILLAGE — welcome aboard!',
-  'Walk up to a house and step into its doorway to read the boards inside.',
+  'Walk up to a community and step into its doorway to read the boards inside.',
   'A red "!" means urgent MUST-KNOW news. The DAILY BRIEF lists everything.',
   'Wild Pokémon hide in the dark TALL GRASS — wander in to find them!',
 ]
@@ -45,14 +44,28 @@ function clampCamera(value, town, view) {
   return Math.min(Math.max(value, 0), town - view)
 }
 
+// Internal village component used by <VillageGame>. The black-box boundary
+// lives one level up; this file only deals with the spatial / input layer.
+//
+// Props:
+//   town, buildings     — geometry from <VillageGame>
+//   communities         — the same array <VillageGame> received, passed to
+//                         AdminPanel for the list/delete UI
+//   townSpawn           — { x, y, facing } resolved from session by parent
+//   dailyBrief          — a slot (React node) the shell injects into the
+//                         top-right overlay; the game does not know its shape
+//   onEnterCommunity    — fired when the avatar steps onto a doorway
+//   onCreateCommunity   — admin action raised from <AdminPanel>
+//   onDeleteCommunity   — admin action raised from <AdminPanel>
 export default function VillageMap({
   town,
   buildings,
-  houses,
+  communities,
   townSpawn,
   dailyBrief,
-  onEnterHouse,
-  onRefetch,
+  onEnterCommunity,
+  onCreateCommunity,
+  onDeleteCommunity,
 }) {
   const [player, setPlayer] = useState({ x: townSpawn.x, y: townSpawn.y })
   const [facing, setFacing] = useState(townSpawn.facing || 'down')
@@ -74,7 +87,7 @@ export default function VillageMap({
   const encounterRef = useRef(null) // set manually — must be live for the walk loop
   const graceRef = useRef(0) // steps remaining where encounters are suppressed
   const buildingsRef = useRef(buildings)
-  const enterRef = useRef(onEnterHouse)
+  const enterRef = useRef(onEnterCommunity)
   const townRef = useRef(town)
 
   playerRef.current = player
@@ -82,7 +95,7 @@ export default function VillageMap({
   dialogueRef.current = dialogue
   adminOpenRef.current = adminOpen
   buildingsRef.current = buildings
-  enterRef.current = onEnterHouse
+  enterRef.current = onEnterCommunity
   townRef.current = town
 
   // ---- collision -----------------------------------------------------
@@ -110,7 +123,7 @@ export default function VillageMap({
     const ty = y + dy
     const door = doorAt(tx, ty)
     if (door) {
-      enterRef.current(door.house.id) // walk into a doorway -> enter
+      enterRef.current(door.community.id) // walk into a doorway -> enter
       return
     }
     if (!walkable(tx, ty)) return // bumped a wall — turned in place
@@ -166,7 +179,7 @@ export default function VillageMap({
       return
     }
     const door = doorAt(fx, fy)
-    if (door) enterRef.current(door.house.id)
+    if (door) enterRef.current(door.community.id)
   }
 
   function pressDir(dir) {
@@ -309,9 +322,11 @@ export default function VillageMap({
 
             {buildings.map((b) => (
               <Building
-                key={b.house.id}
+                key={b.community.id}
                 building={b}
-                isTarget={interactionTarget && interactionTarget.house.id === b.house.id}
+                isTarget={
+                  interactionTarget && interactionTarget.community.id === b.community.id
+                }
               />
             ))}
 
@@ -331,7 +346,7 @@ export default function VillageMap({
             <p className="overlay-hint">Arrows / WASD walk · A to enter</p>
 
             <div className="overlay-slot overlay-tr">
-              <DailyBriefShortcut items={dailyBrief} onClose={onRefetch} />
+              {dailyBrief}
               <button
                 type="button"
                 className="admin-btn"
@@ -348,7 +363,7 @@ export default function VillageMap({
 
             <div className="overlay-slot overlay-br">
               {interactionTarget && (
-                <span className="action-label">{interactionTarget.house.title}</span>
+                <span className="action-label">{interactionTarget.community.title}</span>
               )}
               <button
                 type="button"
@@ -372,9 +387,10 @@ export default function VillageMap({
 
           {adminOpen && (
             <AdminPanel
-              houses={houses}
+              communities={communities}
               onClose={() => setAdminOpen(false)}
-              onChanged={onRefetch}
+              onCreate={onCreateCommunity}
+              onDelete={onDeleteCommunity}
             />
           )}
 

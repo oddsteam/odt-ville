@@ -1,6 +1,19 @@
 module Api
   module V1
     class ContentItemsController < BaseController
+      # GET /api/v1/content_items/feed
+      # The "Daily Brief" shape — must-know + urgent items across every
+      # community, priority-sorted. Decoupled from any village payload so any
+      # UI (game, list, dashboard, bot) can consume the same feed.
+      def feed
+        communities = current_user.company.houses.active.ordered
+                                  .includes(boards: { content_items: :user_content_states })
+                                  .to_a
+        render json: ContentFeedSerializer.call(
+          communities: communities, user: current_user, now: Time.current
+        )
+      end
+
       # POST /api/v1/content_items/:id/open
       # Marks an item opened. Already-opened / acknowledged items are untouched.
       def open

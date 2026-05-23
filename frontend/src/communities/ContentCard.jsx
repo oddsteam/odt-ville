@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { openItem, acknowledgeItem } from '../api.js'
-import { formatDate, formatExpiry } from '../format.js'
+import { openItem, acknowledgeItem } from './client.js'
+import { formatDate, formatExpiry } from './format.js'
 import PriorityChip from './PriorityChip.jsx'
 import StateBadge from './StateBadge.jsx'
 

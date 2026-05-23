@@ -1,11 +1,11 @@
-import { TILE, categoryEmoji } from '../constants.js'
+import { TILE, categoryEmoji } from './constants.js'
 import SignBadge from './SignBadge.jsx'
 
 // A top-down Pokémon-style building sitting on a plot. The roof is tinted with
-// the house's admin-configured colour; a nameplate sign sits in front.
+// the community's admin-configured colour; a nameplate sign sits in front.
 export default function Building({ building, isTarget }) {
-  const { house, col, row, w, h, doorCol } = building
-  const urgent = house.urgent_count > 0
+  const { community, col, row, w, h, doorCol } = building
+  const urgent = (community.badges?.urgent || 0) > 0
 
   return (
     <div
@@ -19,7 +19,7 @@ export default function Building({ building, isTarget }) {
         zIndex: (row + h) * 10,
       }}
     >
-      <div className="bld-roof" style={{ background: house.color }}>
+      <div className="bld-roof" style={{ background: community.color }}>
         <div className="bld-roof-ridge" />
         {urgent && <SignBadge />}
       </div>
@@ -34,8 +34,8 @@ export default function Building({ building, isTarget }) {
       </div>
 
       <div className="bld-plaque" style={{ width: w * TILE }}>
-        <span className="bld-emoji">{categoryEmoji(house.category_key)}</span>
-        <span className="bld-name">{house.title}</span>
+        <span className="bld-emoji">{categoryEmoji(community.category_key)}</span>
+        <span className="bld-name">{community.title}</span>
       </div>
     </div>
   )

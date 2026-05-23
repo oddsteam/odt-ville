@@ -1,14 +1,14 @@
 import { useState } from 'react'
-import { categoryEmoji, BOARD_ORDER } from '../constants.js'
+import { categoryEmoji, BOARD_ORDER } from './constants.js'
 import BoardPanel from './BoardPanel.jsx'
 
-// The house scene: a colored header bar, three boards (in fixed order),
-// and an Exit door button that returns to the town.
-export default function HouseInterior({ houseData, onExit }) {
-  // Local copy of boards so item state updates render immediately.
-  const [boards, setBoards] = useState(houseData.boards || [])
-  const house = houseData.house
-  const hasLogo = house.logo_url && house.logo_url.trim() !== ''
+// The community-detail scene: a colored header bar, three boards (in fixed
+// order), and an Exit button that returns to whatever shell invoked it. The
+// PRD calls this view CommunityView — formerly HouseInterior.
+export default function CommunityView({ communityData, onExit }) {
+  const [boards, setBoards] = useState(communityData.boards || [])
+  const community = communityData.community
+  const hasLogo = community.logo_url && community.logo_url.trim() !== ''
 
   // Merge an updated content item (from open/acknowledge) into local state.
   function handleItemUpdate(boardType, res) {
@@ -33,19 +33,19 @@ export default function HouseInterior({ houseData, onExit }) {
 
   return (
     <div className="house-interior">
-      <header className="interior-header" style={{ background: house.color }}>
+      <header className="interior-header" style={{ background: community.color }}>
         <div className="interior-logo">
           {hasLogo ? (
-            <img src={house.logo_url} alt="" className="interior-logo-img" />
+            <img src={community.logo_url} alt="" className="interior-logo-img" />
           ) : (
             <span className="interior-logo-emoji">
-              {categoryEmoji(house.category_key)}
+              {categoryEmoji(community.category_key)}
             </span>
           )}
         </div>
         <div className="interior-titles">
-          <h2 className="interior-title">{house.title}</h2>
-          <span className="interior-category">{house.category_key}</span>
+          <h2 className="interior-title">{community.title}</h2>
+          <span className="interior-category">{community.category_key}</span>
         </div>
         <button type="button" className="exit-door-btn" onClick={onExit}>
           <span className="exit-door-icon">🚪</span>

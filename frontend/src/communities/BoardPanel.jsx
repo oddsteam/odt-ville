@@ -1,4 +1,4 @@
-import { BOARD_LABELS } from '../constants.js'
+import { BOARD_LABELS } from './constants.js'
 import ContentCard from './ContentCard.jsx'
 
 // One board within a house: a labeled header and its content cards.

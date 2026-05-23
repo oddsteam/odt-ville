@@ -59,12 +59,12 @@ const originalsAreOneRow = originalsAfter.every((b) => b.top === originalsRowY)
 const newIsAbove = !!newOne && newOne.top < originalsRowY
 
 // Tidy: remove the Finance House so the next run is idempotent.
-await fetch('http://localhost:3130/api/v1/village')
+await fetch('http://localhost:3130/api/v1/communities')
   .then((r) => r.json())
   .then(async (d) => {
-    const fin = d.houses.find((h) => h.title === 'Finance House')
+    const fin = d.communities.find((c) => c.title === 'Finance House')
     if (fin) {
-      await fetch(`http://localhost:3130/api/v1/houses/${fin.id}`, {
+      await fetch(`http://localhost:3130/api/v1/communities/${fin.id}`, {
         method: 'DELETE',
       })
     }

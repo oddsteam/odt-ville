@@ -1,6 +1,5 @@
 import { useState } from 'react'
-import { createHouse, deleteHouse } from '../api.js'
-import { categoryEmoji } from '../constants.js'
+import { categoryEmoji } from './constants.js'
 
 const CATEGORIES = [
   { key: 'compliance', label: 'Compliance' },
@@ -15,9 +14,11 @@ const COLOURS = [
   '#E67E22', '#16A085', '#D4AC0D', '#CB4335',
 ]
 
-// Admin tool: add or delete communities. Each community is a house — adding
-// one drops a new building onto the next free town plot.
-export default function AdminPanel({ houses, onClose, onChanged }) {
+// Admin tool — add or delete communities. Per the PRD, this panel raises
+// `onCreate(attrs)` and `onDelete(id)` events; the shell is responsible for
+// calling the communities client and refetching. The panel only owns its
+// local form state and the in-flight `busy` flag.
+export default function AdminPanel({ communities, onClose, onCreate, onDelete }) {
   const [title, setTitle] = useState('')
   const [category, setCategory] = useState('community')
   const [colour, setColour] = useState('#16A085')
@@ -25,7 +26,7 @@ export default function AdminPanel({ houses, onClose, onChanged }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
 
-  const used = houses.length
+  const used = communities.length
 
   async function handleAdd(e) {
     e.preventDefault()
@@ -33,7 +34,7 @@ export default function AdminPanel({ houses, onClose, onChanged }) {
     setBusy(true)
     setError(null)
     try {
-      await createHouse({
+      await onCreate({
         title: title.trim(),
         category_key: category,
         color: colour,
@@ -41,7 +42,6 @@ export default function AdminPanel({ houses, onClose, onChanged }) {
       })
       setTitle('')
       setLogoUrl('')
-      await onChanged()
     } catch (err) {
       setError(err.message)
     } finally {
@@ -54,8 +54,7 @@ export default function AdminPanel({ houses, onClose, onChanged }) {
     setBusy(true)
     setError(null)
     try {
-      await deleteHouse(id)
-      await onChanged()
+      await onDelete(id)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -90,15 +89,15 @@ export default function AdminPanel({ houses, onClose, onChanged }) {
           </p>
 
           <ul className="admin-list">
-            {houses.map((h) => (
-              <li key={h.id} className="admin-row">
-                <span className="admin-swatch" style={{ background: h.color }} />
-                <span className="admin-emoji">{categoryEmoji(h.category_key)}</span>
-                <span className="admin-row-name">{h.title}</span>
+            {communities.map((c) => (
+              <li key={c.id} className="admin-row">
+                <span className="admin-swatch" style={{ background: c.color }} />
+                <span className="admin-emoji">{categoryEmoji(c.category_key)}</span>
+                <span className="admin-row-name">{c.title}</span>
                 <button
                   type="button"
                   className="admin-del"
-                  onClick={() => handleDelete(h.id)}
+                  onClick={() => handleDelete(c.id)}
                   disabled={busy}
                 >
                   DELETE

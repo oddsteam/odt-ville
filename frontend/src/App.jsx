@@ -1,112 +1,136 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { getVillage, getHouse, saveLocation } from './api.js'
-import { buildTown } from './constants.js'
-import VillageMap from './components/VillageMap.jsx'
-import HouseInterior from './components/HouseInterior.jsx'
+import { useCallback, useEffect, useState } from 'react'
+import VillageGame from './game/VillageGame.jsx'
+import CommunityView from './communities/CommunityView.jsx'
+import DailyBriefShortcut from './communities/DailyBriefShortcut.jsx'
+import {
+  listCommunities,
+  getCommunity,
+  createCommunity,
+  removeCommunity,
+  getFeed,
+} from './communities/client.js'
+import { getGameSession, saveGameSession } from './game-session/client.js'
 
-// Houses (sorted by position_order) drop onto the town's plots in order.
-// The town is sized to the community count, so every house gets a building —
-// there is no cap. Admins never place buildings (keeps the "no admin x/y" rule).
-function buildBuildings(houses, town) {
-  return [...houses]
-    .sort((a, b) => a.position_order - b.position_order)
-    .map((house, i) => ({ house, ...town.plots[i] }))
+// Tiny inline fetch for the current viewer — the header above the game.
+// Kept inline (rather than its own client module) because there is only one
+// endpoint and no reason for a third boundary.
+async function getMe() {
+  const res = await fetch('/api/v1/me')
+  if (!res.ok) throw new Error(`Request to /me failed (${res.status})`)
+  return res.json()
 }
 
+// The app shell composes three independent modules:
+//   - communities client (`./communities/client`)   — CRUD + content feed
+//   - game-session client (`./game-session/client`) — spawn + last visited
+//   - the village game (`./game/VillageGame`)        — black-box React component
+// It hands data to the game via props, listens for game events, and persists
+// session changes. Nothing here knows about tiles, sprites, or encounters.
 export default function App() {
-  const [currentScene, setCurrentScene] = useState('town') // "town" | "house"
-  const [activeHouseId, setActiveHouseId] = useState(null)
-  const [villageData, setVillageData] = useState(null)
-  const [houseData, setHouseData] = useState(null)
-  const [townSpawn, setTownSpawn] = useState(null) // { x, y, facing }
+  const [scene, setScene] = useState('town')
+  const [activeCommunityId, setActiveCommunityId] = useState(null)
+  const [communityDetail, setCommunityDetail] = useState(null)
+
+  const [me, setMe] = useState(null)
+  const [communities, setCommunities] = useState(null)
+  const [session, setSession] = useState(null)
+  const [feed, setFeed] = useState([])
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [houseLoading, setHouseLoading] = useState(false)
+  const [communityLoading, setCommunityLoading] = useState(false)
 
-  // The town is regenerated from the live community count — it grows endlessly,
-  // wrapping buildings onto new street rows as communities are added.
-  const town = useMemo(
-    () => buildTown(villageData ? villageData.houses.length : 1),
-    [villageData],
-  )
-  const buildings = useMemo(
-    () => (villageData ? buildBuildings(villageData.houses, town) : []),
-    [villageData, town],
-  )
-
-  // Load the village. `applySpawn` recomputes where the avatar starts.
-  const loadVillage = useCallback(async (applySpawn) => {
-    setLoading(true)
-    setError(null)
-    try {
-      const data = await getVillage()
-      setVillageData(data)
-      if (applySpawn) {
-        const t = buildTown(data.houses.length)
-        const b = buildBuildings(data.houses, t)
-        const spawnHouse =
-          data.spawn && data.spawn.house_id != null
-            ? b.find((x) => x.house.id === data.spawn.house_id)
-            : null
-        // Returning visitor: stand on the mat outside their last house.
-        // Otherwise: the Town Entrance. Always on the map — never in a board.
-        setTownSpawn(
-          spawnHouse
-            ? { x: spawnHouse.doorCol, y: spawnHouse.doorRow + 1, facing: 'up' }
-            : { x: t.entrance.x, y: t.entrance.y, facing: 'up' },
-        )
-      }
-    } catch (e) {
-      setError(e.message)
-    } finally {
-      setLoading(false)
-    }
+  // Town-scene state — fetched on mount and after any communities-mutating
+  // action so the game always sees fresh communities + session + feed.
+  const loadTown = useCallback(async () => {
+    const [c, s, f] = await Promise.all([
+      listCommunities(),
+      getGameSession(),
+      getFeed(),
+    ])
+    setCommunities(c)
+    setSession(s)
+    setFeed(f)
   }, [])
 
   useEffect(() => {
-    loadVillage(true)
-  }, [loadVillage])
+    let active = true
+    setLoading(true)
+    Promise.all([getMe(), loadTown()])
+      .then(([m]) => {
+        if (!active) return
+        setMe(m)
+      })
+      .catch((e) => active && setError(e.message))
+      .finally(() => active && setLoading(false))
+    return () => {
+      active = false
+    }
+  }, [loadTown])
 
-  const handleEnterHouse = useCallback(async (id) => {
-    setHouseLoading(true)
+  // ---- game events --------------------------------------------------
+
+  const handleEnterCommunity = useCallback(async (id) => {
+    setCommunityLoading(true)
     setError(null)
     try {
-      const data = await getHouse(id)
-      setHouseData(data)
-      setActiveHouseId(id)
-      setCurrentScene('house')
-      saveLocation({ last_area: 'house', last_house_id: id, last_room: null }).catch(
-        () => {},
-      )
+      const detail = await getCommunity(id)
+      setCommunityDetail(detail)
+      setActiveCommunityId(id)
+      setScene('community')
+      saveGameSession({ last_area: 'house', last_community_id: id }).catch(() => {})
     } catch (e) {
       setError(e.message)
     } finally {
-      setHouseLoading(false)
+      setCommunityLoading(false)
     }
   }, [])
 
-  const handleExitHouse = useCallback(() => {
-    const id = activeHouseId
-    const b = buildings.find((x) => x.house.id === id)
-    // Step back out onto the doormat of the house just visited.
-    if (b) setTownSpawn({ x: b.doorCol, y: b.doorRow + 1, facing: 'down' })
-    setCurrentScene('town')
-    setHouseData(null)
-    setActiveHouseId(null)
-    saveLocation({ last_area: 'town', last_house_id: id, last_room: null }).catch(
-      () => {},
-    )
-    loadVillage(false)
-  }, [activeHouseId, buildings, loadVillage])
+  const handleExitCommunity = useCallback(() => {
+    const id = activeCommunityId
+    // Optimistic local session update: <VillageGame> remounts on the next
+    // render and initialises the player tile from `session.spawn.last_community_id`
+    // via useState. If we leave the in-memory session pointing at whatever the
+    // previous loadTown returned, the player visually lands on the *previous*
+    // visited community's doormat. Updating session here, before setScene,
+    // ensures the just-exited community is the spawn. saveGameSession + loadTown
+    // still run for server-side persistence and other state.
+    setSession((prev) => ({
+      ...(prev || {}),
+      last_area: 'town',
+      last_community_id: id,
+      spawn: { area: 'town', last_community_id: id },
+    }))
+    saveGameSession({ last_area: 'town', last_community_id: id }).catch(() => {})
+    setScene('town')
+    setCommunityDetail(null)
+    setActiveCommunityId(null)
+    loadTown().catch((e) => setError(e.message))
+  }, [activeCommunityId, loadTown])
 
-  const handleCloseDailyBrief = useCallback(() => {
-    loadVillage(false)
-  }, [loadVillage])
+  const handleCreateCommunity = useCallback(
+    async (attrs) => {
+      await createCommunity(attrs)
+      await loadTown()
+    },
+    [loadTown],
+  )
 
-  // ---- Render states -------------------------------------------------
+  const handleDeleteCommunity = useCallback(
+    async (id) => {
+      await removeCommunity(id)
+      await loadTown()
+    },
+    [loadTown],
+  )
 
-  if (loading && !villageData) {
+  const handleDailyBriefClose = useCallback(() => {
+    loadTown().catch((e) => setError(e.message))
+  }, [loadTown])
+
+  // ---- Render states ------------------------------------------------
+
+  if (loading && !communities) {
     return (
       <div className="app-shell app-centered">
         <div className="loading-card">
@@ -117,13 +141,13 @@ export default function App() {
     )
   }
 
-  if (error && !villageData) {
+  if (error && !communities) {
     return (
       <div className="app-shell app-centered">
         <div className="error-card">
           <h2>CAN'T REACH THE VILLAGE</h2>
           <p className="error-detail">{error}</p>
-          <button type="button" onClick={() => loadVillage(true)}>
+          <button type="button" onClick={() => window.location.reload()}>
             RETRY
           </button>
         </div>
@@ -131,7 +155,7 @@ export default function App() {
     )
   }
 
-  if (!villageData || !townSpawn) return null
+  if (!communities || !session || !me) return null
 
   return (
     <div className="app-shell">
@@ -140,16 +164,16 @@ export default function App() {
           <span className="app-logo">🕹️</span>
           <div>
             <h1>ONE REV VILLAGE</h1>
-            <p className="app-company">{villageData.company.name}</p>
+            <p className="app-company">{me.company.name}</p>
           </div>
         </div>
         <div className="app-user">
-          <span className="app-user-name">{villageData.user.name}</span>
-          <span className="app-user-role">{villageData.user.role}</span>
+          <span className="app-user-name">{me.user.name}</span>
+          <span className="app-user-role">{me.user.role}</span>
         </div>
       </header>
 
-      {error && villageData && (
+      {error && communities && (
         <div className="error-banner">
           {error}
           <button type="button" onClick={() => setError(null)}>
@@ -159,23 +183,27 @@ export default function App() {
       )}
 
       <main className="app-main">
-        {currentScene === 'town' && (
-          <VillageMap
-            town={town}
-            buildings={buildings}
-            houses={villageData.houses}
-            townSpawn={townSpawn}
-            dailyBrief={villageData.daily_brief}
-            onEnterHouse={handleEnterHouse}
-            onRefetch={handleCloseDailyBrief}
+        {scene === 'town' && (
+          <VillageGame
+            communities={communities}
+            session={session}
+            dailyBrief={
+              <DailyBriefShortcut items={feed} onClose={handleDailyBriefClose} />
+            }
+            onEnterCommunity={handleEnterCommunity}
+            onCreateCommunity={handleCreateCommunity}
+            onDeleteCommunity={handleDeleteCommunity}
           />
         )}
 
-        {currentScene === 'house' && houseData && (
-          <HouseInterior houseData={houseData} onExit={handleExitHouse} />
+        {scene === 'community' && communityDetail && (
+          <CommunityView
+            communityData={communityDetail}
+            onExit={handleExitCommunity}
+          />
         )}
 
-        {houseLoading && (
+        {communityLoading && (
           <div className="scene-loading-overlay">
             <div className="loading-pixel" />
             <p>ENTERING…</p>

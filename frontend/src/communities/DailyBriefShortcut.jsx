@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { PRIORITY_RANK, BOARD_LABELS } from '../constants.js'
-import { openItem, acknowledgeItem } from '../api.js'
-import { formatDate, formatExpiry } from '../format.js'
+import { PRIORITY_RANK, BOARD_LABELS } from './constants.js'
+import { openItem, acknowledgeItem } from './client.js'
+import { formatDate, formatExpiry } from './format.js'
 import PriorityChip from './PriorityChip.jsx'
 import StateBadge from './StateBadge.jsx'
 
@@ -38,7 +38,7 @@ function BriefRow({ item, onItemUpdate }) {
       </header>
 
       <p className="brief-row-source">
-        {item.house_title}
+        {item.community_title}
         {item.board_type ? ` · ${BOARD_LABELS[item.board_type] || item.board_type}` : ''}
       </p>
 

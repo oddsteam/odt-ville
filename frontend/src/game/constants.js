@@ -120,7 +120,10 @@ export function isGroundWalkable(town, x, y) {
   return WALKABLE.has(tileChar(town, x, y))
 }
 
-export const CATEGORY_EMOJI = {
+// Category emoji map used by the game's nameplate / admin row. The communities
+// module keeps its own copy of this mapping so the game/communities boundary
+// stays clean (game does not import from communities or vice-versa).
+const CATEGORY_EMOJI = {
   compliance: '⚖️',
   product: '📦',
   branch_ops: '🏢',
@@ -131,13 +134,3 @@ export const CATEGORY_EMOJI = {
 export function categoryEmoji(key) {
   return CATEGORY_EMOJI[key] || '🏠'
 }
-
-export const BOARD_LABELS = {
-  must_know: 'MUST KNOW',
-  should_know: 'SHOULD KNOW',
-  nice_to_know: 'NICE TO KNOW',
-}
-
-export const BOARD_ORDER = ['must_know', 'should_know', 'nice_to_know']
-
-export const PRIORITY_RANK = { urgent: 0, important: 1, normal: 2 }

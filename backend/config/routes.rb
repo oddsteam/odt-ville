@@ -4,18 +4,20 @@ Rails.application.routes.draw do
 
   namespace :api do
     namespace :v1 do
-      # Town map: company, houses, board summaries, counts, spawn point, daily brief.
-      get "village", to: "village#show"
+      # Communities CRUD (reusable surface — no spatial / game concepts).
+      resources :communities, only: [:index, :show, :create, :destroy]
 
-      # House interior (show) + admin add/remove a community.
-      resources :houses, only: [:show, :create, :destroy]
+      # Current viewer (user + company).
+      get "me", to: "me#show"
 
-      # Content interaction.
+      # Content feed + per-item read/ack state.
+      get  "content_items/feed", to: "content_items#feed"
       post "content_items/:id/open", to: "content_items#open"
       post "content_items/:id/acknowledge", to: "content_items#acknowledge"
 
-      # Last known location (last_area / last_house_id / last_room only — never x/y).
-      put "me/location", to: "locations#update"
+      # Village game session — spawn point + last visited (game-only).
+      get  "game/session", to: "game_sessions#show"
+      put  "game/session", to: "game_sessions#update"
     end
   end
 end

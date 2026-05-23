@@ -5,7 +5,7 @@
 
 @font-face {
   font-family: 'PokemonGB';
-  src: url('./assets/fonts/Pokemon-GB.ttf') format('truetype');
+  src: url('./game/assets/fonts/Pokemon-GB.ttf') format('truetype');
   font-display: swap;
 }
 
