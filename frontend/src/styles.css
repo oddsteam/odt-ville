@@ -478,8 +478,34 @@ button:disabled {
 
 .building {
   position: absolute;
-  border: 3px solid var(--ink);
-  filter: drop-shadow(3px 4px 0 rgba(0, 0, 0, 0.28));
+  /* drop-shadow follows the sprite's silhouette, so the building gets a
+     clean offset shadow on the grass without a bounding-box border. */
+  filter: drop-shadow(3px 4px 0 rgba(0, 0, 0, 0.32));
+}
+
+/* Two-layer sprite render: roof on top, body below. Each layer keeps its
+   own aspect ratio inside the 3w×4h footprint (roof ≈ 36%, body ≈ 64%) so
+   the seam lands where the artist drew it. */
+.bld-roof-layer,
+.bld-body-layer {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+
+.bld-roof-layer {
+  top: 0;
+  height: 36%;
+  object-position: bottom center;
+}
+
+.bld-body-layer {
+  top: 36%;
+  height: 64%;
+  object-position: top center;
 }
 
 .bld-roof {
