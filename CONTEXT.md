@@ -76,6 +76,65 @@ These boundaries exist so the game could be reused or replaced without
 touching the content layer, and so the content layer could be reused by a
 different UI (list, dashboard, bot) tomorrow.
 
+## Where the model is heading
+
+The current code calls everything "community," but the conceptual model is
+evolving in two related directions. Both are design choices, not yet built;
+the execution path lives in [`ROADMAP.md`](ROADMAP.md).
+
+### House is a spatial primitive, not a synonym for community
+
+A **house** is what the game renders — a building at a plot, with a
+coloured roof, a door, and an emoji nameplate. What's *behind* the door is
+not the game's business.
+
+Today every house is a community. Tomorrow houses will have **types**:
+
+- **Community house** — the current Must Know / Should Know / Nice to Know
+  boards.
+- **Team house** — your team's working space. Likely a flexible layout
+  configured by the team admin (Discord channel embed, Jira tiles, recent
+  commits, etc.).
+- **Townhall** — your department or the whole company. Broadcast-only.
+- **(open ended)** — onboarding flows, training, project districts.
+
+The game stays a true black box: it renders a building with a door. The
+shell looks at `house.type` and decides which detail component to mount
+when the door opens.
+
+### Relevance is a coordinate, not an algorithm
+
+The original mental model was a single global village containing every
+community in the company. We're moving toward something better: **each
+user has a hometown**.
+
+- The **hometown** is generated *for that user* from what is relevant to
+  them — communities they follow, the team they're on, their department's
+  townhall, onboarding houses while they're new.
+- Other places (the **communities plaza**, the **org HQ**, future
+  **department floors**, **project districts**) are separate maps the user
+  visits when they want to discover or check in.
+- Influence — not coercion — pulls the user out: unique wild encounters
+  spawn in the communities plaza so there's a *reason* to wander, the way
+  rare Pokémon on Route 24 made the player leave Pallet Town.
+
+What this gives the design:
+
+- **Relevance is unambiguous.** The user sees what they see because they
+  walked to where it lives — no "for you" algorithm to argue with.
+- **Joining a community gets a physical metaphor.** A house *appears* in
+  your hometown when you join. Your hometown's skyline is the visual
+  identity of *your* time at the company.
+- **Discovery is geography, not a tab.** The "browse all communities"
+  menu — the one nobody opens — becomes a place to *visit* with a goal.
+- **The org becomes fractally legible.** Hometown → team → department →
+  company. Each level can have its own map, and travel between them is
+  natural in a way no menu hierarchy can be.
+
+This is also a categorical shift in product proposition: from "the same
+corporate content with a nicer interface" to "the org is a place you live
+in, with a place that is *yours*."
+
 ## Inspirations (and why this combination is rare)
 
 - **Spatial work apps**: Gather, Sococo, Teamflow — solve presence, not
@@ -110,6 +169,8 @@ category leader in any public market as of this writing.
 
 ## What to read next
 
+- [`ROADMAP.md`](ROADMAP.md) — the phased path from today's village to
+  the hometown / multi-map / typed-house model.
 - `README.md` (if present) — how to run locally / on the VM.
 - `docs/prd-game-blackbox.md` — the architectural split.
 - Open issues + PR descriptions for current work in flight.
