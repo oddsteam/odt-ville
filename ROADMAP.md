@@ -11,7 +11,13 @@ do not start until earlier ones are paying off.
 If you are wondering *why* any of this matters, read CONTEXT.md first.
 This document is **what** and **when**; CONTEXT.md is **why**.
 
-## Where we are today
+## Phase 0 — Community module: all communities in one map
+
+**This is where we are today.** It is a real product, not a stepping
+stone — Phase 0 ships a working employee app with the spatial-village
+UX, just with the simplest possible content model behind it.
+
+What it gives:
 
 - One global village per company, generated from `position_order` on the
   `houses` table.
@@ -23,7 +29,9 @@ This document is **what** and **when**; CONTEXT.md is **why**.
 - Wild encounters fire on a single global encounter table (Vayu Phoenix).
 - No memberships. The whole company sees the same village.
 
-## Phase 0 — Generalise "community" → "house" at the game boundary
+Status: ✅ landed.
+
+## Phase 1 — Generalise "community" → "house" at the game boundary
 
 **Ships:** a rename refactor. The game's prop becomes `houses`; the event
 becomes `onEnterHouse`. No new types, no schema changes — communities are
@@ -34,7 +42,7 @@ phase can pour data through the same prop without touching the game.
 
 **Cost:** small. Mechanical refactor, one PR.
 
-## Phase 1 — Memberships and the `/me/houses` endpoint
+## Phase 2 — Memberships and the `/me/houses` endpoint
 
 **Ships:** a `community_memberships` (or generic `user_houses`) table on
 the backend. A new endpoint `GET /api/v1/me/houses` returns just the
@@ -47,9 +55,9 @@ sees what is relevant to them. Joining a community = inserting a row in
 the membership table.
 
 **Note:** `position_order` is still global on the house. Per-user ordering
-comes in Phase 2.
+comes in Phase 3.
 
-## Phase 2 — Multiple maps
+## Phase 3 — Multiple maps
 
 **Ships:** a `Map` concept on the backend (start with two: `hometown`,
 `communities-plaza`). The endpoint becomes `GET /api/v1/maps/:slug/houses`
@@ -66,7 +74,7 @@ are generated or remembered per user.
 that exists separately from the user's hometown. The admin tab can curate
 the plaza independently of who belongs to what.
 
-## Phase 3 — Gates and travel between maps
+## Phase 4 — Gates and travel between maps
 
 **Ships:** a portal mechanic in the game. The bottom-edge gate at the
 south of the map (today decorative) now navigates. Walking through it
@@ -77,7 +85,7 @@ a "fly home" shortcut in the overlay.
 itself remains a black box that just renders "the current map." All map
 state lives in the shell.
 
-## Phase 4 — Map-scoped encounter tables
+## Phase 5 — Map-scoped encounter tables
 
 **Ships:** encounter tables move from a global module to a per-map config.
 Each map declares its own `{ rate, table }`. The Vayu Phoenix lives only
@@ -89,7 +97,7 @@ first encounter).
 becomes intrinsically rewarding; the user has a reason to wander beyond
 their hometown.
 
-## Phase 5 — House types
+## Phase 6 — House types
 
 **Ships:** a `type` column on `houses` plus per-type metadata. New types
 in order of demand:
@@ -105,7 +113,7 @@ maps `house.type → detail component`.
 **Unlocks:** the village is no longer a content app — it's an
 organisational app where many kinds of work-relevant spaces co-exist.
 
-## Phase 6 — Composition into adjacent maps (fractal geography)
+## Phase 7 — Composition into adjacent maps (fractal geography)
 
 **Ships:** maps beyond hometown and plaza:
 
@@ -129,6 +137,22 @@ app becomes a thin **houses registry** that aggregates from
 something to build before the per-type services have grown enough to
 justify it.
 
+## Cross-cutting — Designer tooling
+
+Not its own phase; lands alongside the phases that need it.
+
+- **Map authoring** (Phase 3+, when curated maps appear): use **Tiled** or
+  **LDtk** for designer-painted maps. Replace runtime `buildTown()` with
+  a JSON loader that produces the same `town` shape. The game module is
+  unchanged.
+- **House interior layout editing** (Phase 6, for team houses): use
+  **react-grid-layout** (or **dnd-kit** + a custom grid) for the team
+  admin's "edit layout" view. Widgets register themselves; the layout +
+  per-widget config is saved per house.
+
+Both should be built on top of existing libraries — don't build either
+editor from scratch.
+
 ## Living-document rules
 
 - When a phase ships, mark it ✅ here and link the merged PR.
@@ -142,10 +166,11 @@ justify it.
 
 | Phase | Status | Issues / PRs |
 |---|---|---|
-| 0 — Rename community → house at game boundary | planned | — |
-| 1 — Memberships + `/me/houses` | planned | — |
-| 2 — Multiple maps | planned | — |
-| 3 — Gates and travel | planned | — |
-| 4 — Map-scoped encounters | planned | — |
-| 5 — House types (team, townhall) | planned | — |
-| 6 — Composition into adjacent maps | planned | — |
+| 0 — Community module: all communities in one map | ✅ landed | #1, #7, #8, #10, #11, #12, #13, #14 |
+| 1 — Generalise community → house at game boundary | planned | — |
+| 2 — Memberships and `/me/houses` | planned | — |
+| 3 — Multiple maps | planned | — |
+| 4 — Gates and travel | planned | — |
+| 5 — Map-scoped encounters | planned | — |
+| 6 — House types (team, townhall) | planned | — |
+| 7 — Composition into adjacent maps | planned | — |
