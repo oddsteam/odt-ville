@@ -151,6 +151,40 @@ button:disabled {
   color: #a9b6d0;
 }
 
+/* ---- Top-level navigation (tabs) ---------------------------- */
+
+.app-tabs {
+  display: flex;
+  gap: 0;
+  padding: 0 16px;
+  background: var(--bezel);
+  border-bottom: 2px solid var(--screen-edge);
+}
+
+.app-tab {
+  font-family: var(--font-ui);
+  font-size: 9px;
+  letter-spacing: 0.5px;
+  color: #c9cede;
+  background: var(--bezel-lip);
+  border: 3px solid var(--ink);
+  border-bottom: 0;
+  border-radius: 6px 6px 0 0;
+  padding: 7px 14px;
+  margin-right: 4px;
+  margin-bottom: -2px;
+  cursor: pointer;
+}
+
+.app-tab:hover {
+  color: var(--paper);
+}
+
+.app-tab-active {
+  background: var(--paper);
+  color: var(--ink);
+}
+
 .app-main {
   position: relative;
   flex: 1;
@@ -1279,8 +1313,40 @@ button:disabled {
   font-size: 8px;
 }
 
-.admin-modal {
-  max-width: 470px;
+/* ---- Admin page (no longer a modal — lives under the Admin tab) ---- */
+
+.admin-page {
+  width: 100%;
+  max-width: 560px;
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-page-header {
+  background: var(--ink);
+  color: var(--paper);
+  padding: 10px 14px;
+  border: 3px solid var(--ink);
+  border-bottom: 0;
+}
+
+.admin-page-header h2 {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  letter-spacing: 1px;
+}
+
+.admin-page-header .admin-count {
+  color: #a9b6d0;
+  margin-top: 4px;
+}
+
+.admin-page-body {
+  background: var(--paper);
+  border: 3px solid var(--ink);
+  box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.4);
+  padding: 14px 16px;
 }
 
 .admin-count {

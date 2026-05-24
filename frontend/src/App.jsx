@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import VillageGame from './game/VillageGame.jsx'
 import CommunityView from './communities/CommunityView.jsx'
+import CommunitiesAdminPanel from './communities/CommunitiesAdminPanel.jsx'
 import DailyBriefShortcut from './communities/DailyBriefShortcut.jsx'
 import {
   listCommunities,
   getCommunity,
-  createCommunity,
-  removeCommunity,
   getFeed,
 } from './communities/client.js'
 import { getGameSession, saveGameSession } from './game-session/client.js'
@@ -27,6 +26,11 @@ async function getMe() {
 // It hands data to the game via props, listens for game events, and persists
 // session changes. Nothing here knows about tiles, sprites, or encounters.
 export default function App() {
+  // Top-level navigation: 'village' (the game + community detail) | 'admin'
+  // (the community CRUD console). Keeping admin out of the game module is
+  // what makes <VillageGame> a true black box — see issue #13 / PR.
+  const [view, setView] = useState('village')
+
   const [scene, setScene] = useState('town')
   const [activeCommunityId, setActiveCommunityId] = useState(null)
   const [communityDetail, setCommunityDetail] = useState(null)
@@ -108,21 +112,20 @@ export default function App() {
     loadTown().catch((e) => setError(e.message))
   }, [activeCommunityId, loadTown])
 
-  const handleCreateCommunity = useCallback(
-    async (attrs) => {
-      await createCommunity(attrs)
-      await loadTown()
-    },
-    [loadTown],
-  )
+  // Tab switch: opening Admin from inside a community treats it like Exit so
+  // the user lands back in town when they return to the village tab.
+  const goToAdmin = useCallback(() => {
+    if (scene === 'community') {
+      setScene('town')
+      setCommunityDetail(null)
+      setActiveCommunityId(null)
+    }
+    setView('admin')
+  }, [scene])
 
-  const handleDeleteCommunity = useCallback(
-    async (id) => {
-      await removeCommunity(id)
-      await loadTown()
-    },
-    [loadTown],
-  )
+  const goToVillage = useCallback(() => {
+    setView('village')
+  }, [])
 
   const handleDailyBriefClose = useCallback(() => {
     loadTown().catch((e) => setError(e.message))
@@ -173,6 +176,25 @@ export default function App() {
         </div>
       </header>
 
+      <nav className="app-tabs" aria-label="Top-level navigation">
+        <button
+          type="button"
+          className={`app-tab${view === 'village' ? ' app-tab-active' : ''}`}
+          onClick={goToVillage}
+          aria-current={view === 'village' ? 'page' : undefined}
+        >
+          🕹️ VILLAGE
+        </button>
+        <button
+          type="button"
+          className={`app-tab${view === 'admin' ? ' app-tab-active' : ''}`}
+          onClick={goToAdmin}
+          aria-current={view === 'admin' ? 'page' : undefined}
+        >
+          ⚙ ADMIN
+        </button>
+      </nav>
+
       {error && communities && (
         <div className="error-banner">
           {error}
@@ -183,7 +205,7 @@ export default function App() {
       )}
 
       <main className="app-main">
-        {scene === 'town' && (
+        {view === 'village' && scene === 'town' && (
           <VillageGame
             communities={communities}
             session={session}
@@ -191,15 +213,20 @@ export default function App() {
               <DailyBriefShortcut items={feed} onClose={handleDailyBriefClose} />
             }
             onEnterCommunity={handleEnterCommunity}
-            onCreateCommunity={handleCreateCommunity}
-            onDeleteCommunity={handleDeleteCommunity}
           />
         )}
 
-        {scene === 'community' && communityDetail && (
+        {view === 'village' && scene === 'community' && communityDetail && (
           <CommunityView
             communityData={communityDetail}
             onExit={handleExitCommunity}
+          />
+        )}
+
+        {view === 'admin' && (
+          <CommunitiesAdminPanel
+            communities={communities}
+            onChanged={loadTown}
           />
         )}
 

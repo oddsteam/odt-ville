@@ -4,7 +4,6 @@ import PlayerSprite from './PlayerSprite.jsx'
 import Building from './Building.jsx'
 import DialogueBox from './DialogueBox.jsx'
 import MobileDpad from './MobileDpad.jsx'
-import AdminPanel from './AdminPanel.jsx'
 import EncounterScreen from './EncounterScreen.jsx'
 import { rollEncounter, pickWildPokemon, GRACE_STEPS } from './encounters.js'
 
@@ -55,24 +54,18 @@ function clampCamera(value, town, view) {
 //   dailyBrief          — a slot (React node) the shell injects into the
 //                         top-right overlay; the game does not know its shape
 //   onEnterCommunity    — fired when the avatar steps onto a doorway
-//   onCreateCommunity   — admin action raised from <AdminPanel>
-//   onDeleteCommunity   — admin action raised from <AdminPanel>
 export default function VillageMap({
   town,
   buildings,
-  communities,
   townSpawn,
   dailyBrief,
   onEnterCommunity,
-  onCreateCommunity,
-  onDeleteCommunity,
 }) {
   const [player, setPlayer] = useState({ x: townSpawn.x, y: townSpawn.y })
   const [facing, setFacing] = useState(townSpawn.facing || 'down')
   const [moving, setMoving] = useState(false)
   const [stepCount, setStepCount] = useState(0)
   const [dialogue, setDialogue] = useState(null) // { lines, idx } | null
-  const [adminOpen, setAdminOpen] = useState(false)
   const [encounter, setEncounter] = useState(null) // wild Pokémon | null
   const [view, setView] = useState({ w: 720, h: 520 })
   const [ready, setReady] = useState(false)
@@ -85,7 +78,6 @@ export default function VillageMap({
   const playerRef = useRef(player)
   const facingRef = useRef(facing)
   const dialogueRef = useRef(dialogue)
-  const adminOpenRef = useRef(adminOpen)
   const encounterRef = useRef(null) // set manually — must be live for the walk loop
   const graceRef = useRef(0) // steps remaining where encounters are suppressed
   const buildingsRef = useRef(buildings)
@@ -95,7 +87,6 @@ export default function VillageMap({
   playerRef.current = player
   facingRef.current = facing
   dialogueRef.current = dialogue
-  adminOpenRef.current = adminOpen
   buildingsRef.current = buildings
   enterRef.current = onEnterCommunity
   townRef.current = town
@@ -195,13 +186,7 @@ export default function VillageMap({
   // ---- walk loop (keeps moving while a direction is held) ------------
   useEffect(() => {
     const id = window.setInterval(() => {
-      if (
-        adminOpenRef.current ||
-        dialogueRef.current ||
-        movingRef.current ||
-        encounterRef.current
-      )
-        return
+      if (dialogueRef.current || movingRef.current || encounterRef.current) return
       const held = heldRef.current
       if (held.length) step(held[held.length - 1])
     }, 40)
@@ -211,7 +196,6 @@ export default function VillageMap({
   // ---- keyboard ------------------------------------------------------
   useEffect(() => {
     function onDown(e) {
-      if (adminOpenRef.current) return // let the admin form keep its keystrokes
       if (encounterRef.current) return // encounter screen owns the keyboard
       const k = e.key.toLowerCase()
       const dir = KEY_DIR[k]
@@ -370,14 +354,6 @@ export default function VillageMap({
               {dailyBrief}
               <button
                 type="button"
-                className="admin-btn"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => setAdminOpen(true)}
-              >
-                ⚙ ADMIN
-              </button>
-              <button
-                type="button"
                 className="fullscreen-btn"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={toggleFullscreen}
@@ -413,15 +389,6 @@ export default function VillageMap({
               key={dialogue.idx}
               line={dialogue.lines[dialogue.idx]}
               onAdvance={pressA}
-            />
-          )}
-
-          {adminOpen && (
-            <AdminPanel
-              communities={communities}
-              onClose={() => setAdminOpen(false)}
-              onCreate={onCreateCommunity}
-              onDelete={onDeleteCommunity}
             />
           )}
 

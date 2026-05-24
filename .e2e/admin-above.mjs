@@ -27,8 +27,10 @@ await page.waitForTimeout(500)
 const before = await snapshot()
 
 // Add one community — this forces the town from 5 to 6 (wraps to a 2nd row).
-await page.click('.admin-btn')
-await page.waitForSelector('.admin-modal', { timeout: 5000 })
+// Admin lives in its own top-level tab now; the village game no longer has
+// an in-game ⚙ button.
+await page.click('.app-tab >> text=⚙ ADMIN')
+await page.waitForSelector('.admin-page', { timeout: 5000 })
 await page.fill('.admin-form input >> nth=0', 'Finance House')
 await page.click('.admin-colour >> nth=5')
 await page.click('.admin-add')
@@ -37,7 +39,7 @@ await page.waitForFunction(
   6,
   { timeout: 8000 },
 )
-await page.click('.modal-close')
+await page.click('.app-tab >> text=🕹️ VILLAGE')
 await page.waitForSelector('.building', { timeout: 5000 })
 await page.waitForTimeout(400)
 const after = await snapshot()

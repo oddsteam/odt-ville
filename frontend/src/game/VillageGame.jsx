@@ -15,9 +15,7 @@ import VillageMap from './VillageMap.jsx'
 //                       (e.g. a daily-brief modal trigger).
 //
 // Outputs:
-//   onEnterCommunity(id)       — player walked onto a community doorway
-//   onCreateCommunity(attrs)   — admin pressed Add in the admin panel
-//   onDeleteCommunity(id)      — admin pressed Delete on a community row
+//   onEnterCommunity(id)  — player walked onto a community doorway
 //
 // Sort communities by position_order and drop each onto the next plot of the
 // town the game generates. The town size adapts to community count.
@@ -43,8 +41,6 @@ export default function VillageGame({
   session,
   dailyBrief,
   onEnterCommunity,
-  onCreateCommunity,
-  onDeleteCommunity,
 }) {
   const town = useMemo(
     () => buildTown(Math.max(communities.length, 1)),
@@ -63,12 +59,9 @@ export default function VillageGame({
     <VillageMap
       town={town}
       buildings={buildings}
-      communities={communities}
       townSpawn={townSpawn}
       dailyBrief={dailyBrief}
       onEnterCommunity={onEnterCommunity}
-      onCreateCommunity={onCreateCommunity}
-      onDeleteCommunity={onDeleteCommunity}
     />
   )
 }
