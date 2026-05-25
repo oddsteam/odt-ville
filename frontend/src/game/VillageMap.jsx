@@ -296,6 +296,18 @@ export default function VillageMap({
     return () => document.removeEventListener('fullscreenchange', onChange)
   }, [])
 
+  // ---- test API marker — see issue #16 PR-A -------------------------
+  // Exposes `window.__game.engine` so the engine-swap e2e can tell which
+  // backend rendered the current page. PR-B+ extends this surface with
+  // playerTile() / buildings() / opponent() introspection.
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined
+    window.__game = { engine: 'dom' }
+    return () => {
+      if (window.__game && window.__game.engine === 'dom') delete window.__game
+    }
+  }, [])
+
   // ---- viewport measurement (for the camera) -------------------------
   useLayoutEffect(() => {
     const el = screenRef.current

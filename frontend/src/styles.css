@@ -687,6 +687,32 @@ button:disabled {
   max-height: clamp(280px, 56vh, 480px);
 }
 
+/* ---- Phaser host (issue #16, PR-A) -------------------------
+   The DOM engine is the default; this rule activates only when
+   `?engine=phaser` swaps in <PhaserGame>. The canvas Phaser injects
+   scales to fit; we just give the host a visible box. */
+
+.phaser-host {
+  display: flex;
+  width: 100%;
+  max-width: 1024px;
+  aspect-ratio: 4 / 3;
+  margin: 0 auto;
+  background: #1a1a1a;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow:
+    inset 0 0 0 8px #2c1d10,
+    inset 0 0 0 12px #4a3a2a;
+}
+
+.phaser-host canvas {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+  image-rendering: pixelated;
+}
+
 /* ---- buildings -------------------------------------------- */
 
 .building {

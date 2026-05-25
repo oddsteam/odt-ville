@@ -1,6 +1,21 @@
 import { useMemo } from 'react'
 import { buildTown } from './constants.js'
 import VillageMap from './VillageMap.jsx'
+import PhaserGame from './phaser/PhaserGame.jsx'
+
+// PR-A engine flag. URL ?engine=phaser swaps in the Phaser-backed game;
+// anything else (or no flag) keeps the existing DOM/CSS engine as the
+// default while the rebuild lands across PR-A..E (issue #16).
+function readEngineFlag() {
+  if (typeof window === 'undefined') return 'dom'
+  try {
+    return new URLSearchParams(window.location.search).get('engine') === 'phaser'
+      ? 'phaser'
+      : 'dom'
+  } catch {
+    return 'dom'
+  }
+}
 
 // The Village Game black box. Receives community list + game session as
 // props; emits door-entry and admin events. Has no API knowledge, no routing,
@@ -44,6 +59,11 @@ export default function VillageGame({
   trainerDefeated,
   onTrainerDefeated,
 }) {
+  // PR-A: engine selection happens once per mount. ?engine=phaser swaps in
+  // the Phaser-backed placeholder; the default is still the DOM engine so
+  // the existing tests (and users) see no behavioral change.
+  const engine = useMemo(readEngineFlag, [])
+
   const town = useMemo(
     () => buildTown(Math.max(communities.length, 1)),
     [communities],
@@ -56,6 +76,12 @@ export default function VillageGame({
     () => resolveSpawn(town, buildings, session),
     [town, buildings, session],
   )
+
+  if (engine === 'phaser') {
+    // PR-A only hosts a placeholder scene — the data plumbing (communities,
+    // session, callbacks) lands in PR-B when the real TownScene moves over.
+    return <PhaserGame />
+  }
 
   return (
     <VillageMap
