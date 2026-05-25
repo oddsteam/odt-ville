@@ -71,16 +71,22 @@ await press('ArrowLeft', 9)
 const afterLeft = await playerTile()
 await page.screenshot({ path: `${OUT}/walk-phaser-02-at-door.png` })
 
-// Step into Compliance's door. The Phaser scene emits enterCommunity, the
-// React shell mounts the DOM CommunityInterior (still on the DOM side
-// in PR-B).
+// Step into Compliance's door. The Phaser scene emits enterCommunity and
+// starts Phaser's InteriorScene (PR-C). The DOM <CommunityInterior> is
+// no longer mounted under ?engine=phaser — the InteriorScene owns the
+// canvas instead.
 await press('ArrowUp', 1)
-await page.waitForSelector('.community-interior', { timeout: 5000 })
-await page.waitForSelector('.interior-title', { timeout: 3000 })
+await page.waitForFunction(
+  () => window.__game?.activeSceneKey?.() === 'Interior',
+  null,
+  { timeout: 5000 },
+)
 await page.waitForTimeout(300)
 await page.screenshot({ path: `${OUT}/walk-phaser-03-interior.png` })
 
-const interiorTitle = (await page.textContent('.interior-title'))?.trim()
+const interiorTitle = await page.evaluate(
+  () => window.__game?.community?.()?.title || null,
+)
 
 const ok =
   spawn.x === 12 &&

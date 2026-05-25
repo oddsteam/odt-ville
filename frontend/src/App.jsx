@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import VillageGame from './game/VillageGame.jsx'
 import CommunityInterior from './game/CommunityInterior.jsx'
 import CommunitiesAdminPanel from './communities/CommunitiesAdminPanel.jsx'
 import DailyBriefShortcut from './communities/DailyBriefShortcut.jsx'
 import { listCommunities, getFeed } from './communities/client.js'
 import { getGameSession, saveGameSession } from './game-session/client.js'
+import { readEngineFlag } from './game/engineFlag.js'
 
 // Demo target for every board's "open content list" action. Replaced in a
 // follow-up by per-board content-list views (see issue #15 follow-ups).
@@ -30,6 +31,11 @@ export default function App() {
   // (the community CRUD console). Keeping admin out of the game module is
   // what makes <VillageGame> a true black box — see issue #13 / PR.
   const [view, setView] = useState('village')
+
+  // Engine flag — used to gate the DOM community-interior mount. Under
+  // Phaser the InteriorScene lives on the canvas, so the React shell
+  // never mounts the DOM <CommunityInterior> alongside it.
+  const engine = useMemo(readEngineFlag, [])
 
   const [scene, setScene] = useState('town')
   const [activeCommunityId, setActiveCommunityId] = useState(null)
@@ -76,14 +82,18 @@ export default function App() {
 
   // ---- game events --------------------------------------------------
 
-  const handleEnterCommunity = useCallback((id) => {
-    // The spatial interior renders from the community summary the shell
-    // already has — no detail fetch needed, so the door-to-room transition
-    // is instant.
-    setActiveCommunityId(id)
-    setScene('community-interior')
-    saveGameSession({ last_area: 'house', last_community_id: id }).catch(() => {})
-  }, [])
+  const handleEnterCommunity = useCallback(
+    (id) => {
+      // Both engines save session + track the active community. Only the
+      // DOM engine flips `scene` to mount <CommunityInterior>; under
+      // Phaser the InteriorScene runs inside the canvas and the React
+      // `scene` state stays on 'town' the whole time.
+      setActiveCommunityId(id)
+      if (engine === 'dom') setScene('community-interior')
+      saveGameSession({ last_area: 'house', last_community_id: id }).catch(() => {})
+    },
+    [engine],
+  )
 
   // Each board's "open content list" action — for the demo every board
   // points at the same external URL. The game module knows nothing about
@@ -92,26 +102,32 @@ export default function App() {
     window.open(DEMO_BOARD_URL, '_blank', 'noopener,noreferrer')
   }, [])
 
-  const handleExitCommunity = useCallback(() => {
-    const id = activeCommunityId
-    // Optimistic local session update: <VillageGame> remounts on the next
-    // render and initialises the player tile from `session.spawn.last_community_id`
-    // via useState. If we leave the in-memory session pointing at whatever the
-    // previous loadTown returned, the player visually lands on the *previous*
-    // visited community's doormat. Updating session here, before setScene,
-    // ensures the just-exited community is the spawn. saveGameSession + loadTown
-    // still run for server-side persistence and other state.
-    setSession((prev) => ({
-      ...(prev || {}),
-      last_area: 'town',
-      last_community_id: id,
-      spawn: { area: 'town', last_community_id: id },
-    }))
-    saveGameSession({ last_area: 'town', last_community_id: id }).catch(() => {})
-    setScene('town')
-    setActiveCommunityId(null)
-    loadTown().catch((e) => setError(e.message))
-  }, [activeCommunityId, loadTown])
+  const handleExitCommunity = useCallback(
+    (idFromCaller) => {
+      // DOM engine calls this without args (onExit from <CommunityInterior>);
+      // Phaser passes the exited community id via the bus event.
+      const id = idFromCaller ?? activeCommunityId
+      // Optimistic local session update: under the DOM engine,
+      // <VillageGame> remounts on the next render and initialises the
+      // player tile from `session.spawn.last_community_id` via useState.
+      // Updating session here, before setScene, ensures the just-exited
+      // community is the spawn (otherwise the player lands on whatever
+      // the previous loadTown returned). Under Phaser the scene-start
+      // data already does the spawn, so this is purely for the next
+      // load.
+      setSession((prev) => ({
+        ...(prev || {}),
+        last_area: 'town',
+        last_community_id: id,
+        spawn: { area: 'town', last_community_id: id },
+      }))
+      saveGameSession({ last_area: 'town', last_community_id: id }).catch(() => {})
+      if (engine === 'dom') setScene('town')
+      setActiveCommunityId(null)
+      loadTown().catch((e) => setError(e.message))
+    },
+    [activeCommunityId, engine, loadTown],
+  )
 
   // Tab switch: opening Admin from inside a community treats it like Exit so
   // the user lands back in town when they return to the village tab.
@@ -205,7 +221,7 @@ export default function App() {
       )}
 
       <main className="app-main">
-        {view === 'village' && scene === 'town' && (
+        {view === 'village' && (engine === 'phaser' || scene === 'town') && (
           <VillageGame
             communities={communities}
             session={session}
@@ -213,21 +229,26 @@ export default function App() {
               <DailyBriefShortcut items={feed} onClose={handleDailyBriefClose} />
             }
             onEnterCommunity={handleEnterCommunity}
+            onExitCommunity={handleExitCommunity}
+            onOpenBoard={handleOpenBoard}
             trainerDefeated={trainerDefeated}
             onTrainerDefeated={() => setTrainerDefeated(true)}
           />
         )}
 
-        {view === 'village' && scene === 'community-interior' && activeCommunityId != null && (
-          <CommunityInterior
-            community={communities.find((c) => c.id === activeCommunityId)}
-            dailyBrief={
-              <DailyBriefShortcut items={feed} onClose={handleDailyBriefClose} />
-            }
-            onExit={handleExitCommunity}
-            onOpenBoard={handleOpenBoard}
-          />
-        )}
+        {view === 'village' &&
+          engine === 'dom' &&
+          scene === 'community-interior' &&
+          activeCommunityId != null && (
+            <CommunityInterior
+              community={communities.find((c) => c.id === activeCommunityId)}
+              dailyBrief={
+                <DailyBriefShortcut items={feed} onClose={handleDailyBriefClose} />
+              }
+              onExit={handleExitCommunity}
+              onOpenBoard={handleOpenBoard}
+            />
+          )}
 
         {view === 'admin' && (
           <CommunitiesAdminPanel

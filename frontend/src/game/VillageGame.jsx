@@ -2,20 +2,7 @@ import { useMemo } from 'react'
 import { buildTown } from './constants.js'
 import VillageMap from './VillageMap.jsx'
 import PhaserGame from './phaser/PhaserGame.jsx'
-
-// PR-A engine flag. URL ?engine=phaser swaps in the Phaser-backed game;
-// anything else (or no flag) keeps the existing DOM/CSS engine as the
-// default while the rebuild lands across PR-A..E (issue #16).
-function readEngineFlag() {
-  if (typeof window === 'undefined') return 'dom'
-  try {
-    return new URLSearchParams(window.location.search).get('engine') === 'phaser'
-      ? 'phaser'
-      : 'dom'
-  } catch {
-    return 'dom'
-  }
-}
+import { readEngineFlag } from './engineFlag.js'
 
 // The Village Game black box. Receives community list + game session as
 // props; emits door-entry and admin events. Has no API knowledge, no routing,
@@ -56,6 +43,8 @@ export default function VillageGame({
   session,
   dailyBrief,
   onEnterCommunity,
+  onExitCommunity,
+  onOpenBoard,
   trainerDefeated,
   onTrainerDefeated,
 }) {
@@ -78,15 +67,18 @@ export default function VillageGame({
   )
 
   if (engine === 'phaser') {
-    // PR-B: TownScene reads communities + session via the Phaser registry,
-    // and emits enterCommunity via the shared bus when the player walks
-    // onto a doorway. Trainer + wild encounters + dailyBrief overlay still
-    // live in the DOM engine — PR-C..D move those to Phaser too.
+    // PR-C: the interior scene also lives inside Phaser now. Town →
+    // Interior and Interior → Town transitions happen entirely on the
+    // canvas; the React shell only listens for enterCommunity (to save
+    // session), exitCommunity (to save session + activeCommunityId
+    // bookkeeping), and openBoard (to launch the external URL).
     return (
       <PhaserGame
         communities={communities}
         session={session}
         onEnterCommunity={onEnterCommunity}
+        onExitCommunity={onExitCommunity}
+        onOpenBoard={onOpenBoard}
       />
     )
   }

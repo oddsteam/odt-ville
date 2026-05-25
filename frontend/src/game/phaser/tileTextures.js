@@ -120,6 +120,58 @@ export function ensureTileTextures(scene) {
   })
 }
 
+// ---- Interior textures (PR-C) ------------------------------------
+// Mirrors the CSS look of <CommunityInterior>: warm wood floor, dark
+// stone wall (with optional accent banner painted at runtime per
+// community via a separate sprite), and a doormat labelled "EXIT".
+
+const INTERIOR_PALETTE = {
+  floor: 0xd6a86b,
+  floorSeam: 0xa07237,
+  wall: 0x6a5538,
+  doormat: 0x8d6a3d,
+  doormatFrame: 0x4a3a2a,
+}
+
+export function ensureInteriorTileTextures(scene) {
+  if (scene.textures.exists('interior.floor')) return
+
+  drawTile(scene, 'interior.floor', (g) => {
+    g.fillStyle(INTERIOR_PALETTE.floor, 1)
+    g.fillRect(0, 0, TILE, TILE)
+    g.fillStyle(INTERIOR_PALETTE.floorSeam, 1)
+    g.fillRect(0, TILE - 3, TILE, 3) // bottom plank seam
+    g.fillStyle(0xffffff, 0.18)
+    g.fillRect(0, 0, TILE, 1) // top highlight
+    g.fillStyle(0x000000, 0.12)
+    g.fillRect(0, 0, 2, TILE) // vertical plank seam (left)
+  })
+
+  drawTile(scene, 'interior.wall', (g) => {
+    g.fillStyle(INTERIOR_PALETTE.wall, 1)
+    g.fillRect(0, 0, TILE, TILE)
+    g.fillStyle(0xffffff, 0.18)
+    g.fillRect(0, 0, TILE, 4)
+    g.fillStyle(0x000000, 0.3)
+    g.fillRect(0, TILE - 4, TILE, 4)
+    g.fillStyle(0x000000, 0.18)
+    g.fillRect(0, 0, 4, TILE)
+    g.fillStyle(0x000000, 0.18)
+    g.fillRect(TILE - 4, 0, 4, TILE)
+  })
+
+  drawTile(scene, 'interior.doormat', (g) => {
+    g.fillStyle(INTERIOR_PALETTE.doormat, 1)
+    g.fillRect(0, 0, TILE, TILE)
+    g.lineStyle(3, INTERIOR_PALETTE.doormatFrame, 1)
+    g.strokeRect(1.5, 1.5, TILE - 3, TILE - 3)
+    g.fillStyle(0xffffff, 0.18)
+    g.fillRect(3, 3, TILE - 6, 6)
+    g.fillStyle(0x000000, 0.28)
+    g.fillRect(3, TILE - 9, TILE - 6, 6)
+  })
+}
+
 // Helper: open a Graphics, run the painter, render to a texture, throw the
 // Graphics away. The Graphics object isn't added to the scene — it lives
 // just long enough to bake the texture into the GPU.
