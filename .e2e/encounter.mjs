@@ -1,6 +1,7 @@
 // Drives the browser into the tall-grass field and wanders until a wild
 // Pokémon encounter fires, then RUNs from it.
 import { chromium } from 'playwright-core'
+import { clearGateTrainer } from './_helpers.mjs'
 
 const OUT = process.argv[2] || '.'
 const browser = await chromium.launch({ channel: 'chrome', headless: true })
@@ -25,9 +26,14 @@ const press = async (key, times = 1) => {
   }
 }
 
+// First step up triggers the gate trainer's duel — run away from him so the
+// rest of the walk is unblocked. After this returns the player is one tile
+// above the entrance.
+await clearGateTrainer(page)
+
 // Spawn at the Town Entrance — step up the stem into the field rows, then off
 // the safe path into the tall grass.
-await press('ArrowUp', 2)
+await press('ArrowUp', 1)
 await press('ArrowLeft', 1)
 await page.screenshot({ path: `${OUT}/enc-02-in-grass.png` })
 

@@ -41,6 +41,8 @@ export default function VillageGame({
   session,
   dailyBrief,
   onEnterCommunity,
+  trainerDefeated,
+  onTrainerDefeated,
 }) {
   const town = useMemo(
     () => buildTown(Math.max(communities.length, 1)),
@@ -62,6 +64,8 @@ export default function VillageGame({
       townSpawn={townSpawn}
       dailyBrief={dailyBrief}
       onEnterCommunity={onEnterCommunity}
+      trainerDefeated={trainerDefeated}
+      onTrainerDefeated={onTrainerDefeated}
     />
   )
 }

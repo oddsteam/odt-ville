@@ -627,6 +627,66 @@ button:disabled {
   }
 }
 
+/* ---- gate trainer ----------------------------------------- */
+
+/* The trainer sprite sits inside one tile. The source PNG is a tall
+   standing chibi figure (taller than it is wide), so we let it overflow
+   the tile upward — same trick the buildings use — and ground it at the
+   tile's bottom edge so his shoes line up with the road. */
+.trainer {
+  position: absolute;
+  display: grid;
+  place-items: end center;
+  pointer-events: none;
+  filter: drop-shadow(2px 3px 0 rgba(0, 0, 0, 0.32));
+}
+
+.trainer img {
+  /* Overflow the tile vertically so the figure reads at a believable
+     height next to the player without resizing the world. */
+  height: 96px;
+  width: auto;
+  object-fit: contain;
+  image-rendering: pixelated;
+  transform: translateY(0);
+}
+
+/* Defeated trainer fades a hair so he still reads as "guarding" but
+   doesn't visually pull as much attention. */
+.trainer-defeated img {
+  filter: grayscale(0.5) brightness(0.85);
+}
+
+/* Sight-line markers — soft inset chevrons telegraphing where he can see,
+   in the spirit of the Game Boy trainer's exclamation alert. */
+.trainer-sight {
+  position: absolute;
+  pointer-events: none;
+  background: radial-gradient(
+    circle at center,
+    rgba(255, 80, 80, 0.32) 0%,
+    rgba(255, 80, 80, 0.12) 35%,
+    transparent 70%
+  );
+  animation: trainer-sight-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes trainer-sight-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 0.95; }
+}
+
+/* Trainer in the battle stage — the figure is portrait-oriented (the
+   chibi sprite is ~3w × 4h), so override the square sizing of the wild
+   sprite and let it stretch taller than wide while still fitting in the
+   field without crowding the dialogue box at the bottom. */
+.encounter-trainer .encounter-sprite {
+  width: auto;
+  height: auto;
+  max-width: clamp(200px, 36vh, 320px);
+  max-height: clamp(280px, 56vh, 480px);
+}
+
 /* ---- buildings -------------------------------------------- */
 
 .building {

@@ -3,6 +3,7 @@
 // to each and press A, assert each opens the demo external URL in a new tab.
 // Then walk back south through the door and confirm we land in the village.
 import { chromium } from 'playwright-core'
+import { clearGateTrainer } from './_helpers.mjs'
 
 const OUT = process.argv[2] || '.'
 const DEMO_URL = 'https://onerev-sit.dev.krungthai.com/'
@@ -61,8 +62,13 @@ await page.waitForSelector('.gb-screen', { timeout: 15000 })
 await page.waitForSelector('.building', { timeout: 15000 })
 await page.waitForTimeout(700)
 
+// First step up triggers the gate trainer — dismiss the duel so the rest
+// of the walk is deterministic, then continue with 9 more ups to reach the
+// street row.
+await clearGateTrainer(page)
+
 // Spawn at the entrance → Compliance House doormat → step into door.
-await press('ArrowUp', 10) // up the entrance stem to the street
+await press('ArrowUp', 9) // up the entrance stem to the street
 await press('ArrowLeft', 9) // west to Compliance's doormat
 await press('ArrowUp', 1) // into the doorway
 

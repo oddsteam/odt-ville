@@ -33,6 +33,10 @@ export default function App() {
 
   const [scene, setScene] = useState('town')
   const [activeCommunityId, setActiveCommunityId] = useState(null)
+  // Gate-trainer state — once you've escaped the duel he never challenges
+  // again in this session. Lifted to the shell so it survives VillageGame
+  // remounts when you enter / exit a community.
+  const [trainerDefeated, setTrainerDefeated] = useState(false)
 
   const [me, setMe] = useState(null)
   const [communities, setCommunities] = useState(null)
@@ -209,6 +213,8 @@ export default function App() {
               <DailyBriefShortcut items={feed} onClose={handleDailyBriefClose} />
             }
             onEnterCommunity={handleEnterCommunity}
+            trainerDefeated={trainerDefeated}
+            onTrainerDefeated={() => setTrainerDefeated(true)}
           />
         )}
 
