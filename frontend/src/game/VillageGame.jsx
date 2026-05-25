@@ -78,9 +78,17 @@ export default function VillageGame({
   )
 
   if (engine === 'phaser') {
-    // PR-A only hosts a placeholder scene — the data plumbing (communities,
-    // session, callbacks) lands in PR-B when the real TownScene moves over.
-    return <PhaserGame />
+    // PR-B: TownScene reads communities + session via the Phaser registry,
+    // and emits enterCommunity via the shared bus when the player walks
+    // onto a doorway. Trainer + wild encounters + dailyBrief overlay still
+    // live in the DOM engine — PR-C..D move those to Phaser too.
+    return (
+      <PhaserGame
+        communities={communities}
+        session={session}
+        onEnterCommunity={onEnterCommunity}
+      />
+    )
   }
 
   return (
