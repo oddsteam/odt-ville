@@ -27,3 +27,28 @@ export async function clearGateTrainer(page, { stepDelay = 220 } = {}) {
     await page.waitForTimeout(400)
   }
 }
+
+// Phaser variant of clearGateTrainer. Walks one step up the entrance
+// stem; if the gate trainer's EncounterScene launches, presses Enter
+// (RUN AWAY) and waits for the Town scene to resume. Used by every
+// Phaser-side walking test that needs to traverse the entrance area
+// without the duel contaminating its planned walk.
+export async function clearPhaserGateTrainer(page) {
+  await page.keyboard.down('ArrowUp')
+  await page.waitForTimeout(190)
+  await page.keyboard.up('ArrowUp')
+  await page.waitForTimeout(120)
+  const inEncounter = await page.evaluate(
+    () => window.__game?.activeSceneKey?.() === 'Encounter',
+  )
+  if (inEncounter) {
+    await page.waitForTimeout(500) // past the white flash
+    await page.keyboard.press('Enter')
+    await page.waitForFunction(
+      () => window.__game?.activeSceneKey?.() === 'Town',
+      null,
+      { timeout: 5000 },
+    )
+    await page.waitForTimeout(300)
+  }
+}

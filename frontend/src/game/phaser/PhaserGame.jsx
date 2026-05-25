@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import Phaser from 'phaser'
 import TownScene from './scenes/TownScene.js'
 import InteriorScene from './scenes/InteriorScene.js'
+import EncounterScene from './scenes/EncounterScene.js'
 import bus from './bus.js'
 
 // Player walks — imported here so Vite emits hashed URLs at build time and
@@ -58,6 +59,8 @@ export default function PhaserGame({
   onEnterCommunity,
   onExitCommunity,
   onOpenBoard,
+  trainerDefeated,
+  onTrainerDefeated,
 }) {
   const hostRef = useRef(null)
   const gameRef = useRef(null)
@@ -70,6 +73,8 @@ export default function PhaserGame({
   exitCommunityRef.current = onExitCommunity
   const openBoardRef = useRef(onOpenBoard)
   openBoardRef.current = onOpenBoard
+  const trainerDefeatedRef = useRef(onTrainerDefeated)
+  trainerDefeatedRef.current = onTrainerDefeated
 
   // Phaser instantiation — once per mount. Subsequent prop changes are
   // pushed via registry updates in the next effects, not by recreating
@@ -91,15 +96,16 @@ export default function PhaserGame({
         width: DESIGN_WIDTH,
         height: DESIGN_HEIGHT,
       },
-      scene: [TownScene, InteriorScene],
+      scene: [TownScene, InteriorScene, EncounterScene],
     })
 
     // Seed the registry BEFORE the scene boots so TownScene.create() sees
-    // the initial communities + session. Game registry is shared data
-    // React can update at runtime via .set().
+    // the initial communities + session + trainerDefeated. Game registry
+    // is shared data React can update at runtime via .set().
     game.registry.set('assets', ASSETS)
     game.registry.set('communities', communities)
     game.registry.set('session', session)
+    game.registry.set('trainerDefeated', Boolean(trainerDefeated))
 
     gameRef.current = game
 
@@ -109,14 +115,17 @@ export default function PhaserGame({
     const onEnter = (id) => enterCommunityRef.current?.(id)
     const onExit = (id) => exitCommunityRef.current?.(id)
     const onOpen = (boardType) => openBoardRef.current?.(boardType)
+    const onTrainerDefeatedEvent = () => trainerDefeatedRef.current?.()
     bus.on('enterCommunity', onEnter)
     bus.on('exitCommunity', onExit)
     bus.on('openBoard', onOpen)
+    bus.on('trainerDefeated', onTrainerDefeatedEvent)
 
     return () => {
       bus.off('enterCommunity', onEnter)
       bus.off('exitCommunity', onExit)
       bus.off('openBoard', onOpen)
+      bus.off('trainerDefeated', onTrainerDefeatedEvent)
       game.destroy(true)
       gameRef.current = null
       if (typeof window !== 'undefined' && window.__game) {
@@ -138,6 +147,12 @@ export default function PhaserGame({
     if (!game) return
     game.registry.set('session', session)
   }, [session])
+
+  useEffect(() => {
+    const game = gameRef.current
+    if (!game) return
+    game.registry.set('trainerDefeated', Boolean(trainerDefeated))
+  }, [trainerDefeated])
 
   return <div className="phaser-host" ref={hostRef} />
 }

@@ -6,7 +6,7 @@
 // enterCommunity event reached the React shell (the DOM CommunityInterior
 // is rendered because PR-B keeps the interior on the DOM engine for now).
 import { chromium } from 'playwright-core'
-import { clearGateTrainer } from './_helpers.mjs'
+import { clearPhaserGateTrainer } from './_helpers.mjs'
 
 const OUT = process.argv[2] || '.'
 const TILE = 48
@@ -58,14 +58,15 @@ const press = async (key, times = 1) => {
   }
 }
 
-// PR-B doesn't have the gate trainer in Phaser yet (still DOM-only — PR-D
-// moves him over). The DOM-side _helpers.clearGateTrainer would only run
-// in the DOM engine, so we skip it here. With a clean session the player
-// can walk straight up the stem without any encounters.
-void clearGateTrainer // referenced so the import isn't flagged unused
+// PR-D moved the gate trainer into Phaser. First step up triggers his
+// duel; dismiss it so the rest of the planned walk is deterministic.
+// After this returns the trainer is defeated for the rest of the page
+// session and the player is one tile above the entrance (9 more ups to
+// reach the street row).
+await clearPhaserGateTrainer(page)
 
-// Spawn → street row: walk up 10 tiles, then west 9 to Compliance's doormat.
-await press('ArrowUp', 10)
+// Spawn → street row: walk up 9 more, then west 9 to Compliance's doormat.
+await press('ArrowUp', 9)
 const afterUp = await playerTile()
 await press('ArrowLeft', 9)
 const afterLeft = await playerTile()
