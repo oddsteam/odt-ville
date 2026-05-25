@@ -316,11 +316,6 @@ button:disabled {
   background: var(--grass);
   border: 5px solid var(--screen-edge);
   border-radius: 4px 4px 14px 4px;
-  /* Centre the 4:3 .phaser-host inside whatever shape .gb-screen is —
-     the host preserves the design aspect; this rule just positions it. */
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
 /* When the GB shell is in the browser's Fullscreen API, the bezel chrome
@@ -358,21 +353,11 @@ button:disabled {
    DOM engine uses, so the chrome (topbar, frame, overlay slots) is
    identical across engines. The host fills the gb-screen exactly. */
 
-/* The host owns the 4:3 design aspect regardless of what shape
-   .gb-screen happens to be — the canvas fills the host without
-   stretching because the host's aspect always matches the design. */
 .phaser-host {
-  position: relative;
-  aspect-ratio: 4 / 3;
-  height: 100%;
-  width: auto;
-  max-width: 100%;
-  max-height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  position: absolute;
+  inset: 0;
+  display: block;
   overflow: hidden;
-  margin: 0 auto;
 }
 
 .phaser-host canvas {
