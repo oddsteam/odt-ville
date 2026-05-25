@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
 import VillageGame from './game/VillageGame.jsx'
-import CommunityView from './communities/CommunityView.jsx'
+import CommunityInterior from './game/CommunityInterior.jsx'
 import CommunitiesAdminPanel from './communities/CommunitiesAdminPanel.jsx'
 import DailyBriefShortcut from './communities/DailyBriefShortcut.jsx'
-import {
-  listCommunities,
-  getCommunity,
-  getFeed,
-} from './communities/client.js'
+import { listCommunities, getFeed } from './communities/client.js'
 import { getGameSession, saveGameSession } from './game-session/client.js'
+
+// Demo target for every board's "open content list" action. Replaced in a
+// follow-up by per-board content-list views (see issue #15 follow-ups).
+const DEMO_BOARD_URL = 'https://onerev-sit.dev.krungthai.com/'
 
 // Tiny inline fetch for the current viewer — the header above the game.
 // Kept inline (rather than its own client module) because there is only one
@@ -33,7 +33,10 @@ export default function App() {
 
   const [scene, setScene] = useState('town')
   const [activeCommunityId, setActiveCommunityId] = useState(null)
-  const [communityDetail, setCommunityDetail] = useState(null)
+  // Gate-trainer state — once you've escaped the duel he never challenges
+  // again in this session. Lifted to the shell so it survives VillageGame
+  // remounts when you enter / exit a community.
+  const [trainerDefeated, setTrainerDefeated] = useState(false)
 
   const [me, setMe] = useState(null)
   const [communities, setCommunities] = useState(null)
@@ -42,7 +45,6 @@ export default function App() {
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [communityLoading, setCommunityLoading] = useState(false)
 
   // Town-scene state — fetched on mount and after any communities-mutating
   // action so the game always sees fresh communities + session + feed.
@@ -74,20 +76,20 @@ export default function App() {
 
   // ---- game events --------------------------------------------------
 
-  const handleEnterCommunity = useCallback(async (id) => {
-    setCommunityLoading(true)
-    setError(null)
-    try {
-      const detail = await getCommunity(id)
-      setCommunityDetail(detail)
-      setActiveCommunityId(id)
-      setScene('community')
-      saveGameSession({ last_area: 'house', last_community_id: id }).catch(() => {})
-    } catch (e) {
-      setError(e.message)
-    } finally {
-      setCommunityLoading(false)
-    }
+  const handleEnterCommunity = useCallback((id) => {
+    // The spatial interior renders from the community summary the shell
+    // already has — no detail fetch needed, so the door-to-room transition
+    // is instant.
+    setActiveCommunityId(id)
+    setScene('community-interior')
+    saveGameSession({ last_area: 'house', last_community_id: id }).catch(() => {})
+  }, [])
+
+  // Each board's "open content list" action — for the demo every board
+  // points at the same external URL. The game module knows nothing about
+  // this; it just emits the board id and the shell decides.
+  const handleOpenBoard = useCallback(() => {
+    window.open(DEMO_BOARD_URL, '_blank', 'noopener,noreferrer')
   }, [])
 
   const handleExitCommunity = useCallback(() => {
@@ -107,7 +109,6 @@ export default function App() {
     }))
     saveGameSession({ last_area: 'town', last_community_id: id }).catch(() => {})
     setScene('town')
-    setCommunityDetail(null)
     setActiveCommunityId(null)
     loadTown().catch((e) => setError(e.message))
   }, [activeCommunityId, loadTown])
@@ -115,9 +116,8 @@ export default function App() {
   // Tab switch: opening Admin from inside a community treats it like Exit so
   // the user lands back in town when they return to the village tab.
   const goToAdmin = useCallback(() => {
-    if (scene === 'community') {
+    if (scene !== 'town') {
       setScene('town')
-      setCommunityDetail(null)
       setActiveCommunityId(null)
     }
     setView('admin')
@@ -213,13 +213,19 @@ export default function App() {
               <DailyBriefShortcut items={feed} onClose={handleDailyBriefClose} />
             }
             onEnterCommunity={handleEnterCommunity}
+            trainerDefeated={trainerDefeated}
+            onTrainerDefeated={() => setTrainerDefeated(true)}
           />
         )}
 
-        {view === 'village' && scene === 'community' && communityDetail && (
-          <CommunityView
-            communityData={communityDetail}
+        {view === 'village' && scene === 'community-interior' && activeCommunityId != null && (
+          <CommunityInterior
+            community={communities.find((c) => c.id === activeCommunityId)}
+            dailyBrief={
+              <DailyBriefShortcut items={feed} onClose={handleDailyBriefClose} />
+            }
             onExit={handleExitCommunity}
+            onOpenBoard={handleOpenBoard}
           />
         )}
 
@@ -228,13 +234,6 @@ export default function App() {
             communities={communities}
             onChanged={loadTown}
           />
-        )}
-
-        {communityLoading && (
-          <div className="scene-loading-overlay">
-            <div className="loading-pixel" />
-            <p>ENTERING…</p>
-          </div>
         )}
       </main>
     </div>

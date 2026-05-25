@@ -2,10 +2,18 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { TILE, MOVE_MS, isGroundWalkable, tileChar } from './constants.js'
 import PlayerSprite from './PlayerSprite.jsx'
 import Building from './Building.jsx'
+import Trainer from './Trainer.jsx'
 import DialogueBox from './DialogueBox.jsx'
 import MobileDpad from './MobileDpad.jsx'
 import EncounterScreen from './EncounterScreen.jsx'
-import { rollEncounter, pickWildPokemon, GRACE_STEPS } from './encounters.js'
+import {
+  rollEncounter,
+  pickWildPokemon,
+  GRACE_STEPS,
+  GATE_TRAINER,
+  resolveTrainerStart,
+  trainerSightCells,
+} from './encounters.js'
 
 const DELTAS = {
   up: { dx: 0, dy: -1 },
@@ -60,16 +68,26 @@ export default function VillageMap({
   townSpawn,
   dailyBrief,
   onEnterCommunity,
+  trainerDefeated,
+  onTrainerDefeated,
 }) {
   const [player, setPlayer] = useState({ x: townSpawn.x, y: townSpawn.y })
   const [facing, setFacing] = useState(townSpawn.facing || 'down')
   const [moving, setMoving] = useState(false)
   const [stepCount, setStepCount] = useState(0)
   const [dialogue, setDialogue] = useState(null) // { lines, idx } | null
-  const [encounter, setEncounter] = useState(null) // wild Pokémon | null
+  const [encounter, setEncounter] = useState(null) // wild Pokémon OR trainer | null
   const [view, setView] = useState({ w: 720, h: 520 })
   const [ready, setReady] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
+
+  // Gate trainer + his line of sight. Position is derived from the town's
+  // entrance so the trainer follows the entrance even as the town reshapes.
+  const trainer = useMemo(() => resolveTrainerStart(town), [town])
+  const trainerSight = useMemo(
+    () => trainerSightCells(trainer, town),
+    [trainer, town],
+  )
 
   const shellRef = useRef(null)
   const screenRef = useRef(null)
@@ -83,6 +101,9 @@ export default function VillageMap({
   const buildingsRef = useRef(buildings)
   const enterRef = useRef(onEnterCommunity)
   const townRef = useRef(town)
+  const trainerRef = useRef(trainer)
+  const trainerSightRef = useRef(trainerSight)
+  const trainerDefeatedRef = useRef(Boolean(trainerDefeated))
 
   playerRef.current = player
   facingRef.current = facing
@@ -90,6 +111,9 @@ export default function VillageMap({
   buildingsRef.current = buildings
   enterRef.current = onEnterCommunity
   townRef.current = town
+  trainerRef.current = trainer
+  trainerSightRef.current = trainerSight
+  trainerDefeatedRef.current = Boolean(trainerDefeated)
 
   // ---- collision -----------------------------------------------------
   function doorAt(x, y) {
@@ -103,7 +127,12 @@ export default function VillageMap({
   function walkable(x, y) {
     if (!isGroundWalkable(townRef.current, x, y)) return false
     if (doorAt(x, y)) return true
-    return !insideBuilding(x, y)
+    if (insideBuilding(x, y)) return false
+    // The trainer stands in his tile and blocks pass-through (even after
+    // defeat — defeated trainers stay rooted in Pokémon, you just walk past).
+    const t = trainerRef.current
+    if (t && t.x === x && t.y === y) return false
+    return true
   }
 
   // ---- one tile step -------------------------------------------------
@@ -129,8 +158,29 @@ export default function VillageMap({
     window.setTimeout(() => {
       movingRef.current = false
       setMoving(false)
-      maybeEncounter(tx, ty)
+      // Trainer sight is checked first — if the player lands in the gate
+      // trainer's line of sight, the duel takes priority over a wild
+      // encounter on the same step.
+      if (!maybeTrainerSpot(tx, ty)) {
+        maybeEncounter(tx, ty)
+      }
     }, MOVE_MS)
+  }
+
+  // ---- gate trainer (fires when a step lands inside his sight line) ---
+  // Returns true if a trainer encounter was started, so the caller can skip
+  // the wild-grass roll for this step.
+  function maybeTrainerSpot(x, y) {
+    if (encounterRef.current) return false
+    if (trainerDefeatedRef.current) return false
+    const inSight = trainerSightRef.current.some(
+      (c) => c.x === x && c.y === y,
+    )
+    if (!inSight) return false
+    const challenge = { ...GATE_TRAINER }
+    encounterRef.current = challenge
+    setEncounter(challenge)
+    return true
   }
 
   // ---- wild encounters (rolled when a step lands on tall grass) ------
@@ -149,7 +199,15 @@ export default function VillageMap({
   }
 
   function endEncounter() {
-    graceRef.current = GRACE_STEPS // grace steps to leave the grass
+    // Trainer "defeat" persists for the rest of the session — escaping a
+    // trainer the Pokémon way means he stays put but no longer challenges.
+    // Wild encounters get a few grace steps so you can leave the grass.
+    if (encounterRef.current?.kind === 'trainer') {
+      trainerDefeatedRef.current = true
+      onTrainerDefeated?.()
+    } else {
+      graceRef.current = GRACE_STEPS
+    }
     encounterRef.current = null
     setEncounter(null)
   }
@@ -334,6 +392,12 @@ export default function VillageMap({
                 }
               />
             ))}
+
+            <Trainer
+              trainer={{ ...trainer, name: GATE_TRAINER.name, sprite: GATE_TRAINER.sprite }}
+              sightCells={trainerSight}
+              defeated={Boolean(trainerDefeated)}
+            />
 
             <div
               className={`player${ready ? ' player-animate' : ''}`}

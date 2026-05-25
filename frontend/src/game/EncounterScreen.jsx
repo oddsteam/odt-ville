@@ -1,10 +1,15 @@
 import { useEffect, useState } from 'react'
 
-// Wild-encounter screen. Scope is "encounter screen only": it shows the wild
-// Pokémon and a single RUN action. A brief white flash plays the classic
-// Game Boy battle-transition feel before the Pokémon is revealed.
+// Wild-encounter screen. Scope is "encounter screen only": it shows the
+// opponent and a single RUN action. A brief white flash plays the classic
+// Game Boy battle-transition feel before the opponent is revealed.
+//
+// `wild.kind` is 'wild' (a Pokémon you bumped into in the grass) or
+// 'trainer' (an NPC who spotted you on the road). The screen layout is the
+// same; only the intro line and the run button label differ.
 export default function EncounterScreen({ wild, onRun }) {
   const [phase, setPhase] = useState('flash') // 'flash' -> 'show'
+  const isTrainer = wild.kind === 'trainer'
 
   useEffect(() => {
     const id = window.setTimeout(() => setPhase('show'), 420)
@@ -29,7 +34,7 @@ export default function EncounterScreen({ wild, onRun }) {
       {phase === 'flash' ? (
         <div className="encounter-flash" />
       ) : (
-        <div className="encounter-stage">
+        <div className={`encounter-stage${isTrainer ? ' encounter-trainer' : ''}`}>
           <div className="encounter-field">
             <img
               className="encounter-sprite"
@@ -40,7 +45,9 @@ export default function EncounterScreen({ wild, onRun }) {
           </div>
           <div className="encounter-box">
             <p className="encounter-text">
-              A wild {wild.name} appeared!
+              {isTrainer
+                ? `${wild.name} wants to duel!`
+                : `A wild ${wild.name} appeared!`}
               <br />
               <span className="encounter-level">Lv. {wild.level}</span>
             </p>
@@ -50,7 +57,7 @@ export default function EncounterScreen({ wild, onRun }) {
               onMouseDown={(e) => e.preventDefault()}
               onClick={onRun}
             >
-              RUN
+              {isTrainer ? 'RUN AWAY' : 'RUN'}
             </button>
           </div>
         </div>

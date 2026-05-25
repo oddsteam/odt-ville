@@ -3,6 +3,7 @@
 // Walks A → exit, then B → exit, and asserts each post-exit tile is the
 // expected community's `(doorCol, doorRow + 1)`.
 import { chromium } from 'playwright-core'
+import { clearGateTrainer } from './_helpers.mjs'
 
 const OUT = process.argv[2] || '.'
 const TILE = 48
@@ -47,11 +48,16 @@ await page.screenshot({ path: `${OUT}/exit-01-entrance.png` })
 // plot is 4 columns apart; doormat = (doorCol, doorRow + 1) = (col+1, row+4).
 // Compliance House: slot 0 → doormat (3, 7). Product House: slot 1 → (7, 7).
 
+// First step up triggers the gate trainer — dismiss the duel so the rest
+// of the walk is deterministic, then continue with 9 more ups to reach the
+// street row.
+await clearGateTrainer(page)
+
 // Spawn → Compliance doormat: up the entrance stem to the street, then west.
-await press('ArrowUp', 10) // (entranceCol, 7)
+await press('ArrowUp', 9) // (entranceCol, 7)
 await press('ArrowLeft', 9) // (3, 7) — facing Compliance's door
 await press('ArrowUp', 1) // step into the doorway
-await page.waitForSelector('.house-interior', { timeout: 5000 })
+await page.waitForSelector('.community-interior', { timeout: 5000 })
 const titleA = await interiorTitle()
 await page.screenshot({ path: `${OUT}/exit-02-inside-A.png` })
 
@@ -65,7 +71,7 @@ await page.screenshot({ path: `${OUT}/exit-03-after-A.png` })
 // Now walk to Product House and enter.
 await press('ArrowRight', 4) // (7, 7)
 await press('ArrowUp', 1) // step into Product's door
-await page.waitForSelector('.house-interior', { timeout: 5000 })
+await page.waitForSelector('.community-interior', { timeout: 5000 })
 const titleB = await interiorTitle()
 await page.screenshot({ path: `${OUT}/exit-04-inside-B.png` })
 

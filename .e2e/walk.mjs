@@ -1,6 +1,8 @@
 // Drives a real browser through the top-down town: spawn at the Town Entrance,
-// walk up the path, over to Compliance House, and into its doorway.
+// walk up the path, over to Compliance House, and into its doorway — landing
+// inside the spatial interior with three boards.
 import { chromium } from 'playwright-core'
+import { clearGateTrainer } from './_helpers.mjs'
 
 const OUT = process.argv[2] || '.'
 const browser = await chromium.launch({ channel: 'chrome', headless: true })
@@ -25,24 +27,30 @@ await page.waitForSelector('.building', { timeout: 15000 })
 await page.waitForTimeout(700)
 await page.screenshot({ path: `${OUT}/01-town.png` })
 
+// First step up the entrance stem triggers the gate trainer's duel —
+// dismiss it so the rest of the walk is deterministic. After this returns
+// the trainer is defeated for the rest of this page session and the player
+// is one tile above the entrance (so we still need 9 more ArrowUps).
+await clearGateTrainer(page)
+
 // Town Entrance -> up the entrance stem (which crosses the tall-grass field
 // safely) to the street, then west.
-await press('ArrowUp', 10) // up to the street-path row
+await press('ArrowUp', 9) // up to the street-path row
 await press('ArrowLeft', 9) // along the street, below Compliance House
 await page.waitForTimeout(300)
 await page.screenshot({ path: `${OUT}/02-at-door.png` })
 
-// Step up into the doorway -> enters the house.
+// Step up into the doorway -> enters the spatial interior.
 await press('ArrowUp', 1)
-await page.waitForSelector('.house-interior', { timeout: 15000 })
+await page.waitForSelector('.community-interior', { timeout: 15000 })
 await page.waitForSelector('.interior-title', { timeout: 5000 })
 await page.waitForTimeout(400)
 
 const title = (await page.textContent('.interior-title'))?.trim()
-const boards = await page.$$eval('.board-panel', (els) =>
+const boards = await page.$$eval('.interior-board', (els) =>
   els.map((el) => ({
-    label: el.querySelector('.board-title')?.textContent?.trim(),
-    count: el.querySelector('.board-count')?.textContent?.trim(),
+    type: el.className.match(/board-(must_know|should_know|nice_to_know)/)?.[1],
+    label: el.querySelector('.board-label')?.textContent?.trim(),
   })),
 )
 await page.screenshot({ path: `${OUT}/03-compliance-interior.png`, fullPage: true })
