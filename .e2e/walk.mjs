@@ -1,5 +1,6 @@
 // Drives a real browser through the top-down town: spawn at the Town Entrance,
-// walk up the path, over to Compliance House, and into its doorway.
+// walk up the path, over to Compliance House, and into its doorway — landing
+// inside the spatial interior with three boards.
 import { chromium } from 'playwright-core'
 
 const OUT = process.argv[2] || '.'
@@ -32,17 +33,17 @@ await press('ArrowLeft', 9) // along the street, below Compliance House
 await page.waitForTimeout(300)
 await page.screenshot({ path: `${OUT}/02-at-door.png` })
 
-// Step up into the doorway -> enters the house.
+// Step up into the doorway -> enters the spatial interior.
 await press('ArrowUp', 1)
-await page.waitForSelector('.house-interior', { timeout: 15000 })
+await page.waitForSelector('.community-interior', { timeout: 15000 })
 await page.waitForSelector('.interior-title', { timeout: 5000 })
 await page.waitForTimeout(400)
 
 const title = (await page.textContent('.interior-title'))?.trim()
-const boards = await page.$$eval('.board-panel', (els) =>
+const boards = await page.$$eval('.interior-board', (els) =>
   els.map((el) => ({
-    label: el.querySelector('.board-title')?.textContent?.trim(),
-    count: el.querySelector('.board-count')?.textContent?.trim(),
+    type: el.className.match(/board-(must_know|should_know|nice_to_know)/)?.[1],
+    label: el.querySelector('.board-label')?.textContent?.trim(),
   })),
 )
 await page.screenshot({ path: `${OUT}/03-compliance-interior.png`, fullPage: true })
