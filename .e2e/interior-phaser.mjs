@@ -7,6 +7,7 @@
 // the EXIT mat and confirms we land back in TownScene on Compliance's
 // doormat.
 import { chromium } from 'playwright-core'
+import { clearPhaserGateTrainer } from './_helpers.mjs'
 
 const OUT = process.argv[2] || '.'
 const DEMO_URL = 'https://onerev-sit.dev.krungthai.com/'
@@ -57,8 +58,12 @@ await page.waitForFunction(() => window.__game?.engine === 'phaser', null, {
 })
 await page.waitForTimeout(700)
 
+// PR-D's gate trainer now triggers under Phaser too; dismiss his duel
+// before the planned walk so subsequent steps are deterministic.
+await clearPhaserGateTrainer(page)
+
 // Spawn (12, 17) → Compliance doormat (3, 7) → step into door.
-await press('ArrowUp', 10)
+await press('ArrowUp', 9)
 await press('ArrowLeft', 9)
 await press('ArrowUp', 1)
 

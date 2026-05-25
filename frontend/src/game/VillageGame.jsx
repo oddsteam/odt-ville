@@ -67,11 +67,11 @@ export default function VillageGame({
   )
 
   if (engine === 'phaser') {
-    // PR-C: the interior scene also lives inside Phaser now. Town →
-    // Interior and Interior → Town transitions happen entirely on the
-    // canvas; the React shell only listens for enterCommunity (to save
-    // session), exitCommunity (to save session + activeCommunityId
-    // bookkeeping), and openBoard (to launch the external URL).
+    // PR-D: trainer + wild encounters now live in TownScene; the duel
+    // screen lives in EncounterScene. The React shell still owns
+    // trainerDefeated (lifted state survives view-tab switches) and
+    // forwards it through the Phaser registry — same prop contract as
+    // the DOM engine.
     return (
       <PhaserGame
         communities={communities}
@@ -79,6 +79,8 @@ export default function VillageGame({
         onEnterCommunity={onEnterCommunity}
         onExitCommunity={onExitCommunity}
         onOpenBoard={onOpenBoard}
+        trainerDefeated={trainerDefeated}
+        onTrainerDefeated={onTrainerDefeated}
       />
     )
   }

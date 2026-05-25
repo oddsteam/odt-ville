@@ -2,6 +2,14 @@ import Phaser from 'phaser'
 import { TILE, MOVE_MS, buildTown, tileChar } from '../../constants.js'
 import { ensureTileTextures } from '../tileTextures.js'
 import bus from '../bus.js'
+import {
+  GATE_TRAINER,
+  resolveTrainerStart,
+  trainerSightCells,
+  rollEncounter,
+  pickWildPokemon,
+  GRACE_STEPS,
+} from '../../encounters.js'
 
 // Tile classes that block movement. Mirrors `isGroundWalkable` in
 // constants.js: anything not in this set is walkable ground; tree/sign are
@@ -34,6 +42,17 @@ export default class TownScene extends Phaser.Scene {
     // the player lands on the community they just left, not whatever the
     // session last persisted.
     this.exitedCommunityId = null
+    // Gate-trainer state. The trainer is a single sprite at a tile near
+    // the entrance, with a `sightCells` line in front of him; stepping
+    // into any of those cells fires a trainer encounter. After the
+    // player runs away once, `defeated` flips on and the markers hide.
+    this.trainer = null // { x, y, facing, sightRange }
+    this.trainerSprite = null
+    this.sightCells = []
+    this.sightGraphics = null // pulsing red markers
+    // Wild-encounter rate limiting — N grace steps after each encounter
+    // before another can fire, so leaving the grass is reliable.
+    this.graceSteps = 0
   }
 
   init(data) {
@@ -58,6 +77,11 @@ export default class TownScene extends Phaser.Scene {
       this.load.image('building.roof', reg.buildings.roofUrl)
       this.load.image('building.body', reg.buildings.bodyUrl)
     }
+
+    // Gate trainer + opponent sprites. `encounters.js` already imports
+    // these as Vite-resolved URLs; we just reuse them so the engines
+    // share one source of truth for the opponent table.
+    this.load.image('trainer.boss-k', GATE_TRAINER.sprite)
   }
 
   create() {
@@ -103,6 +127,11 @@ export default class TownScene extends Phaser.Scene {
     // empty or names a community that no longer exists.
     this.spawnPlayer(session)
 
+    // Gate trainer (PR-D) — derived from the town's entrance via
+    // resolveTrainerStart() so position follows the entrance even when
+    // the town reshapes. Defeated state is read from the registry.
+    this.addGateTrainer()
+
     // Keyboard input — Phaser's cursor keys + WASD via additional keys.
     this.cursors = this.input.keyboard.createCursorKeys()
     this.wasd = this.input.keyboard.addKeys({
@@ -112,9 +141,9 @@ export default class TownScene extends Phaser.Scene {
       right: Phaser.Input.Keyboard.KeyCodes.D,
     })
 
-    // Test API. PR-A only exposed `engine`; we hang playerTile() and
-    // buildings() off the same object so Playwright can read scene state
-    // without poking around Phaser internals.
+    // Test API. PR-A only exposed `engine`; PR-B+ hang reads off the
+    // same object so Playwright can introspect scene state without
+    // poking around Phaser internals.
     if (typeof window !== 'undefined') {
       window.__game = {
         engine: 'phaser',
@@ -128,16 +157,31 @@ export default class TownScene extends Phaser.Scene {
             x: b.col * TILE,
             y: b.row * TILE,
           })),
+        trainer: () => ({
+          x: this.trainer?.x ?? null,
+          y: this.trainer?.y ?? null,
+          defeated: Boolean(this.registry.get('trainerDefeated')),
+          sightCells: this.sightCells.map((c) => ({ x: c.x, y: c.y })),
+        }),
       }
     }
 
     // React → Phaser registry watchers — when the shell pushes a new
-    // communities/session payload (e.g. admin added a house), rebuild.
+    // communities/session payload (e.g. admin added a house), rebuild;
+    // when trainerDefeated flips, refresh the sight markers.
     this.registry.events.on('changedata-communities', this.handleRegistryChange, this)
     this.registry.events.on('changedata-session', this.handleSessionChange, this)
+    this.registry.events.on('changedata-trainerDefeated', this.refreshTrainerVisuals, this)
+
+    // When EncounterScene closes it scene.resume()s us; this is the
+    // hook to re-arm grace steps after a wild run.
+    this.events.on(Phaser.Scenes.Events.RESUME, this.handleResume, this)
+
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.registry.events.off('changedata-communities', this.handleRegistryChange, this)
       this.registry.events.off('changedata-session', this.handleSessionChange, this)
+      this.registry.events.off('changedata-trainerDefeated', this.refreshTrainerVisuals, this)
+      this.events.off(Phaser.Scenes.Events.RESUME, this.handleResume, this)
       if (typeof window !== 'undefined' && window.__game?.engine === 'phaser') {
         delete window.__game
       }
@@ -199,12 +243,58 @@ export default class TownScene extends Phaser.Scene {
       duration: MOVE_MS,
       onComplete: () => {
         this.movingTween = null
+        // Trainer sight is checked first — when the player lands in
+        // his line of sight, the duel takes priority over a wild
+        // encounter on the same step.
+        if (!this.maybeTrainerSpot(tx, ty)) {
+          this.maybeWildEncounter(tx, ty)
+        }
       },
     })
   }
 
+  // Trainer line-of-sight check. Returns true if a duel was triggered
+  // so the caller can skip the wild-grass roll on the same step.
+  maybeTrainerSpot(x, y) {
+    if (!this.trainer) return false
+    if (this.registry.get('trainerDefeated')) return false
+    const inSight = this.sightCells.some((c) => c.x === x && c.y === y)
+    if (!inSight) return false
+    this.launchEncounter({ ...GATE_TRAINER })
+    return true
+  }
+
+  // Wild-encounter roll — only fires on a tall-grass tile, only when
+  // not in the GRACE_STEPS window after the last encounter.
+  maybeWildEncounter(x, y) {
+    if (tileChar(this.town, x, y) !== 'g') return
+    if (this.graceSteps > 0) {
+      this.graceSteps -= 1
+      return
+    }
+    if (rollEncounter()) {
+      this.launchEncounter(pickWildPokemon())
+    }
+  }
+
+  launchEncounter(opponent) {
+    // Pause this scene so its update() loop (and the world) freeze
+    // while the duel runs; EncounterScene resumes us on close.
+    this.scene.pause()
+    this.scene.launch('Encounter', { opponent })
+  }
+
+  handleResume(_sys, data) {
+    // EncounterScene exited. Wild → arm grace steps. Trainer →
+    // trainerDefeated already flipped via the bus; refresh visuals.
+    if (data?.ranFrom === 'wild') this.graceSteps = GRACE_STEPS
+    this.refreshTrainerVisuals()
+  }
+
   // Walkability check — ground class + building footprint exclusion.
-  // Doors are walkable: they're how the player enters.
+  // Doors are walkable: they're how the player enters. The gate trainer
+  // also occupies a tile and blocks pass-through (defeated trainers
+  // still stand there in Pokémon, you walk around).
   walkable(x, y) {
     const ch = tileChar(this.town, x, y)
     if (BLOCKED_TILE_CHARS.has(ch)) return false
@@ -216,7 +306,74 @@ export default class TownScene extends Phaser.Scene {
     ) {
       return false
     }
+    if (this.trainer && this.trainer.x === x && this.trainer.y === y) return false
     return true
+  }
+
+  // Place the gate trainer + render his line-of-sight markers. Called
+  // once on scene boot, after the buildings + player are positioned so
+  // depth-sorting comes out right.
+  addGateTrainer() {
+    const start = resolveTrainerStart(this.town)
+    this.trainer = start
+    this.sightCells = trainerSightCells(start, this.town)
+
+    // The trainer sprite is portrait-aspect (taller than wide); same
+    // trick the buildings use — overflow the tile upward, ground the
+    // figure at the bottom of his tile so his shoes line up with the
+    // road. Two-sprite drop shadow approximated by a translucent dark
+    // ellipse below.
+    const tx = start.x * TILE
+    const ty = start.y * TILE
+    const targetH = 96
+    const sprite = this.add
+      .image(tx + TILE / 2, ty + TILE, 'trainer.boss-k')
+      .setOrigin(0.5, 1)
+      .setDepth(start.y * 10 + 4)
+    const scale = targetH / sprite.height
+    sprite.setScale(scale)
+    this.trainerSprite = sprite
+
+    // Sight markers — soft red pulsing squares on each sight cell.
+    // Drawn as a single Graphics with one rect per cell so a single
+    // tween animates them all in sync. Hidden when defeated.
+    const g = this.add.graphics().setDepth(1)
+    for (const c of this.sightCells) {
+      g.fillStyle(0xff5050, 0.32)
+      g.fillCircle(c.x * TILE + TILE / 2, c.y * TILE + TILE / 2, TILE * 0.45)
+    }
+    this.tweens.add({
+      targets: g,
+      alpha: { from: 0.55, to: 0.95 },
+      duration: 700,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    })
+    this.sightGraphics = g
+
+    this.refreshTrainerVisuals()
+  }
+
+  // Trainer visuals — fade sprite + hide markers when defeated, normal
+  // colors otherwise. Called whenever trainerDefeated flips, and after
+  // every EncounterScene exit (the trainer is the most recent thing
+  // that might have changed).
+  refreshTrainerVisuals() {
+    const defeated = Boolean(this.registry.get('trainerDefeated'))
+    if (this.trainerSprite) {
+      // Darken a hair + desaturate so he reads as "guarding, but
+      // already faced". Matches the DOM .trainer-defeated filter look.
+      if (defeated) {
+        this.trainerSprite.setTint(0x999999)
+      } else {
+        this.trainerSprite.clearTint()
+      }
+      this.trainerSprite.setAlpha(defeated ? 0.75 : 1)
+    }
+    if (this.sightGraphics) {
+      this.sightGraphics.setVisible(!defeated)
+    }
   }
 
   // Cycle through the four-frame walk strip. For a single press the
