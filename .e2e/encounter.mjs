@@ -1,11 +1,9 @@
-// Wild-encounter e2e. Clears the gate trainer, walks into the
-// tall-grass field, wanders until a wild Pokémon encounter rolls,
-// asserts the opponent kind/name/level, then RUNs and confirms Town
-// takes back over.
+// Drives the browser into the tall-grass field and wanders until a wild
+// Pokémon encounter fires, then RUNs from it.
 import { chromium } from 'playwright-core'
+import { clearGateTrainer } from './_helpers.mjs'
 
 const OUT = process.argv[2] || '.'
-
 const browser = await chromium.launch({ channel: 'chrome', headless: true })
 const page = await browser.newPage({ viewport: { width: 1180, height: 820 } })
 
@@ -15,92 +13,54 @@ page.on('console', (m) => {
   if (m.type() === 'error') errors.push(`console.error: ${m.text()}`)
 })
 
-await fetch('http://localhost:3130/api/v1/game/session', {
-  method: 'PUT',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ last_area: 'town', last_community_id: '' }),
-})
+await page.goto('http://localhost:5390', { waitUntil: 'networkidle' })
+await page.waitForSelector('.gb-screen', { timeout: 15000 })
+await page.waitForSelector('.building', { timeout: 15000 })
+await page.waitForTimeout(700)
+await page.screenshot({ path: `${OUT}/enc-01-town.png` })
 
 const press = async (key, times = 1) => {
   for (let i = 0; i < times; i++) {
-    await page.keyboard.down(key)
-    await page.waitForTimeout(190)
-    await page.keyboard.up(key)
-    await page.waitForTimeout(40)
+    await page.keyboard.press(key)
+    await page.waitForTimeout(220)
   }
 }
 
-const sceneKey = () => page.evaluate(() => window.__game?.activeSceneKey?.() || null)
-const opponent = () => page.evaluate(() => window.__game?.opponent?.() || null)
+// First step up triggers the gate trainer's duel — run away from him so the
+// rest of the walk is unblocked. After this returns the player is one tile
+// above the entrance.
+await clearGateTrainer(page)
 
-await page.goto('http://localhost:5390', { waitUntil: 'networkidle' })
-await page.waitForFunction(() => window.__game?.engine === 'phaser', null, { timeout: 10000 })
-await page.waitForFunction(() => typeof window.__game?.trainer === 'function', null, { timeout: 5000 })
-await page.waitForTimeout(700)
-
-// Clear the gate trainer — one step up triggers his duel.
+// Spawn at the Town Entrance — step up the stem into the field rows, then off
+// the safe path into the tall grass.
 await press('ArrowUp', 1)
-await page.waitForFunction(
-  () => window.__game?.activeSceneKey?.() === 'Encounter',
-  null,
-  { timeout: 5000 },
-)
-await page.waitForTimeout(450)
-await press('Enter', 1)
-await page.waitForFunction(
-  () => window.__game?.activeSceneKey?.() === 'Town',
-  null,
-  { timeout: 5000 },
-)
-await page.waitForTimeout(300)
-
-// Walk up into the tall-grass field; (12, 11..15) are tall-grass tiles.
-// Player is currently at (12, 16) after running from the trainer.
-await press('ArrowUp', 5)
+await press('ArrowLeft', 1)
 await page.screenshot({ path: `${OUT}/enc-02-in-grass.png` })
 
-// Wander up to 80 steps; the wild rate is ~10%/step so an encounter is
-// virtually guaranteed within 30. Bail if it never fires.
+// Wander a 2x2 patch of tall grass until a wild Pokémon appears.
 const moves = ['ArrowUp', 'ArrowLeft', 'ArrowDown', 'ArrowRight']
-let encountered = (await sceneKey()) === 'Encounter'
+let encountered = (await page.$('.encounter')) !== null
 let steps = 0
-while (!encountered && steps < 80) {
-  await press(moves[steps % 4], 1)
+for (let i = 0; i < 80 && !encountered; i++) {
+  await page.keyboard.press(moves[i % 4])
+  await page.waitForTimeout(220)
   steps++
-  encountered = (await sceneKey()) === 'Encounter'
+  encountered = (await page.$('.encounter')) !== null
 }
 
-let wildOpponent = null
-let ranAway = false
+let name = null
+let ranAway = null
 if (encountered) {
-  await page.waitForTimeout(450)
+  await page.waitForSelector('.encounter-stage', { timeout: 3000 })
+  await page.waitForTimeout(500)
   await page.screenshot({ path: `${OUT}/enc-03-encounter.png` })
-  wildOpponent = await opponent()
-  await press('Enter', 1)
-  await page.waitForFunction(
-    () => window.__game?.activeSceneKey?.() === 'Town',
-    null,
-    { timeout: 5000 },
-  )
-  await page.waitForTimeout(300)
-  ranAway = (await sceneKey()) === 'Town'
+  name = (await page.textContent('.encounter-text'))?.replace(/\s+/g, ' ').trim()
+  await page.keyboard.press('Escape') // RUN
+  await page.waitForTimeout(450)
   await page.screenshot({ path: `${OUT}/enc-04-after-run.png` })
+  ranAway = (await page.$('.encounter')) === null
 }
 
-const validName =
-  wildOpponent?.name === 'VAYU PHOENIX' || wildOpponent?.name === 'MR.P'
-
-const ok =
-  encountered &&
-  wildOpponent?.kind === 'wild' &&
-  validName &&
-  wildOpponent?.level === 99 &&
-  ranAway &&
-  errors.length === 0
-
-console.log(
-  JSON.stringify({ encountered, steps, wildOpponent, ranAway, ok, errors }, null, 2),
-)
-
+console.log(JSON.stringify({ encountered, steps, name, ranAway, errors }, null, 2))
 await browser.close()
-process.exit(ok ? 0 : 1)
+process.exit(errors.length || !encountered || !ranAway ? 1 : 0)

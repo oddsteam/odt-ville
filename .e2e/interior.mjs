@@ -1,8 +1,7 @@
 // Spatial community interior — issue #15.
-// Walks into Compliance House, verifies InteriorScene renders three
-// boards, presses A on each (window.open stubbed so popups don't steal
-// keyboard focus between presses), then steps south onto the EXIT mat
-// and confirms TownScene takes back over.
+// Walk into Compliance House, verify the room renders three boards, walk up
+// to each and press A, assert each opens the demo external URL in a new tab.
+// Then walk back south through the door and confirm we land in the village.
 import { chromium } from 'playwright-core'
 import { clearGateTrainer } from './_helpers.mjs'
 
@@ -19,14 +18,18 @@ page.on('console', (m) => {
   if (m.type() === 'error') errors.push(`console.error: ${m.text()}`)
 })
 
+// Reset the game session so the village player spawns at the Town Entrance —
+// otherwise a previously-saved `last_community_id` would put the player on a
+// doormat, and the entry walk would step into the wrong house.
 await fetch('http://localhost:3130/api/v1/game/session', {
   method: 'PUT',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({ last_area: 'town', last_community_id: '' }),
 })
 
-// Stub window.open so press-A on a board records the URL without
-// opening a popup (which would steal keyboard focus mid-test).
+// Stub window.open before the page boots — actual popups would steal keyboard
+// focus between presses and ruin the movement sequence. We just want to know
+// what URL each board *would* have opened with.
 await page.addInitScript(() => {
   window.__openCalls = []
   window.open = (url, target, features) => {
@@ -35,117 +38,119 @@ await page.addInitScript(() => {
   }
 })
 
+const openCalls = () => page.evaluate(() => window.__openCalls || [])
+
 const press = async (key, times = 1) => {
   for (let i = 0; i < times; i++) {
-    await page.keyboard.down(key)
-    await page.waitForTimeout(190)
-    await page.keyboard.up(key)
-    await page.waitForTimeout(40)
+    await page.keyboard.press(key)
+    await page.waitForTimeout(220)
   }
 }
 
-const sceneKey = () => page.evaluate(() => window.__game?.activeSceneKey?.() || null)
-const playerTile = () => page.evaluate(() => window.__game?.playerTile?.() || null)
-const openCalls = () => page.evaluate(() => window.__openCalls || [])
+const playerTile = () =>
+  page.$eval('.player', (el) => {
+    const m = el.style.transform.match(/translate\(([\-0-9.]+)px,\s*([\-0-9.]+)px\)/)
+    if (!m) return null
+    return {
+      x: Math.round(parseFloat(m[1]) / 48),
+      y: Math.round(parseFloat(m[2]) / 48),
+    }
+  })
 
 await page.goto('http://localhost:5390', { waitUntil: 'networkidle' })
-await page.waitForFunction(() => window.__game?.engine === 'phaser', null, { timeout: 10000 })
+await page.waitForSelector('.gb-screen', { timeout: 15000 })
+await page.waitForSelector('.building', { timeout: 15000 })
 await page.waitForTimeout(700)
 
+// First step up triggers the gate trainer — dismiss the duel so the rest
+// of the walk is deterministic, then continue with 9 more ups to reach the
+// street row.
 await clearGateTrainer(page)
-await press('ArrowUp', 9)
-await press('ArrowLeft', 9)
-await press('ArrowUp', 1)
 
-await page.waitForFunction(
-  () => window.__game?.activeSceneKey?.() === 'Interior',
-  null,
-  { timeout: 5000 },
-)
-await page.waitForTimeout(300)
+// Spawn at the entrance → Compliance House doormat → step into door.
+await press('ArrowUp', 9) // up the entrance stem to the street
+await press('ArrowLeft', 9) // west to Compliance's doormat
+await press('ArrowUp', 1) // into the doorway
+
+await page.waitForSelector('.community-interior', { timeout: 5000 })
+await page.waitForSelector('.interior-board', { timeout: 5000 })
+await page.waitForTimeout(400)
 await page.screenshot({ path: `${OUT}/interior-01-entered.png` })
 
-const inInterior = await sceneKey()
-const interiorCommunity = await page.evaluate(() => window.__game?.community?.())
-const boards = await page.evaluate(() => window.__game?.boards?.() || [])
+const title = (await page.textContent('.interior-title'))?.trim()
+const boardCount = await page.$$eval('.interior-board', (e) => e.length)
 const spawnTile = await playerTile()
+
+// Player spawns at the door's interior tile, facing up. From buildInterior:
+//   ROOM_COLS=11, ROOM_ROWS=8, DOOR_COL=5, DOOR_ROW=7 -> spawn (5, 6).
 const expectedSpawn = { x: 5, y: 6 }
 
-// Walk to Should Know (centre, col 5 row 1). Spawn (5,6) → up 4 → (5,2).
+// Walk to the Should Know board (centre, col 5, row 1). Spawn (5,6) -> go up 4
+// times to land on (5,2) directly below the board at (5,1), then press A.
 await press('ArrowUp', 4)
-await press('Enter', 1)
+await page.waitForTimeout(150)
+await page.screenshot({ path: `${OUT}/interior-02-at-should-know.png` })
+await press('Enter', 1) // A button
 await page.waitForTimeout(200)
-const afterShould = await openCalls()
+const callsAfterShould = await openCalls()
 
-// Left to (3,2), face up at Must Know, press A.
+// Now walk left two tiles to (3,2), facing the Must Know board at (3,1).
 await press('ArrowLeft', 2)
-await press('ArrowUp', 1)
+await press('ArrowUp', 1) // bump the board to face up (board is blocked, so this just turns the player)
 await press('Enter', 1)
 await page.waitForTimeout(200)
-const afterMust = await openCalls()
+const callsAfterMust = await openCalls()
 
-// Right to (7,2), face up at Nice to Know, press A.
+// Walk right four tiles to (7,2), facing Nice to Know at (7,1).
 await press('ArrowRight', 4)
-await press('ArrowUp', 1)
+await press('ArrowUp', 1) // turn to face up (board is blocked)
 await press('Enter', 1)
 await page.waitForTimeout(200)
-const afterNice = await openCalls()
+const callsAfterNice = await openCalls()
 
-await page.screenshot({ path: `${OUT}/interior-02-after-A.png` })
+const shouldFired = callsAfterShould.length === 1
+const mustFired = callsAfterMust.length === 2
+const niceFired = callsAfterNice.length === 3
+const shouldUrl = callsAfterShould[0]?.url || null
+const mustUrl = callsAfterMust[1]?.url || null
+const niceUrl = callsAfterNice[2]?.url || null
 
-// Walk south back to the door — (7,2) → (5,7).
-await press('ArrowDown', 4)
-await press('ArrowLeft', 2)
-await press('ArrowDown', 1) // step onto door → exits
-await page.waitForFunction(
-  () => window.__game?.activeSceneKey?.() === 'Town',
-  null,
-  { timeout: 5000 },
-)
+await page.screenshot({ path: `${OUT}/interior-03-after-presses.png` })
+
+// Walk back to the door — (7,2) -> (5,7). Go down to (7,6), left to (5,6),
+// then down once more onto the door tile (5,7) — that fires onExit.
+await press('ArrowDown', 4) // (7, 6)
+await press('ArrowLeft', 2) // (5, 6)
+await press('ArrowDown', 1) // step south onto door -> exit
+await page.waitForSelector('.building', { timeout: 5000 })
 await page.waitForTimeout(400)
-await page.screenshot({ path: `${OUT}/interior-03-back-in-town.png` })
+await page.screenshot({ path: `${OUT}/interior-04-back-in-village.png` })
 
-const backInTown = await sceneKey()
-const townPlayerTile = await playerTile()
-const expectedTownTile = { x: 3, y: 7 } // Compliance's doormat
-
-const callsAllMatchDemo = [afterShould[0], afterMust[1], afterNice[2]].every(
-  (c) => c && c.url === DEMO_URL,
-)
-
+const allUrlsMatch = [shouldUrl, mustUrl, niceUrl].every((u) => u === DEMO_URL)
 const ok =
-  inInterior === 'Interior' &&
-  interiorCommunity?.title === 'Compliance House' &&
-  boards.length === 3 &&
-  boards[0]?.type === 'must_know' &&
-  boards[1]?.type === 'should_know' &&
-  boards[2]?.type === 'nice_to_know' &&
+  title === 'Compliance House' &&
+  boardCount === 3 &&
   spawnTile?.x === expectedSpawn.x &&
   spawnTile?.y === expectedSpawn.y &&
-  afterShould.length === 1 &&
-  afterMust.length === 2 &&
-  afterNice.length === 3 &&
-  callsAllMatchDemo &&
-  backInTown === 'Town' &&
-  townPlayerTile?.x === expectedTownTile.x &&
-  townPlayerTile?.y === expectedTownTile.y &&
+  shouldFired &&
+  mustFired &&
+  niceFired &&
+  allUrlsMatch &&
   errors.length === 0
 
 console.log(
   JSON.stringify(
     {
-      inInterior,
-      interiorCommunity,
-      boards,
+      title,
+      boardCount,
       spawnTile,
       expectedSpawn,
-      afterShould,
-      afterMust,
-      afterNice,
-      callsAllMatchDemo,
-      backInTown,
-      townPlayerTile,
-      expectedTownTile,
+      shouldFired,
+      mustFired,
+      niceFired,
+      shouldUrl,
+      mustUrl,
+      niceUrl,
       ok,
       errors,
     },

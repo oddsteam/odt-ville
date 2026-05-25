@@ -1,7 +1,7 @@
-// Gate trainer e2e. Spawn at the village entrance, take a single step
-// up the entrance stem, and confirm the trainer encounter fires with
-// "THE BOSS wants to duel!". RUN AWAY, then verify the trainer doesn't
-// re-trigger when the player walks back across the same sight line.
+// Gate trainer e2e. Spawn at the village entrance, take a single step up the
+// entrance stem, and confirm the trainer encounter fires with "THE BOSS wants
+// to duel!". RUN AWAY, then verify the trainer doesn't re-trigger when the
+// player walks back across the same sight line.
 import { chromium } from 'playwright-core'
 
 const OUT = process.argv[2] || '.'
@@ -15,6 +15,7 @@ page.on('console', (m) => {
   if (m.type() === 'error') errors.push(`console.error: ${m.text()}`)
 })
 
+// Reset session so the village player spawns at the Town Entrance.
 await fetch('http://localhost:3130/api/v1/game/session', {
   method: 'PUT',
   headers: { 'Content-Type': 'application/json' },
@@ -23,72 +24,70 @@ await fetch('http://localhost:3130/api/v1/game/session', {
 
 const press = async (key, times = 1) => {
   for (let i = 0; i < times; i++) {
-    await page.keyboard.down(key)
-    await page.waitForTimeout(190)
-    await page.keyboard.up(key)
-    await page.waitForTimeout(40)
+    await page.keyboard.press(key)
+    await page.waitForTimeout(220)
   }
 }
 
-const sceneKey = () => page.evaluate(() => window.__game?.activeSceneKey?.() || null)
-const opponent = () => page.evaluate(() => window.__game?.opponent?.() || null)
-const trainerInfo = () => page.evaluate(() => window.__game?.trainer?.() || null)
-
 await page.goto('http://localhost:5390', { waitUntil: 'networkidle' })
-await page.waitForFunction(() => window.__game?.engine === 'phaser', null, { timeout: 10000 })
-await page.waitForFunction(() => typeof window.__game?.trainer === 'function', null, { timeout: 5000 })
+await page.waitForSelector('.gb-screen', { timeout: 15000 })
+await page.waitForSelector('.building', { timeout: 15000 })
+await page.waitForSelector('.trainer', { timeout: 5000 })
 await page.waitForTimeout(700)
 await page.screenshot({ path: `${OUT}/trainer-01-entrance.png` })
 
-const initialTrainer = await trainerInfo()
+const sightCells = await page.$$eval('.trainer-sight', (e) => e.length)
 
-// One step up lands the player in the gate trainer's sight (he sees
-// west across row 16; player goes 17→16 at col 12).
+// One step up the entrance stem should land the player in the trainer's
+// sight (his sight reaches west across the bottom margin row).
 await press('ArrowUp', 1)
-await page.waitForFunction(
-  () => window.__game?.activeSceneKey?.() === 'Encounter',
-  null,
-  { timeout: 5000 },
-)
-await page.waitForTimeout(450)
+await page.waitForSelector('.encounter', { timeout: 5000 })
+await page.waitForTimeout(600) // wait past the flash → show transition
 await page.screenshot({ path: `${OUT}/trainer-02-duel.png` })
 
-const inDuel = await sceneKey()
-const duelOpponent = await opponent()
+const duelText = (await page.textContent('.encounter-text'))?.trim()
+const runLabel = (await page.textContent('.encounter-run'))?.trim()
+const isTrainerStage = await page.$('.encounter-trainer').then((e) => !!e)
 
-await press('Enter', 1)
-await page.waitForFunction(
-  () => window.__game?.activeSceneKey?.() === 'Town',
-  null,
-  { timeout: 5000 },
-)
-await page.waitForTimeout(400)
+// RUN AWAY → back to the village.
+await page.click('.encounter-run')
+await page.waitForSelector('.gb-screen', { timeout: 5000 })
+await page.waitForTimeout(300)
 await page.screenshot({ path: `${OUT}/trainer-03-after-run.png` })
 
-const afterRunTrainer = await trainerInfo()
+const sightCellsAfter = await page.$$eval('.trainer-sight', (e) => e.length)
+const isDefeated = await page.$('.trainer-defeated').then((e) => !!e)
 
-// Walking back through the same sight tile must NOT re-trigger.
-await press('ArrowUp', 1)
-await page.waitForTimeout(400)
-await press('ArrowDown', 1)
-await page.waitForTimeout(400)
-const stillInTown = await sceneKey()
+// Walking back into the same sight line must not trigger again.
+await press('ArrowUp', 1) // back into the same sight tile
+await page.waitForTimeout(500)
+const reTriggered = await page.$('.encounter').then((e) => !!e)
+await page.screenshot({ path: `${OUT}/trainer-04-walk-past.png` })
 
 const ok =
-  initialTrainer &&
-  initialTrainer.defeated === false &&
-  initialTrainer.sightCells.length === 5 &&
-  inDuel === 'Encounter' &&
-  duelOpponent?.kind === 'trainer' &&
-  duelOpponent?.name === 'THE BOSS' &&
-  duelOpponent?.level === 99 &&
-  afterRunTrainer?.defeated === true &&
-  stillInTown === 'Town' &&
+  sightCells > 0 &&
+  duelText?.includes('THE BOSS') &&
+  duelText?.includes('wants to duel') &&
+  runLabel === 'RUN AWAY' &&
+  isTrainerStage &&
+  sightCellsAfter === 0 &&
+  isDefeated &&
+  !reTriggered &&
   errors.length === 0
 
 console.log(
   JSON.stringify(
-    { initialTrainer, inDuel, duelOpponent, afterRunTrainer, stillInTown, ok, errors },
+    {
+      sightCells,
+      duelText,
+      runLabel,
+      isTrainerStage,
+      sightCellsAfter,
+      isDefeated,
+      reTriggered,
+      ok,
+      errors,
+    },
     null,
     2,
   ),

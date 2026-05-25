@@ -11,13 +11,29 @@ export async function resetSession() {
   })
 }
 
-// Walk one step up the entrance stem; if the gate trainer's
-// EncounterScene launches, press Enter (RUN AWAY) and wait for the
-// Town scene to resume. Use this at the start of any test that needs
-// to traverse the entrance area without the duel screen contaminating
-// the planned walk. After this returns the trainer is defeated for
-// the rest of this page session.
-export async function clearGateTrainer(page) {
+// Walk one step up the entrance stem and clear the gate trainer if he
+// challenges. After this returns the trainer is in his "defeated" state for
+// the rest of the page session — he never re-triggers — and the player is
+// standing one tile above the entrance, free to walk anywhere.
+//
+// Use this at the start of any test that needs to traverse the entrance area
+// without the duel screen contaminating the planned walk.
+export async function clearGateTrainer(page, { stepDelay = 220 } = {}) {
+  await page.keyboard.press('ArrowUp')
+  await page.waitForTimeout(stepDelay)
+  if (await page.$('.encounter')) {
+    await page.waitForTimeout(500) // past the flash → show
+    await page.click('.encounter-run')
+    await page.waitForTimeout(400)
+  }
+}
+
+// Phaser variant of clearGateTrainer. Walks one step up the entrance
+// stem; if the gate trainer's EncounterScene launches, presses Enter
+// (RUN AWAY) and waits for the Town scene to resume. Used by every
+// Phaser-side walking test that needs to traverse the entrance area
+// without the duel contaminating its planned walk.
+export async function clearPhaserGateTrainer(page) {
   await page.keyboard.down('ArrowUp')
   await page.waitForTimeout(190)
   await page.keyboard.up('ArrowUp')

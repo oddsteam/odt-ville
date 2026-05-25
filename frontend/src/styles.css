@@ -347,6 +347,345 @@ button:disabled {
   border-radius: 0;
 }
 
+/* ---- the scrolling town ----------------------------------- */
+
+.town {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.town-animate {
+  transition: transform var(--move-ms) linear;
+}
+
+.town-ground {
+  position: absolute;
+  inset: 0;
+  display: grid;
+}
+
+.t {
+  width: 48px;
+  height: 48px;
+}
+
+.t-grass {
+  background: var(--grass);
+  box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.05);
+}
+
+.t-path {
+  background: var(--path);
+  box-shadow: inset 0 0 0 1px var(--path-dk);
+}
+
+.t-flower {
+  background: var(--grass);
+  position: relative;
+}
+
+.t-flower::before,
+.t-flower::after {
+  content: '';
+  position: absolute;
+  width: 8px;
+  height: 8px;
+}
+
+.t-flower::before {
+  left: 14px;
+  top: 16px;
+  background: var(--flower-a);
+  box-shadow: 10px 6px 0 var(--flower-b);
+}
+
+.t-flower::after {
+  left: 24px;
+  top: 26px;
+  background: var(--flower-b);
+  box-shadow: -12px 4px 0 var(--flower-a);
+}
+
+.t-tree {
+  background: var(--grass);
+  position: relative;
+}
+
+.t-tree::before {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  background: var(--tree);
+  border: 2px solid var(--tree-dk);
+  border-radius: 36% 36% 30% 30%;
+  box-shadow: inset 0 -10px 0 var(--tree-dk),
+    inset 0 6px 0 rgba(255, 255, 255, 0.13);
+}
+
+.t-sign {
+  background: var(--grass);
+  position: relative;
+}
+
+.t-sign::before {
+  /* post */
+  content: '';
+  position: absolute;
+  left: 22px;
+  top: 22px;
+  width: 5px;
+  height: 18px;
+  background: var(--door);
+}
+
+.t-sign::after {
+  /* board */
+  content: '';
+  position: absolute;
+  left: 9px;
+  top: 12px;
+  width: 30px;
+  height: 16px;
+  background: var(--wall);
+  border: 2px solid var(--door);
+}
+
+.t-tallgrass {
+  background: var(--grass);
+  position: relative;
+  box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.05);
+}
+
+.t-tallgrass::before {
+  /* a clump of dark grass blades filling the lower part of the tile */
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 34px;
+  background: var(--tree);
+  box-shadow: inset 0 -7px 0 var(--tree-dk);
+  clip-path: polygon(
+    0% 42%, 8% 8%, 16% 42%, 25% 2%, 34% 42%, 42% 12%, 50% 42%,
+    58% 4%, 67% 42%, 75% 10%, 84% 42%, 92% 6%, 100% 42%,
+    100% 100%, 0% 100%
+  );
+}
+
+/* ---- community interior (the spatial room) --------------- */
+
+/* `.community-interior` is the wrapper around the GB shell when scene =
+   community-interior. It piggy-backs on `.village-map` for the outer chrome
+   (frame, screen, overlay slots) and only restyles the inside of the screen. */
+
+.community-interior .interior-room {
+  /* Subtle floor base colour behind the floor tiles — also bleeds through
+     gaps if any. Sits behind everything else in the room. */
+  background: #4a3a2a;
+}
+
+.it {
+  width: 48px;
+  height: 48px;
+  position: relative;
+}
+
+/* Wood-plank floor — warm beige like the village path, with a horizontal
+   plank seam at the bottom of every tile so the floor reads as boards. */
+.it-floor {
+  background: #d6a86b;
+  box-shadow:
+    inset 0 -3px 0 #a07237,
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+/* Vertical seam between every plank — light line. Plus a darker shadow
+   under the top wall so the room has a sense of depth. */
+.it-floor::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(0, 0, 0, 0.12) 0 2px, transparent 2px 100%);
+  pointer-events: none;
+}
+
+/* Stone-ish wall. The back wall band gets a community-coloured strip via
+   the `--room-accent` variable set on `.interior-room`. */
+.it-wall {
+  background: #6a5538;
+  box-shadow:
+    inset 0 4px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -4px 0 rgba(0, 0, 0, 0.3),
+    inset 4px 0 0 rgba(0, 0, 0, 0.18),
+    inset -4px 0 0 rgba(0, 0, 0, 0.18);
+}
+
+/* Top wall takes the community accent as a 12px banner along the bottom of
+   the tile — it's how the interior reads as "belonging to this building".
+   Selects the top row (every wall tile in the first row of the grid). */
+.community-interior .interior-ground > .it-wall:nth-child(-n + 11) {
+  box-shadow:
+    inset 0 4px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -12px 0 var(--room-accent, #c7a76a);
+}
+
+/* The doormat tile — walkable, distinctly framed so the exit is obvious. */
+.it-door-tile {
+  background: #8d6a3d;
+  box-shadow:
+    inset 0 0 0 3px #4a3a2a,
+    inset 0 6px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -6px 0 rgba(0, 0, 0, 0.3);
+  position: relative;
+}
+
+.it-door-tile::after {
+  content: 'EXIT';
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: var(--ink, #2c1d10);
+  font-weight: 700;
+}
+
+/* ---- interior boards (1 tile each, hung on the back wall) ------ */
+
+.interior-board {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  font-size: 9px;
+  line-height: 1.05;
+  letter-spacing: 0.5px;
+  font-weight: 700;
+  color: var(--ink, #2c1d10);
+  /* The board itself — wood frame + coloured paper */
+  background: var(--board-paper, #f3e6bb);
+  border: 3px solid var(--door, #432a14);
+  box-shadow:
+    inset 0 4px 0 rgba(255, 255, 255, 0.25),
+    inset 0 -4px 0 rgba(0, 0, 0, 0.2),
+    0 3px 0 rgba(0, 0, 0, 0.35);
+  /* Sit above the floor and the back-wall accent. */
+  z-index: 50;
+  padding: 4px 2px;
+}
+
+.board-must_know {
+  --board-paper: #f7c1bb; /* coral — the most prominent */
+}
+
+.board-should_know {
+  --board-paper: #f7e3a0; /* amber */
+}
+
+.board-nice_to_know {
+  --board-paper: #c6e8b8; /* soft green */
+}
+
+.board-label {
+  display: block;
+  word-spacing: 100vw; /* force each word onto its own line */
+  white-space: normal;
+}
+
+.board-badge {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: #d22d2d;
+  color: #fff;
+  font-size: 10px;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--ink, #2c1d10);
+}
+
+/* Pokémon-style flashing target highlight when the player faces a board. */
+.board-target {
+  animation: board-blink 0.6s steps(2, end) infinite;
+}
+
+@keyframes board-blink {
+  50% {
+    box-shadow:
+      inset 0 4px 0 rgba(255, 255, 255, 0.4),
+      inset 0 -4px 0 rgba(0, 0, 0, 0.2),
+      0 0 0 3px #fff,
+      0 3px 0 rgba(0, 0, 0, 0.35);
+  }
+}
+
+/* ---- gate trainer ----------------------------------------- */
+
+/* The trainer sprite sits inside one tile. The source PNG is a tall
+   standing chibi figure (taller than it is wide), so we let it overflow
+   the tile upward — same trick the buildings use — and ground it at the
+   tile's bottom edge so his shoes line up with the road. */
+.trainer {
+  position: absolute;
+  display: grid;
+  place-items: end center;
+  pointer-events: none;
+  filter: drop-shadow(2px 3px 0 rgba(0, 0, 0, 0.32));
+}
+
+.trainer img {
+  /* Overflow the tile vertically so the figure reads at a believable
+     height next to the player without resizing the world. */
+  height: 96px;
+  width: auto;
+  object-fit: contain;
+  image-rendering: pixelated;
+  transform: translateY(0);
+}
+
+/* Defeated trainer fades a hair so he still reads as "guarding" but
+   doesn't visually pull as much attention. */
+.trainer-defeated img {
+  filter: grayscale(0.5) brightness(0.85);
+}
+
+/* Sight-line markers — soft inset chevrons telegraphing where he can see,
+   in the spirit of the Game Boy trainer's exclamation alert. */
+.trainer-sight {
+  position: absolute;
+  pointer-events: none;
+  background: radial-gradient(
+    circle at center,
+    rgba(255, 80, 80, 0.32) 0%,
+    rgba(255, 80, 80, 0.12) 35%,
+    transparent 70%
+  );
+  animation: trainer-sight-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes trainer-sight-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 0.95; }
+}
+
+/* Trainer in the battle stage — the figure is portrait-oriented (the
+   chibi sprite is ~3w × 4h), so override the square sizing of the wild
+   sprite and let it stretch taller than wide while still fitting in the
+   field without crowding the dialogue box at the bottom. */
+.encounter-trainer .encounter-sprite {
+  width: auto;
+  height: auto;
+  max-width: clamp(200px, 36vh, 320px);
+  max-height: clamp(280px, 56vh, 480px);
+}
 
 /* ---- Phaser host (issue #16, PR-E) -------------------------
    PR-E wraps the Phaser canvas in the same GB shell + screen the
@@ -364,6 +703,188 @@ button:disabled {
   width: 100% !important;
   height: 100% !important;
   display: block;
+  image-rendering: pixelated;
+}
+
+/* ---- buildings -------------------------------------------- */
+
+.building {
+  position: absolute;
+  /* drop-shadow follows the sprite's silhouette, so the building gets a
+     clean offset shadow on the grass without a bounding-box border. */
+  filter: drop-shadow(3px 4px 0 rgba(0, 0, 0, 0.32));
+}
+
+/* Two-layer sprite render: roof on top, body below. Each layer keeps its
+   own aspect ratio inside the 3w×4h footprint (roof ≈ 36%, body ≈ 64%) so
+   the seam lands where the artist drew it. */
+.bld-roof-layer,
+.bld-body-layer {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+
+.bld-roof-layer {
+  top: 0;
+  height: 36%;
+  object-position: bottom center;
+}
+
+.bld-body-layer {
+  top: 36%;
+  height: 64%;
+  object-position: top center;
+}
+
+.bld-roof {
+  height: 54%;
+  position: relative;
+  border-bottom: 3px solid var(--ink);
+  box-shadow: inset 0 7px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -8px 0 rgba(0, 0, 0, 0.22);
+}
+
+.bld-roof-ridge {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  top: 50%;
+  height: 4px;
+  background: rgba(0, 0, 0, 0.28);
+}
+
+.bld-wall {
+  height: 46%;
+  position: relative;
+  background: var(--wall);
+  box-shadow: inset 0 0 0 2px var(--wall-dk);
+}
+
+.bld-window {
+  position: absolute;
+  top: 12px;
+  width: 20px;
+  height: 20px;
+  background: var(--glass);
+  border: 3px solid var(--ink);
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.5);
+}
+
+.bld-window {
+  left: 10px;
+}
+
+.bld-window-right {
+  left: auto;
+  right: 10px;
+}
+
+.bld-door {
+  position: absolute;
+  bottom: 0;
+  height: 64%;
+  background: var(--door);
+  border: 3px solid var(--ink);
+  border-bottom: 0;
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.12);
+}
+
+.bld-door::after {
+  /* doorknob */
+  content: '';
+  position: absolute;
+  right: 5px;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  background: var(--amber);
+}
+
+.bld-plaque {
+  /* A nameplate sitting on the doormat below the house — readable from the
+     path the player walks. */
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  transform: translateX(-50%);
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  background: var(--paper);
+  border: 3px solid var(--ink);
+  box-shadow: 2px 2px 0 var(--ink);
+  padding: 4px 4px;
+  font-size: 7px;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.bld-emoji {
+  font-size: 14px;
+}
+
+.bld-name {
+  white-space: normal;
+}
+
+.building-target {
+  animation: target-flash 0.5s steps(2, end) infinite;
+}
+
+@keyframes target-flash {
+  0%, 100% { outline: 3px solid #f8f000; outline-offset: 2px; }
+  50% { outline: 3px solid transparent; outline-offset: 2px; }
+}
+
+/* ---- urgent sign badge ------------------------------------ */
+
+.sign-badge {
+  position: absolute;
+  top: -12px;
+  right: -10px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--red);
+  border: 3px solid var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3;
+  animation: pixel-blink 0.8s steps(2, end) infinite;
+}
+
+.sign-badge-mark {
+  color: #fff;
+  font-size: 11px;
+}
+
+/* ---- player avatar ---------------------------------------- */
+
+.player {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 48px;
+  height: 48px;
+}
+
+.player-animate {
+  transition: transform var(--move-ms) linear;
+}
+
+.player-img {
+  position: absolute;
+  left: 1px;
+  bottom: 7px;
+  width: 46px;
+  height: 46px;
   image-rendering: pixelated;
 }
 
@@ -522,6 +1043,430 @@ button:disabled {
   font-size: 8px;
 }
 
+/* ============================================================
+   Dialogue box (Pokémon text frame)
+   ============================================================ */
+
+.dialogue {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 10px;
+  min-height: 78px;
+  z-index: 90;
+  background: var(--paper);
+  border: 3px solid var(--ink);
+  border-radius: 5px;
+  box-shadow: inset 0 0 0 3px var(--paper), inset 0 0 0 5px var(--ink),
+    4px 4px 0 rgba(0, 0, 0, 0.4);
+  padding: 14px 16px;
+  cursor: pointer;
+}
+
+.dialogue-text {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.8;
+}
+
+.dialogue-arrow {
+  position: absolute;
+  right: 14px;
+  bottom: 8px;
+  font-size: 12px;
+  color: var(--ink);
+  animation: pixel-blink 0.6s steps(2, end) infinite;
+}
+
+/* ============================================================
+   Wild encounter screen
+   ============================================================ */
+
+.encounter {
+  position: absolute;
+  inset: 0;
+  z-index: 200;
+}
+
+.encounter-flash {
+  position: absolute;
+  inset: 0;
+  background: #ffffff;
+  animation: encounter-flash 0.42s steps(1, end);
+}
+
+@keyframes encounter-flash {
+  0% { opacity: 1; }
+  20% { opacity: 0; }
+  40% { opacity: 1; }
+  60% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+.encounter-stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--paper);
+  animation: encounter-in 0.18s ease-out;
+}
+
+@keyframes encounter-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.encounter-field {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* dark arena — the phoenix's silver tones + glow halo pop against it */
+  background: radial-gradient(
+    ellipse at 50% 46%,
+    #7c8694 0%,
+    #4b5260 52%,
+    #20242e 100%
+  );
+  border-bottom: 4px solid var(--ink);
+}
+
+.encounter-sprite {
+  width: clamp(300px, 50vh, 400px);
+  height: clamp(300px, 50vh, 400px);
+  object-fit: contain;
+  image-rendering: pixelated;
+  animation: encounter-pop 0.3s ease-out;
+}
+
+@keyframes encounter-pop {
+  0% { transform: scale(0.25); opacity: 0; }
+  70% { transform: scale(1.08); opacity: 1; }
+  100% { transform: scale(1); }
+}
+
+.encounter-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 96px;
+  padding: 16px 18px;
+  background: var(--paper);
+  border-top: 4px solid var(--ink);
+}
+
+.encounter-text {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.9;
+  color: var(--ink);
+}
+
+.encounter-level {
+  color: var(--green);
+}
+
+.encounter-run {
+  flex-shrink: 0;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  color: var(--paper);
+  background: var(--red);
+  border: 3px solid var(--ink);
+  border-radius: 4px;
+  padding: 12px 20px;
+  cursor: pointer;
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.4);
+}
+
+.encounter-run:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 rgba(0, 0, 0, 0.4);
+}
+
+/* ============================================================
+   HOUSE INTERIOR — Pokémon menu styling
+   ============================================================ */
+
+.house-interior {
+  width: 100%;
+  max-width: 1040px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.interior-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 4px solid var(--ink);
+  box-shadow: 5px 5px 0 var(--ink);
+  color: #fff;
+}
+
+.interior-logo {
+  width: 46px;
+  height: 46px;
+  background: var(--paper);
+  border: 3px solid var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
+.interior-logo-emoji {
+  font-size: 24px;
+}
+
+.interior-logo-img {
+  width: 36px;
+  height: 36px;
+}
+
+.interior-titles {
+  flex: 1;
+}
+
+.interior-title {
+  margin: 0;
+  font-size: 15px;
+  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.45);
+}
+
+.interior-category {
+  font-size: 8px;
+  letter-spacing: 1px;
+  opacity: 0.92;
+}
+
+.exit-door-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 9px;
+}
+
+.exit-door-icon {
+  font-size: 14px;
+}
+
+.interior-boards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+/* ---- board panels ----------------------------------------- */
+
+.board-panel {
+  background: var(--paper);
+  border: 4px solid var(--ink);
+  box-shadow: 5px 5px 0 var(--ink);
+}
+
+.board-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 11px;
+  border-bottom: 3px solid var(--ink);
+  background: var(--paper-dk);
+}
+
+.board-title {
+  margin: 0;
+  font-size: 10px;
+  letter-spacing: 0.5px;
+}
+
+.board-count {
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 8px;
+  min-width: 18px;
+  text-align: center;
+  padding: 2px 4px;
+}
+
+.board-must_know .board-header {
+  background: var(--red);
+  color: #fff;
+}
+
+.board-must_know .board-count {
+  background: #fff;
+  color: var(--red);
+}
+
+.board-should_know .board-header {
+  background: #f1d27a;
+}
+
+.board-nice_to_know .board-header {
+  background: #cde0b8;
+}
+
+.board-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 11px;
+}
+
+.board-empty {
+  padding: 14px 11px;
+  margin: 0;
+  font-size: 8px;
+  color: #6a6a52;
+}
+
+/* ---- content cards ---------------------------------------- */
+
+.content-card,
+.brief-row {
+  border: 3px solid var(--ink);
+  background: #fffdf0;
+  padding: 9px;
+  box-shadow: 2px 2px 0 var(--ink);
+}
+
+.content-card-opened,
+.brief-row-opened {
+  background: #eef0dc;
+}
+
+.content-card-head,
+.brief-row-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.content-card-title,
+.brief-row-title {
+  margin: 0;
+  font-size: 9px;
+  line-height: 1.6;
+}
+
+.content-card-badges {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-end;
+  flex: 0 0 auto;
+}
+
+.content-card-summary {
+  font-size: 11px;
+  font-family: var(--font-read);
+  color: #45452f;
+  margin: 8px 0;
+  line-height: 1.45;
+}
+
+.brief-row-source {
+  font-size: 7px;
+  color: #6a6a52;
+  margin: 5px 0 0;
+  letter-spacing: 0.5px;
+}
+
+.content-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 14px;
+  margin: 8px 0;
+}
+
+.meta-pair {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.meta-pair dt {
+  font-size: 6px;
+  letter-spacing: 0.5px;
+  color: #6a6a52;
+}
+
+.meta-pair dd {
+  margin: 0;
+  font-size: 10px;
+  font-family: var(--font-read);
+  font-weight: bold;
+}
+
+.ack-required { color: var(--red); }
+.ack-done { color: var(--green); }
+
+.content-card-body {
+  border-top: 3px dashed var(--paper-dk);
+  margin-top: 8px;
+  padding-top: 8px;
+}
+
+.content-card-body p {
+  margin: 0;
+  font-size: 12px;
+  font-family: var(--font-read);
+  line-height: 1.5;
+  color: #2c2c1e;
+}
+
+.content-card-error {
+  color: var(--red);
+  font-size: 8px;
+  margin: 6px 0 0;
+}
+
+.content-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.content-card-actions button {
+  font-size: 8px;
+}
+
+.btn-ack {
+  background: var(--red);
+  color: #fff;
+}
+
+.content-card-done {
+  font-size: 8px;
+  color: var(--green);
+}
+
+/* ---- priority chip + state badge -------------------------- */
+
+.priority-chip,
+.state-badge {
+  font-size: 7px;
+  padding: 3px 5px;
+  border: 2px solid var(--ink);
+  white-space: nowrap;
+}
+
+.priority-normal { background: #e3e6cf; }
+.priority-important { background: var(--amber); color: #3a2400; }
+.priority-urgent { background: var(--red); color: #fff; }
+
+.state-unread { background: var(--ink); color: var(--paper); }
+.state-opened { background: var(--glass); }
+.state-acknowledged { background: #a9dca0; }
 
 /* ============================================================
    Daily Brief modal

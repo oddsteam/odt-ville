@@ -1,11 +1,12 @@
-// Regression for issue #9: exiting a community must land the player on
-// the doormat of the community they just exited — not the previously
-// visited one. Walks A → exit, then B → exit, and asserts each
-// post-exit tile is the expected community's (doorCol, doorRow + 1).
+// Regression for issue #9: exiting a community must land the player on the
+// doormat of the community they just exited — not the previously-visited one.
+// Walks A → exit, then B → exit, and asserts each post-exit tile is the
+// expected community's `(doorCol, doorRow + 1)`.
 import { chromium } from 'playwright-core'
 import { clearGateTrainer } from './_helpers.mjs'
 
 const OUT = process.argv[2] || '.'
+const TILE = 48
 
 const browser = await chromium.launch({ channel: 'chrome', headless: true })
 const page = await browser.newPage({ viewport: { width: 1180, height: 820 } })
@@ -16,87 +17,70 @@ page.on('console', (m) => {
   if (m.type() === 'error') errors.push(`console.error: ${m.text()}`)
 })
 
-await fetch('http://localhost:3130/api/v1/game/session', {
-  method: 'PUT',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ last_area: 'town', last_community_id: '' }),
-})
-
 const press = async (key, times = 1) => {
   for (let i = 0; i < times; i++) {
-    await page.keyboard.down(key)
-    await page.waitForTimeout(190)
-    await page.keyboard.up(key)
-    await page.waitForTimeout(40)
+    await page.keyboard.press(key)
+    await page.waitForTimeout(220)
   }
 }
 
-const playerTile = () => page.evaluate(() => window.__game?.playerTile?.() || null)
-const sceneKey = () => page.evaluate(() => window.__game?.activeSceneKey?.() || null)
-const communityTitle = () =>
-  page.evaluate(() => window.__game?.community?.()?.title || null)
+// Read the player's tile from the inline `translate(Xpx, Ypx)` transform.
+const playerTile = () =>
+  page.$eval('.player', (el) => {
+    const m = el.style.transform.match(/translate\(([\-0-9.]+)px,\s*([\-0-9.]+)px\)/)
+    if (!m) return null
+    return {
+      x: Math.round(parseFloat(m[1]) / 48),
+      y: Math.round(parseFloat(m[2]) / 48),
+    }
+  })
 
-// Walk south onto the door tile from the interior spawn (5, 6) → step
-// down 1 onto (5, 7). Phaser fires exitCommunity + scene.starts Town.
-async function exitInterior() {
-  await press('ArrowDown', 1)
-  await page.waitForFunction(
-    () => window.__game?.activeSceneKey?.() === 'Town',
-    null,
-    { timeout: 5000 },
-  )
-  await page.waitForTimeout(350)
-}
+const interiorTitle = () =>
+  page.textContent('.interior-title').then((t) => (t || '').trim())
 
 await page.goto('http://localhost:5390', { waitUntil: 'networkidle' })
-await page.waitForFunction(() => window.__game?.engine === 'phaser', null, {
-  timeout: 10000,
-})
-await page.waitForFunction(
-  () => typeof window.__game?.playerTile === 'function',
-  null,
-  { timeout: 5000 },
-)
+await page.waitForSelector('.gb-screen', { timeout: 15000 })
+await page.waitForSelector('.building', { timeout: 15000 })
 await page.waitForTimeout(700)
 await page.screenshot({ path: `${OUT}/exit-01-entrance.png` })
 
-// First step up triggers the trainer; clear him.
+// With the default seed (5 communities) the town has one building row. Each
+// plot is 4 columns apart; doormat = (doorCol, doorRow + 1) = (col+1, row+4).
+// Compliance House: slot 0 → doormat (3, 7). Product House: slot 1 → (7, 7).
+
+// First step up triggers the gate trainer — dismiss the duel so the rest
+// of the walk is deterministic, then continue with 9 more ups to reach the
+// street row.
 await clearGateTrainer(page)
 
-// Compliance House (slot 0) → doormat (3, 7); Product (slot 1) → (7, 7).
-// We're at (12, 16) after the trainer pass-through; up 9 to street row,
-// west 9 to (3, 7), up 1 into the doorway.
-await press('ArrowUp', 9)
-await press('ArrowLeft', 9)
-await press('ArrowUp', 1)
-await page.waitForFunction(
-  () => window.__game?.activeSceneKey?.() === 'Interior',
-  null,
-  { timeout: 5000 },
-)
-const titleA = await communityTitle()
+// Spawn → Compliance doormat: up the entrance stem to the street, then west.
+await press('ArrowUp', 9) // (entranceCol, 7)
+await press('ArrowLeft', 9) // (3, 7) — facing Compliance's door
+await press('ArrowUp', 1) // step into the doorway
+await page.waitForSelector('.community-interior', { timeout: 5000 })
+const titleA = await interiorTitle()
 await page.screenshot({ path: `${OUT}/exit-02-inside-A.png` })
 
-await exitInterior()
+// Exit and check the player landed on Compliance's doormat.
+await page.click('.exit-door-btn')
+await page.waitForSelector('.gb-screen', { timeout: 5000 })
+await page.waitForTimeout(450)
 const afterA = await playerTile()
 await page.screenshot({ path: `${OUT}/exit-03-after-A.png` })
 
-// Now east 4 to Product's doormat (7, 7), then up into the doorway.
-await press('ArrowRight', 4)
-await press('ArrowUp', 1)
-await page.waitForFunction(
-  () => window.__game?.activeSceneKey?.() === 'Interior',
-  null,
-  { timeout: 5000 },
-)
-const titleB = await communityTitle()
+// Now walk to Product House and enter.
+await press('ArrowRight', 4) // (7, 7)
+await press('ArrowUp', 1) // step into Product's door
+await page.waitForSelector('.community-interior', { timeout: 5000 })
+const titleB = await interiorTitle()
 await page.screenshot({ path: `${OUT}/exit-04-inside-B.png` })
 
-await exitInterior()
+// Exit Product and verify the player landed on PRODUCT's doormat (not A).
+await page.click('.exit-door-btn')
+await page.waitForSelector('.gb-screen', { timeout: 5000 })
+await page.waitForTimeout(450)
 const afterB = await playerTile()
 await page.screenshot({ path: `${OUT}/exit-05-after-B.png` })
-
-const inTown = await sceneKey()
 
 const expected = {
   titleA: 'Compliance House',
@@ -111,7 +95,6 @@ const ok =
   titleB === expected.titleB &&
   afterB?.x === expected.afterB.x &&
   afterB?.y === expected.afterB.y &&
-  inTown === 'Town' &&
   errors.length === 0
 
 console.log(
