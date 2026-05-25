@@ -228,6 +228,7 @@ export default function App() {
             dailyBrief={
               <DailyBriefShortcut items={feed} onClose={handleDailyBriefClose} />
             }
+            activeCommunityId={activeCommunityId}
             onEnterCommunity={handleEnterCommunity}
             onExitCommunity={handleExitCommunity}
             onOpenBoard={handleOpenBoard}

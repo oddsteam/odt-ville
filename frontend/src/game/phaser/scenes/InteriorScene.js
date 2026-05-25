@@ -180,6 +180,18 @@ export default class InteriorScene extends Phaser.Scene {
     this.spaceKey = this.input.keyboard.addKey(
       Phaser.Input.Keyboard.KeyCodes.SPACE,
     )
+    // Overlay D-pad + A — same bus pattern as TownScene.
+    this.dpadDir = null
+    this._onDpadPress = (d) => {
+      this.dpadDir = d
+    }
+    this._onDpadRelease = (d) => {
+      if (this.dpadDir === d) this.dpadDir = null
+    }
+    this._onABtn = () => this.pressA()
+    bus.on('dpadPress', this._onDpadPress)
+    bus.on('dpadRelease', this._onDpadRelease)
+    bus.on('aButton', this._onABtn)
 
     if (typeof window !== 'undefined') {
       window.__game = {
@@ -210,6 +222,9 @@ export default class InteriorScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.input.keyboard.off('keydown-ENTER', this.pressA, this)
       this.input.keyboard.off('keydown-SPACE', this.pressA, this)
+      bus.off('dpadPress', this._onDpadPress)
+      bus.off('dpadRelease', this._onDpadRelease)
+      bus.off('aButton', this._onABtn)
     })
   }
 
@@ -220,6 +235,7 @@ export default class InteriorScene extends Phaser.Scene {
   }
 
   activeDirection() {
+    if (this.dpadDir) return this.dpadDir
     const c = this.cursors
     const w = this.wasd
     if (c.up.isDown || w.up.isDown) return 'up'

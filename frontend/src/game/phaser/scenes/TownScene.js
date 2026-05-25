@@ -140,6 +140,18 @@ export default class TownScene extends Phaser.Scene {
       left: Phaser.Input.Keyboard.KeyCodes.A,
       right: Phaser.Input.Keyboard.KeyCodes.D,
     })
+    // Overlay D-pad — React emits press/release events on the bus so
+    // we drive movement from tap/click input the same way keyboard
+    // input feeds activeDirection().
+    this.dpadDir = null
+    this._onDpadPress = (d) => {
+      this.dpadDir = d
+    }
+    this._onDpadRelease = (d) => {
+      if (this.dpadDir === d) this.dpadDir = null
+    }
+    bus.on('dpadPress', this._onDpadPress)
+    bus.on('dpadRelease', this._onDpadRelease)
 
     // Test API. PR-A only exposed `engine`; PR-B+ hang reads off the
     // same object so Playwright can introspect scene state without
@@ -182,6 +194,8 @@ export default class TownScene extends Phaser.Scene {
       this.registry.events.off('changedata-session', this.handleSessionChange, this)
       this.registry.events.off('changedata-trainerDefeated', this.refreshTrainerVisuals, this)
       this.events.off(Phaser.Scenes.Events.RESUME, this.handleResume, this)
+      bus.off('dpadPress', this._onDpadPress)
+      bus.off('dpadRelease', this._onDpadRelease)
       if (typeof window !== 'undefined' && window.__game?.engine === 'phaser') {
         delete window.__game
       }
@@ -198,7 +212,10 @@ export default class TownScene extends Phaser.Scene {
 
   // Resolve which direction key is currently held; the most-recently
   // pressed direction wins so changing direction mid-walk feels snappy.
+  // Overlay D-pad press wins over keyboard since taps are usually
+  // mutually exclusive with held keys on the same device.
   activeDirection() {
+    if (this.dpadDir) return this.dpadDir
     const c = this.cursors
     const w = this.wasd
     if (c.up.isDown || w.up.isDown) return 'up'

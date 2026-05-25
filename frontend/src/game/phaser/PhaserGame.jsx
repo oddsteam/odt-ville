@@ -1,8 +1,9 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Phaser from 'phaser'
 import TownScene from './scenes/TownScene.js'
 import InteriorScene from './scenes/InteriorScene.js'
 import EncounterScene from './scenes/EncounterScene.js'
+import MobileDpad from '../MobileDpad.jsx'
 import bus from './bus.js'
 
 // Player walks — imported here so Vite emits hashed URLs at build time and
@@ -26,9 +27,6 @@ import rightWalk3 from '../assets/character/right-walk-3.png'
 import roofImg from '../assets/buildings/guild-roof.png'
 import bodyImg from '../assets/buildings/guild-body.png'
 
-// Asset URLs collected in one bag so TownScene's preload() can pull them
-// from the registry without importing them itself (keeping the scene file
-// portable to other shells in the future).
 const ASSETS = {
   player: {
     down: [frontStill, frontWalk1, frontWalk2, frontWalk3],
@@ -49,13 +47,15 @@ const ASSETS = {
 const DESIGN_WIDTH = 1152
 const DESIGN_HEIGHT = 912
 
-// PR-C host. Mounts a Phaser game, pushes React props into the game's
-// registry, and forwards bus events back to the parent via callback
-// props. The Phaser game survives prop changes — the scene listens on
-// the registry and reacts there.
+// PR-E village shell. Wraps the Phaser canvas in the GB chrome and
+// renders the DOM overlay (D-pad / A button / FULL / Daily Brief)
+// floating on top of it. The overlay forwards taps + clicks to the
+// scenes via the bus so on-screen and keyboard input behave identically.
 export default function PhaserGame({
   communities,
   session,
+  dailyBrief,
+  activeCommunityId,
   onEnterCommunity,
   onExitCommunity,
   onOpenBoard,
@@ -63,10 +63,10 @@ export default function PhaserGame({
   onTrainerDefeated,
 }) {
   const hostRef = useRef(null)
+  const shellRef = useRef(null)
   const gameRef = useRef(null)
+  const [isFullscreen, setIsFullscreen] = useState(false)
 
-  // The callback-ref pattern lets us avoid re-subscribing to the bus on
-  // every render — listeners read the latest callback through the ref.
   const enterCommunityRef = useRef(onEnterCommunity)
   enterCommunityRef.current = onEnterCommunity
   const exitCommunityRef = useRef(onExitCommunity)
@@ -76,9 +76,8 @@ export default function PhaserGame({
   const trainerDefeatedRef = useRef(onTrainerDefeated)
   trainerDefeatedRef.current = onTrainerDefeated
 
-  // Phaser instantiation — once per mount. Subsequent prop changes are
-  // pushed via registry updates in the next effects, not by recreating
-  // the game.
+  // Phaser instantiation — once per mount. Prop changes flow via
+  // registry updates in later effects, not by recreating the game.
   useEffect(() => {
     if (!hostRef.current) return undefined
 
@@ -99,9 +98,6 @@ export default function PhaserGame({
       scene: [TownScene, InteriorScene, EncounterScene],
     })
 
-    // Seed the registry BEFORE the scene boots so TownScene.create() sees
-    // the initial communities + session + trainerDefeated. Game registry
-    // is shared data React can update at runtime via .set().
     game.registry.set('assets', ASSETS)
     game.registry.set('communities', communities)
     game.registry.set('session', session)
@@ -109,9 +105,6 @@ export default function PhaserGame({
 
     gameRef.current = game
 
-    // Bus subscriptions — one set of listeners per mount, each reading
-    // the latest callback from a ref so we don't tear listeners on
-    // prop change.
     const onEnter = (id) => enterCommunityRef.current?.(id)
     const onExit = (id) => exitCommunityRef.current?.(id)
     const onOpen = (boardType) => openBoardRef.current?.(boardType)
@@ -135,7 +128,7 @@ export default function PhaserGame({
   }, [])
 
   // Push prop changes into the registry. Scenes listen for
-  // 'changedata-communities' / 'changedata-session' to react.
+  // 'changedata-communities' / 'changedata-session' / 'changedata-trainerDefeated'.
   useEffect(() => {
     const game = gameRef.current
     if (!game) return
@@ -154,5 +147,84 @@ export default function PhaserGame({
     game.registry.set('trainerDefeated', Boolean(trainerDefeated))
   }, [trainerDefeated])
 
-  return <div className="phaser-host" ref={hostRef} />
+  // ---- Fullscreen toggle (the GB shell becomes the fullscreen element).
+  function toggleFullscreen() {
+    const root = shellRef.current
+    if (!root) return
+    if (document.fullscreenElement) {
+      document.exitFullscreen?.()
+    } else if (root.requestFullscreen) {
+      root.requestFullscreen().catch(() => {})
+    }
+  }
+  useEffect(() => {
+    const onChange = () => setIsFullscreen(Boolean(document.fullscreenElement))
+    document.addEventListener('fullscreenchange', onChange)
+    return () => document.removeEventListener('fullscreenchange', onChange)
+  }, [])
+
+  // ---- Overlay button handlers — emit on the bus so scenes treat
+  // tap input identically to keyboard. D-pad press/release maps to
+  // pressDir/releaseDir in the scene's input loop.
+  const onDpadPress = (dir) => bus.emit('dpadPress', dir)
+  const onDpadRelease = (dir) => bus.emit('dpadRelease', dir)
+  const onAButton = () => bus.emit('aButton')
+
+  // Dynamic topbar label — community title while inside a house,
+  // "ONE REV VILLAGE" when in the town.
+  const activeCommunity =
+    activeCommunityId != null
+      ? communities.find((c) => c.id === activeCommunityId)
+      : null
+  const topbarLabel = activeCommunity?.title || 'ONE REV VILLAGE'
+
+  return (
+    <div className="village-map">
+      <div className="gb-shell" ref={shellRef}>
+        <div className="gb-topbar">
+          <span className="gb-led" />
+          <span className="gb-topbar-label interior-title">{topbarLabel}</span>
+          <span className="gb-topbar-tag">GAME BOY</span>
+        </div>
+
+        <div className="gb-screen">
+          <div className="phaser-host" ref={hostRef} />
+
+          <div className="screen-overlay">
+            <p className="overlay-hint">Arrows / WASD walk · A to interact</p>
+
+            <div className="overlay-slot overlay-tr">
+              {dailyBrief}
+              <button
+                type="button"
+                className="fullscreen-btn"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={toggleFullscreen}
+                aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+                title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+              >
+                {isFullscreen ? '⊟ EXIT' : '⛶ FULL'}
+              </button>
+            </div>
+
+            <div className="overlay-slot overlay-bl">
+              <MobileDpad onPress={onDpadPress} onRelease={onDpadRelease} />
+            </div>
+
+            <div className="overlay-slot overlay-br">
+              <button
+                type="button"
+                className="action-btn"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={onAButton}
+                aria-label="A button"
+              >
+                A
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 }

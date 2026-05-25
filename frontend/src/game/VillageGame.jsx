@@ -42,6 +42,7 @@ export default function VillageGame({
   communities,
   session,
   dailyBrief,
+  activeCommunityId,
   onEnterCommunity,
   onExitCommunity,
   onOpenBoard,
@@ -76,6 +77,8 @@ export default function VillageGame({
       <PhaserGame
         communities={communities}
         session={session}
+        dailyBrief={dailyBrief}
+        activeCommunityId={activeCommunityId}
         onEnterCommunity={onEnterCommunity}
         onExitCommunity={onExitCommunity}
         onOpenBoard={onOpenBoard}
