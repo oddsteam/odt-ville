@@ -1,6 +1,7 @@
-// Drives a real browser through the top-down town: spawn at the Town Entrance,
-// walk up the path, over to Compliance House, and into its doorway — landing
-// inside the spatial interior with three boards.
+// Drives a real browser through the top-down town: spawn at the Town
+// Entrance, walk up the path, over to Compliance House, and into its
+// doorway. Reads scene state via the Phaser test API (canvas has no DOM
+// nodes to query).
 import { chromium } from 'playwright-core'
 import { clearGateTrainer } from './_helpers.mjs'
 
@@ -14,46 +15,54 @@ page.on('console', (m) => {
   if (m.type() === 'error') errors.push(`console.error: ${m.text()}`)
 })
 
-const press = async (key, times) => {
+await fetch('http://localhost:3130/api/v1/game/session', {
+  method: 'PUT',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ last_area: 'town', last_community_id: '' }),
+})
+
+const press = async (key, times = 1) => {
   for (let i = 0; i < times; i++) {
-    await page.keyboard.press(key)
-    await page.waitForTimeout(230)
+    await page.keyboard.down(key)
+    await page.waitForTimeout(190)
+    await page.keyboard.up(key)
+    await page.waitForTimeout(40)
   }
 }
 
 await page.goto('http://localhost:5390', { waitUntil: 'networkidle' })
-await page.waitForSelector('.gb-screen', { timeout: 15000 })
-await page.waitForSelector('.building', { timeout: 15000 })
+await page.waitForFunction(() => window.__game?.engine === 'phaser', null, {
+  timeout: 10000,
+})
+await page.waitForFunction(
+  () => typeof window.__game?.playerTile === 'function',
+  null,
+  { timeout: 5000 },
+)
 await page.waitForTimeout(700)
 await page.screenshot({ path: `${OUT}/01-town.png` })
 
-// First step up the entrance stem triggers the gate trainer's duel —
-// dismiss it so the rest of the walk is deterministic. After this returns
-// the trainer is defeated for the rest of this page session and the player
-// is one tile above the entrance (so we still need 9 more ArrowUps).
+// First step up triggers the gate trainer; dismiss the duel so the
+// scripted walk stays deterministic. After this returns the player is
+// one tile above the entrance (9 more ups to the street row).
 await clearGateTrainer(page)
-
-// Town Entrance -> up the entrance stem (which crosses the tall-grass field
-// safely) to the street, then west.
-await press('ArrowUp', 9) // up to the street-path row
-await press('ArrowLeft', 9) // along the street, below Compliance House
+await press('ArrowUp', 9)
+await press('ArrowLeft', 9)
 await page.waitForTimeout(300)
 await page.screenshot({ path: `${OUT}/02-at-door.png` })
 
-// Step up into the doorway -> enters the spatial interior.
+// Step up into the doorway → Phaser's InteriorScene takes over.
 await press('ArrowUp', 1)
-await page.waitForSelector('.community-interior', { timeout: 15000 })
-await page.waitForSelector('.interior-title', { timeout: 5000 })
-await page.waitForTimeout(400)
-
-const title = (await page.textContent('.interior-title'))?.trim()
-const boards = await page.$$eval('.interior-board', (els) =>
-  els.map((el) => ({
-    type: el.className.match(/board-(must_know|should_know|nice_to_know)/)?.[1],
-    label: el.querySelector('.board-label')?.textContent?.trim(),
-  })),
+await page.waitForFunction(
+  () => window.__game?.activeSceneKey?.() === 'Interior',
+  null,
+  { timeout: 5000 },
 )
+await page.waitForTimeout(300)
 await page.screenshot({ path: `${OUT}/03-compliance-interior.png`, fullPage: true })
+
+const title = await page.evaluate(() => window.__game?.community?.()?.title)
+const boards = await page.evaluate(() => window.__game?.boards?.() || [])
 
 console.log(JSON.stringify({ title, boards, errors }, null, 2))
 await browser.close()
