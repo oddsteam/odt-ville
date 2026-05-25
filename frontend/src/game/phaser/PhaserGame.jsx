@@ -1,28 +1,72 @@
 import { useEffect, useRef } from 'react'
 import Phaser from 'phaser'
-import PlaceholderScene from './scenes/PlaceholderScene.js'
+import TownScene from './scenes/TownScene.js'
+import bus from './bus.js'
 
-// PR-A bootstrap. <PhaserGame> is the React-side host for the Phaser game
-// instance — it does nothing more than:
-//   1. Create a div Phaser can paint into.
-//   2. On mount, instantiate Phaser.Game with our scene list.
-//   3. On unmount, destroy the game cleanly so HMR / scene swaps don't leak.
-//
-// The black-box boundary stays at <VillageGame> one level up — PhaserGame
-// only knows how to host Phaser, not what the game *means*. PR-B+ will
-// thread props (communities, session, ...) into the scenes via Phaser's
-// registry / event bus; for the placeholder there is nothing to thread.
+// Player walks — imported here so Vite emits hashed URLs at build time and
+// the Phaser loader can fetch each direction's frames.
+import frontStill from '../assets/character/front-still.png'
+import frontWalk1 from '../assets/character/front-walk-1.png'
+import frontWalk2 from '../assets/character/front-walk-2.png'
+import frontWalk3 from '../assets/character/front-walk-3.png'
+import backStill from '../assets/character/back-still.png'
+import backWalk1 from '../assets/character/back-walk-1.png'
+import backWalk2 from '../assets/character/back-walk-2.png'
+import backWalk3 from '../assets/character/back-walk-3.png'
+import leftStill from '../assets/character/left-still.png'
+import leftWalk1 from '../assets/character/left-walk-1.png'
+import leftWalk2 from '../assets/character/left-walk-2.png'
+import leftWalk3 from '../assets/character/left-walk-3.png'
+import rightStill from '../assets/character/right-still.png'
+import rightWalk1 from '../assets/character/right-walk-1.png'
+import rightWalk2 from '../assets/character/right-walk-2.png'
+import rightWalk3 from '../assets/character/right-walk-3.png'
+import roofImg from '../assets/buildings/guild-roof.png'
+import bodyImg from '../assets/buildings/guild-body.png'
 
-// Design resolution matches today's DOM town for a 5-community seed
+// Asset URLs collected in one bag so TownScene's preload() can pull them
+// from the registry without importing them itself (keeping the scene file
+// portable to other shells in the future).
+const ASSETS = {
+  player: {
+    down: [frontStill, frontWalk1, frontWalk2, frontWalk3],
+    up: [backStill, backWalk1, backWalk2, backWalk3],
+    left: [leftStill, leftWalk1, leftWalk2, leftWalk3],
+    right: [rightStill, rightWalk1, rightWalk2, rightWalk3],
+  },
+  buildings: {
+    roofUrl: roofImg,
+    bodyUrl: bodyImg,
+  },
+}
+
+// Design resolution matches the DOM town for a 5-community seed
 // (24 cols × 19 rows × 48 px = 1152 × 912). Phaser's Scale.FIT keeps that
-// aspect ratio inside whatever box the GB shell gives us.
+// aspect ratio inside whatever box the GB shell gives us; TownScene
+// resizes the world bounds for larger towns at runtime.
 const DESIGN_WIDTH = 1152
 const DESIGN_HEIGHT = 912
 
-export default function PhaserGame() {
+// PR-B host. Mounts a Phaser game, pushes React props into the game's
+// registry, and forwards bus events back to the parent via callback
+// props. The Phaser game survives prop changes — the scene listens on
+// the registry and reacts there.
+export default function PhaserGame({
+  communities,
+  session,
+  onEnterCommunity,
+}) {
   const hostRef = useRef(null)
   const gameRef = useRef(null)
 
+  // The callback ref pattern lets us avoid re-subscribing to the bus on
+  // every render — the listener reads the latest callback through the ref.
+  const enterCommunityRef = useRef(onEnterCommunity)
+  enterCommunityRef.current = onEnterCommunity
+
+  // Phaser instantiation — once per mount. Subsequent prop changes are
+  // pushed via registry updates in the next effects, not by recreating
+  // the game.
   useEffect(() => {
     if (!hostRef.current) return undefined
 
@@ -31,34 +75,55 @@ export default function PhaserGame() {
       parent: hostRef.current,
       width: DESIGN_WIDTH,
       height: DESIGN_HEIGHT,
-      backgroundColor: '#cfa974',
+      backgroundColor: '#5fc24a',
       pixelArt: true,
       antialias: false,
-      // FIT preserves the design's aspect ratio inside the host element —
-      // the canvas grows / shrinks with the GB screen, never stretches.
       scale: {
         mode: Phaser.Scale.FIT,
         autoCenter: Phaser.Scale.CENTER_BOTH,
         width: DESIGN_WIDTH,
         height: DESIGN_HEIGHT,
       },
-      scene: [PlaceholderScene],
+      scene: [TownScene],
     })
+
+    // Seed the registry BEFORE the scene boots so TownScene.create() sees
+    // the initial communities + session. Game registry is shared data
+    // React can update at runtime via .set().
+    game.registry.set('assets', ASSETS)
+    game.registry.set('communities', communities)
+    game.registry.set('session', session)
+
     gameRef.current = game
 
+    // Bus subscription — one listener per mount, reads the latest
+    // callback from the ref so we don't tear the listener on prop change.
+    const onEnter = (id) => enterCommunityRef.current?.(id)
+    bus.on('enterCommunity', onEnter)
+
     return () => {
-      // Tear the game down so the canvas + listeners go away when the
-      // engine is hot-swapped or the village tab is unmounted. The
-      // `true` removes the canvas element from the DOM.
+      bus.off('enterCommunity', onEnter)
       game.destroy(true)
       gameRef.current = null
       if (typeof window !== 'undefined' && window.__game) {
-        // Strict mode and HMR remount the host; clear the shared
-        // test-API marker so stale scenes can't be inspected.
         delete window.__game
       }
     }
   }, [])
+
+  // Push prop changes into the registry. Scenes listen for
+  // 'changedata-communities' / 'changedata-session' to react.
+  useEffect(() => {
+    const game = gameRef.current
+    if (!game) return
+    game.registry.set('communities', communities)
+  }, [communities])
+
+  useEffect(() => {
+    const game = gameRef.current
+    if (!game) return
+    game.registry.set('session', session)
+  }, [session])
 
   return <div className="phaser-host" ref={hostRef} />
 }
