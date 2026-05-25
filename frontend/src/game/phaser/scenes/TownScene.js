@@ -29,6 +29,15 @@ export default class TownScene extends Phaser.Scene {
     this.town = null
     this.buildings = [] // [{ community, col, row, w, h, doorCol, doorRow, sprite }]
     this.heldDirs = []
+    // When InteriorScene exits via the doormat it scene.starts us with
+    // `{ exitedCommunityId }`; we honor that over session-based spawn so
+    // the player lands on the community they just left, not whatever the
+    // session last persisted.
+    this.exitedCommunityId = null
+  }
+
+  init(data) {
+    this.exitedCommunityId = data?.exitedCommunityId ?? null
   }
 
   preload() {
@@ -164,11 +173,13 @@ export default class TownScene extends Phaser.Scene {
     const tx = this.playerTile.x + dx
     const ty = this.playerTile.y + dy
 
-    // Door collision — stepping onto a doorway emits enterCommunity.
-    // The React shell catches this and (today) routes scene state.
+    // Door collision — stepping onto a doorway emits enterCommunity for
+    // the React shell (session save) and transitions Phaser to the
+    // interior scene with the community payload attached.
     const door = this.buildings.find((b) => b.doorCol === tx && b.doorRow === ty)
     if (door) {
       bus.emit('enterCommunity', door.community.id)
+      this.scene.start('Interior', { community: door.community })
       return
     }
 
@@ -265,10 +276,12 @@ export default class TownScene extends Phaser.Scene {
   }
 
   spawnPlayer(session) {
-    // Same spawn-resolution logic as resolveSpawn() in VillageGame:
-    // returning visitor → on their last community's doormat, else the
-    // Town Entrance.
-    const id = session?.spawn?.last_community_id
+    // Spawn priority:
+    //   1. The community we just exited (passed via scene.start data).
+    //   2. The session's `last_community_id` (returning visitor on reload).
+    //   3. The Town Entrance (first-time / cleared session).
+    const id =
+      this.exitedCommunityId ?? session?.spawn?.last_community_id ?? null
     const b = id != null ? this.buildings.find((x) => x.community.id === id) : null
     const spawn = b
       ? { x: b.doorCol, y: b.doorRow + 1, facing: 'up' }

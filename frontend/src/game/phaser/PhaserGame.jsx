@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import Phaser from 'phaser'
 import TownScene from './scenes/TownScene.js'
+import InteriorScene from './scenes/InteriorScene.js'
 import bus from './bus.js'
 
 // Player walks — imported here so Vite emits hashed URLs at build time and
@@ -47,7 +48,7 @@ const ASSETS = {
 const DESIGN_WIDTH = 1152
 const DESIGN_HEIGHT = 912
 
-// PR-B host. Mounts a Phaser game, pushes React props into the game's
+// PR-C host. Mounts a Phaser game, pushes React props into the game's
 // registry, and forwards bus events back to the parent via callback
 // props. The Phaser game survives prop changes — the scene listens on
 // the registry and reacts there.
@@ -55,14 +56,20 @@ export default function PhaserGame({
   communities,
   session,
   onEnterCommunity,
+  onExitCommunity,
+  onOpenBoard,
 }) {
   const hostRef = useRef(null)
   const gameRef = useRef(null)
 
-  // The callback ref pattern lets us avoid re-subscribing to the bus on
-  // every render — the listener reads the latest callback through the ref.
+  // The callback-ref pattern lets us avoid re-subscribing to the bus on
+  // every render — listeners read the latest callback through the ref.
   const enterCommunityRef = useRef(onEnterCommunity)
   enterCommunityRef.current = onEnterCommunity
+  const exitCommunityRef = useRef(onExitCommunity)
+  exitCommunityRef.current = onExitCommunity
+  const openBoardRef = useRef(onOpenBoard)
+  openBoardRef.current = onOpenBoard
 
   // Phaser instantiation — once per mount. Subsequent prop changes are
   // pushed via registry updates in the next effects, not by recreating
@@ -84,7 +91,7 @@ export default function PhaserGame({
         width: DESIGN_WIDTH,
         height: DESIGN_HEIGHT,
       },
-      scene: [TownScene],
+      scene: [TownScene, InteriorScene],
     })
 
     // Seed the registry BEFORE the scene boots so TownScene.create() sees
@@ -96,13 +103,20 @@ export default function PhaserGame({
 
     gameRef.current = game
 
-    // Bus subscription — one listener per mount, reads the latest
-    // callback from the ref so we don't tear the listener on prop change.
+    // Bus subscriptions — one set of listeners per mount, each reading
+    // the latest callback from a ref so we don't tear listeners on
+    // prop change.
     const onEnter = (id) => enterCommunityRef.current?.(id)
+    const onExit = (id) => exitCommunityRef.current?.(id)
+    const onOpen = (boardType) => openBoardRef.current?.(boardType)
     bus.on('enterCommunity', onEnter)
+    bus.on('exitCommunity', onExit)
+    bus.on('openBoard', onOpen)
 
     return () => {
       bus.off('enterCommunity', onEnter)
+      bus.off('exitCommunity', onExit)
+      bus.off('openBoard', onOpen)
       game.destroy(true)
       gameRef.current = null
       if (typeof window !== 'undefined' && window.__game) {
