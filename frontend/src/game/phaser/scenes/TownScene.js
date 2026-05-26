@@ -258,7 +258,9 @@ export default class TownScene extends Phaser.Scene {
     this.movingTween = this.tweens.add({
       targets: this.player,
       x: tx * TILE + TILE / 2,
-      y: ty * TILE + TILE / 2,
+      // y matches setOrigin(0.5, 1) — anchor at the bottom edge of the
+      // tile, so feet stay inside the destination tile during the tween.
+      y: (ty + 1) * TILE,
       duration: MOVE_MS,
       onComplete: () => {
         this.movingTween = null
@@ -468,14 +470,16 @@ export default class TownScene extends Phaser.Scene {
     this.player = this.add
       .image(
         spawn.x * TILE + TILE / 2,
-        spawn.y * TILE + TILE / 2,
+        // Position by the sprite's FEET (bottom edge of the tile) so
+        // when scaled up, the character grows upward — feet stay
+        // inside the tile, head overhangs into the tile above.
+        (spawn.y + 1) * TILE,
         `player.${spawn.facing}.0`,
       )
-      .setOrigin(0.5, 0.5)
+      .setOrigin(0.5, 1)
       .setDepth(spawn.y * 10 + 5)
-      // Pokémon-style protagonist — visibly larger than the tile so
-      // the sprite overhangs the grid (head + feet stick out) instead
-      // of fitting neatly inside it.
+      // Pokémon-style protagonist — larger than the tile so the head
+      // sticks out while the feet land on the tile floor.
       .setScale(1.5)
     this.player.stepCount = 0
     this.updatePlayerFrame()
