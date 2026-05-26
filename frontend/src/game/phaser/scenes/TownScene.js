@@ -473,6 +473,10 @@ export default class TownScene extends Phaser.Scene {
       )
       .setOrigin(0.5, 0.5)
       .setDepth(spawn.y * 10 + 5)
+      // Pokémon-style protagonist — visibly larger than the tile so
+      // the sprite overhangs the grid (head + feet stick out) instead
+      // of fitting neatly inside it.
+      .setScale(1.5)
     this.player.stepCount = 0
     this.updatePlayerFrame()
     this.cameras.main.startFollow(this.player, true, 0.15, 0.15)
