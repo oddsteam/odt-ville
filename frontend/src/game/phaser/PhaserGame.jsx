@@ -90,7 +90,11 @@ export default function PhaserGame({
       pixelArt: true,
       antialias: false,
       scale: {
-        mode: Phaser.Scale.FIT,
+        // RESIZE = canvas display size matches .gb-screen exactly,
+        // no aspect-preserving letterbox. The world renders at 1:1
+        // device pixels so each TILE=48 tile is 48 screen pixels —
+        // pixel-identical to the DOM engine's render.
+        mode: Phaser.Scale.RESIZE,
         autoCenter: Phaser.Scale.CENTER_BOTH,
         width: DESIGN_WIDTH,
         height: DESIGN_HEIGHT,

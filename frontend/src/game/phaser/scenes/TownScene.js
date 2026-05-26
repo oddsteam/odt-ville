@@ -95,11 +95,13 @@ export default class TownScene extends Phaser.Scene {
     // game's design data.
     this.town = buildTown(Math.max(communities.length, 1))
 
-    // Resize the scene to match the generated town. Phaser's Scale.FIT in
-    // PhaserGame will scale the whole thing to the host element.
+    // With Scale.RESIZE in PhaserGame, the canvas display size matches
+    // .gb-screen at 1:1 device pixels (TILE=48 → 48 screen px, same as
+    // DOM). We do NOT call scale.resize here: that would re-size the
+    // canvas to the world size and the player would see everything at
+    // once. The camera's setBounds caps scroll to the world's edges.
     const worldW = this.town.cols * TILE
     const worldH = this.town.rows * TILE
-    this.scale.resize(worldW, worldH)
     this.cameras.main.setBounds(0, 0, worldW, worldH)
     this.physics?.world.setBounds(0, 0, worldW, worldH)
 
