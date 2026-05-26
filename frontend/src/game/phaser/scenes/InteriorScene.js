@@ -300,7 +300,8 @@ export default class InteriorScene extends Phaser.Scene {
     }
 
     this.playerTile = { x: tx, y: ty }
-    this.player.setTexture(`player.${this.facing}.${(this.player.stepCount++ % 3) + 1}`)
+    // rpg-char-01 has 3 frames per direction: 0 still, 1 step-A, 2 step-B.
+    this.player.setTexture(`player.${this.facing}.${(this.player.stepCount++ % 2) + 1}`)
     this.movingTween = this.tweens.add({
       targets: this.player,
       x: tx * TILE + TILE / 2,

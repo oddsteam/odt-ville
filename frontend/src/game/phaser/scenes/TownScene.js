@@ -411,7 +411,8 @@ export default class TownScene extends Phaser.Scene {
   // frame based on the cumulative step count to alternate left / right
   // foot, same effect as the DOM <PlayerSprite>.
   updatePlayerFrame() {
-    const idx = this.movingTween ? (this.player.stepCount % 3) + 1 : 0
+    // rpg-char-01 has 3 frames per direction: 0 still, 1 step-A, 2 step-B.
+    const idx = this.movingTween ? (this.player.stepCount % 2) + 1 : 0
     this.player.setTexture(`player.${this.facing}.${idx}`)
   }
 

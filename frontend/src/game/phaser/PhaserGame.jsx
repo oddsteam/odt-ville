@@ -6,33 +6,33 @@ import EncounterScene from './scenes/EncounterScene.js'
 import MobileDpad from '../MobileDpad.jsx'
 import bus from './bus.js'
 
-// Player walks — imported here so Vite emits hashed URLs at build time and
-// the Phaser loader can fetch each direction's frames.
-import frontStill from '../assets/character/front-still.png'
-import frontWalk1 from '../assets/character/front-walk-1.png'
-import frontWalk2 from '../assets/character/front-walk-2.png'
-import frontWalk3 from '../assets/character/front-walk-3.png'
-import backStill from '../assets/character/back-still.png'
-import backWalk1 from '../assets/character/back-walk-1.png'
-import backWalk2 from '../assets/character/back-walk-2.png'
-import backWalk3 from '../assets/character/back-walk-3.png'
-import leftStill from '../assets/character/left-still.png'
-import leftWalk1 from '../assets/character/left-walk-1.png'
-import leftWalk2 from '../assets/character/left-walk-2.png'
-import leftWalk3 from '../assets/character/left-walk-3.png'
-import rightStill from '../assets/character/right-still.png'
-import rightWalk1 from '../assets/character/right-walk-1.png'
-import rightWalk2 from '../assets/character/right-walk-2.png'
-import rightWalk3 from '../assets/character/right-walk-3.png'
+// Player walks — rpg-char-01 sprite sheet from the pokemon-js external
+// assets. 32×32 PNGs, rows = direction (r0 down, r1 left, r2 right,
+// r3 up), columns = frame (c0 still, c1 step-A, c2 step-B). DOM engine
+// is unaffected; it still uses the original front-/back-/left-/right-
+// PNGs from the same `character/` directory.
+import downStill from '../assets/character/rpg-char-01/r0-c0.png'
+import downWalk1 from '../assets/character/rpg-char-01/r0-c1.png'
+import downWalk2 from '../assets/character/rpg-char-01/r0-c2.png'
+import leftStill from '../assets/character/rpg-char-01/r1-c0.png'
+import leftWalk1 from '../assets/character/rpg-char-01/r1-c1.png'
+import leftWalk2 from '../assets/character/rpg-char-01/r1-c2.png'
+import rightStill from '../assets/character/rpg-char-01/r2-c0.png'
+import rightWalk1 from '../assets/character/rpg-char-01/r2-c1.png'
+import rightWalk2 from '../assets/character/rpg-char-01/r2-c2.png'
+import upStill from '../assets/character/rpg-char-01/r3-c0.png'
+import upWalk1 from '../assets/character/rpg-char-01/r3-c1.png'
+import upWalk2 from '../assets/character/rpg-char-01/r3-c2.png'
 import roofImg from '../assets/buildings/guild-roof.png'
 import bodyImg from '../assets/buildings/guild-body.png'
 
+// 3 frames per direction: index 0 still, 1+2 walk cycle.
 const ASSETS = {
   player: {
-    down: [frontStill, frontWalk1, frontWalk2, frontWalk3],
-    up: [backStill, backWalk1, backWalk2, backWalk3],
-    left: [leftStill, leftWalk1, leftWalk2, leftWalk3],
-    right: [rightStill, rightWalk1, rightWalk2, rightWalk3],
+    down: [downStill, downWalk1, downWalk2],
+    up: [upStill, upWalk1, upWalk2],
+    left: [leftStill, leftWalk1, leftWalk2],
+    right: [rightStill, rightWalk1, rightWalk2],
   },
   buildings: {
     roofUrl: roofImg,
