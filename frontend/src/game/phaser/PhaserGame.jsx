@@ -40,14 +40,12 @@ const ASSETS = {
   },
 }
 
-// Design resolution = the Phaser canvas viewport. Matches the DOM
-// engine's .gb-screen size at TILE=48: 18×13 tiles visible. The camera
-// scrolls a fixed-size 864×624 viewport through whatever-size world
-// the town generated (TownScene's setBounds limits the scroll to the
-// world's edges). Same look the user accepted in
-// docs/reference/village-view-baseline.png.
-const DESIGN_WIDTH = 864
-const DESIGN_HEIGHT = 624
+// Design resolution matches the DOM town for a 5-community seed
+// (24 cols × 19 rows × 48 px = 1152 × 912). Phaser's Scale.FIT keeps that
+// aspect ratio inside whatever box the GB shell gives us; TownScene
+// resizes the world bounds for larger towns at runtime.
+const DESIGN_WIDTH = 1152
+const DESIGN_HEIGHT = 912
 
 // PR-E village shell. Wraps the Phaser canvas in the GB chrome and
 // renders the DOM overlay (D-pad / A button / FULL / Daily Brief)
