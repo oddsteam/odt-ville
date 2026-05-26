@@ -57,6 +57,15 @@ export default class TownScene extends Phaser.Scene {
 
   init(data) {
     this.exitedCommunityId = data?.exitedCommunityId ?? null
+    // Reset per-scene-start runtime state. The constructor only runs once
+    // for the whole game lifetime; without this, a movingTween that was
+    // in flight at the moment we scene.start('Interior') gets destroyed
+    // by Phaser but the reference here stays non-null — and update()'s
+    // `if (this.movingTween) return` guard would freeze the player on
+    // the next return to Town.
+    this.movingTween = null
+    this.dpadDir = null
+    this.graceSteps = 0
   }
 
   preload() {

@@ -52,6 +52,12 @@ export default class InteriorScene extends Phaser.Scene {
     this.playerTile = { x: DOOR_COL, y: DOOR_ROW - 1 }
     this.facing = 'up'
     this.exiting = false
+    // Same reason as TownScene.init: a leftover movingTween reference
+    // from a previous interior visit would freeze movement, because
+    // update()'s `if (this.movingTween) return` would think we're still
+    // mid-walk.
+    this.movingTween = null
+    this.dpadDir = null
   }
 
   create() {
