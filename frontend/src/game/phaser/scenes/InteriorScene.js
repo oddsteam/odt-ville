@@ -65,8 +65,31 @@ export default class InteriorScene extends Phaser.Scene {
 
     const worldW = ROOM_COLS * TILE
     const worldH = ROOM_ROWS * TILE
-    this.scale.resize(worldW, worldH)
-    this.cameras.main.setBounds(0, 0, worldW, worldH)
+
+    // We do NOT call scale.resize here. The canvas already matches
+    // .gb-screen at 1:1 via PhaserGame's Scale.RESIZE — same as
+    // TownScene — so tiles render at TILE=48 device pixels and the
+    // character is positioned with the same math as in the town.
+    // Instead, centre the camera on the room so the small interior
+    // sits in the middle of the screen with empty bezel around it
+    // (and re-centre whenever the canvas resizes).
+    const centerCamera = () => {
+      const cw = this.scale.gameSize.width
+      const ch = this.scale.gameSize.height
+      this.cameras.main.setScroll(
+        (worldW - cw) / 2,
+        (worldH - ch) / 2,
+      )
+    }
+    centerCamera()
+    this.scale.on('resize', centerCamera)
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.scale.off('resize', centerCamera)
+    })
+
+    // No setBounds here: bounds would clamp our negative scroll
+    // (world is smaller than the canvas) and snap the room to one
+    // edge. The player can only move within walls anyway.
 
     // Floor + walls + door tile. Walls block the player; the door tile is
     // walkable but stepping onto it triggers exit instead of a real move.
@@ -159,17 +182,21 @@ export default class InteriorScene extends Phaser.Scene {
       return { boardType, col, row: BOARD_ROW, frame, label }
     })
 
-    // Player sprite. Player textures are shared with TownScene — they
-    // were preloaded in TownScene.preload(); they're still in the
+    // Player sprite — same display math as TownScene so the avatar
+    // sits at the same scale and the same height-relative-to-tile in
+    // both scenes (46×46, anchored at the feet, 7 px gap to the tile
+    // floor, head pokes 5 px into the row above). Textures are shared
+    // with TownScene; they were preloaded there and still in the
     // texture cache when Phaser scene-starts to us.
     this.player = this.add
       .image(
         this.playerTile.x * TILE + TILE / 2,
-        this.playerTile.y * TILE + TILE / 2,
+        this.playerTile.y * TILE + TILE - 7,
         `player.${this.facing}.0`,
       )
-      .setOrigin(0.5, 0.5)
+      .setOrigin(0.5, 1)
       .setDepth(this.playerTile.y * 10 + 5)
+      .setDisplaySize(46, 46)
     this.player.stepCount = 0
 
     this.cursors = this.input.keyboard.createCursorKeys()
@@ -277,7 +304,8 @@ export default class InteriorScene extends Phaser.Scene {
     this.movingTween = this.tweens.add({
       targets: this.player,
       x: tx * TILE + TILE / 2,
-      y: ty * TILE + TILE / 2,
+      // y matches setOrigin(0.5, 1) + 7 px floor gap — same as TownScene.
+      y: ty * TILE + TILE - 7,
       duration: MOVE_MS,
       onComplete: () => {
         this.movingTween = null
