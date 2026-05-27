@@ -262,6 +262,13 @@ export default class TownScene extends Phaser.Scene {
     }
 
     this.playerTile = { x: tx, y: ty }
+    // Depth tracks the player's current row so south-of-player buildings
+    // (higher row → higher depth) draw on top and north-of-player
+    // buildings (lower row → lower depth) draw behind — same y-sort
+    // discipline the buildings themselves use. Without this update the
+    // depth set at spawn would never change and the player would slip
+    // behind any building that happens to be south of its spawn row.
+    this.player.setDepth(ty * 10 + 5)
     // rpg-char-01 has 3 frames per direction: 0 still, 1 step-A, 2 step-B.
     // Alternate walk-A and walk-B with each step so the gait reads as
     // left-foot / right-foot — same scheme as InteriorScene.
@@ -528,6 +535,7 @@ export default class TownScene extends Phaser.Scene {
       this.playerTile.x * TILE + TILE / 2,
       this.playerTile.y * TILE + TILE / 2,
     )
+    this.player.setDepth(this.playerTile.y * 10 + 5)
     this.updatePlayerFrame()
   }
 }
