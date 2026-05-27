@@ -1,5 +1,5 @@
 import Phaser from 'phaser'
-import { TILE, MOVE_MS } from '../../constants.js'
+import { TILE, MOVE_MS, PLAYER_FEET_LIFT } from '../../constants.js'
 import { ensureInteriorTileTextures } from '../tileTextures.js'
 import bus from '../bus.js'
 
@@ -191,12 +191,13 @@ export default class InteriorScene extends Phaser.Scene {
     this.player = this.add
       .image(
         this.playerTile.x * TILE + TILE / 2,
-        this.playerTile.y * TILE + TILE - 7,
+        (this.playerTile.y + 1) * TILE - PLAYER_FEET_LIFT,
         `player.${this.facing}.0`,
       )
       .setOrigin(0.5, 1)
       .setDepth(this.playerTile.y * 10 + 5)
-      .setDisplaySize(46, 46)
+      // Same display size as TownScene (rpg-char-01 padding compensation).
+      .setDisplaySize(96, 96)
     this.player.stepCount = 0
 
     this.cursors = this.input.keyboard.createCursorKeys()
@@ -305,8 +306,9 @@ export default class InteriorScene extends Phaser.Scene {
     this.movingTween = this.tweens.add({
       targets: this.player,
       x: tx * TILE + TILE / 2,
-      // y matches setOrigin(0.5, 1) + 7 px floor gap — same as TownScene.
-      y: ty * TILE + TILE - 7,
+      // Feet land at the destination tile's floor, lifted by
+      // PLAYER_FEET_LIFT — see TownScene for rationale.
+      y: (ty + 1) * TILE - PLAYER_FEET_LIFT,
       duration: MOVE_MS,
       onComplete: () => {
         this.movingTween = null

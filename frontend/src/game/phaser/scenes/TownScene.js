@@ -1,5 +1,5 @@
 import Phaser from 'phaser'
-import { TILE, MOVE_MS, buildTown, tileChar } from '../../constants.js'
+import { TILE, MOVE_MS, PLAYER_FEET_LIFT, buildTown, tileChar } from '../../constants.js'
 import { ensureTileTextures } from '../tileTextures.js'
 import bus from '../bus.js'
 import {
@@ -267,9 +267,10 @@ export default class TownScene extends Phaser.Scene {
     this.movingTween = this.tweens.add({
       targets: this.player,
       x: tx * TILE + TILE / 2,
-      // y matches setOrigin(0.5, 1) + DOM `.player-img bottom: 7px`
-      // — feet sit 7px above the destination tile's floor.
-      y: ty * TILE + TILE - 7,
+      // Feet land at the destination tile's floor (matches setOrigin),
+      // lifted by PLAYER_FEET_LIFT to account for the sprite's foot
+      // position inside its display box.
+      y: (ty + 1) * TILE - PLAYER_FEET_LIFT,
       duration: MOVE_MS,
       onComplete: () => {
         this.movingTween = null
@@ -480,17 +481,20 @@ export default class TownScene extends Phaser.Scene {
     this.player = this.add
       .image(
         spawn.x * TILE + TILE / 2,
-        // Match the DOM engine's `.player-img` math exactly:
-        //   div = 48×48, img = 46×46, positioned bottom:7px
-        //   → feet sit 7px above the tile floor
-        //   → top of head lands 5px above the tile top (= overhang)
-        // Phaser equivalent: feet anchor at tile_y*TILE + (TILE - 7).
-        spawn.y * TILE + TILE - 7,
+        // Feet anchor at the tile floor — same as the trainer sprite,
+        // so when they stand side by side their feet line up. Lifted
+        // by PLAYER_FEET_LIFT so the rpg-char-01 sprite's visible feet
+        // (which sit a little above the bottom of its 96×96 display
+        // box) land on the tile floor rather than below it.
+        (spawn.y + 1) * TILE - PLAYER_FEET_LIFT,
         `player.${spawn.facing}.0`,
       )
       .setOrigin(0.5, 1)
       .setDepth(spawn.y * 10 + 5)
-      .setDisplaySize(46, 46)
+      // rpg-char-01 has heavy transparent padding inside its 32×32
+      // box, so 96×96 brings the visible body to a Pokémon-faithful
+      // on-screen height. Source PNG is square; display kept square.
+      .setDisplaySize(96, 96)
     this.player.stepCount = 0
     this.updatePlayerFrame()
     this.cameras.main.startFollow(this.player, true, 0.15, 0.15)

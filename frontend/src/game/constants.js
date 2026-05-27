@@ -22,6 +22,13 @@ import rightWalk3 from './assets/character/right-walk-3.png'
 export const TILE = 48 // rendered px per tile
 export const MOVE_MS = 170 // ms to slide one tile
 
+// Px to lift the player sprite above the tile floor. The rpg-char-01
+// sprite's visible feet sit a little above the bottom of its 96×96
+// display box, so anchoring strictly at the tile floor looks too low.
+// Both TownScene and InteriorScene use this so the player sits at the
+// same height-relative-to-tile in either scene.
+export const PLAYER_FEET_LIFT = 20
+
 // Player walk sprites, keyed by facing direction: [still, step-A, mid, step-B].
 export const SPRITES = {
   down: [frontStill, frontWalk1, frontWalk2, frontWalk3],
