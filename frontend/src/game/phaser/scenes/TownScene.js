@@ -256,14 +256,18 @@ export default class TownScene extends Phaser.Scene {
     }
 
     if (!this.walkable(tx, ty)) {
-      // Bumped a wall — just turn in place via facing direction; sprite
-      // updates next frame.
-      this.updatePlayerFrame()
+      // Bumped a wall — face the direction in still pose; no tween.
+      this.player.setTexture(`player.${this.facing}.0`)
       return
     }
 
     this.playerTile = { x: tx, y: ty }
-    this.updatePlayerFrame()
+    // rpg-char-01 has 3 frames per direction: 0 still, 1 step-A, 2 step-B.
+    // Alternate walk-A and walk-B with each step so the gait reads as
+    // left-foot / right-foot — same scheme as InteriorScene.
+    this.player.setTexture(
+      `player.${this.facing}.${(this.player.stepCount++ % 2) + 1}`,
+    )
     this.movingTween = this.tweens.add({
       targets: this.player,
       x: tx * TILE + TILE / 2,
@@ -274,6 +278,11 @@ export default class TownScene extends Phaser.Scene {
       duration: MOVE_MS,
       onComplete: () => {
         this.movingTween = null
+        // Snap back to still at the end of the slide so a single tap
+        // doesn't leave the sprite stuck mid-stride. If the player is
+        // still holding a direction, update() will immediately call
+        // step() again and the next walk frame takes over.
+        this.player.setTexture(`player.${this.facing}.0`)
         // Trainer sight is checked first — when the player lands in
         // his line of sight, the duel takes priority over a wild
         // encounter on the same step.
@@ -407,14 +416,12 @@ export default class TownScene extends Phaser.Scene {
     }
   }
 
-  // Cycle through the four-frame walk strip. For a single press the
-  // sprite ends back at frame 0 (still). For a moving step we pick a
-  // frame based on the cumulative step count to alternate left / right
-  // foot, same effect as the DOM <PlayerSprite>.
+  // Set the sprite to the still pose for the current facing. Used
+  // after spawn / session changes; the per-step walk animation is
+  // handled inline in step() (frame alternation + onComplete snap
+  // back to this still pose).
   updatePlayerFrame() {
-    // rpg-char-01 has 3 frames per direction: 0 still, 1 step-A, 2 step-B.
-    const idx = this.movingTween ? (this.player.stepCount % 2) + 1 : 0
-    this.player.setTexture(`player.${this.facing}.${idx}`)
+    this.player.setTexture(`player.${this.facing}.0`)
   }
 
   // Build the two-layer building sprite. We don't yet hue-rotate from
