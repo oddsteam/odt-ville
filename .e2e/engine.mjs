@@ -1,12 +1,14 @@
-// Engine-swap e2e (issue #16, PR-A).
+// Engine-swap e2e (issue #16, PR-A → PR-E).
 //
-// Two ways to render the village game co-exist while the Phaser rebuild lands:
-//   - default                 → DOM engine (current), .player + .building divs
-//   - ?engine=phaser          → Phaser placeholder scene, a real <canvas>
+// Two ways to render the village game co-exist while the Phaser rebuild
+// lands. After the PR-E default flip:
+//   - default            → Phaser, a real <canvas>
+//   - ?engine=phaser     → Phaser (explicit, same result as default)
+//   - ?engine=dom        → legacy DOM engine, .player + .building divs
 //
-// This test loads both URLs against the same page and asserts each engine
-// boots. It does NOT walk or test gameplay — every other e2e covers that
-// against the DOM engine, and PR-B+ ports them to Phaser.
+// This test loads the dom + phaser URLs side by side and asserts each
+// engine boots into its expected shape. It does NOT walk or test
+// gameplay — the other e2e files cover that.
 import { chromium } from 'playwright-core'
 
 const OUT = process.argv[2] || '.'
@@ -42,7 +44,7 @@ async function bootEngine(url, expectedMarker) {
   return { marker, hasCanvas, hasDomPlayer, errors }
 }
 
-const dom = await bootEngine('http://localhost:5390/', 'dom')
+const dom = await bootEngine('http://localhost:5390/?engine=dom', 'dom')
 const phaser = await bootEngine('http://localhost:5390/?engine=phaser', 'phaser')
 
 const ok =
