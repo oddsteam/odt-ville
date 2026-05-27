@@ -1,5 +1,12 @@
-// Verifies that adding a new community puts the wrapped row *above* the
-// existing row — the original houses stay anchored to the entrance.
+// Verifies that adding a new community puts the wrapped row *above*
+// the existing row — the original houses stay anchored to the
+// entrance.
+//
+// PR-E port: admin-side flows are unchanged (the ⚙ ADMIN tab is its
+// own DOM page, independent of the engine flag), but the village-side
+// building snapshot now reads from window.__game.buildings() instead
+// of the DOM .building divs that no longer mount under the Phaser
+// engine.
 import { chromium } from 'playwright-core'
 
 const OUT = process.argv[2] || '.'
@@ -12,23 +19,39 @@ page.on('console', (m) => {
   if (m.type() === 'error') errors.push(`console.error: ${m.text()}`)
 })
 
-// Read every building's plaque title + its plot's top-Y (px).
+// Phaser building snapshot — title + pixel-y of the plot's top-left
+// (b.row * TILE in the scene's coordinates). Sorted top→bottom so
+// the row banding stays comparable to the DOM version.
 const snapshot = () =>
-  page.$$eval('.building', (els) =>
-    els.map((el) => ({
-      title: el.querySelector('.bld-plaque')?.textContent?.trim(),
-      top: parseInt(el.style.top, 10),
-    })).sort((a, b) => a.top - b.top),
+  page.evaluate(() => {
+    const list = window.__game?.buildings?.() || []
+    return list
+      .map((b) => ({ title: b.title, top: b.y }))
+      .sort((a, b) => a.top - b.top)
+  })
+
+const waitForBuildingCount = (n) =>
+  page.waitForFunction(
+    (count) => (window.__game?.buildings?.() || []).length === count,
+    n,
+    { timeout: 8000 },
   )
 
-await page.goto('http://localhost:5390', { waitUntil: 'networkidle' })
-await page.waitForSelector('.building', { timeout: 15000 })
+await page.goto('http://localhost:5390/', { waitUntil: 'networkidle' })
+await page.waitForFunction(() => window.__game?.engine === 'phaser', null, {
+  timeout: 10000,
+})
+await page.waitForFunction(
+  () => typeof window.__game?.buildings === 'function',
+  null,
+  { timeout: 5000 },
+)
 await page.waitForTimeout(500)
 const before = await snapshot()
 
-// Add one community — this forces the town from 5 to 6 (wraps to a 2nd row).
-// Admin lives in its own top-level tab now; the village game no longer has
-// an in-game ⚙ button.
+// Add one community — this forces the town from 5 to 6 (wraps to a
+// second row). Admin lives in its own top-level tab; the village game
+// no longer has an in-game ⚙ button.
 await page.click('.app-tab >> text=⚙ ADMIN')
 await page.waitForSelector('.admin-page', { timeout: 5000 })
 await page.fill('.admin-form input >> nth=0', 'Finance House')
@@ -40,20 +63,21 @@ await page.waitForFunction(
   { timeout: 8000 },
 )
 await page.click('.app-tab >> text=🕹️ VILLAGE')
-await page.waitForSelector('.building', { timeout: 5000 })
+// Re-wait for the Phaser scene since switching tabs unmounts + remounts.
+await page.waitForFunction(() => window.__game?.engine === 'phaser', null, {
+  timeout: 10000,
+})
+await waitForBuildingCount(6)
 await page.waitForTimeout(400)
 const after = await snapshot()
 
-// Quick visual: walk up the entrance stem so the camera shows the original
-// bottom row anchored near the player, then a second screenshot after walking
-// further up to reveal the new top row.
 await page.screenshot({ path: `${OUT}/above-1-at-entrance.png` })
-
 await browser.close()
 
-// The original five must all share one y in `after` (one row), the new house
-// must sit at a smaller y (a new row above), and the originals' row must be
-// at a larger y than the new one (the bottom row, closer to the entrance).
+// The original five must all share one y in `after` (one row), the
+// new house must sit at a smaller y (a new row above), and the
+// originals' row must be at a larger y than the new one (the bottom
+// row, closer to the entrance).
 const newOne = after.find((b) => !before.some((x) => x.title === b.title))
 const originalsAfter = after.filter((b) => b !== newOne)
 const originalsRowY = originalsAfter[0]?.top
