@@ -279,9 +279,9 @@ export default class TownScene extends Phaser.Scene {
       targets: this.player,
       x: tx * TILE + TILE / 2,
       // Feet land at the destination tile's floor (matches setOrigin),
-      // lifted by PLAYER_FEET_LIFT to account for the sprite's foot
-      // position inside its display box.
-      y: (ty + 1) * TILE - PLAYER_FEET_LIFT,
+      // offset by PLAYER_FEET_LIFT to account for the sprite's foot
+      // position inside its display box (+y = down in Phaser).
+      y: (ty + 1) * TILE + PLAYER_FEET_LIFT,
       duration: MOVE_MS,
       onComplete: () => {
         this.movingTween = null
@@ -496,11 +496,11 @@ export default class TownScene extends Phaser.Scene {
       .image(
         spawn.x * TILE + TILE / 2,
         // Feet anchor at the tile floor — same as the trainer sprite,
-        // so when they stand side by side their feet line up. Lifted
+        // so when they stand side by side their feet line up. Offset
         // by PLAYER_FEET_LIFT so the rpg-char-01 sprite's visible feet
-        // (which sit a little above the bottom of its 96×96 display
-        // box) land on the tile floor rather than below it.
-        (spawn.y + 1) * TILE - PLAYER_FEET_LIFT,
+        // (which sit inside its 96×96 display box's padding) land
+        // where the eye expects them on the tile (+y = down in Phaser).
+        (spawn.y + 1) * TILE + PLAYER_FEET_LIFT,
         `player.${spawn.facing}.0`,
       )
       .setOrigin(0.5, 1)

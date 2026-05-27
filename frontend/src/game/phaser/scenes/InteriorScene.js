@@ -191,7 +191,7 @@ export default class InteriorScene extends Phaser.Scene {
     this.player = this.add
       .image(
         this.playerTile.x * TILE + TILE / 2,
-        (this.playerTile.y + 1) * TILE - PLAYER_FEET_LIFT,
+        (this.playerTile.y + 1) * TILE + PLAYER_FEET_LIFT,
         `player.${this.facing}.0`,
       )
       .setOrigin(0.5, 1)
@@ -306,9 +306,9 @@ export default class InteriorScene extends Phaser.Scene {
     this.movingTween = this.tweens.add({
       targets: this.player,
       x: tx * TILE + TILE / 2,
-      // Feet land at the destination tile's floor, lifted by
+      // Feet land at the destination tile's floor, offset by
       // PLAYER_FEET_LIFT — see TownScene for rationale.
-      y: (ty + 1) * TILE - PLAYER_FEET_LIFT,
+      y: (ty + 1) * TILE + PLAYER_FEET_LIFT,
       duration: MOVE_MS,
       onComplete: () => {
         this.movingTween = null
