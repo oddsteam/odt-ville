@@ -1,11 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import VillageGame from './game/VillageGame.jsx'
-import CommunityInterior from './game/CommunityInterior.jsx'
 import CommunitiesAdminPanel from './communities/CommunitiesAdminPanel.jsx'
 import DailyBriefShortcut from './communities/DailyBriefShortcut.jsx'
 import { listCommunities, getFeed } from './communities/client.js'
 import { getGameSession, saveGameSession } from './game-session/client.js'
-import { readEngineFlag } from './game/engineFlag.js'
 
 // Demo target for every board's "open content list" action. Replaced in a
 // follow-up by per-board content-list views (see issue #15 follow-ups).
@@ -27,17 +25,15 @@ async function getMe() {
 // It hands data to the game via props, listens for game events, and persists
 // session changes. Nothing here knows about tiles, sprites, or encounters.
 export default function App() {
-  // Top-level navigation: 'village' (the game + community detail) | 'admin'
-  // (the community CRUD console). Keeping admin out of the game module is
-  // what makes <VillageGame> a true black box — see issue #13 / PR.
+  // Top-level navigation: 'village' (the game) | 'admin' (the community
+  // CRUD console). Keeping admin out of the game module is what makes
+  // <VillageGame> a true black box — see issue #13 / PR.
   const [view, setView] = useState('village')
 
-  // Engine flag — used to gate the DOM community-interior mount. Under
-  // Phaser the InteriorScene lives on the canvas, so the React shell
-  // never mounts the DOM <CommunityInterior> alongside it.
-  const engine = useMemo(readEngineFlag, [])
-
-  const [scene, setScene] = useState('town')
+  // PR-E retired the DOM engine; the village game now always runs on
+  // Phaser, which owns its own scene transitions inside the canvas. The
+  // shell just tracks which community the player is inside (for the
+  // active-community-id prop / topbar label).
   const [activeCommunityId, setActiveCommunityId] = useState(null)
   // Gate-trainer state — once you've escaped the duel he never challenges
   // again in this session. Lifted to the shell so it survives VillageGame
@@ -82,18 +78,14 @@ export default function App() {
 
   // ---- game events --------------------------------------------------
 
-  const handleEnterCommunity = useCallback(
-    (id) => {
-      // Both engines save session + track the active community. Only the
-      // DOM engine flips `scene` to mount <CommunityInterior>; under
-      // Phaser the InteriorScene runs inside the canvas and the React
-      // `scene` state stays on 'town' the whole time.
-      setActiveCommunityId(id)
-      if (engine === 'dom') setScene('community-interior')
-      saveGameSession({ last_area: 'house', last_community_id: id }).catch(() => {})
-    },
-    [engine],
-  )
+  const handleEnterCommunity = useCallback((id) => {
+    // Save session + track the active community. Phaser's InteriorScene
+    // handles the visual transition inside the canvas; the React shell
+    // just records the id (for the topbar label and the activeCommunityId
+    // prop that PhaserGame forwards back into its registry).
+    setActiveCommunityId(id)
+    saveGameSession({ last_area: 'house', last_community_id: id }).catch(() => {})
+  }, [])
 
   // Each board's "open content list" action — for the demo every board
   // points at the same external URL. The game module knows nothing about
@@ -104,17 +96,13 @@ export default function App() {
 
   const handleExitCommunity = useCallback(
     (idFromCaller) => {
-      // DOM engine calls this without args (onExit from <CommunityInterior>);
-      // Phaser passes the exited community id via the bus event.
+      // Phaser passes the exited community id via the bus event; fall
+      // back to whatever the shell most recently tracked as active.
       const id = idFromCaller ?? activeCommunityId
-      // Optimistic local session update: under the DOM engine,
-      // <VillageGame> remounts on the next render and initialises the
-      // player tile from `session.spawn.last_community_id` via useState.
-      // Updating session here, before setScene, ensures the just-exited
-      // community is the spawn (otherwise the player lands on whatever
-      // the previous loadTown returned). Under Phaser the scene-start
-      // data already does the spawn, so this is purely for the next
-      // load.
+      // Optimistic local session update so the next remount (e.g. after
+      // an admin tab switch) spawns on the just-exited doormat rather
+      // than whatever the previous loadTown returned. Phaser's own
+      // scene-start data covers the within-session spawn.
       setSession((prev) => ({
         ...(prev || {}),
         last_area: 'town',
@@ -122,22 +110,20 @@ export default function App() {
         spawn: { area: 'town', last_community_id: id },
       }))
       saveGameSession({ last_area: 'town', last_community_id: id }).catch(() => {})
-      if (engine === 'dom') setScene('town')
       setActiveCommunityId(null)
       loadTown().catch((e) => setError(e.message))
     },
-    [activeCommunityId, engine, loadTown],
+    [activeCommunityId, loadTown],
   )
 
-  // Tab switch: opening Admin from inside a community treats it like Exit so
-  // the user lands back in town when they return to the village tab.
+  // Tab switch: opening Admin clears the active community so the user
+  // lands back in town when they return to the village tab. VillageGame
+  // unmounts on tab switch and Phaser starts fresh at the Town Entrance
+  // / saved doormat on return — no React-side scene state to reset.
   const goToAdmin = useCallback(() => {
-    if (scene !== 'town') {
-      setScene('town')
-      setActiveCommunityId(null)
-    }
+    setActiveCommunityId(null)
     setView('admin')
-  }, [scene])
+  }, [])
 
   const goToVillage = useCallback(() => {
     setView('village')
@@ -221,7 +207,7 @@ export default function App() {
       )}
 
       <main className="app-main">
-        {view === 'village' && (engine === 'phaser' || scene === 'town') && (
+        {view === 'village' && (
           <VillageGame
             communities={communities}
             session={session}
@@ -236,20 +222,6 @@ export default function App() {
             onTrainerDefeated={() => setTrainerDefeated(true)}
           />
         )}
-
-        {view === 'village' &&
-          engine === 'dom' &&
-          scene === 'community-interior' &&
-          activeCommunityId != null && (
-            <CommunityInterior
-              community={communities.find((c) => c.id === activeCommunityId)}
-              dailyBrief={
-                <DailyBriefShortcut items={feed} onClose={handleDailyBriefClose} />
-              }
-              onExit={handleExitCommunity}
-              onOpenBoard={handleOpenBoard}
-            />
-          )}
 
         {view === 'admin' && (
           <CommunitiesAdminPanel
