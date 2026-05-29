@@ -190,10 +190,18 @@ export default class TownScene extends Phaser.Scene {
     }
 
     // React → Phaser registry watchers — when the shell pushes a new
-    // communities/session payload (e.g. admin added a house), rebuild;
-    // when trainerDefeated flips, refresh the sight markers.
+    // communities payload that's actually different (admin added a
+    // house, renamed one, changed a colour), rebuild; idempotent
+    // re-fetches such as the loadTown() that DailyBriefShortcut's
+    // close fires are filtered out by sameCommunityShape so the
+    // player isn't yanked back to spawnPlayer's default tile.
+    // Session changes are NOT listened to: Phaser owns the post-exit
+    // spawn via scene.start('Town', { exitedCommunityId }) +
+    // TownScene.init, and the registry session is read only at
+    // spawnPlayer (scene boot). Reacting to changedata-session here
+    // would respawn the player on every loadTown() refresh — the
+    // exact bug we just fixed for communities.
     this.registry.events.on('changedata-communities', this.handleRegistryChange, this)
-    this.registry.events.on('changedata-session', this.handleSessionChange, this)
     this.registry.events.on('changedata-trainerDefeated', this.refreshTrainerVisuals, this)
 
     // When EncounterScene closes it scene.resume()s us; this is the
@@ -202,7 +210,6 @@ export default class TownScene extends Phaser.Scene {
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.registry.events.off('changedata-communities', this.handleRegistryChange, this)
-      this.registry.events.off('changedata-session', this.handleSessionChange, this)
       this.registry.events.off('changedata-trainerDefeated', this.refreshTrainerVisuals, this)
       this.events.off(Phaser.Scenes.Events.RESUME, this.handleResume, this)
       bus.off('dpadPress', this._onDpadPress)
@@ -514,30 +521,39 @@ export default class TownScene extends Phaser.Scene {
     this.cameras.main.startFollow(this.player, true, 0.15, 0.15)
   }
 
-  // Communities changed (admin added/deleted/reordered) — rebuild the
-  // town. PR-B keeps this dumb (full restart of the scene) because
-  // partial rebuilds add a lot of bookkeeping for a thing that happens
-  // once per admin action.
-  handleRegistryChange() {
+  // Communities changed (admin added/deleted/renamed/recoloured) —
+  // rebuild the town. PR-B keeps this dumb (full restart of the scene)
+  // because partial rebuilds add a lot of bookkeeping for a thing that
+  // happens once per admin action.
+  //
+  // The shape comparison below filters out idempotent re-fetches
+  // (loadTown() called after the daily-brief modal closes, after a
+  // community exit, etc.) where the new payload is identical to the
+  // old. Without it, every refetch would scene.restart() the player
+  // and silently yank them back to the entrance / their last-doormat
+  // mid-walk. The check covers id, position, title, colour and the
+  // urgent-badge count — i.e. everything addBuildingSprite paints.
+  handleRegistryChange(_parent, value, previousValue) {
+    if (sameCommunityShape(value, previousValue)) return
     this.scene.restart()
   }
+}
 
-  // Session changed (the React shell's optimistic post-exit update) —
-  // re-spawn the player at the new last-community doormat.
-  handleSessionChange() {
-    const session = this.registry.get('session')
-    const id = session?.spawn?.last_community_id
-    const b = id != null ? this.buildings.find((x) => x.community.id === id) : null
-    if (!b) return
-    this.playerTile = { x: b.doorCol, y: b.doorRow + 1 }
-    this.facing = 'up'
-    this.player.setPosition(
-      this.playerTile.x * TILE + TILE / 2,
-      this.playerTile.y * TILE + TILE / 2,
-    )
-    this.player.setDepth(this.playerTile.y * 10 + 5)
-    this.updatePlayerFrame()
+function sameCommunityShape(a, b) {
+  if (a === b) return true
+  if (!Array.isArray(a) || !Array.isArray(b)) return false
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) {
+    const x = a[i]
+    const y = b[i]
+    if (!x || !y) return false
+    if (x.id !== y.id) return false
+    if (x.position_order !== y.position_order) return false
+    if (x.title !== y.title) return false
+    if (x.color !== y.color) return false
+    if ((x.badges?.urgent || 0) !== (y.badges?.urgent || 0)) return false
   }
+  return true
 }
 
 // Map a tile character to a texture key. Anything boundary-tree-ish (T)
