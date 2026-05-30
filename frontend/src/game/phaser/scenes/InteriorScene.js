@@ -1,5 +1,5 @@
 import Phaser from 'phaser'
-import { TILE, MOVE_MS } from '../../constants.js'
+import { TILE, MOVE_MS, PLAYER_FEET_LIFT } from '../../constants.js'
 import { ensureInteriorTileTextures } from '../tileTextures.js'
 import bus from '../bus.js'
 
@@ -52,6 +52,12 @@ export default class InteriorScene extends Phaser.Scene {
     this.playerTile = { x: DOOR_COL, y: DOOR_ROW - 1 }
     this.facing = 'up'
     this.exiting = false
+    // Same reason as TownScene.init: a leftover movingTween reference
+    // from a previous interior visit would freeze movement, because
+    // update()'s `if (this.movingTween) return` would think we're still
+    // mid-walk.
+    this.movingTween = null
+    this.dpadDir = null
   }
 
   create() {
@@ -59,8 +65,31 @@ export default class InteriorScene extends Phaser.Scene {
 
     const worldW = ROOM_COLS * TILE
     const worldH = ROOM_ROWS * TILE
-    this.scale.resize(worldW, worldH)
-    this.cameras.main.setBounds(0, 0, worldW, worldH)
+
+    // We do NOT call scale.resize here. The canvas already matches
+    // .gb-screen at 1:1 via PhaserGame's Scale.RESIZE — same as
+    // TownScene — so tiles render at TILE=48 device pixels and the
+    // character is positioned with the same math as in the town.
+    // Instead, centre the camera on the room so the small interior
+    // sits in the middle of the screen with empty bezel around it
+    // (and re-centre whenever the canvas resizes).
+    const centerCamera = () => {
+      const cw = this.scale.gameSize.width
+      const ch = this.scale.gameSize.height
+      this.cameras.main.setScroll(
+        (worldW - cw) / 2,
+        (worldH - ch) / 2,
+      )
+    }
+    centerCamera()
+    this.scale.on('resize', centerCamera)
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.scale.off('resize', centerCamera)
+    })
+
+    // No setBounds here: bounds would clamp our negative scroll
+    // (world is smaller than the canvas) and snap the room to one
+    // edge. The player can only move within walls anyway.
 
     // Floor + walls + door tile. Walls block the player; the door tile is
     // walkable but stepping onto it triggers exit instead of a real move.
@@ -153,17 +182,22 @@ export default class InteriorScene extends Phaser.Scene {
       return { boardType, col, row: BOARD_ROW, frame, label }
     })
 
-    // Player sprite. Player textures are shared with TownScene — they
-    // were preloaded in TownScene.preload(); they're still in the
+    // Player sprite — same display math as TownScene so the avatar
+    // sits at the same scale and the same height-relative-to-tile in
+    // both scenes (46×46, anchored at the feet, 7 px gap to the tile
+    // floor, head pokes 5 px into the row above). Textures are shared
+    // with TownScene; they were preloaded there and still in the
     // texture cache when Phaser scene-starts to us.
     this.player = this.add
       .image(
         this.playerTile.x * TILE + TILE / 2,
-        this.playerTile.y * TILE + TILE / 2,
+        (this.playerTile.y + 1) * TILE + PLAYER_FEET_LIFT,
         `player.${this.facing}.0`,
       )
-      .setOrigin(0.5, 0.5)
+      .setOrigin(0.5, 1)
       .setDepth(this.playerTile.y * 10 + 5)
+      // Same display size as TownScene (rpg-char-01 padding compensation).
+      .setDisplaySize(96, 96)
     this.player.stepCount = 0
 
     this.cursors = this.input.keyboard.createCursorKeys()
@@ -180,6 +214,18 @@ export default class InteriorScene extends Phaser.Scene {
     this.spaceKey = this.input.keyboard.addKey(
       Phaser.Input.Keyboard.KeyCodes.SPACE,
     )
+    // Overlay D-pad + A — same bus pattern as TownScene.
+    this.dpadDir = null
+    this._onDpadPress = (d) => {
+      this.dpadDir = d
+    }
+    this._onDpadRelease = (d) => {
+      if (this.dpadDir === d) this.dpadDir = null
+    }
+    this._onABtn = () => this.pressA()
+    bus.on('dpadPress', this._onDpadPress)
+    bus.on('dpadRelease', this._onDpadRelease)
+    bus.on('aButton', this._onABtn)
 
     if (typeof window !== 'undefined') {
       window.__game = {
@@ -210,6 +256,9 @@ export default class InteriorScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.input.keyboard.off('keydown-ENTER', this.pressA, this)
       this.input.keyboard.off('keydown-SPACE', this.pressA, this)
+      bus.off('dpadPress', this._onDpadPress)
+      bus.off('dpadRelease', this._onDpadRelease)
+      bus.off('aButton', this._onABtn)
     })
   }
 
@@ -220,6 +269,7 @@ export default class InteriorScene extends Phaser.Scene {
   }
 
   activeDirection() {
+    if (this.dpadDir) return this.dpadDir
     const c = this.cursors
     const w = this.wasd
     if (c.up.isDown || w.up.isDown) return 'up'
@@ -251,11 +301,14 @@ export default class InteriorScene extends Phaser.Scene {
     }
 
     this.playerTile = { x: tx, y: ty }
-    this.player.setTexture(`player.${this.facing}.${(this.player.stepCount++ % 3) + 1}`)
+    // rpg-char-01 has 3 frames per direction: 0 still, 1 step-A, 2 step-B.
+    this.player.setTexture(`player.${this.facing}.${(this.player.stepCount++ % 2) + 1}`)
     this.movingTween = this.tweens.add({
       targets: this.player,
       x: tx * TILE + TILE / 2,
-      y: ty * TILE + TILE / 2,
+      // Feet land at the destination tile's floor, offset by
+      // PLAYER_FEET_LIFT — see TownScene for rationale.
+      y: (ty + 1) * TILE + PLAYER_FEET_LIFT,
       duration: MOVE_MS,
       onComplete: () => {
         this.movingTween = null

@@ -9,9 +9,16 @@ import Phaser from 'phaser'
 // avoids the temptation to call into React from a scene.
 //
 // Events emitted by scenes:
-//   'enterCommunity'  (communityId: number)
+//   'enterCommunity'  (communityId: number) — town door → interior
+//   'exitCommunity'   (communityId: number) — interior doormat → town
+//   'openBoard'       (boardType)            — interior A on a board
+//   'trainerDefeated' ()                     — encounter RUN AWAY (trainer)
 //
-// PR-C+ will add: 'openBoard', 'encounter', 'encounterEnded', 'dialogue', ...
+// Events emitted by the React overlay (PR-E onward) so Phaser scenes
+// can treat tap/click input identically to keyboard:
+//   'dpadPress'   (dir: 'up'|'down'|'left'|'right')
+//   'dpadRelease' (dir)
+//   'aButton'     ()
 const bus = new Phaser.Events.EventEmitter()
 
 export default bus
