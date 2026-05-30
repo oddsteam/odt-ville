@@ -30,7 +30,7 @@ const KEY_DIR = {
 }
 
 const WELCOME = [
-  'ONE REV VILLAGE — welcome aboard!',
+  'ODT VILLAGE — welcome aboard!',
   'Walk up to a community and step into its doorway to read the boards inside.',
   'A red "!" means urgent MUST-KNOW news. The DAILY BRIEF lists everything.',
   'Wild Pokémon hide in the dark TALL GRASS — wander in to find them!',
@@ -375,7 +375,7 @@ export default function VillageMap({
       <div className="gb-shell" ref={shellRef}>
         <div className="gb-topbar">
           <span className="gb-led" />
-          <span className="gb-topbar-label">ONE REV VILLAGE</span>
+          <span className="gb-topbar-label">ODT VILLAGE</span>
           <span className="gb-topbar-tag">GAME BOY</span>
         </div>
 

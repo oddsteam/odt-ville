@@ -1,0 +1,39 @@
+# ODT Village — local Keycloak for the POC auth phase.
+#
+# This stands in for ODT's real company Keycloak (which we don't have admin
+# access to). It runs a self-contained Keycloak in dev mode and imports the
+# `odt` realm from ./keycloak/realm-export.json on startup, so test users and
+# the frontend client exist with zero manual console clicking.
+#
+#   docker compose up -d        # start Keycloak on http://localhost:8180
+#   docker compose down         # stop it (realm is re-imported next start)
+#
+# Admin console:  http://localhost:8180/  (admin / admin)
+# Realm:          odt
+# Test users:     alice / bob / carol   (password: "password")
+#
+# To swap in the REAL company Keycloak later, you don't touch this file — point
+# the backend (KEYCLOAK_ISSUER) and frontend (VITE_KEYCLOAK_*) env vars at the
+# real server instead. See README "Authentication (Keycloak POC)".
+
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    container_name: odt-keycloak
+    command: ["start-dev", "--import-realm"]
+    environment:
+      # Bootstrap admin for the master realm (Keycloak 26+ env names).
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_HTTP_PORT: 8080
+      # Dev mode keeps the issuer aligned with the browser-facing host:port.
+      KC_HOSTNAME_STRICT: "false"
+    ports:
+      - "8180:8080"
+    volumes:
+      - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/8080 && echo done"]
+      interval: 10s
+      timeout: 5s
+      retries: 12

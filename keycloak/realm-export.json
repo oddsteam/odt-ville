@@ -1,0 +1,90 @@
+{
+  "realm": "odt",
+  "enabled": true,
+  "displayName": "ODT Village (POC)",
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": false,
+  "editUsernameAllowed": false,
+  "accessTokenLifespan": 900,
+  "roles": {
+    "realm": [
+      { "name": "branch_employee", "description": "Default ODT employee role" },
+      { "name": "village_admin", "description": "Can manage communities in ODT Village" }
+    ]
+  },
+  "defaultRoles": ["branch_employee"],
+  "clients": [
+    {
+      "clientId": "odt-frontend",
+      "name": "ODT Village Frontend (React SPA)",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "rootUrl": "http://localhost:5390",
+      "baseUrl": "http://localhost:5390",
+      "redirectUris": [
+        "http://localhost:5390/*",
+        "http://127.0.0.1:5390/*",
+        "https://gather-odt.p2d.uk/*"
+      ],
+      "webOrigins": [
+        "http://localhost:5390",
+        "http://127.0.0.1:5390",
+        "https://gather-odt.p2d.uk",
+        "+"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:5390/*##https://gather-odt.p2d.uk/*"
+      },
+      "protocolMappers": [
+        {
+          "name": "odt-backend-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "odt-backend",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "alice",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "alice@odt.example",
+      "firstName": "Alice",
+      "lastName": "Anan",
+      "credentials": [{ "type": "password", "value": "password", "temporary": false }],
+      "realmRoles": ["branch_employee", "village_admin"]
+    },
+    {
+      "username": "bob",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "bob@odt.example",
+      "firstName": "Bob",
+      "lastName": "Boon",
+      "credentials": [{ "type": "password", "value": "password", "temporary": false }],
+      "realmRoles": ["branch_employee"]
+    },
+    {
+      "username": "carol",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "carol@odt.example",
+      "firstName": "Carol",
+      "lastName": "Chai",
+      "credentials": [{ "type": "password", "value": "password", "temporary": false }],
+      "realmRoles": ["branch_employee"]
+    }
+  ]
+}

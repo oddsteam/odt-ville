@@ -1,10 +1,12 @@
 // Communities + content data client. No game / spatial concepts here — this
 // module is the reusable boundary on the frontend, mirroring /api/v1/communities
 // and the content_items endpoints.
+import { authFetch } from '../auth/authFetch.js'
+
 const BASE = '/api/v1'
 
 async function request(path, options = {}) {
-  const res = await fetch(`${BASE}${path}`, options)
+  const res = await authFetch(`${BASE}${path}`, options)
   if (!res.ok) {
     let detail = ''
     try {

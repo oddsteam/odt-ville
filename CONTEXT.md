@@ -1,4 +1,4 @@
-# CONTEXT — One Rev Village
+# CONTEXT — ODT Village
 
 If you are new to this repo (human or AI), read this **before** editing. It
 explains *why* the game-style UI exists and what the design language means.

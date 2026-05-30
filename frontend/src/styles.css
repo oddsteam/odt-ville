@@ -1,5 +1,5 @@
 /* ============================================================
-   One Rev Village — top-down Pokémon Game Boy Color theme.
+   ODT Village — top-down Pokémon Game Boy Color theme.
    Font + character sprites borrowed from the local pokemon-js repo.
    ============================================================ */
 
@@ -149,6 +149,23 @@ button:disabled {
 .app-user-role {
   font-size: 7px;
   color: #a9b6d0;
+}
+
+.app-logout {
+  margin-top: 4px;
+  font-family: var(--font-ui);
+  font-size: 7px;
+  letter-spacing: 0.5px;
+  color: #c9cede;
+  background: var(--bezel-lip);
+  border: 2px solid var(--ink);
+  border-radius: 5px;
+  padding: 3px 7px;
+  cursor: pointer;
+}
+
+.app-logout:hover {
+  color: var(--paper);
 }
 
 /* ---- Top-level navigation (tabs) ---------------------------- */

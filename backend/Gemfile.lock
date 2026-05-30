@@ -107,6 +107,8 @@ GEM
       rdoc (>= 4.0.0)
       reline (>= 0.4.2)
     json (2.19.5)
+    jwt (2.10.3)
+      base64
     language_server-protocol (3.17.0.5)
     lint_roller (1.1.0)
     logger (1.7.0)
@@ -291,6 +293,7 @@ DEPENDENCIES
   brakeman
   bundler-audit
   debug
+  jwt (~> 2.9)
   pg (~> 1.1)
   puma (>= 5.0)
   rack-cors

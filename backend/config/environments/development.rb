@@ -53,7 +53,7 @@ Rails.application.configure do
   # Raise error when a before_action's only/except options reference missing actions.
   config.action_controller.raise_on_missing_callback_actions = true
 
-  # Allow the Cloudflare tunnel hostnames (gather-onerev-api.p2d.uk etc.) in
+  # Allow the Cloudflare tunnel hostnames (gather-odt-api.p2d.uk etc.) in
   # addition to the default localhost-only hosts.
   config.hosts << ".p2d.uk"
 

@@ -6,16 +6,18 @@ import DailyBriefShortcut from './communities/DailyBriefShortcut.jsx'
 import { listCommunities, getFeed } from './communities/client.js'
 import { getGameSession, saveGameSession } from './game-session/client.js'
 import { readEngineFlag } from './game/engineFlag.js'
+import keycloak, { authEnabled } from './auth/keycloak.js'
+import { authFetch } from './auth/authFetch.js'
 
 // Demo target for every board's "open content list" action. Replaced in a
 // follow-up by per-board content-list views (see issue #15 follow-ups).
-const DEMO_BOARD_URL = 'https://onerev-sit.dev.krungthai.com/'
+const DEMO_BOARD_URL = 'https://odt-sit.dev.krungthai.com/'
 
 // Tiny inline fetch for the current viewer — the header above the game.
 // Kept inline (rather than its own client module) because there is only one
 // endpoint and no reason for a third boundary.
 async function getMe() {
-  const res = await fetch('/api/v1/me')
+  const res = await authFetch('/api/v1/me')
   if (!res.ok) throw new Error(`Request to /me failed (${res.status})`)
   return res.json()
 }
@@ -154,7 +156,7 @@ export default function App() {
       <div className="app-shell app-centered">
         <div className="loading-card">
           <div className="loading-pixel" />
-          <p>LOADING ONE REV VILLAGE…</p>
+          <p>LOADING ODT VILLAGE…</p>
         </div>
       </div>
     )
@@ -182,13 +184,22 @@ export default function App() {
         <div className="app-brand">
           <span className="app-logo">🕹️</span>
           <div>
-            <h1>ONE REV VILLAGE</h1>
+            <h1>ODT VILLAGE</h1>
             <p className="app-company">{me.company.name}</p>
           </div>
         </div>
         <div className="app-user">
           <span className="app-user-name">{me.user.name}</span>
           <span className="app-user-role">{me.user.role}</span>
+          {authEnabled && (
+            <button
+              type="button"
+              className="app-logout"
+              onClick={() => keycloak.logout()}
+            >
+              LOG OUT
+            </button>
+          )}
         </div>
       </header>
 

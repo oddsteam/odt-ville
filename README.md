@@ -1,4 +1,4 @@
-# One Rev Village
+# ODT Village
 
 An MVP prototype of a playful, **top-down Pokémon Game Boy-style village** that
 sits on top of an ordinary corporate-content app. An employee walks an avatar
@@ -37,9 +37,10 @@ The frontend talks to the API at `/api/v1`. In development, Vite proxies
 `/api → http://localhost:3130`, so no CORS setup is needed (CORS is also enabled
 on the backend as a safety net).
 
-There is **no authentication** in this MVP — it is single-player, so the server
-simply acts as the one seeded user. (An optional `X-User-Id` request header can
-switch users for testing.)
+Authentication is handled by **Keycloak (OIDC)** in a POC configuration — see
+[Authentication (Keycloak POC)](#authentication-keycloak-poc) below. With auth
+disabled the app falls back to the original single-player behaviour (the server
+acts as the one seeded user; an optional `X-User-Id` header can switch users).
 
 ---
 
@@ -74,7 +75,7 @@ The API is now on **http://localhost:3130**.
 `bin/rails db:seed` is **re-runnable** — it clears the village tables and
 recreates them. It produces:
 
-- 1 company — **One Rev**
+- 1 company — **ODT**
 - 1 user — **Alex Rivera** (`branch_employee`)
 - 5 houses — **Compliance House, Product House, Branch Ops House, Learning
   House, Community Lounge**
@@ -95,6 +96,86 @@ npm run dev
 
 Open **http://localhost:5390**. (Keep the backend running — the frontend proxies
 API calls to it.)
+
+---
+
+## Authentication (Keycloak POC)
+
+ODT employees sign in through the company **Keycloak**, but we don't have admin
+access to that server yet. So this repo ships a **self-contained Keycloak** you
+run locally via Docker. It plays the same OIDC role as the real one, which means
+**swapping to the real Keycloak later is a config change, not a code change** —
+you only repoint a few environment variables.
+
+### How it fits together
+
+```
+Browser ──login──▶ Keycloak (:8180, realm "odt")
+   │                   │ issues signed JWT (RS256)
+   ▼                   ▼
+React SPA ──Bearer JWT──▶ Rails API (:3130)
+  (keycloak-js,            verifies signature against Keycloak's JWKS,
+   Auth Code + PKCE)       then find-or-creates the local User (by `sub`)
+```
+
+- **Frontend** — `keycloak-js` runs the Authorization Code + PKCE flow
+  (`frontend/src/auth/`). Every API call carries `Authorization: Bearer <jwt>`.
+- **Backend** — `KeycloakAuth` (`backend/app/services/keycloak_auth.rb`)
+  verifies the token (signature via JWKS, issuer, expiry, audience/`azp`) and
+  `User.from_keycloak_claims` provisions a local user row keyed on the OIDC
+  `sub`. An **invalid token is a 401**; **no token** falls back to the seeded
+  single-player user so the original flow still works.
+
+### 3. Run Keycloak
+
+```bash
+docker compose up -d          # Keycloak on http://localhost:8180
+```
+
+First start pulls the image and imports the **`odt`** realm from
+`keycloak/realm-export.json` — a public PKCE client `odt-frontend` plus three
+test users. Admin console: **http://localhost:8180/** (`admin` / `admin`).
+
+| Username | Password   | Role             |
+|----------|------------|------------------|
+| `alice`  | `password` | village_admin    |
+| `bob`    | `password` | branch_employee  |
+| `carol`  | `password` | branch_employee  |
+
+Now load **http://localhost:5390** — you're redirected to the Keycloak login,
+and after signing in each person becomes a **distinct user** with their own
+read/acknowledge state and map location. Use **LOG OUT** (top-right) to switch.
+
+### Configuration (and swapping to the real Keycloak)
+
+Everything is env-driven; the defaults match the local docker-compose setup, so
+no `.env` is needed for the POC.
+
+**Frontend** (`frontend/.env`, see `frontend/.env.example`):
+
+| Var | Default | Meaning |
+|-----|---------|---------|
+| `VITE_KEYCLOAK_URL` | `http://localhost:8180` | Keycloak base URL |
+| `VITE_KEYCLOAK_REALM` | `odt` | Realm |
+| `VITE_KEYCLOAK_CLIENT_ID` | `odt-frontend` | Public SPA client |
+| `VITE_AUTH_DISABLED` | _(unset)_ | `true` = no login, single-player mode |
+
+**Backend** (environment variables when starting Rails):
+
+| Var | Default | Meaning |
+|-----|---------|---------|
+| `KEYCLOAK_ISSUER` | `http://localhost:8180/realms/odt` | Token issuer (`iss`) |
+| `KEYCLOAK_AUDIENCE` | `odt-backend` | Expected `aud` |
+| `KEYCLOAK_CLIENT_ID` | `odt-frontend` | Accepted `azp` |
+
+To move to **ODT's real Keycloak**: point `VITE_KEYCLOAK_*` and
+`KEYCLOAK_ISSUER` at the real server/realm/client and register an equivalent
+public PKCE client there (redirect URI `http://localhost:5390/*`, web origin
+`http://localhost:5390`). No application code changes.
+
+> **Just want the old single-player mode?** Skip Docker, set
+> `VITE_AUTH_DISABLED=true` in `frontend/.env`, and run backend + frontend as
+> before — the API serves the seeded user.
 
 ---
 
@@ -148,7 +229,7 @@ curl -s -X PUT localhost:3130/api/v1/me/location \
 | Model               | Purpose                                                            |
 |---------------------|--------------------------------------------------------------------|
 | `Company`           | Tenant.                                                            |
-| `User`              | An employee (single-player; no auth).                              |
+| `User`              | An employee. Provisioned from Keycloak by `external_id` (OIDC `sub`). |
 | `House`             | A community/channel — title, color, logo URL, category, order.     |
 | `Board`             | One of `must_know` / `should_know` / `nice_to_know` per house.     |
 | `ContentItem`       | A card — title, summary, body, priority, effective window, ack.    |
@@ -185,7 +266,7 @@ placeholder) — never x/y coordinates.
 ## Project layout
 
 ```
-gather-onerev/
+gather-odt/
 ├── backend/        Rails 8 API
 │   ├── app/models/         Company, User, House, Board, ContentItem, …
 │   ├── app/controllers/api/v1/   village, houses, content_items, locations
