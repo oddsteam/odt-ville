@@ -1,5 +1,5 @@
 import Phaser from 'phaser'
-import { TILE, MOVE_MS, buildTown, tileChar } from '../../constants.js'
+import { TILE, MOVE_MS, PLAYER_FEET_LIFT, buildTown, tileChar } from '../../constants.js'
 import { ensureTileTextures } from '../tileTextures.js'
 import bus from '../bus.js'
 import {
@@ -57,6 +57,15 @@ export default class TownScene extends Phaser.Scene {
 
   init(data) {
     this.exitedCommunityId = data?.exitedCommunityId ?? null
+    // Reset per-scene-start runtime state. The constructor only runs once
+    // for the whole game lifetime; without this, a movingTween that was
+    // in flight at the moment we scene.start('Interior') gets destroyed
+    // by Phaser but the reference here stays non-null — and update()'s
+    // `if (this.movingTween) return` guard would freeze the player on
+    // the next return to Town.
+    this.movingTween = null
+    this.dpadDir = null
+    this.graceSteps = 0
   }
 
   preload() {
@@ -95,11 +104,13 @@ export default class TownScene extends Phaser.Scene {
     // game's design data.
     this.town = buildTown(Math.max(communities.length, 1))
 
-    // Resize the scene to match the generated town. Phaser's Scale.FIT in
-    // PhaserGame will scale the whole thing to the host element.
+    // With Scale.RESIZE in PhaserGame, the canvas display size matches
+    // .gb-screen at 1:1 device pixels (TILE=48 → 48 screen px, same as
+    // DOM). We do NOT call scale.resize here: that would re-size the
+    // canvas to the world size and the player would see everything at
+    // once. The camera's setBounds caps scroll to the world's edges.
     const worldW = this.town.cols * TILE
     const worldH = this.town.rows * TILE
-    this.scale.resize(worldW, worldH)
     this.cameras.main.setBounds(0, 0, worldW, worldH)
     this.physics?.world.setBounds(0, 0, worldW, worldH)
 
@@ -140,6 +151,18 @@ export default class TownScene extends Phaser.Scene {
       left: Phaser.Input.Keyboard.KeyCodes.A,
       right: Phaser.Input.Keyboard.KeyCodes.D,
     })
+    // Overlay D-pad — React emits press/release events on the bus so
+    // we drive movement from tap/click input the same way keyboard
+    // input feeds activeDirection().
+    this.dpadDir = null
+    this._onDpadPress = (d) => {
+      this.dpadDir = d
+    }
+    this._onDpadRelease = (d) => {
+      if (this.dpadDir === d) this.dpadDir = null
+    }
+    bus.on('dpadPress', this._onDpadPress)
+    bus.on('dpadRelease', this._onDpadRelease)
 
     // Test API. PR-A only exposed `engine`; PR-B+ hang reads off the
     // same object so Playwright can introspect scene state without
@@ -166,11 +189,23 @@ export default class TownScene extends Phaser.Scene {
       }
     }
 
-    // React → Phaser registry watchers — when the shell pushes a new
-    // communities/session payload (e.g. admin added a house), rebuild;
-    // when trainerDefeated flips, refresh the sight markers.
-    this.registry.events.on('changedata-communities', this.handleRegistryChange, this)
-    this.registry.events.on('changedata-session', this.handleSessionChange, this)
+    // React → Phaser registry watchers. The rule for what the scene
+    // subscribes to: **structural data is a scene-boot input, not a
+    // live data source.** The community list (positions, titles,
+    // colours) and the session are read once by spawnPlayer +
+    // addBuildingSprite during create() and never re-read mid-scene.
+    // The shell still pushes fresh communities/session into the
+    // registry on every loadTown() refresh, but the scene ignores
+    // those events — the new shape takes effect the next time
+    // VillageGame mounts (tab switch ⚙ ADMIN → 🕹️ VILLAGE, or a
+    // page reload). That keeps the player in place during normal
+    // play and removes the surprise-restart bug class entirely.
+    //
+    // Only **presentation-level** registry keys are listened to
+    // here. trainerDefeated is presentation (sprite tint + sight
+    // markers); when live notification badges arrive they'll get
+    // their own dedicated key + handler with the same in-place
+    // update discipline.
     this.registry.events.on('changedata-trainerDefeated', this.refreshTrainerVisuals, this)
 
     // When EncounterScene closes it scene.resume()s us; this is the
@@ -178,10 +213,10 @@ export default class TownScene extends Phaser.Scene {
     this.events.on(Phaser.Scenes.Events.RESUME, this.handleResume, this)
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-      this.registry.events.off('changedata-communities', this.handleRegistryChange, this)
-      this.registry.events.off('changedata-session', this.handleSessionChange, this)
       this.registry.events.off('changedata-trainerDefeated', this.refreshTrainerVisuals, this)
       this.events.off(Phaser.Scenes.Events.RESUME, this.handleResume, this)
+      bus.off('dpadPress', this._onDpadPress)
+      bus.off('dpadRelease', this._onDpadRelease)
       if (typeof window !== 'undefined' && window.__game?.engine === 'phaser') {
         delete window.__game
       }
@@ -198,7 +233,10 @@ export default class TownScene extends Phaser.Scene {
 
   // Resolve which direction key is currently held; the most-recently
   // pressed direction wins so changing direction mid-walk feels snappy.
+  // Overlay D-pad press wins over keyboard since taps are usually
+  // mutually exclusive with held keys on the same device.
   activeDirection() {
+    if (this.dpadDir) return this.dpadDir
     const c = this.cursors
     const w = this.wasd
     if (c.up.isDown || w.up.isDown) return 'up'
@@ -228,21 +266,40 @@ export default class TownScene extends Phaser.Scene {
     }
 
     if (!this.walkable(tx, ty)) {
-      // Bumped a wall — just turn in place via facing direction; sprite
-      // updates next frame.
-      this.updatePlayerFrame()
+      // Bumped a wall — face the direction in still pose; no tween.
+      this.player.setTexture(`player.${this.facing}.0`)
       return
     }
 
     this.playerTile = { x: tx, y: ty }
-    this.updatePlayerFrame()
+    // Depth tracks the player's current row so south-of-player buildings
+    // (higher row → higher depth) draw on top and north-of-player
+    // buildings (lower row → lower depth) draw behind — same y-sort
+    // discipline the buildings themselves use. Without this update the
+    // depth set at spawn would never change and the player would slip
+    // behind any building that happens to be south of its spawn row.
+    this.player.setDepth(ty * 10 + 5)
+    // rpg-char-01 has 3 frames per direction: 0 still, 1 step-A, 2 step-B.
+    // Alternate walk-A and walk-B with each step so the gait reads as
+    // left-foot / right-foot — same scheme as InteriorScene.
+    this.player.setTexture(
+      `player.${this.facing}.${(this.player.stepCount++ % 2) + 1}`,
+    )
     this.movingTween = this.tweens.add({
       targets: this.player,
       x: tx * TILE + TILE / 2,
-      y: ty * TILE + TILE / 2,
+      // Feet land at the destination tile's floor (matches setOrigin),
+      // offset by PLAYER_FEET_LIFT to account for the sprite's foot
+      // position inside its display box (+y = down in Phaser).
+      y: (ty + 1) * TILE + PLAYER_FEET_LIFT,
       duration: MOVE_MS,
       onComplete: () => {
         this.movingTween = null
+        // Snap back to still at the end of the slide so a single tap
+        // doesn't leave the sprite stuck mid-stride. If the player is
+        // still holding a direction, update() will immediately call
+        // step() again and the next walk frame takes over.
+        this.player.setTexture(`player.${this.facing}.0`)
         // Trainer sight is checked first — when the player lands in
         // his line of sight, the duel takes priority over a wild
         // encounter on the same step.
@@ -376,13 +433,12 @@ export default class TownScene extends Phaser.Scene {
     }
   }
 
-  // Cycle through the four-frame walk strip. For a single press the
-  // sprite ends back at frame 0 (still). For a moving step we pick a
-  // frame based on the cumulative step count to alternate left / right
-  // foot, same effect as the DOM <PlayerSprite>.
+  // Set the sprite to the still pose for the current facing. Used
+  // after spawn / session changes; the per-step walk animation is
+  // handled inline in step() (frame alternation + onComplete snap
+  // back to this still pose).
   updatePlayerFrame() {
-    const idx = this.movingTween ? (this.player.stepCount % 3) + 1 : 0
-    this.player.setTexture(`player.${this.facing}.${idx}`)
+    this.player.setTexture(`player.${this.facing}.0`)
   }
 
   // Build the two-layer building sprite. We don't yet hue-rotate from
@@ -449,39 +505,25 @@ export default class TownScene extends Phaser.Scene {
     this.player = this.add
       .image(
         spawn.x * TILE + TILE / 2,
-        spawn.y * TILE + TILE / 2,
+        // Feet anchor at the tile floor — same as the trainer sprite,
+        // so when they stand side by side their feet line up. Offset
+        // by PLAYER_FEET_LIFT so the rpg-char-01 sprite's visible feet
+        // (which sit inside its 96×96 display box's padding) land
+        // where the eye expects them on the tile (+y = down in Phaser).
+        (spawn.y + 1) * TILE + PLAYER_FEET_LIFT,
         `player.${spawn.facing}.0`,
       )
-      .setOrigin(0.5, 0.5)
+      .setOrigin(0.5, 1)
       .setDepth(spawn.y * 10 + 5)
+      // rpg-char-01 has heavy transparent padding inside its 32×32
+      // box, so 96×96 brings the visible body to a Pokémon-faithful
+      // on-screen height. Source PNG is square; display kept square.
+      .setDisplaySize(96, 96)
     this.player.stepCount = 0
     this.updatePlayerFrame()
     this.cameras.main.startFollow(this.player, true, 0.15, 0.15)
   }
 
-  // Communities changed (admin added/deleted/reordered) — rebuild the
-  // town. PR-B keeps this dumb (full restart of the scene) because
-  // partial rebuilds add a lot of bookkeeping for a thing that happens
-  // once per admin action.
-  handleRegistryChange() {
-    this.scene.restart()
-  }
-
-  // Session changed (the React shell's optimistic post-exit update) —
-  // re-spawn the player at the new last-community doormat.
-  handleSessionChange() {
-    const session = this.registry.get('session')
-    const id = session?.spawn?.last_community_id
-    const b = id != null ? this.buildings.find((x) => x.community.id === id) : null
-    if (!b) return
-    this.playerTile = { x: b.doorCol, y: b.doorRow + 1 }
-    this.facing = 'up'
-    this.player.setPosition(
-      this.playerTile.x * TILE + TILE / 2,
-      this.playerTile.y * TILE + TILE / 2,
-    )
-    this.updatePlayerFrame()
-  }
 }
 
 // Map a tile character to a texture key. Anything boundary-tree-ish (T)

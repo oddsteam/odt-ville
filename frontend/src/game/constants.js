@@ -22,6 +22,16 @@ import rightWalk3 from './assets/character/right-walk-3.png'
 export const TILE = 48 // rendered px per tile
 export const MOVE_MS = 170 // ms to slide one tile
 
+// Vertical offset added to the player sprite's foot position, in
+// screen pixels. Phaser's +y points down, so a positive value pushes
+// the feet BELOW the tile's bottom edge — useful when the sprite
+// (rpg-char-01) has transparent padding under its visible feet and
+// "feet exactly on the tile floor" looks too high. Negative values
+// lift the feet above the tile floor. Both TownScene and InteriorScene
+// read this so the player sits at the same height-relative-to-tile in
+// either scene.
+export const PLAYER_FEET_LIFT = 27
+
 // Player walk sprites, keyed by facing direction: [still, step-A, mid, step-B].
 export const SPRITES = {
   down: [frontStill, frontWalk1, frontWalk2, frontWalk3],
