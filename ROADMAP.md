@@ -1,4 +1,4 @@
-# ROADMAP — One Rev Village
+# ROADMAP — ODT Village
 
 **Last updated:** 2026-05-24
 

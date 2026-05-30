@@ -13,7 +13,7 @@ import { chromium } from 'playwright-core'
 import { clearPhaserGateTrainer } from './_helpers.mjs'
 
 const OUT = process.argv[2] || '.'
-const DEMO_URL = 'https://onerev-sit.dev.krungthai.com/'
+const DEMO_URL = 'https://odt-sit.dev.krungthai.com/'
 
 const browser = await chromium.launch({ channel: 'chrome', headless: true })
 const context = await browser.newContext({ viewport: { width: 1180, height: 820 } })

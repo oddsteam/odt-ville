@@ -1,6 +1,6 @@
 # PRD — Decouple the village game from the communities/content layer
 
-> Tracking issue: [#1](https://github.com/zacrify/gather-onerev/issues/1)
+> Tracking issue: [#1](https://github.com/zacrify/gather-odt/issues/1)
 > ("อยากปรับ structure ของ ตัวเกมให้เป็น blackbox" — adjust the game's
 > structure so data can be passed in and out cleanly, and the game can be
 > tested as a black box).

@@ -1,9 +1,11 @@
 // Village-game session client — the only place the game-session API lives.
 // Kept isolated from the communities client so non-game UIs never need it.
+import { authFetch } from '../auth/authFetch.js'
+
 const BASE = '/api/v1'
 
 async function request(path, options = {}) {
-  const res = await fetch(`${BASE}${path}`, options)
+  const res = await authFetch(`${BASE}${path}`, options)
   if (!res.ok) {
     let detail = ''
     try {
