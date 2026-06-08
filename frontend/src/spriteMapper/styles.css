@@ -1,0 +1,243 @@
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: #14141a;
+  color: #e8e8ef;
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+}
+.mapper {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  background: #1d1d27;
+  border-bottom: 1px solid #2c2c3a;
+  flex-wrap: wrap;
+}
+.bar h1 {
+  font-size: 16px;
+  margin: 0 8px 0 0;
+}
+.bar label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #b9b9c8;
+}
+.bar input,
+.source-bar input,
+.source-bar select {
+  background: #0f0f15;
+  color: #e8e8ef;
+  border: 1px solid #3a3a4c;
+  border-radius: 5px;
+  padding: 4px 6px;
+}
+button {
+  background: #2e7dff;
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  padding: 5px 10px;
+  cursor: pointer;
+  font-size: 13px;
+}
+button:hover {
+  background: #4a90ff;
+}
+.zoom-ctl button {
+  background: #33334a;
+  padding: 2px 8px;
+}
+.open-preview {
+  margin-left: auto;
+  color: #6fb0ff;
+  text-decoration: none;
+  font-size: 13px;
+}
+.status {
+  padding: 6px 14px;
+  background: #20202c;
+  border-bottom: 1px solid #2c2c3a;
+  color: #ffd479;
+  font-size: 13px;
+}
+.cols {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+.left {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-right: 1px solid #2c2c3a;
+}
+.source-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 14px;
+  background: #1a1a23;
+  border-bottom: 1px solid #2c2c3a;
+  flex-wrap: wrap;
+}
+.source-bar label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #b9b9c8;
+}
+.grid-ctl,
+.zoom-ctl {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #b9b9c8;
+}
+.zoom-val {
+  min-width: 34px;
+  text-align: center;
+}
+.sheet-scroll {
+  flex: 1;
+  overflow: auto;
+  padding: 12px;
+  background:
+    repeating-conic-gradient(#202028 0% 25%, #1a1a22 0% 50%) 50% / 24px 24px;
+}
+.sheet-canvas {
+  display: block;
+  image-rendering: pixelated;
+  cursor: crosshair;
+  box-shadow: 0 0 0 1px #3a3a4c;
+}
+.sheet-empty {
+  margin: auto;
+  padding: 40px;
+  color: #7a7a8c;
+}
+.right {
+  width: 320px;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+.preview-box {
+  padding: 12px 14px;
+  border-bottom: 1px solid #2c2c3a;
+  text-align: center;
+}
+.preview-box h3 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: #b9b9c8;
+}
+.anim-canvas {
+  image-rendering: pixelated;
+  background: #0f0f15;
+  border: 1px solid #3a3a4c;
+  border-radius: 6px;
+}
+.posture-panel {
+  padding: 12px 14px;
+}
+.posture-panel h3 {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+.hint {
+  color: #7a7a8c;
+  font-size: 12px;
+}
+.slot-list {
+  list-style: none;
+  margin: 8px 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.slot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 8px;
+  background: #1d1d27;
+  border: 1px solid #2c2c3a;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.slot.filled {
+  border-color: #345;
+}
+.slot.active {
+  background: #21314d;
+  border-color: #2e7dff;
+}
+.slot-count {
+  background: #0f0f15;
+  border-radius: 10px;
+  padding: 1px 7px;
+  color: #9fb6ff;
+  font-variant-numeric: tabular-nums;
+}
+.active-frames {
+  margin-top: 10px;
+}
+.active-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.active-head button {
+  background: #4a3030;
+  padding: 2px 8px;
+  font-size: 12px;
+}
+.thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.thumb-wrap {
+  position: relative;
+}
+.thumb {
+  image-rendering: pixelated;
+  background: #0f0f15;
+  border: 1px solid #3a3a4c;
+  border-radius: 4px;
+  display: block;
+}
+.thumb-idx {
+  position: absolute;
+  bottom: 1px;
+  left: 2px;
+  font-size: 10px;
+  color: #fff;
+  text-shadow: 0 0 2px #000;
+}
+.thumb-x {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border-radius: 50%;
+  background: #b03b3b;
+  line-height: 1;
+  font-size: 13px;
+}
