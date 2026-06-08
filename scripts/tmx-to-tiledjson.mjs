@@ -43,14 +43,23 @@ const TILESET_META = {
   '5_Floor_Modular_Buildings_32x32.tsx': { png: '5_Floor_Modular_Buildings_32x32.png', imagewidth: 1024, imageheight: 8288 },
   '4_Generic_Buildings_32x32.tsx': { png: '4_Generic_Buildings_32x32.png', imagewidth: 1024, imageheight: 6400 },
   '10_Vehicles_32x32.tsx': { png: '10_Vehicles_32x32.png', imagewidth: 1024, imageheight: 5376 },
+  'Interiors_free_32x32.tsx': { png: 'Interiors_free_32x32.png', imagewidth: 512, imageheight: 2848 },
 }
 
-const tilesets = [...xml.matchAll(/<tileset firstgid="(\d+)" source="([^"]*)"\/>/g)].map(
-  (m) => {
+// Unknown tilesets are skipped (with a warning) rather than aborting the whole
+// convert — tiles using them won't render, but the rest of the map (and the
+// object layers) still come through. To support a new tileset: bundle its PNG
+// under public/maps/tilesets/, add a TILESET_META entry, and list its name in
+// TiledMapScene.TILESETS.
+const tilesets = [...xml.matchAll(/<tileset firstgid="(\d+)" source="([^"]*)"\/>/g)]
+  .map((m) => {
     const firstgid = Number(m[1])
     const source = m[2].split('/').pop()
     const meta = TILESET_META[source]
-    if (!meta) throw new Error(`unknown tileset source: ${source}`)
+    if (!meta) {
+      console.warn(`WARN: unknown tileset "${source}" — skipping (its tiles won't render)`)
+      return null
+    }
     const columns = meta.imagewidth / tilewidth
     const rows = meta.imageheight / tileheight
     return {
@@ -66,8 +75,8 @@ const tilesets = [...xml.matchAll(/<tileset firstgid="(\d+)" source="([^"]*)"\/>
       margin: 0,
       spacing: 0,
     }
-  },
-)
+  })
+  .filter(Boolean)
 
 // --- tile layers -------------------------------------------------------
 const layers = []
@@ -97,12 +106,15 @@ for (const m of xml.matchAll(layerRe)) {
   })
 }
 
-// --- collisions object group -------------------------------------------
-const ogMatch = xml.match(/<objectgroup id="(\d+)" name="([^"]*)">([\s\S]*?)<\/objectgroup>/)
-if (ogMatch) {
+// --- object layers (collisions, signs, …) ------------------------------
+// Emit every <objectgroup>, not just the first, so custom layers authored in
+// Tiled (e.g. a "signs" layer of anchor rectangles) reach the game. Each
+// object's custom <properties> are parsed into a flat `properties` object.
+const ogRe = /<objectgroup id="(\d+)" name="([^"]*)"[^>]*>([\s\S]*?)<\/objectgroup>/g
+for (const ogMatch of xml.matchAll(ogRe)) {
   const objects = []
   const body = ogMatch[3]
-  // Each <object ...> either self-closes or wraps a <polygon>.
+  // Each <object ...> either self-closes or wraps <polygon>/<properties>.
   const objRe = /<object\b([^>]*?)(?:\/>|>([\s\S]*?)<\/object>)/g
   for (const om of body.matchAll(objRe)) {
     const attrs = Object.fromEntries(
@@ -130,6 +142,8 @@ if (ogMatch) {
       // No size and no polygon → a point marker in Tiled.
       obj.point = true
     }
+    const props = parseProperties(inner)
+    if (props) obj.properties = props
     objects.push(obj)
   }
   layers.push({
@@ -143,6 +157,20 @@ if (ogMatch) {
     visible: true,
     objects,
   })
+}
+
+// Tiled emits per-object <properties><property name= value=/></properties>.
+// Return them as Tiled-JSON's array shape, or null if there are none.
+function parseProperties(inner) {
+  const block = inner.match(/<properties>([\s\S]*?)<\/properties>/)
+  if (!block) return null
+  const out = []
+  for (const p of block[1].matchAll(/<property\b([^>]*?)\/?>/g)) {
+    const a = Object.fromEntries([...p[1].matchAll(/(\w+)="([^"]*)"/g)].map((m) => [m[1], m[2]]))
+    if (!a.name) continue
+    out.push({ name: a.name, type: a.type || 'string', value: a.value ?? '' })
+  }
+  return out.length ? out : null
 }
 
 // --- assemble ----------------------------------------------------------
@@ -165,8 +193,12 @@ const out = {
 }
 
 writeFileSync(outPath, JSON.stringify(out, null, 1))
+const objLayers = layers
+  .filter((l) => l.type === 'objectgroup')
+  .map((l) => `${l.name}(${l.objects.length})`)
+  .join(', ')
 console.log(
   `wrote ${outPath}: ${tilesets.length} tilesets, ` +
     `${layers.filter((l) => l.type === 'tilelayer').length} tile layers, ` +
-    `${layers.find((l) => l.type === 'objectgroup')?.objects.length ?? 0} collision objects`,
+    `object layers: ${objLayers || 'none'}`,
 )

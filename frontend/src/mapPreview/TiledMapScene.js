@@ -4,6 +4,7 @@ import {
   resolveSheetSrc,
   framesForFacing,
 } from '../character/manifest.js'
+import { openVideoModal } from './videoModal.js'
 
 // Standalone preview of a Tiled map exported from tipco/downtown.tmx.
 // Renders the four tile layers and enforces the `collisions` object group.
@@ -34,9 +35,36 @@ const TILESETS = [
   '5_Floor_Modular_Buildings_32x32',
   '4_Generic_Buildings_32x32',
   '10_Vehicles_32x32',
+  'Interiors_free_32x32',
 ]
 
 const LAYER_NAMES = ['road', 'pavement', 'buildings', 'props']
+
+// Building overlays — text panels / images drawn over a building at runtime,
+// anchored to the named objects in the Tiled `collisions` group (building1,
+// main-building, …). This is the programmatic alternative to baking labels
+// into the PNG or the Tiled map: each entry is keyed by the object's name.
+//   text  — string painted on a "blank panel" (a filled rounded rect)
+//   image — texture key to load + stamp instead of text (see SIGN_IMAGES)
+//   yFactor — 0 = footprint centre, negative = toward the top/face (default -0.18)
+// Depth sits above the tile layers (max 3) and below the player (100).
+const SIGN_DEPTH = 60
+const BUILDING_SIGNS = {
+  // Keyed by the object name you give the rectangle in the Tiled `signs` layer.
+  //   clip  — looping muted video texture (most lively); falls back to image
+  //   image — still PNG (used when there's no clip)
+  //   video — makes the sign clickable → opens a YouTube popup over the canvas
+  //   scale — shrink the fitted result (1 = fill the box, 0.5 = half size)
+  odt: { clip: 'odt', video: 'V3-fmhxeDzM', start: 179, scale: 1.1 },
+}
+// Sign content sources. Images are name -> URL. Clips carry their intrinsic
+// pixel size so we can scale them correctly without waiting on the video
+// element to report dimensions (which races with the texture swap). Reference
+// a key from a BUILDING_SIGNS entry via `image:`/`clip:`.
+const SIGN_IMAGES = {}
+const SIGN_CLIPS = {
+  odt: { url: '/maps/signs/odt.mp4', width: 1014, height: 576 },
+}
 
 export default class TiledMapScene extends Phaser.Scene {
   constructor() {
@@ -61,6 +89,13 @@ export default class TiledMapScene extends Phaser.Scene {
     this.manifest = this.registry.get('characterManifest')
     const src = this.manifest ? resolveSheetSrc(this.manifest) : ''
     if (src) this.load.image(SHEET_KEY, src)
+
+    for (const [key, url] of Object.entries(SIGN_IMAGES)) {
+      this.load.image(`sign.${key}`, url)
+    }
+    for (const [key, clip] of Object.entries(SIGN_CLIPS)) {
+      this.load.video(`clip.${key}`, clip.url, true) // noAudio: muted billboard
+    }
   }
 
   create() {
@@ -96,6 +131,11 @@ export default class TiledMapScene extends Phaser.Scene {
     }
     gfx.setVisible(false)
     this.collisionGfx = gfx
+
+    // --- building overlays: text panels / images, placed on the rectangles
+    // you draw in the Tiled `signs` object layer (content keyed by name) ------
+    const signLayer = map.getObjectLayer('signs')
+    this.addBuildingSigns(signLayer?.objects ?? [])
 
     // --- player: build from the manifest, spawn near map centre ---------
     this.setupCharacter()
@@ -266,6 +306,123 @@ export default class TiledMapScene extends Phaser.Scene {
     this.player.setPosition(p.x, p.y)
   }
 
+  // Stamp overlays onto the rectangles drawn in the Tiled `signs` layer. The
+  // rectangle is the anchor *space*; its name selects the content from the
+  // BUILDING_SIGNS config. An image is fitted into the box; otherwise we draw
+  // a text-on-panel sign sized to the box. All created at runtime.
+  addBuildingSigns(objects) {
+    for (const obj of objects) {
+      const cfg = BUILDING_SIGNS[obj.name]
+      if (!cfg) continue
+      const a = anchorRect(obj) // { cx, cy, w, h } — w/h are the drawn box
+
+      let go
+      if (cfg.clip) {
+        go = this.addClip(a, cfg)
+      } else if (cfg.image) {
+        const key = `sign.${cfg.image}`
+        if (!this.textures.exists(key)) continue
+        go = this.add.image(a.cx, a.cy, key).setOrigin(0.5).setDepth(SIGN_DEPTH)
+        if (a.w && a.h) go.setScale(Math.min(a.w / go.width, a.h / go.height))
+      } else {
+        go = this.addSign(a, cfg)
+      }
+      if (cfg.video && go) this.makeVideoTrigger(go, cfg)
+    }
+  }
+
+  // Make a sign clickable → open the YouTube popup. Player keyboard is
+  // disabled while the modal is up so arrow keys don't drive the hidden
+  // player behind it. Works for both image sprites and text-sign containers.
+  makeVideoTrigger(go, cfg) {
+    if (go.type === 'Container') {
+      const w = go.width || 1
+      const h = go.height || 1
+      go.setInteractive(
+        new Phaser.Geom.Rectangle(-w / 2, -h / 2, w, h),
+        Phaser.Geom.Rectangle.Contains,
+      )
+    } else {
+      go.setInteractive({ useHandCursor: true })
+    }
+    go.on('pointerover', () => {
+      go.setAlpha(0.85)
+      this.input.setDefaultCursor('pointer')
+    })
+    go.on('pointerout', () => {
+      go.setAlpha(1)
+      this.input.setDefaultCursor('default')
+    })
+    go.on('pointerdown', () => {
+      this.input.keyboard.enabled = false
+      this.input.setDefaultCursor('default')
+      openVideoModal({
+        videoId: cfg.video,
+        start: cfg.start ?? 0,
+        title: cfg.text || cfg.video,
+        onClose: () => {
+          this.input.keyboard.enabled = true
+        },
+      })
+    })
+  }
+
+  // A looping muted video texture fitted into the drawn box — a "moving
+  // billboard". Falls back to a text sign if the clip didn't load.
+  addClip(a, cfg) {
+    const key = `clip.${cfg.clip}`
+    const meta = SIGN_CLIPS[cfg.clip]
+    if (!this.cache.video.exists(key) || !meta) {
+      return this.addSign(a, { ...cfg, text: cfg.text || cfg.clip })
+    }
+    const vid = this.add.video(a.cx, a.cy, key).setOrigin(0.5).setDepth(SIGN_DEPTH)
+    vid.setMute(true) // muted → allowed to autoplay without a user gesture
+
+    // Scale = box-fit × optional shrink. Computed from the clip's KNOWN size so
+    // it's stable regardless of when the video texture swaps in (reading the
+    // element's size at runtime raced with that and locked a wrong scale).
+    // display = scaleX × frameWidth, and the frame settles to meta.width, so
+    // this yields the intended on-screen size once the first frame decodes.
+    if (a.w && a.h) {
+      const boxFit = Math.min(a.w / meta.width, a.h / meta.height)
+      vid.setScale(boxFit * (cfg.scale ?? 1))
+    }
+    vid.play(true) // loop
+    return vid
+  }
+
+  // The "blank space + text" sign: a filled rounded-rect panel and a centred
+  // label, grouped in a Container. The panel takes the drawn box's size (so a
+  // bigger rectangle = a bigger sign), and the text scales down to fit inside
+  // it. With no box (a point object) the panel just hugs the text.
+  addSign(a, cfg) {
+    const label = this.add
+      .text(0, 0, cfg.text, {
+        fontFamily: 'monospace',
+        fontSize: `${cfg.fontSize ?? 10}px`,
+        color: cfg.color ?? '#2c1d10',
+        align: 'center',
+        resolution: 2, // keep small text crisp under pixelArt scaling
+      })
+      .setOrigin(0.5)
+
+    const padX = 5
+    const padY = 3
+    const w = a.w || Math.ceil(label.width) + padX * 2
+    const h = a.h || Math.ceil(label.height) + padY * 2
+    // Shrink the text to fit the box (never enlarge past the authored size).
+    const fit = Math.min((w - padX * 2) / label.width, (h - padY * 2) / label.height, 1)
+    if (fit < 1) label.setScale(fit)
+
+    const panel = this.add.graphics()
+    panel.fillStyle(cfg.bg ?? 0xf3e6bb, cfg.bgAlpha ?? 1)
+    panel.lineStyle(1, cfg.border ?? 0x2c1d10, 1)
+    panel.fillRoundedRect(-w / 2, -h / 2, w, h, 3)
+    panel.strokeRoundedRect(-w / 2, -h / 2, w, h, 3)
+
+    return this.add.container(a.cx, a.cy, [panel, label]).setDepth(SIGN_DEPTH).setSize(w, h)
+  }
+
   walkable(x, y) {
     if (x < 0 || y < 0 || x >= this.cols || y >= this.rows) return false
     return !this.blocked.has(`${x},${y}`)
@@ -303,6 +460,29 @@ export default class TiledMapScene extends Phaser.Scene {
       .setDepth(1000)
     hud.setShadow(1, 1, '#000', 2)
   }
+}
+
+// Centre + size of a Tiled object's footprint in world pixels. Rectangles use
+// their box; a polygon uses its bounding box (points are relative to x,y).
+function anchorRect(o) {
+  if (o.polygon && o.polygon.length) {
+    let minX = Infinity
+    let minY = Infinity
+    let maxX = -Infinity
+    let maxY = -Infinity
+    for (const p of o.polygon) {
+      const px = o.x + p.x
+      const py = o.y + p.y
+      minX = Math.min(minX, px)
+      minY = Math.min(minY, py)
+      maxX = Math.max(maxX, px)
+      maxY = Math.max(maxY, py)
+    }
+    return { cx: (minX + maxX) / 2, cy: (minY + maxY) / 2, w: maxX - minX, h: maxY - minY }
+  }
+  const w = o.width || 0
+  const h = o.height || 0
+  return { cx: o.x + w / 2, cy: o.y + h / 2, w, h }
 }
 
 // Rasterize Tiled collision objects (rectangles + a polygon; points are
