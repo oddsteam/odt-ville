@@ -40,6 +40,16 @@ const TILESETS = [
 
 const LAYER_NAMES = ['road', 'pavement', 'buildings', 'props']
 
+// Named collision objects that should also visually occlude the player: when
+// the player stands north of one (its feet above the object's bottom edge), it
+// is drawn *under* the object so it doesn't paint over a car/bus it's walking
+// behind. Walking south of it, the player is in front (normal high depth).
+// `props` (the vehicle tiles) is the last tile layer at depth 3, so the
+// "behind" depth sits just under it but above the buildings layer (depth 2).
+const OCCLUDER_NAMES = new Set(['car', 'bus'])
+const PLAYER_FRONT_DEPTH = 100
+const PLAYER_BEHIND_DEPTH = 2.5
+
 // Building overlays — text panels / images drawn over a building at runtime,
 // anchored to the named objects in the Tiled `collisions` group (building1,
 // main-building, …). This is the programmatic alternative to baking labels
@@ -79,6 +89,7 @@ export default class TiledMapScene extends Phaser.Scene {
     this.showCollisions = false
     this.manifest = null
     this.dir = null // per-direction { animKey, idleFrame, flipX } lookup
+    this.occluders = [] // [{ left, top, right, bottom }] vehicles to y-sort behind
   }
 
   preload() {
@@ -120,6 +131,11 @@ export default class TiledMapScene extends Phaser.Scene {
     const objLayer = map.getObjectLayer('collisions')
     this.blocked = rasterizeCollisions(objLayer?.objects ?? [], this.cols, this.rows, TILE)
 
+    // Vehicles (named collision objects) double as y-sort occluders.
+    this.occluders = (objLayer?.objects ?? [])
+      .filter((o) => OCCLUDER_NAMES.has(o.name) && o.width && o.height)
+      .map((o) => ({ left: o.x, top: o.y, right: o.x + o.width, bottom: o.y + o.height }))
+
     // Collision overlay (toggle with C) — drawn above tiles, below player.
     const gfx = this.add.graphics().setDepth(50)
     gfx.fillStyle(0xff3b3b, 0.38)
@@ -151,9 +167,10 @@ export default class TiledMapScene extends Phaser.Scene {
       : this.add.rectangle(0, 0, TILE * 0.7, TILE * 0.7, 0x2e7dff).setStrokeStyle(2, 0xffffff)
     this.player
       .setOrigin(render.originX, render.originY)
-      .setDepth(100)
+      .setDepth(PLAYER_FRONT_DEPTH)
     if (render.scale && render.scale !== 1) this.player.setScale(render.scale)
     this.placePlayer(spawn.x, spawn.y)
+    this.updatePlayerDepth()
     this.applyFacing('down', false)
     this.cameras.main.startFollow(this.player, true, 0.18, 0.18)
 
@@ -204,6 +221,7 @@ export default class TiledMapScene extends Phaser.Scene {
 
     this.moving = true
     this.playerTile = { x: tx, y: ty }
+    this.updatePlayerDepth() // re-sort against vehicles for the destination tile
     const dest = this.tilePos(tx, ty) // bottom-anchored origin → feet on the tile
     this.tweens.add({
       targets: this.player,
@@ -304,6 +322,25 @@ export default class TiledMapScene extends Phaser.Scene {
   placePlayer(x, y) {
     const p = this.tilePos(x, y)
     this.player.setPosition(p.x, p.y)
+  }
+
+  // Y-sort the player against vehicle occluders. When its feet are above an
+  // occluder's bottom edge (and it horizontally overlaps), it's "behind" the
+  // vehicle → draw under the props layer; otherwise keep it on top. The upper
+  // bound (top − 1.5 tiles) means only a near-overlap counts, so a player far
+  // to the north isn't needlessly sunk behind unrelated props.
+  updatePlayerDepth() {
+    if (!this.player) return
+    const cx = this.playerTile.x * TILE + TILE / 2
+    const feetY = (this.playerTile.y + 1) * TILE
+    const behind = this.occluders.some(
+      (o) =>
+        cx >= o.left &&
+        cx <= o.right &&
+        feetY <= o.bottom &&
+        feetY >= o.top - TILE * 1.5,
+    )
+    this.player.setDepth(behind ? PLAYER_BEHIND_DEPTH : PLAYER_FRONT_DEPTH)
   }
 
   // Stamp overlays onto the rectangles drawn in the Tiled `signs` layer. The
