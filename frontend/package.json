@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "map:build": "node ../scripts/tmx-to-tiledjson.mjs public/maps/downtown.tmx public/maps/downtown.json"
   },
   "dependencies": {
     "phaser": "^4.1.0",

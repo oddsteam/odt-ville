@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <map version="1.10" tiledversion="1.12.2" orientation="oblique" renderorder="right-down" width="30" height="20" tilewidth="32" tileheight="32" infinite="0" nextlayerid="15" nextobjectid="37">
- <tileset firstgid="1" source="../../../1_Terrains_and_Fences_32x32.tsx"/>
- <tileset firstgid="2369" source="../../../2_City_Terrains_32x32.tsx"/>
- <tileset firstgid="8446" source="../../../5_Floor_Modular_Buildings_32x32.tsx"/>
- <tileset firstgid="16734" source="../../../4_Generic_Buildings_32x32.tsx"/>
- <tileset firstgid="23134" source="../../../10_Vehicles_32x32.tsx"/>
- <tileset firstgid="28510" source="Interiors_free_32x32.tsx"/>
+ <tileset firstgid="1" source="tilesets/1_Terrains_and_Fences_32x32.tsx"/>
+ <tileset firstgid="2369" source="tilesets/2_City_Terrains_32x32.tsx"/>
+ <tileset firstgid="8446" source="tilesets/5_Floor_Modular_Buildings_32x32.tsx"/>
+ <tileset firstgid="16734" source="tilesets/4_Generic_Buildings_32x32.tsx"/>
+ <tileset firstgid="23134" source="tilesets/10_Vehicles_32x32.tsx"/>
+ <tileset firstgid="28510" source="tilesets/Interiors_free_32x32.tsx"/>
  <layer id="1" name="road" width="30" height="20">
   <data encoding="csv">
 2665,2665,2665,2665,2665,2665,2665,2665,2665,2665,2665,2665,2665,2665,2665,2665,2665,2665,2665,2665,2665,2665,2665,2665,2665,2665,2665,2665,2665,2665,
