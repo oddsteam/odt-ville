@@ -18,6 +18,12 @@ Rails.application.routes.draw do
       # Village game session — spawn point + last visited (game-only).
       get  "game/session", to: "game_sessions#show"
       put  "game/session", to: "game_sessions#update"
+
+      # Character sprite manifests — saved by the sprite-mapper tool, read by
+      # the game/preview. `active` is the single live character.
+      resources :character_manifests, only: [:index, :create] do
+        get :active, on: :collection
+      end
     end
   end
 end

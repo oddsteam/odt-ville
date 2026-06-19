@@ -7,6 +7,7 @@ import {
   emptyPostures,
   normalizeManifest,
   saveActiveManifest,
+  saveActiveManifestRemote,
   downloadManifest,
   loadActiveManifest,
 } from '../character/manifest.js'
@@ -115,6 +116,19 @@ export default function SpriteMapper() {
     )
   }
 
+  async function onSaveRemote() {
+    if (!requireSheet()) return
+    setStatus('Saving to server…')
+    try {
+      const saved = await saveActiveManifestRemote(buildManifest())
+      setStatus(
+        `Saved to server as "${saved?.name ?? name}" — now the active character everywhere. Open /map-preview.html to see it.`,
+      )
+    } catch (err) {
+      setStatus(`Server save failed: ${err.message}`)
+    }
+  }
+
   function onDownload() {
     if (!requireSheet()) return
     const note = downloadManifest(buildManifest())
@@ -184,8 +198,11 @@ export default function SpriteMapper() {
             style={{ width: 48 }}
           />
         </label>
-        <button type="button" onClick={onSave}>
-          Save (live)
+        <button type="button" onClick={onSave} title="Save to this browser only (localStorage)">
+          Save (local)
+        </button>
+        <button type="button" onClick={onSaveRemote} title="Save to the backend — shared across browsers and origins">
+          Save (server)
         </button>
         <button type="button" onClick={onDownload}>
           Download JSON

@@ -89,6 +89,10 @@ function cap(s) {
 
 // --- persistence -------------------------------------------------------
 
+// Backend API for shared, cross-origin persistence (see the Rails
+// character_manifests controller). The dev server proxies /api to Rails.
+const API_BASE = '/api/v1'
+
 export function saveActiveManifest(m) {
   try {
     localStorage.setItem(ACTIVE_KEY, JSON.stringify(m))
@@ -100,9 +104,45 @@ export function saveActiveManifest(m) {
   }
 }
 
-// Read the active manifest from localStorage, else fetch the committed
-// default. Always returns a normalized manifest (never throws).
+// Persist the manifest to the backend so every browser and origin sees it,
+// and make it the single active character. Throws on failure (the caller
+// surfaces the message); does NOT touch localStorage.
+export async function saveActiveManifestRemote(m) {
+  const res = await fetch(`${API_BASE}/character_manifests`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ manifest: normalizeManifest(m), active: true }),
+  })
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '')
+    throw new Error(`Save failed (${res.status})${detail ? `: ${detail}` : ''}`)
+  }
+  const text = await res.text()
+  return text ? JSON.parse(text) : null
+}
+
+// Fetch the active manifest from the backend. Returns a normalized manifest,
+// or null when nothing is saved (204) or the backend is unreachable.
+async function fetchRemoteActive() {
+  try {
+    const res = await fetch(`${API_BASE}/character_manifests/active`)
+    if (res.status === 204 || !res.ok) return null
+    const text = await res.text()
+    if (!text) return null
+    const payload = JSON.parse(text)
+    return payload?.data ? normalizeManifest(payload.data) : null
+  } catch (err) {
+    console.warn('fetching remote manifest failed:', err)
+    return null
+  }
+}
+
+// Resolve the active manifest, preferring shared backend state, then this
+// browser's localStorage, then the committed default. Always returns a
+// normalized manifest (never throws).
 export async function loadActiveManifest() {
+  const remote = await fetchRemoteActive()
+  if (remote) return remote
   try {
     const raw = localStorage.getItem(ACTIVE_KEY)
     if (raw) return normalizeManifest(JSON.parse(raw))
