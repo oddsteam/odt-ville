@@ -1,6 +1,11 @@
 import Phaser from 'phaser'
 import { TILE, MOVE_MS, PLAYER_FEET_LIFT, buildTown, tileChar } from '../../constants.js'
 import { ensureTileTextures } from '../tileTextures.js'
+import {
+  ENABLED as TILESET_ENABLED,
+  PROPS,
+  tallPropsFor,
+} from '../townTileset.js'
 import bus from '../bus.js'
 import {
   GATE_TRAINER,
@@ -36,6 +41,7 @@ export default class TownScene extends Phaser.Scene {
     this.movingTween = null
     this.town = null
     this.buildings = [] // [{ community, col, row, w, h, doorCol, doorRow, sprite }]
+    this.propCells = new Set() // "x,y" tiles blocked by tall props (atlas mode)
     this.heldDirs = []
     // When InteriorScene exits via the doormat it scene.starts us with
     // `{ exitedCommunityId }`; we honor that over session-based spawn so
@@ -91,6 +97,12 @@ export default class TownScene extends Phaser.Scene {
     // these as Vite-resolved URLs; we just reuse them so the engines
     // share one source of truth for the opponent table.
     this.load.image('trainer.boss-k', GATE_TRAINER.sprite)
+
+    // Tall-prop art (see townTileset.js) — trees, loaded under their own
+    // texture keys for the overlay pass.
+    if (TILESET_ENABLED) {
+      for (const prop of Object.values(PROPS)) this.load.image(prop.key, prop.url)
+    }
   }
 
   create() {
@@ -120,10 +132,17 @@ export default class TownScene extends Phaser.Scene {
     for (let y = 0; y < this.town.rows; y++) {
       for (let x = 0; x < this.town.cols; x++) {
         const ch = this.town.map[y][x]
-        const key = keyForTileChar(ch)
+        // Boundary trees ('T') render as tall props over grass, so lay grass
+        // under them instead of the flat generated tree tile.
+        const groundCh = TILESET_ENABLED && ch === 'T' ? '.' : ch
+        const key = keyForTileChar(groundCh)
         if (key) this.add.image(x * TILE, y * TILE, key).setOrigin(0, 0).setDepth(0)
       }
     }
+
+    // Tall props (trees) — bottom-anchored sprites that overflow their tile
+    // and y-sort against the player.
+    if (TILESET_ENABLED) this.addTallProps()
 
     // Buildings — placement sorted by position_order, dropped onto the
     // town's plots in turn. Same shape as buildBuildings() in VillageGame.
@@ -364,6 +383,7 @@ export default class TownScene extends Phaser.Scene {
       return false
     }
     if (this.trainer && this.trainer.x === x && this.trainer.y === y) return false
+    if (this.propCells.has(`${x},${y}`)) return false
     return true
   }
 
@@ -486,6 +506,24 @@ export default class TownScene extends Phaser.Scene {
     }
 
     return roof
+  }
+
+  // Render tall props from the atlas (townTileset.tallPropsFor). Each is
+  // bottom-anchored on its tile so it overflows upward, and depth-sorted by
+  // its base row so the player passes in front of / behind it correctly. A
+  // prop flagged `blocks` adds its base tile to propCells for walkability.
+  addTallProps() {
+    this.propCells.clear()
+    for (const { key, col, row } of tallPropsFor(this.town)) {
+      const def = PROPS[key]
+      if (!def || !this.textures.exists(key)) continue
+      this.add
+        .image(col * TILE + TILE / 2, (row + 1) * TILE, key)
+        .setOrigin(0.5, 1)
+        .setDisplaySize((def.wTiles || 1) * TILE, (def.hTiles || 1) * TILE)
+        .setDepth((row + 1) * 10 - 1)
+      if (def.blocks) this.propCells.add(`${col},${row}`)
+    }
   }
 
   spawnPlayer(session) {
