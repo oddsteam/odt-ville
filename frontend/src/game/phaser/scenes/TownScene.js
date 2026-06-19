@@ -144,6 +144,17 @@ export default class TownScene extends Phaser.Scene {
     // and y-sort against the player.
     if (TILESET_ENABLED) this.addTallProps()
 
+    // Tile-grid overlay (debug/authoring aid) — toggle with G. Drawn above
+    // everything so tile boundaries are visible over ground, buildings, and
+    // props. Hidden by default.
+    const grid = this.add.graphics().setDepth(9000)
+    grid.lineStyle(1, 0xffffff, 0.22)
+    for (let x = 0; x <= this.town.cols; x++) grid.lineBetween(x * TILE, 0, x * TILE, worldH)
+    for (let y = 0; y <= this.town.rows; y++) grid.lineBetween(0, y * TILE, worldW, y * TILE)
+    grid.setVisible(false)
+    this.gridGfx = grid
+    this.showGrid = false
+
     // Buildings — placement sorted by position_order, dropped onto the
     // town's plots in turn. Same shape as buildBuildings() in VillageGame.
     const sorted = [...communities].sort((a, b) => a.position_order - b.position_order)
@@ -169,6 +180,11 @@ export default class TownScene extends Phaser.Scene {
       down: Phaser.Input.Keyboard.KeyCodes.S,
       left: Phaser.Input.Keyboard.KeyCodes.A,
       right: Phaser.Input.Keyboard.KeyCodes.D,
+    })
+    // G toggles the tile-grid overlay (authoring aid).
+    this.input.keyboard.on('keydown-G', () => {
+      this.showGrid = !this.showGrid
+      this.gridGfx.setVisible(this.showGrid)
     })
     // Overlay D-pad — React emits press/release events on the bus so
     // we drive movement from tap/click input the same way keyboard

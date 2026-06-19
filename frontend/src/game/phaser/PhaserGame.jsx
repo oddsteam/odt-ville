@@ -195,7 +195,7 @@ export default function PhaserGame({
           <div className="phaser-host" ref={hostRef} />
 
           <div className="screen-overlay">
-            <p className="overlay-hint">Arrows / WASD walk · A to interact</p>
+            <p className="overlay-hint">Arrows / WASD walk · A to interact · G grid</p>
 
             <div className="overlay-slot overlay-tr">
               {dailyBrief}
