@@ -24,6 +24,12 @@ Rails.application.routes.draw do
       resources :character_manifests, only: [:index, :create] do
         get :active, on: :collection
       end
+
+      # Tile objects — trees/props cropped from an atlas in the tile-object
+      # mapper, rendered on the town map. `active?kind=` is the live one.
+      resources :tile_objects, only: [:index, :create] do
+        get :active, on: :collection
+      end
     end
   end
 end

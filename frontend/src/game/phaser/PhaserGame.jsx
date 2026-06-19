@@ -54,6 +54,7 @@ const DESIGN_HEIGHT = 912
 export default function PhaserGame({
   communities,
   session,
+  treeObject,
   dailyBrief,
   activeCommunityId,
   onEnterCommunity,
@@ -105,6 +106,7 @@ export default function PhaserGame({
     game.registry.set('assets', ASSETS)
     game.registry.set('communities', communities)
     game.registry.set('session', session)
+    game.registry.set('treeObject', treeObject || null)
     game.registry.set('trainerDefeated', Boolean(trainerDefeated))
 
     gameRef.current = game
@@ -144,6 +146,15 @@ export default function PhaserGame({
     if (!game) return
     game.registry.set('session', session)
   }, [session])
+
+  // Like communities/session, the tree object is a scene-boot input: the
+  // scene reads it once in preload(). Pushing it keeps the registry fresh so
+  // the next VillageGame mount / reload renders the latest tree.
+  useEffect(() => {
+    const game = gameRef.current
+    if (!game) return
+    game.registry.set('treeObject', treeObject || null)
+  }, [treeObject])
 
   useEffect(() => {
     const game = gameRef.current

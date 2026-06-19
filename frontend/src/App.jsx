@@ -4,6 +4,7 @@ import CommunitiesAdminPanel from './communities/CommunitiesAdminPanel.jsx'
 import DailyBriefShortcut from './communities/DailyBriefShortcut.jsx'
 import { listCommunities, getFeed } from './communities/client.js'
 import { getGameSession, saveGameSession } from './game-session/client.js'
+import { getActiveTileObject } from './tileObjects/client.js'
 
 // Demo target for every board's "open content list" action. Replaced in a
 // follow-up by per-board content-list views (see issue #15 follow-ups).
@@ -44,6 +45,9 @@ export default function App() {
   const [communities, setCommunities] = useState(null)
   const [session, setSession] = useState(null)
   const [feed, setFeed] = useState([])
+  // The admin-defined tree object (tile-object mapper), rendered by the game.
+  // Optional enhancement — null is fine and falls back to the bundled tree.
+  const [treeObject, setTreeObject] = useState(null)
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -51,14 +55,19 @@ export default function App() {
   // Town-scene state — fetched on mount and after any communities-mutating
   // action so the game always sees fresh communities + session + feed.
   const loadTown = useCallback(async () => {
-    const [c, s, f] = await Promise.all([
+    const [c, s, f, tree] = await Promise.all([
       listCommunities(),
       getGameSession(),
       getFeed(),
+      // Best-effort: the tree object is a visual enhancement, so swallow any
+      // failure (e.g. endpoint not migrated on this env) and fall back to null
+      // — never let it break the town load.
+      getActiveTileObject('tree').catch(() => null),
     ])
     setCommunities(c)
     setSession(s)
     setFeed(f)
+    setTreeObject(tree)
   }, [])
 
   useEffect(() => {
@@ -211,6 +220,7 @@ export default function App() {
           <VillageGame
             communities={communities}
             session={session}
+            treeObject={treeObject}
             dailyBrief={
               <DailyBriefShortcut items={feed} onClose={handleDailyBriefClose} />
             }

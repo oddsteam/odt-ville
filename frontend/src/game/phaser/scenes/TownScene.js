@@ -98,9 +98,13 @@ export default class TownScene extends Phaser.Scene {
     // share one source of truth for the opponent table.
     this.load.image('trainer.boss-k', GATE_TRAINER.sprite)
 
-    // Tall-prop art (see townTileset.js) — trees, loaded under their own
-    // texture keys for the overlay pass.
-    if (TILESET_ENABLED) {
+    // Tall-prop art for the overlay pass. An admin-defined tree object
+    // (tile-object mapper → registry) wins; otherwise the bundled tree art
+    // from townTileset.js is used.
+    this._treeObject = this.registry.get('treeObject') || null
+    if (this._treeObject?.image) {
+      this.load.image('prop.tree', this._treeObject.image)
+    } else if (TILESET_ENABLED) {
       for (const prop of Object.values(PROPS)) this.load.image(prop.key, prop.url)
     }
   }
@@ -141,8 +145,9 @@ export default class TownScene extends Phaser.Scene {
     }
 
     // Tall props (trees) — bottom-anchored sprites that overflow their tile
-    // and y-sort against the player.
-    if (TILESET_ENABLED) this.addTallProps()
+    // and y-sort against the player. Runs if either the bundled art or an
+    // admin tree object is available.
+    if (TILESET_ENABLED || this._treeObject?.image) this.addTallProps()
 
     // Tile-grid overlay (debug/authoring aid) — toggle with G. Drawn above
     // everything so tile boundaries are visible over ground, buildings, and
@@ -530,15 +535,21 @@ export default class TownScene extends Phaser.Scene {
   // prop flagged `blocks` adds its base tile to propCells for walkability.
   addTallProps() {
     this.propCells.clear()
+    const tree = this._treeObject
     for (const { key, col, row } of tallPropsFor(this.town)) {
+      if (!this.textures.exists(key)) continue
       const def = PROPS[key]
-      if (!def || !this.textures.exists(key)) continue
+      // Footprint: an admin tree object wins for the tree key; otherwise the
+      // bundled prop definition.
+      const useTree = key === 'prop.tree' && tree
+      const wTiles = (useTree ? tree.footprint_w : def?.wTiles) || 1
+      const hTiles = (useTree ? tree.footprint_h : def?.hTiles) || 1
       this.add
         .image(col * TILE + TILE / 2, (row + 1) * TILE, key)
         .setOrigin(0.5, 1)
-        .setDisplaySize((def.wTiles || 1) * TILE, (def.hTiles || 1) * TILE)
+        .setDisplaySize(wTiles * TILE, hTiles * TILE)
         .setDepth((row + 1) * 10 - 1)
-      if (def.blocks) this.propCells.add(`${col},${row}`)
+      if (def?.blocks) this.propCells.add(`${col},${row}`)
     }
   }
 

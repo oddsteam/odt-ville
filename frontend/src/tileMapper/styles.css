@@ -1,0 +1,49 @@
+* { box-sizing: border-box; }
+body { margin: 0; font-family: system-ui, sans-serif; background: #1b1b22; color: #e8e8ee; }
+
+.tilemapper { display: flex; flex-direction: column; height: 100vh; }
+
+.bar {
+  display: flex; align-items: center; gap: 16px;
+  padding: 10px 16px; background: #24242e; border-bottom: 1px solid #34343f;
+}
+.bar h1 { font-size: 16px; margin: 0 8px 0 0; }
+.bar label { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+.bar input[type='number'] { background: #15151b; color: #e8e8ee; border: 1px solid #3a3a47; border-radius: 4px; padding: 3px 6px; }
+.bar input[type='file'] { font-size: 12px; max-width: 200px; }
+.zoom-ctl { display: inline-flex; align-items: center; gap: 6px; }
+.zoom-ctl button { width: 26px; height: 26px; border: 1px solid #3a3a47; background: #15151b; color: #e8e8ee; border-radius: 4px; cursor: pointer; }
+.zoom-val { min-width: 28px; text-align: center; }
+
+.status { padding: 8px 16px; background: #2a2a36; font-size: 13px; border-bottom: 1px solid #34343f; }
+
+.cols { display: flex; flex: 1; min-height: 0; }
+.left { flex: 1; overflow: auto; padding: 16px; }
+.right {
+  width: 300px; flex-shrink: 0; padding: 16px; background: #20202a;
+  border-left: 1px solid #34343f; display: flex; flex-direction: column; gap: 12px;
+}
+.right h3 { margin: 4px 0; font-size: 13px; text-transform: uppercase; color: #9a9ab0; }
+.right label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.right input, .right select {
+  background: #15151b; color: #e8e8ee; border: 1px solid #3a3a47;
+  border-radius: 4px; padding: 5px 8px;
+}
+.fp { display: flex; gap: 12px; }
+
+.canvas-wrap { display: inline-block; background: #101015; border: 1px solid #34343f; }
+.canvas-wrap canvas { display: block; cursor: crosshair; image-rendering: pixelated; }
+.empty { padding: 40px; color: #6a6a7a; }
+
+.preview-box {
+  min-height: 96px; display: flex; align-items: center; justify-content: center;
+  background: #101015; border: 1px solid #34343f; border-radius: 6px; padding: 12px;
+}
+.preview-box canvas { image-rendering: pixelated; }
+.hint { color: #6a6a7a; font-size: 13px; margin: 0; }
+
+.save {
+  margin-top: auto; padding: 10px; font-size: 14px; font-weight: 600;
+  background: #2e7dff; color: #fff; border: 0; border-radius: 6px; cursor: pointer;
+}
+.save:disabled { background: #3a3a47; color: #6a6a7a; cursor: not-allowed; }

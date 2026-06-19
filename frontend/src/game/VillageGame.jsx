@@ -28,6 +28,7 @@ import PhaserGame from './phaser/PhaserGame.jsx'
 export default function VillageGame({
   communities,
   session,
+  treeObject,
   dailyBrief,
   activeCommunityId,
   onEnterCommunity,
@@ -40,6 +41,7 @@ export default function VillageGame({
     <PhaserGame
       communities={communities}
       session={session}
+      treeObject={treeObject}
       dailyBrief={dailyBrief}
       activeCommunityId={activeCommunityId}
       onEnterCommunity={onEnterCommunity}

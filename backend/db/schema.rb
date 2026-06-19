@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_19_000001) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_19_000002) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -66,6 +66,19 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_19_000001) do
     t.datetime "updated_at", null: false
     t.index ["company_id", "position_order"], name: "index_houses_on_company_id_and_position_order"
     t.index ["company_id"], name: "index_houses_on_company_id"
+  end
+
+  create_table "tile_objects", force: :cascade do |t|
+    t.boolean "active", default: false, null: false
+    t.datetime "created_at", null: false
+    t.float "footprint_h", default: 1.0, null: false
+    t.float "footprint_w", default: 1.0, null: false
+    t.text "image", null: false
+    t.string "kind", default: "prop", null: false
+    t.string "name", null: false
+    t.datetime "updated_at", null: false
+    t.index ["kind"], name: "index_tile_objects_one_active_per_kind", unique: true, where: "active"
+    t.index ["name"], name: "index_tile_objects_on_name", unique: true
   end
 
   create_table "user_content_states", force: :cascade do |t|
