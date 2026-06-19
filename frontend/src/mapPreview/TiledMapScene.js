@@ -122,9 +122,6 @@ export default class TiledMapScene extends Phaser.Scene {
       if (layer) layer.setDepth(depth++)
     }
 
-    const worldW = this.cols * TILE
-    const worldH = this.rows * TILE
-    this.cameras.main.setBounds(0, 0, worldW, worldH)
     this.cameras.main.setBackgroundColor('#1b1b22')
 
     // --- collisions: rasterize the object group onto the tile grid ------
@@ -172,7 +169,11 @@ export default class TiledMapScene extends Phaser.Scene {
     this.placePlayer(spawn.x, spawn.y)
     this.updatePlayerDepth()
     this.applyFacing('down', false)
-    this.cameras.main.startFollow(this.player, true, 0.18, 0.18)
+    // Frame the camera now and on every window resize. A map smaller than the
+    // viewport is centered; a larger map follows the player within bounds.
+    this.frameCamera()
+    this.scale.on('resize', this.frameCamera, this)
+    this.events.once('shutdown', () => this.scale.off('resize', this.frameCamera, this))
 
     // --- input ----------------------------------------------------------
     this.cursors = this.input.keyboard.createCursorKeys()
@@ -188,6 +189,24 @@ export default class TiledMapScene extends Phaser.Scene {
     })
 
     this.addHud(map)
+  }
+
+  // Center a small map; follow the player on a map larger than the viewport.
+  // Without bounds, Phaser doesn't clamp scroll, so a centered small map stays
+  // put instead of being pinned to the top-left corner. Re-run on resize since
+  // which case applies depends on the current window size.
+  frameCamera() {
+    const cam = this.cameras.main
+    const worldW = this.cols * TILE
+    const worldH = this.rows * TILE
+    if (worldW <= cam.width && worldH <= cam.height) {
+      cam.stopFollow()
+      cam.removeBounds()
+      cam.centerOn(worldW / 2, worldH / 2)
+    } else {
+      cam.setBounds(0, 0, worldW, worldH)
+      cam.startFollow(this.player, true, 0.18, 0.18)
+    }
   }
 
   update() {
