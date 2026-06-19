@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react'
 import SheetCanvas from './SheetCanvas.jsx'
 import PosturePanel from './PosturePanel.jsx'
 import AnimPreview from './AnimPreview.jsx'
+import CharacterRoster from './CharacterRoster.jsx'
 import {
   POSTURE_SLOTS,
   emptyPostures,
@@ -37,6 +38,7 @@ export default function SpriteMapper() {
   const [name, setName] = useState('scout')
   const [frameRate, setFrameRate] = useState(9)
   const [status, setStatus] = useState('')
+  const [rosterSignal, setRosterSignal] = useState(0) // bump to refresh the roster
 
   const selectBundled = useCallback(async (value) => {
     const b = BUNDLED.find((x) => x.name === value)
@@ -124,6 +126,7 @@ export default function SpriteMapper() {
       setStatus(
         `Saved to server as "${saved?.name ?? name}" — now the active character everywhere. Open /map-preview.html to see it.`,
       )
+      setRosterSignal((n) => n + 1)
     } catch (err) {
       setStatus(`Server save failed: ${err.message}`)
     }
@@ -135,11 +138,12 @@ export default function SpriteMapper() {
     setStatus(note ? `Downloaded JSON. ${note}` : 'Downloaded JSON — commit it under public/maps/characters/.')
   }
 
-  async function onLoadCurrent() {
-    const m = await loadActiveManifest()
+  // Load a normalized manifest into the editor. Shared by "Load current" and
+  // the roster's per-character "Load" button.
+  const applyManifest = useCallback((m) => {
     const src = m.sheet.dataUrl || m.sheet.path
     if (!src) {
-      setStatus('The current manifest has no sheet.')
+      setStatus('That manifest has no sheet.')
       return
     }
     setSheet({
@@ -154,7 +158,11 @@ export default function SpriteMapper() {
     setName(m.name || 'character')
     setFrameRate(m.frameRate || 9)
     setPostures({ ...emptyPostures(), ...m.postures })
-    setStatus(`Loaded current manifest "${m.name}".`)
+    setStatus(`Loaded manifest "${m.name}".`)
+  }, [])
+
+  async function onLoadCurrent() {
+    applyManifest(await loadActiveManifest())
   }
 
   const toggleFrame = useCallback(
@@ -294,6 +302,8 @@ export default function SpriteMapper() {
           />
         </div>
       </div>
+
+      <CharacterRoster reloadSignal={rosterSignal} onLoad={applyManifest} />
     </div>
   )
 }

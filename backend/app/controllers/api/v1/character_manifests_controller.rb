@@ -7,6 +7,13 @@ module Api
         render json: manifests.map { |m| CharacterManifestSerializer.summary(m) }
       end
 
+      # GET /api/v1/character_manifests/:id — full manifest (incl. data blob),
+      # used by the roster to animate each saved character.
+      def show
+        manifest = CharacterManifest.find(params[:id])
+        render json: CharacterManifestSerializer.call(manifest)
+      end
+
       # GET /api/v1/character_manifests/active — the live character the game
       # and map preview load. 204 when nothing has been saved yet.
       def active

@@ -9,9 +9,13 @@ body {
   font-size: 14px;
 }
 .mapper {
-  height: 100vh;
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
+}
+/* The editor fills the first viewport; the roster sits below it (page scrolls). */
+.mapper > .cols {
+  height: calc(100vh - 92px);
 }
 .bar {
   display: flex;
@@ -240,4 +244,94 @@ button:hover {
   background: #b03b3b;
   line-height: 1;
   font-size: 13px;
+}
+
+/* --- saved-character roster -------------------------------------------- */
+.roster {
+  border-top: 2px solid #2c2c3a;
+  padding: 12px 14px 20px;
+}
+.roster-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.roster-head h3 {
+  margin: 0;
+  font-size: 14px;
+  color: #b9b9c8;
+}
+.roster-head button {
+  background: #2c2c3a;
+  color: #e8e8ef;
+  border: 1px solid #3a3a4c;
+  border-radius: 4px;
+  padding: 3px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.roster-error {
+  color: #ff9a9a;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+.roster-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.roster-card {
+  width: 132px;
+  background: #1a1a22;
+  border: 1px solid #3a3a4c;
+  border-radius: 6px;
+  padding: 8px;
+  text-align: center;
+}
+.roster-card.is-active {
+  border-color: #ffd479;
+}
+.roster-anim {
+  min-height: 64px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: #0f0f15;
+  border-radius: 4px;
+  padding: 4px 0;
+}
+.roster-name {
+  margin: 6px 0;
+  font-size: 13px;
+  word-break: break-word;
+}
+.roster-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: #ffd479;
+  color: #14141a;
+  font-size: 10px;
+  vertical-align: middle;
+}
+.roster-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+}
+.roster-actions button {
+  flex: 1;
+  background: #2c2c3a;
+  color: #e8e8ef;
+  border: 1px solid #3a3a4c;
+  border-radius: 4px;
+  padding: 3px 0;
+  font-size: 12px;
+  cursor: pointer;
+}
+.roster-actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
 }

@@ -21,7 +21,7 @@ Rails.application.routes.draw do
 
       # Character sprite manifests — saved by the sprite-mapper tool, read by
       # the game/preview. `active` is the single live character.
-      resources :character_manifests, only: [:index, :create] do
+      resources :character_manifests, only: [:index, :create, :show] do
         get :active, on: :collection
       end
 
