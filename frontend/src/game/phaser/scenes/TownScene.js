@@ -689,7 +689,14 @@ export default class TownScene extends Phaser.Scene {
 
         // Base layers — a terrain's own cells, plus a one-tile halo but only
         // under grass (so a road/dirt cell is never covered by the other base).
-        if (road && (ch === ':' || (isGrass && nearType(x, y, 'road')))) stamp(x, y, road, 0, 'roadBase')
+        // Road is the bottom-most base, so it spills freely: every road cell
+        // plus a one-tile halo on all sides. Anything opaque above (the dirt
+        // field, grass fill) covers the spill; grass edges reveal it. The base
+        // doesn't care how the top layers render.
+        if (road && (ch === ':' || nearType(x, y, 'road'))) stamp(x, y, road, 0, 'roadBase')
+        // Dirt sits above road (depth 0.1), so its halo stays grass-only — it
+        // must not paint over a road cell, or the entrance-stem road that cuts
+        // through the field would disappear under it.
         if (dirt && (ch === 'g' || (isGrass && nearType(x, y, 'dirt')))) stamp(x, y, dirt, 0.1, 'dirtBase')
 
         // Surface layer.
