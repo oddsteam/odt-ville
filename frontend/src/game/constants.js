@@ -89,7 +89,12 @@ export function buildTown(plotCount) {
   // encountered. The entrance stem cuts a safe (no-encounter) path through it.
   const fieldTop = 1 + TOP_MARGIN + numRows * BAND_H + FIELD_GAP
   const fieldBottom = fieldTop + FIELD_H - 1
-  const fieldLeft = 3
+  // Start the field at x=4, not x=3, so there are two grass tiles (x2,x3)
+  // between the side-avenue road (x1) and the field. A single grass tile there
+  // would have to transition to road on one side and dirt on the other at once,
+  // which the 3x3 edge set can't express (the two opposite edges overlap into
+  // solid grass). Two tiles give each side its own clean single-edge cell.
+  const fieldLeft = 4
   const fieldRight = cols - 4
 
   // Ground tile for (x,y): T tree / s sign (blocked) · . grass / : path /
