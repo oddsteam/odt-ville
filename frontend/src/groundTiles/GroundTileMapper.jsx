@@ -59,6 +59,10 @@ export default function GroundTileMapper() {
   const [sel, setSel] = useState(null) // { c, r } single cell
   const [type, setType] = useState('grass')
   const [label, setLabel] = useState('')
+  // Boundary role: 'fill' (interior) or 'edge' (a transition tile facing a
+  // side). Side is only meaningful for edges; corners come later.
+  const [role, setRole] = useState('fill')
+  const [side, setSide] = useState('N')
   const [catalog, setCatalog] = useState([])
   const [status, setStatus] = useState('Pick a tileset, click a cell, set its type, then save.')
 
@@ -156,6 +160,8 @@ export default function GroundTileMapper() {
     if (existing) {
       setType(existing.tile_type)
       setLabel(existing.label || '')
+      setRole(existing.role || 'fill')
+      setSide(existing.side || 'N')
       setStatus(`Cell ${c},${r} is "${existing.tile_type}". Change its type and save, or delete it.`)
     } else {
       setStatus(`Cell ${c},${r} selected. Set a type and save.`)
@@ -169,8 +175,10 @@ export default function GroundTileMapper() {
     try {
       const saved = await saveGroundTile({
         tile_type: type.trim(), tileset, col: sel.c, row: sel.r, cell, label: label.trim(),
+        role, side: role === 'edge' ? side : null,
       })
-      setStatus(`Saved cell ${saved.col},${saved.row} as "${saved.tile_type}".`)
+      const desc = saved.role === 'edge' ? `${saved.tile_type} edge·${saved.side}` : saved.tile_type
+      setStatus(`Saved cell ${saved.col},${saved.row} as "${desc}".`)
       refreshCatalog()
     } catch (e) {
       setStatus(`Save failed: ${e.message}`)
@@ -247,6 +255,35 @@ export default function GroundTileMapper() {
             Label (optional)
             <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="plain grass" />
           </label>
+          <div className="role-block">
+            <span className="role-label">Role</span>
+            <div className="presets">
+              {['fill', 'edge'].map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  className={`preset${role === r ? ' on' : ''}`}
+                  onClick={() => setRole(r)}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
+            {role === 'edge' && (
+              <div className="presets sides">
+                {['N', 'E', 'S', 'W'].map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    className={`preset${side === s ? ' on' : ''}`}
+                    onClick={() => setSide(s)}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <button type="button" className="save" onClick={onSave} disabled={!sel}>
             {sel ? `Save cell ${sel.c},${sel.r}` : 'Click a cell first'}
           </button>
@@ -260,8 +297,11 @@ export default function GroundTileMapper() {
                 {byType[ty].map((t) => (
                   <div key={t.id} className="cat-row">
                     <Thumb tile={t} />
+                    <span className={`role-badge ${t.role}`}>
+                      {t.role === 'edge' ? `edge·${t.side || '?'}` : 'fill'}
+                    </span>
                     <span className="cat-meta">
-                      {t.tileset.replace(/_32x32$/, '')} · r{t.row} c{t.col}
+                      r{t.row} c{t.col}
                       {t.label ? <em> — {t.label}</em> : null}
                     </span>
                     <button type="button" className="del" onClick={() => onDelete(t.id)} title="Remove">×</button>

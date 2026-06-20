@@ -13,6 +13,8 @@ module GroundTileSerializer
       row: t.row,
       cell: t.cell,
       label: t.label,
+      role: t.role,
+      side: t.side,
       updated_at: t.updated_at
     }
   end

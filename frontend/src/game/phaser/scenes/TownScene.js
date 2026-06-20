@@ -167,34 +167,17 @@ export default class TownScene extends Phaser.Scene {
     this.cameras.main.setBounds(0, 0, worldW, worldH)
     this.physics?.world.setBounds(0, 0, worldW, worldH)
 
-    // Admin-tagged ground cells (ground-tile mapper), keyed by tile char.
-    // When a char has a catalog cell we stamp it from the tileset; otherwise
-    // the procedural texture (ensureTileTextures) is the fallback.
+    // Ground is rendered in stacked depth layers so the grass edge tiles (which
+    // are transparent on their outward side) reveal the terrain they border:
+    //   depth 0    road base — under road cells + a 1-tile halo into the grass
+    //   depth 0.1  dirt base — under the dirt field + a 1-tile halo into grass
+    //   depth 0.2  surface   — grass (fill or edge tiles); road/dirt cells draw
+    //                          nothing on top, so they stay full-strength and
+    //                          narrow roads are never overdrawn by grass.
+    // Fill + edge cells come from the ground-tile mapper; unknowns (the sign)
+    // fall back to the procedural textures.
     this.groundTiles = this.buildGroundTileMap()
-
-    // Ground layer — one image per tile. This is more sprites than a
-    // tilemap-backed approach, but tile count tops out around 24×19 today
-    // and Phaser batches identical-texture sprites efficiently.
-    for (let y = 0; y < this.town.rows; y++) {
-      for (let x = 0; x < this.town.cols; x++) {
-        const ch = this.town.map[y][x]
-        // Boundary trees ('T') render as tall props over grass, so lay grass
-        // under them instead of the flat generated tree tile.
-        const groundCh = TILESET_ENABLED && ch === 'T' ? '.' : ch
-        const gt = this.groundTiles[groundCh]
-        if (gt) {
-          // Catalog cell — source is 32-px; scale to the 48-px map tile.
-          this.add
-            .image(x * TILE, y * TILE, gt.key, gt.frame)
-            .setOrigin(0, 0)
-            .setDepth(0)
-            .setDisplaySize(TILE, TILE)
-        } else {
-          const key = keyForTileChar(groundCh)
-          if (key) this.add.image(x * TILE, y * TILE, key).setOrigin(0, 0).setDepth(0)
-        }
-      }
-    }
+    this.paintGround()
 
     // Tall props (trees) — bottom-anchored sprites that overflow their tile
     // and y-sort against the player. Runs if either the bundled art or an
@@ -577,6 +560,9 @@ export default class TownScene extends Phaser.Scene {
     const TYPE_TO_CHARS = { grass: ['.', '*'], dirt: ['g'], road: [':'] }
     const out = {}
     for (const t of this._groundTiles || []) {
+      // Only fill tiles paint the interior; edge tiles (role: 'edge') are
+      // resolved by the boundary pass — Step 2, not yet wired here.
+      if (t.role && t.role !== 'fill') continue
       const chars = TYPE_TO_CHARS[t.tile_type]
       if (!chars) continue
       const key = `gtset.${t.tileset}`
@@ -587,6 +573,93 @@ export default class TownScene extends Phaser.Scene {
       for (const ch of chars) out[ch] = cell
     }
     return out
+  }
+
+  // Edge tiles from the catalog, as `{ type: { side: { key, frame } } }`.
+  // Only role:'edge' tiles with a side; the fill map ignores these.
+  buildEdgeMap() {
+    const out = {}
+    for (const t of this._groundTiles || []) {
+      if (t.role !== 'edge' || !t.side) continue
+      const key = `gtset.${t.tileset}`
+      if (!this.textures.exists(key)) continue
+      const cols = Math.max(1, Math.floor(this.textures.get(key).getSourceImage().width / t.cell))
+      ;(out[t.tile_type] ||= {})[t.side] = { key, frame: t.row * cols + t.col }
+    }
+    return out
+  }
+
+  // Render the ground as stacked layers (see the call site in create()). Road
+  // and dirt form opaque bases under their own cells plus a one-tile halo into
+  // the bordering grass, so the grass surface's transparent edge tiles reveal
+  // them at the seam while the full road/dirt cells stay visible. The halo is
+  // grass-only — it never paints under another surface cell, so e.g. the
+  // entrance-stem road that cuts through the dirt field isn't clobbered.
+  paintGround() {
+    const fill = this.groundTiles
+    const edges = this.buildEdgeMap()
+    const road = fill[':'] || null
+    const dirt = fill.g || null
+    const grassFill = fill['.'] || null
+    const GRASS_CHARS = new Set(['.', '*', 'T'])
+    const DIRS = [
+      { d: 'N', dx: 0, dy: -1 },
+      { d: 'S', dx: 0, dy: 1 },
+      { d: 'E', dx: 1, dy: 0 },
+      { d: 'W', dx: -1, dy: 0 },
+    ]
+    const stamp = (x, y, t, depth) => {
+      if (!t) return
+      this.add
+        .image(x * TILE, y * TILE, t.key, t.frame)
+        .setOrigin(0, 0)
+        .setDepth(depth)
+        .setDisplaySize(TILE, TILE)
+    }
+    // Is any of the 8 neighbours of `type`? Used for the base halo.
+    const nearType = (x, y, type) => {
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (!dx && !dy) continue
+          if (typeForTileChar(tileChar(this.town, x + dx, y + dy)) === type) return true
+        }
+      }
+      return false
+    }
+
+    for (let y = 0; y < this.town.rows; y++) {
+      for (let x = 0; x < this.town.cols; x++) {
+        const ch = this.town.map[y][x]
+        const isGrass = GRASS_CHARS.has(ch)
+
+        // Base layers — a terrain's own cells, plus a one-tile halo but only
+        // under grass (so a road/dirt cell is never covered by the other base).
+        if (road && (ch === ':' || (isGrass && nearType(x, y, 'road')))) stamp(x, y, road, 0)
+        if (dirt && (ch === 'g' || (isGrass && nearType(x, y, 'dirt')))) stamp(x, y, dirt, 0.1)
+
+        // Surface layer.
+        if (ch === ':' || ch === 'g') continue // base is the surface — nothing on top
+        if (isGrass) {
+          // Grass border sides: an orthogonal non-grass neighbour with an edge
+          // tile. Each edge is mostly opaque grass with a transparent fringe
+          // toward that side, revealing the base below. No border → plain fill.
+          const sides = []
+          for (const { d, dx, dy } of DIRS) {
+            const nType = typeForTileChar(tileChar(this.town, x + dx, y + dy))
+            if (nType && nType !== 'grass' && edges.grass?.[d]) sides.push(d)
+          }
+          if (sides.length) {
+            for (const d of sides) stamp(x, y, edges.grass[d], 0.2)
+          } else {
+            stamp(x, y, grassFill, 0.2)
+          }
+          continue
+        }
+        // Sign + anything unrecognised: procedural texture (opaque) on top.
+        const key = keyForTileChar(ch)
+        if (key) this.add.image(x * TILE, y * TILE, key).setOrigin(0, 0).setDepth(0.2)
+      }
+    }
   }
 
   // Build the two-layer building sprite. We don't yet hue-rotate from
@@ -720,6 +793,26 @@ export default class TownScene extends Phaser.Scene {
 // or unspecified renders as a tree; ground tiles use their dedicated
 // textures so the scene matches the DOM engine's look as closely as
 // procedural shapes can manage.
+// Map a tile character to its ground *type* for edge-boundary detection.
+// Mirrors the fill mapping (grass '.'/'*', dirt 'g', road ':') and treats
+// boundary trees + signs as grass (their ground is grass underneath). Anything
+// unrecognised returns null → never an edge neighbour, never receives an edge.
+function typeForTileChar(ch) {
+  switch (ch) {
+    case '.':
+    case '*':
+    case 'T':
+    case 's':
+      return 'grass'
+    case 'g':
+      return 'dirt'
+    case ':':
+      return 'road'
+    default:
+      return null
+  }
+}
+
 function keyForTileChar(ch) {
   switch (ch) {
     case '.':

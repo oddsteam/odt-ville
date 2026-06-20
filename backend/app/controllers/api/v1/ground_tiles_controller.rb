@@ -21,10 +21,14 @@ module Api
         tile = GroundTile.find_or_initialize_by(
           tileset: tileset, col: params[:col].to_i, row: params[:row].to_i
         )
+        role = params[:role].presence || "fill"
         tile.assign_attributes(
           tile_type: type,
           cell: params[:cell].presence || tile.cell || 32,
-          label: params[:label].to_s
+          label: params[:label].to_s,
+          role: role,
+          # Side is meaningful only for edge tiles; a fill tile clears it.
+          side: role == "edge" ? params[:side].presence : nil
         )
         tile.save!
 

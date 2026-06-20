@@ -22,11 +22,11 @@ export function listGroundTiles(type) {
 }
 
 // POST /ground_tiles -> upsert one cell by (tileset, col, row).
-export function saveGroundTile({ tile_type, tileset, col, row, cell, label }) {
+export function saveGroundTile({ tile_type, tileset, col, row, cell, label, role, side }) {
   return request('/ground_tiles', {
     method: 'POST',
     headers: jsonHeaders,
-    body: JSON.stringify({ tile_type, tileset, col, row, cell, label }),
+    body: JSON.stringify({ tile_type, tileset, col, row, cell, label, role, side }),
   })
 }
 
