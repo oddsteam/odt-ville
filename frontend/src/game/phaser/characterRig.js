@@ -44,7 +44,14 @@ export function buildCharacterRig(scene, manifest) {
   const usingManifest = Boolean(manifest && scene.textures.exists(CHAR_SHEET_KEY))
   if (!usingManifest) {
     for (const d of Object.keys(charDir)) {
-      charDir[d] = { animKey: null, idleFrame: null, walkFlip: false, idleFlip: false }
+      charDir[d] = {
+        walkAnimKey: null,
+        walkFrame: null,
+        walkFlip: false,
+        idleAnimKey: null,
+        idleFrame: null,
+        idleFlip: false,
+      }
     }
     return { usingManifest, charDir }
   }
@@ -57,11 +64,13 @@ export function buildCharacterRig(scene, manifest) {
     })
   }
 
+  // A looping anim for every posture with 2+ frames — idle as well as walk, so
+  // a multi-frame idle (breathing/blink) animates instead of freezing on frame
+  // 0. Single-frame postures stay static (shown via setFrame).
   const frameRate = manifest.frameRate || 9
   for (const slot of POSTURE_KEYS) {
-    if (!slot.startsWith('walk')) continue
     const rects = manifest.postures?.[slot] || []
-    if (!rects.length) continue
+    if (rects.length < 2) continue
     const key = `char.anim.${slot}`
     if (!scene.anims.exists(key)) {
       scene.anims.create({
@@ -76,17 +85,25 @@ export function buildCharacterRig(scene, manifest) {
   for (const d of Object.keys(charDir)) {
     const walk = framesForFacing(manifest, d, 'walk')
     const idle = framesForFacing(manifest, d, 'idle')
+
+    // Idle: loop when the posture has 2+ frames, else a static frame. With no
+    // idle art, fall back to the walk posture's first frame.
     let idleFrame = null
     let idleFlip = idle.flipX
+    let idleAnimKey = null
     if (idle.frames.length) {
       idleFrame = `${idle.slot}.0`
+      if (idle.frames.length > 1) idleAnimKey = `char.anim.${idle.slot}`
     } else if (walk.frames.length) {
       idleFrame = `${walk.slot}.0`
       idleFlip = walk.flipX
     }
+
     charDir[d] = {
-      animKey: walk.frames.length ? `char.anim.${walk.slot}` : null,
+      walkAnimKey: walk.frames.length > 1 ? `char.anim.${walk.slot}` : null,
+      walkFrame: walk.frames.length ? `${walk.slot}.0` : null,
       walkFlip: walk.flipX,
+      idleAnimKey,
       idleFrame,
       idleFlip,
     }
@@ -100,21 +117,22 @@ export function characterScale(manifest) {
   return (render.scale || 1) * (TILE / CHAR_TILE_BASIS)
 }
 
-// Point the manifest sprite the right way: `walking` plays that direction's
-// loop (if any); otherwise snap to its idle frame. Directions with no own
+// Point the manifest sprite the right way. `walking` plays the walk loop; when
+// standing we play the idle loop (multi-frame idle) or snap to its idle frame.
+// Single-frame postures fall back to a static frame. Directions with no own
 // frames were resolved to the down posture (flipped, for left) in the rig.
 export function applyFacing(player, charDir, dir, walking) {
   if (!player?.anims || !charDir) return
   const cfg = charDir[dir]
   if (!cfg) return
-  if (walking && cfg.animKey) {
-    player.setFlipX(cfg.walkFlip)
-    player.anims.play(cfg.animKey, true)
+  const animKey = walking ? cfg.walkAnimKey : cfg.idleAnimKey
+  const flip = walking ? cfg.walkFlip : cfg.idleFlip
+  const frame = walking ? cfg.walkFrame : cfg.idleFrame
+  player.setFlipX(flip)
+  if (animKey) {
+    player.anims.play(animKey, true)
   } else {
     player.anims.stop()
-    if (cfg.idleFrame) {
-      player.setFlipX(cfg.idleFlip)
-      player.setFrame(cfg.idleFrame)
-    }
+    if (frame) player.setFrame(frame)
   }
 }
