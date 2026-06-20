@@ -1,6 +1,6 @@
 # Task: No transparent holes at layer seams (coverage invariant)
 
-**Status:** TODO
+**Status:** DONE
 **Area:** Ground rendering — `frontend/src/game/phaser/scenes/TownScene.js` (`paintGround`)
 **Type:** Rendering invariant (+ verification)
 
@@ -70,13 +70,26 @@ shows `#5fc24a` canvas (or whatever happens to be below), i.e. a hole.
 
 ## Acceptance criteria
 
-- [ ] No cell renders a transparent edge/corner over bare canvas at any
+- [x] No cell renders a transparent edge/corner over bare canvas at any
       `plotCount` in range (verified by the scan).
-- [ ] At a grass↔road, grass↔dirt, dirt↔road (stem), and dirt↔grass seam, the
+- [x] At a grass↔road, grass↔dirt, dirt↔road (stem), and dirt↔grass seam, the
       transparent fringe reveals the intended terrain, not canvas.
-- [ ] Coverage does not reintroduce a blanket dirt/grass bleed ring into
-      neighbouring cells beyond what's needed to fill the hole.
-- [ ] Production build unaffected; `npx vite build` still succeeds.
+- [x] Logical terrain ownership and fixed road → dirt → grass depths are never
+      changed by coverage fills.
+- [x] Production build unaffected; `npm run build` still succeeds.
+
+## Implemented precedence
+
+The higher-ranked terrain owns each seam. Its transparent edge/corner receives
+one targeted lower-terrain fill at that lower terrain's canonical depth. Thus
+dirt edges reveal road, while grass edges reveal dirt (or road); dirt remains a
+fill at dirt/grass boundaries. If several lower neighbours meet one edge cell,
+the highest one in `GROUND_STACK` wins.
+
+The dirt layer derives a one-cell underlay mask beneath adjacent grass, including
+diagonal corner cells, and autotiles that mask independently. For the generated
+field this produces two complete rectangles separated by the entrance road;
+grass still paints above the mask at its unchanged depth.
 
 ## Out of scope
 

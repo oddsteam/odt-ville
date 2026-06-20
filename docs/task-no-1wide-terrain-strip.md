@@ -1,6 +1,6 @@
 # Task: No 1-tile-wide terrain strip in the generated map
 
-**Status:** TODO
+**Status:** DONE
 **Area:** Map generation — `frontend/src/game/constants.js` (`buildTown` / `tileFor`)
 **Type:** Map-layout invariant (+ verification across map sizes)
 
@@ -64,12 +64,13 @@ tweak.
 
 ## Acceptance criteria
 
-- [ ] Test asserts the invariant for `plotCount` 1..N and passes.
-- [ ] No `plotCount` in range produces a 1-wide strip (grass or dirt) between two
+- [x] Test asserts the invariant for `plotCount` 1..50 and passes.
+- [x] No `plotCount` in range produces a 1-wide strip (grass or dirt) between two
       different terrains.
-- [ ] Violations (if any reappear) print offending cells + map size, not a vague
+- [x] Violations (if any reappear) print offending cells + map size, not a vague
       failure.
-- [ ] No rendering code changes required (this is purely about the char grid).
+- [x] No rendering code changes were required for this invariant; the generator
+      uses a two-cell grass margin between the avenue and field.
 
 ## Out of scope
 

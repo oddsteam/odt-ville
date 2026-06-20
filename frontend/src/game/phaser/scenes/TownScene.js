@@ -16,6 +16,16 @@ import {
 } from '../characterRig.js'
 import bus from '../bus.js'
 import {
+  GROUND_STACK,
+  EDGE_CORNERS,
+  coverageTerrainForCell,
+  dirtLayerBorders,
+  dirtLayerCoversCell,
+  groundPaintStackForCell,
+  terrainBorders,
+  typeForTileChar,
+} from '../groundModel.js'
+import {
   GATE_TRAINER,
   resolveTrainerStart,
   trainerSightCells,
@@ -50,14 +60,8 @@ const DEV_NUM_KEYS = ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX', 'SEVEN', 'EI
 
 // Ground terrain layers, stacked bottom → top. Each layer draws its own
 // (autotiled) tile on its OWN cells. Depth falls out of position here; a
-// transparent edge reveals whatever a lower layer drew in the same cell, else
-// the canvas. Append future terrains in stack order.
-const GROUND_STACK = ['road', 'dirt', 'grass']
-// Layers that additionally "bleed" — spill their flat fill one tile into
-// adjacent cells whose terrain stacks ABOVE them, so a higher layer's
-// transparent edge reveals them at the seam. Opt-in per layer: only the
-// bottom road base bleeds; dirt/grass paint strictly their own cells.
-const BLEED_LAYERS = new Set(['road'])
+// transparent edge receives a targeted neighbouring-terrain fill in the same
+// cell immediately beneath it. Append future terrains in stack order.
 
 // Asset URLs are imported by PhaserGame and pushed into the registry so a
 // scene doesn't need to know module paths. The registry shape:
@@ -197,13 +201,8 @@ export default class TownScene extends Phaser.Scene {
     this.cameras.main.setBounds(0, 0, worldW, worldH)
     this.physics?.world.setBounds(0, 0, worldW, worldH)
 
-    // Ground is rendered in stacked depth layers so the grass edge tiles (which
-    // are transparent on their outward side) reveal the terrain they border:
-    //   depth 0    road base — under road cells + a 1-tile halo into the grass
-    //   depth 0.1  dirt base — under the dirt field + a 1-tile halo into grass
-    //   depth 0.2  surface   — grass (fill or edge tiles); road/dirt cells draw
-    //                          nothing on top, so they stay full-strength and
-    //                          narrow roads are never overdrawn by grass.
+    // Ground is rendered at fixed road → dirt → grass depths. The higher layer
+    // owns each seam and reveals a targeted lower-layer fill beneath its edge.
     // Fill + edge cells come from the ground-tile mapper; unknowns (the sign)
     // fall back to the procedural textures.
     // Dev layer inspector — bucket each ground sprite so it can be toggled
@@ -646,31 +645,15 @@ export default class TownScene extends Phaser.Scene {
     return out
   }
 
-  // Render the ground as stacked layers (see the call site in create()). Road
-  // and dirt form opaque bases under their own cells plus a one-tile halo into
-  // the bordering grass, so the grass surface's transparent edge tiles reveal
-  // them at the seam while the full road/dirt cells stay visible. The halo is
-  // grass-only — it never paints under another surface cell, so e.g. the
-  // entrance-stem road that cuts through the dirt field isn't clobbered.
+  // Render fixed road → dirt → grass layers. Logical terrain ownership never
+  // changes: the higher terrain owns each seam, and its transparent edge gets
+  // the highest applicable lower terrain as backing at that terrain's depth.
   paintGround() {
     const fill = this.groundTiles
     const edges = this.buildEdgeMap()
     // Flat fill tile per terrain type (the char fill map keyed by terrain).
     const fillFor = { road: fill[':'] || null, dirt: fill.g || null, grass: fill['.'] || null }
-    const rank = (t) => GROUND_STACK.indexOf(t)
-    const DIRS = [
-      { d: 'N', dx: 0, dy: -1 },
-      { d: 'S', dx: 0, dy: 1 },
-      { d: 'E', dx: 1, dy: 0 },
-      { d: 'W', dx: -1, dy: 0 },
-    ]
     // Outer corners: a diagonal tile spanning two adjacent orthogonal borders.
-    const CORNERS = [
-      { c: 'NE', a: 'N', b: 'E' },
-      { c: 'NW', a: 'N', b: 'W' },
-      { c: 'SE', a: 'S', b: 'E' },
-      { c: 'SW', a: 'S', b: 'W' },
-    ]
     const stamp = (x, y, t, depth, bucket) => {
       if (!t) return
       const img = this.add
@@ -680,16 +663,6 @@ export default class TownScene extends Phaser.Scene {
         .setDisplaySize(TILE, TILE)
       if (DEV && bucket) this.devLayers[bucket]?.push(img)
     }
-    // Does this cell have an 8-neighbour of terrain `type`? Used for the bleed.
-    const near = (x, y, type) => {
-      for (let dy = -1; dy <= 1; dy++) {
-        for (let dx = -1; dx <= 1; dx++) {
-          if (!dx && !dy) continue
-          if (typeForTileChar(tileChar(this.town, x + dx, y + dy)) === type) return true
-        }
-      }
-      return false
-    }
     // Dev-inspector bucket for a layer. Grass fill/edges/corners are one layer;
     // road/dirt are their base layers.
     const bucketFor = (layer) => (layer === 'grass' ? 'grass' : `${layer}Base`)
@@ -697,21 +670,17 @@ export default class TownScene extends Phaser.Scene {
     // Draw a terrain's own tile at (x,y): autotiled (fill / edge / corner) when
     // the terrain has edge tiles tagged — grass today, dirt/road automatically
     // once tagged — otherwise a flat fill. Generic across every terrain.
-    const drawOwn = (layer, x, y, depth) => {
+    const drawOwn = (layer, x, y, depth, borderOverride = null) => {
       const e = edges[layer]
       const f = fillFor[layer]
       if (!e) {
         stamp(x, y, f, depth, bucketFor(layer))
         return
       }
-      const border = {}
-      for (const { d, dx, dy } of DIRS) {
-        const nt = typeForTileChar(tileChar(this.town, x + dx, y + dy))
-        border[d] = Boolean(nt && nt !== layer)
-      }
+      const border = borderOverride || terrainBorders(this.town, x, y, layer)
       const used = new Set()
       let drew = false
-      for (const { c, a, b } of CORNERS) {
+      for (const { c, a, b } of EDGE_CORNERS) {
         if (border[a] && border[b] && e[c]) {
           stamp(x, y, e[c], depth, bucketFor(layer))
           used.add(a)
@@ -728,24 +697,48 @@ export default class TownScene extends Phaser.Scene {
       if (!drew) stamp(x, y, f, depth, bucketFor(layer))
     }
 
-    // One generic pass per layer, bottom → top. Each layer draws its own
-    // (autotiled) tile on its own cells. A bleed layer (BLEED_LAYERS) also
-    // spills its flat fill one tile into adjacent higher-stacked cells so a
-    // higher transparent edge can reveal it; non-bleed layers touch only their
-    // own cells. Compositing is dumb depth order (depth = rank × 0.1, all < 1 so
-    // the ground stays beneath sight markers / player / props).
+    // One generic pass per layer, bottom → top. Dirt also paints its autotiled
+    // underlay mask beneath neighbouring grass; this never changes the logical
+    // surface. Other transparent edges stamp the selected lower neighbour at
+    // its canonical depth.
     GROUND_STACK.forEach((layer, i) => {
       const f = fillFor[layer]
       if (!f) return // terrain has no fill tile tagged yet
-      const bleeds = BLEED_LAYERS.has(layer)
       const depth = i * 0.1
       for (let y = 0; y < this.town.rows; y++) {
         for (let x = 0; x < this.town.cols; x++) {
           const cType = typeForTileChar(this.town.map[y][x])
-          if (cType === layer) {
+          const dirtCoverage = layer === 'dirt' && dirtLayerCoversCell(this.town, x, y)
+          if (cType === layer || dirtCoverage) {
+            if (layer === 'dirt') {
+              const dirtBorders = dirtLayerBorders(this.town, x, y)
+              const roadBacking = coverageTerrainForCell(
+                this.town,
+                x,
+                y,
+                'dirt',
+                dirtBorders,
+              )
+              if (roadBacking === 'road') {
+                stamp(x, y, fillFor.road, 0, bucketFor('road'))
+              }
+              drawOwn(layer, x, y, depth, dirtBorders)
+              continue
+            }
+            const plan = groundPaintStackForCell(this.town, x, y, edges)
+            const backing = plan.find(({ role }) => role === 'coverage')
+            const alreadyPaintedByDirt =
+              backing?.terrain === 'dirt' && dirtLayerCoversCell(this.town, x, y)
+            if (!alreadyPaintedByDirt) {
+              stamp(
+                x,
+                y,
+                fillFor[backing?.terrain],
+                backing?.depth,
+                bucketFor(backing?.terrain),
+              )
+            }
             drawOwn(layer, x, y, depth)
-          } else if (bleeds && cType && rank(cType) > i && near(x, y, layer)) {
-            stamp(x, y, f, depth, bucketFor(layer)) // bleed under a higher layer
           }
         }
       }
@@ -1001,22 +994,6 @@ function colLabel(n) {
 // Mirrors the fill mapping (grass '.'/'*', dirt 'g', road ':') and treats
 // boundary trees + signs as grass (their ground is grass underneath). Anything
 // unrecognised returns null → never an edge neighbour, never receives an edge.
-function typeForTileChar(ch) {
-  switch (ch) {
-    case '.':
-    case '*':
-    case 'T':
-    case 's':
-      return 'grass'
-    case 'g':
-      return 'dirt'
-    case ':':
-      return 'road'
-    default:
-      return null
-  }
-}
-
 function keyForTileChar(ch) {
   switch (ch) {
     case '.':
