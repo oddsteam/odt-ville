@@ -260,11 +260,14 @@ export default class TownScene extends Phaser.Scene {
     this.input.keyboard.on('keydown-G', () => {
       this.showGrid = !this.showGrid
       this.gridGfx.setVisible(this.showGrid)
-      // Coordinate labels (A1 notation) are built lazily on first reveal so
-      // they cost nothing until the grid is used. Combined with a layer name
-      // (the L panel), "grassEdge D5" names one tile on one layer in text.
-      if (this.showGrid && !this.gridLabels) this.buildGridLabels()
-      this.gridLabels?.setVisible(this.showGrid)
+      // Coordinate labels (A1 notation) are a dev-only addition to the grid —
+      // built lazily on first reveal, gated behind DEV (stripped in prod) like
+      // the L layer panel. Combined with a layer name, "grassEdge D5" names one
+      // tile on one layer in text.
+      if (DEV) {
+        if (this.showGrid && !this.gridLabels) this.buildGridLabels()
+        this.gridLabels?.setVisible(this.showGrid)
+      }
     })
     // Overlay D-pad — React emits press/release events on the bus so
     // we drive movement from tap/click input the same way keyboard
