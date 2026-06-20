@@ -215,16 +215,18 @@ export default class TownScene extends Phaser.Scene {
     // admin tree object is available.
     if (TILESET_ENABLED || this._treeObject?.image) this.addTallProps()
 
-    // Tile-grid overlay (debug/authoring aid) — toggle with G. Drawn above
+    // Tile-grid overlay (dev-only authoring aid) — toggle with G. Drawn above
     // everything so tile boundaries are visible over ground, buildings, and
-    // props. Hidden by default.
-    const grid = this.add.graphics().setDepth(9000)
-    grid.lineStyle(1, 0xffffff, 0.22)
-    for (let x = 0; x <= this.town.cols; x++) grid.lineBetween(x * TILE, 0, x * TILE, worldH)
-    for (let y = 0; y <= this.town.rows; y++) grid.lineBetween(0, y * TILE, worldW, y * TILE)
-    grid.setVisible(false)
-    this.gridGfx = grid
-    this.showGrid = false
+    // props. Hidden by default and gated behind DEV (stripped in prod).
+    if (DEV) {
+      const grid = this.add.graphics().setDepth(9000)
+      grid.lineStyle(1, 0xffffff, 0.22)
+      for (let x = 0; x <= this.town.cols; x++) grid.lineBetween(x * TILE, 0, x * TILE, worldH)
+      for (let y = 0; y <= this.town.rows; y++) grid.lineBetween(0, y * TILE, worldW, y * TILE)
+      grid.setVisible(false)
+      this.gridGfx = grid
+      this.showGrid = false
+    }
 
     // Buildings — placement sorted by position_order, dropped onto the
     // town's plots in turn. Same shape as buildBuildings() in VillageGame.
@@ -256,19 +258,17 @@ export default class TownScene extends Phaser.Scene {
       left: Phaser.Input.Keyboard.KeyCodes.A,
       right: Phaser.Input.Keyboard.KeyCodes.D,
     })
-    // G toggles the tile-grid overlay (authoring aid).
-    this.input.keyboard.on('keydown-G', () => {
-      this.showGrid = !this.showGrid
-      this.gridGfx.setVisible(this.showGrid)
-      // Coordinate labels (A1 notation) are a dev-only addition to the grid —
-      // built lazily on first reveal, gated behind DEV (stripped in prod) like
-      // the L layer panel. Combined with a layer name, "grassEdge D5" names one
-      // tile on one layer in text.
-      if (DEV) {
+    // G toggles the tile-grid overlay + A1 coordinate labels (dev-only). The
+    // labels are built lazily on first reveal; combined with a layer name,
+    // "grassEdge D5" names one tile on one layer in text.
+    if (DEV) {
+      this.input.keyboard.on('keydown-G', () => {
+        this.showGrid = !this.showGrid
+        this.gridGfx.setVisible(this.showGrid)
         if (this.showGrid && !this.gridLabels) this.buildGridLabels()
         this.gridLabels?.setVisible(this.showGrid)
-      }
-    })
+      })
+    }
     // Overlay D-pad — React emits press/release events on the bus so
     // we drive movement from tap/click input the same way keyboard
     // input feeds activeDirection().
