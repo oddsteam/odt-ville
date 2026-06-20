@@ -260,6 +260,11 @@ export default class TownScene extends Phaser.Scene {
     this.input.keyboard.on('keydown-G', () => {
       this.showGrid = !this.showGrid
       this.gridGfx.setVisible(this.showGrid)
+      // Coordinate labels (A1 notation) are built lazily on first reveal so
+      // they cost nothing until the grid is used. Combined with a layer name
+      // (the L panel), "grassEdge D5" names one tile on one layer in text.
+      if (this.showGrid && !this.gridLabels) this.buildGridLabels()
+      this.gridLabels?.setVisible(this.showGrid)
     })
     // Overlay D-pad — React emits press/release events on the bus so
     // we drive movement from tap/click input the same way keyboard
@@ -780,6 +785,28 @@ export default class TownScene extends Phaser.Scene {
     this.refreshDevLayerPanel()
   }
 
+  // Build the per-cell coordinate labels for the G grid (A1 notation: column
+  // letters across, 1-based row numbers down — top-left cell is A1). Kept in a
+  // container so the G handler can toggle them all with one setVisible.
+  buildGridLabels() {
+    const c = this.add.container(0, 0).setDepth(9001)
+    for (let y = 0; y < this.town.rows; y++) {
+      for (let x = 0; x < this.town.cols; x++) {
+        const label = this.add
+          .text(x * TILE + 2, y * TILE + 1, `${colLabel(x)}${y + 1}`, {
+            fontFamily: 'monospace',
+            fontSize: '9px',
+            color: '#ffffff',
+            stroke: '#000000',
+            strokeThickness: 2,
+          })
+          .setOrigin(0, 0)
+        c.add(label)
+      }
+    }
+    this.gridLabels = c
+  }
+
   refreshDevLayerPanel() {
     if (!this.devLayerPanel) return
     const lines = ['GROUND LAYERS  (L)']
@@ -925,6 +952,19 @@ export default class TownScene extends Phaser.Scene {
 // or unspecified renders as a tree; ground tiles use their dedicated
 // textures so the scene matches the DOM engine's look as closely as
 // procedural shapes can manage.
+// Spreadsheet-style column label for a 0-based column index: 0→A, 25→Z,
+// 26→AA, … (rolls to two letters for maps wider than 26 cells).
+function colLabel(n) {
+  let s = ''
+  let i = n + 1 // 1-based for the modulo math
+  while (i > 0) {
+    const r = (i - 1) % 26
+    s = String.fromCharCode(65 + r) + s
+    i = Math.floor((i - 1) / 26)
+  }
+  return s
+}
+
 // Map a tile character to its ground *type* for edge-boundary detection.
 // Mirrors the fill mapping (grass '.'/'*', dirt 'g', road ':') and treats
 // boundary trees + signs as grass (their ground is grass underneath). Anything
