@@ -30,6 +30,11 @@ Rails.application.routes.draw do
       resources :tile_objects, only: [:index, :create] do
         get :active, on: :collection
       end
+
+      # Ground tiles — grass/road/… cells tagged in the ground-tile mapper by
+      # their atlas coordinate, drawn via the tilemap renderer. A flat catalog
+      # (no single-active); edge/corner autotiling comes later.
+      resources :ground_tiles, only: [:index, :create, :destroy]
     end
   end
 end

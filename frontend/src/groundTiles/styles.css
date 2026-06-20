@@ -1,0 +1,30 @@
+/* Ground-tile mapper extras — the shared shell comes from tileMapper/styles.css.
+   The canvas is click-to-select (single cell), not drag-to-crop. */
+
+.canvas-wrap canvas { cursor: pointer; }
+
+.presets { display: flex; flex-wrap: wrap; gap: 6px; }
+.preset {
+  padding: 4px 10px; font-size: 12px; border-radius: 999px; cursor: pointer;
+  background: #15151b; color: #cfcfe0; border: 1px solid #3a3a47;
+}
+.preset.on { background: #2e7dff; color: #fff; border-color: #2e7dff; }
+
+.catalog { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+.cat-group { display: flex; flex-direction: column; gap: 4px; }
+.cat-head {
+  font-size: 12px; font-weight: 600; text-transform: capitalize; color: #9ab8ff;
+  border-bottom: 1px solid #34343f; padding-bottom: 3px;
+}
+.cat-row { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.thumb {
+  width: 32px; height: 32px; flex-shrink: 0; image-rendering: pixelated;
+  background: #101015; border: 1px solid #34343f; border-radius: 3px;
+}
+.cat-meta { flex: 1; color: #c8c8d6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cat-meta em { color: #8a8a9a; font-style: italic; }
+.del {
+  width: 22px; height: 22px; flex-shrink: 0; line-height: 1; font-size: 16px;
+  background: #15151b; color: #d06a6a; border: 1px solid #3a3a47; border-radius: 4px; cursor: pointer;
+}
+.del:hover { background: #3a1f1f; }

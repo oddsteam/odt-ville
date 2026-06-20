@@ -129,6 +129,21 @@ export default class TownScene extends Phaser.Scene {
     } else if (TILESET_ENABLED) {
       for (const prop of Object.values(PROPS)) this.load.image(prop.key, prop.url)
     }
+
+    // Ground-tile catalog (ground-tile mapper). Each referenced tileset loads
+    // once as a uniform spritesheet (frame = cell), so create() can stamp a
+    // specific cell — grass/dirt/road — onto the map by frame index.
+    this._groundTiles = this.registry.get('groundTiles') || []
+    const seenSheets = new Set()
+    for (const t of this._groundTiles) {
+      const key = `gtset.${t.tileset}`
+      if (seenSheets.has(key)) continue
+      seenSheets.add(key)
+      this.load.spritesheet(key, `/maps/tilesets/${t.tileset}.png`, {
+        frameWidth: t.cell,
+        frameHeight: t.cell,
+      })
+    }
   }
 
   create() {
@@ -152,6 +167,11 @@ export default class TownScene extends Phaser.Scene {
     this.cameras.main.setBounds(0, 0, worldW, worldH)
     this.physics?.world.setBounds(0, 0, worldW, worldH)
 
+    // Admin-tagged ground cells (ground-tile mapper), keyed by tile char.
+    // When a char has a catalog cell we stamp it from the tileset; otherwise
+    // the procedural texture (ensureTileTextures) is the fallback.
+    this.groundTiles = this.buildGroundTileMap()
+
     // Ground layer — one image per tile. This is more sprites than a
     // tilemap-backed approach, but tile count tops out around 24×19 today
     // and Phaser batches identical-texture sprites efficiently.
@@ -161,8 +181,18 @@ export default class TownScene extends Phaser.Scene {
         // Boundary trees ('T') render as tall props over grass, so lay grass
         // under them instead of the flat generated tree tile.
         const groundCh = TILESET_ENABLED && ch === 'T' ? '.' : ch
-        const key = keyForTileChar(groundCh)
-        if (key) this.add.image(x * TILE, y * TILE, key).setOrigin(0, 0).setDepth(0)
+        const gt = this.groundTiles[groundCh]
+        if (gt) {
+          // Catalog cell — source is 32-px; scale to the 48-px map tile.
+          this.add
+            .image(x * TILE, y * TILE, gt.key, gt.frame)
+            .setOrigin(0, 0)
+            .setDepth(0)
+            .setDisplaySize(TILE, TILE)
+        } else {
+          const key = keyForTileChar(groundCh)
+          if (key) this.add.image(x * TILE, y * TILE, key).setOrigin(0, 0).setDepth(0)
+        }
       }
     }
 
@@ -534,6 +564,29 @@ export default class TownScene extends Phaser.Scene {
 
   applyFacing(dir, walking) {
     if (this.usingManifest) applyFacing(this.player, this.charDir, dir, walking)
+  }
+
+  // Resolve the ground-tile catalog into a `tileChar -> { key, frame }` lookup
+  // for the ground layer. Surface types map onto the town's map chars:
+  //   grass -> '.' open ground AND '*' flower patches (same grass cell)
+  //   dirt  -> 'g' tall-grass encounter field
+  //   road  -> ':' streets, side avenue, entrance stem
+  // The spritesheet was loaded in preload(); the cell's frame index is
+  // row * columns + col, with columns derived from the loaded image width.
+  buildGroundTileMap() {
+    const TYPE_TO_CHARS = { grass: ['.', '*'], dirt: ['g'], road: [':'] }
+    const out = {}
+    for (const t of this._groundTiles || []) {
+      const chars = TYPE_TO_CHARS[t.tile_type]
+      if (!chars) continue
+      const key = `gtset.${t.tileset}`
+      if (!this.textures.exists(key)) continue
+      const width = this.textures.get(key).getSourceImage().width
+      const cols = Math.max(1, Math.floor(width / t.cell))
+      const cell = { key, frame: t.row * cols + t.col }
+      for (const ch of chars) out[ch] = cell
+    }
+    return out
   }
 
   // Build the two-layer building sprite. We don't yet hue-rotate from

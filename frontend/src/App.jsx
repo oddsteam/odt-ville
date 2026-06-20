@@ -5,6 +5,7 @@ import DailyBriefShortcut from './communities/DailyBriefShortcut.jsx'
 import { listCommunities, getFeed } from './communities/client.js'
 import { getGameSession, saveGameSession } from './game-session/client.js'
 import { getActiveTileObject } from './tileObjects/client.js'
+import { listGroundTiles } from './groundTiles/client.js'
 import { loadActiveManifest } from './character/manifest.js'
 
 // Demo target for every board's "open content list" action. Replaced in a
@@ -49,6 +50,10 @@ export default function App() {
   // The admin-defined tree object (tile-object mapper), rendered by the game.
   // Optional enhancement — null is fine and falls back to the bundled tree.
   const [treeObject, setTreeObject] = useState(null)
+  // Ground-tile catalog (ground-tile mapper): grass/dirt/road cells painted
+  // onto the town's ground, encounter field, and roads. Empty array falls back
+  // to the procedural tile textures, so it's a pure visual enhancement.
+  const [groundTiles, setGroundTiles] = useState([])
   // The active character sprite (sprite-mapper manifest). Drives the town
   // player; loadActiveManifest always resolves (remote → committed default).
   const [characterManifest, setCharacterManifest] = useState(null)
@@ -59,7 +64,7 @@ export default function App() {
   // Town-scene state — fetched on mount and after any communities-mutating
   // action so the game always sees fresh communities + session + feed.
   const loadTown = useCallback(async () => {
-    const [c, s, f, tree, character] = await Promise.all([
+    const [c, s, f, tree, ground, character] = await Promise.all([
       listCommunities(),
       getGameSession(),
       getFeed(),
@@ -67,6 +72,9 @@ export default function App() {
       // failure (e.g. endpoint not migrated on this env) and fall back to null
       // — never let it break the town load.
       getActiveTileObject('tree').catch(() => null),
+      // Ground-tile catalog — same best-effort discipline: an empty list just
+      // means the procedural tile textures keep being used.
+      listGroundTiles().catch(() => []),
       // The active character sprite. Never throws (falls back to the committed
       // default), so the town always has a player even if the backend is down.
       loadActiveManifest().catch(() => null),
@@ -75,6 +83,7 @@ export default function App() {
     setSession(s)
     setFeed(f)
     setTreeObject(tree)
+    setGroundTiles(ground || [])
     setCharacterManifest(character)
   }, [])
 
@@ -229,6 +238,7 @@ export default function App() {
             communities={communities}
             session={session}
             treeObject={treeObject}
+            groundTiles={groundTiles}
             characterManifest={characterManifest}
             dailyBrief={
               <DailyBriefShortcut items={feed} onClose={handleDailyBriefClose} />

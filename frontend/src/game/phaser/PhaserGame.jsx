@@ -53,6 +53,7 @@ export default function PhaserGame({
   communities,
   session,
   treeObject,
+  groundTiles,
   characterManifest,
   dailyBrief,
   activeCommunityId,
@@ -106,6 +107,9 @@ export default function PhaserGame({
     game.registry.set('communities', communities)
     game.registry.set('session', session)
     game.registry.set('treeObject', treeObject || null)
+    // Ground-tile catalog — read once by TownScene.preload() to load the
+    // referenced tilesets, same boot-input timing as treeObject.
+    game.registry.set('groundTiles', groundTiles || [])
     // The active character manifest (sprite-mapper). Set synchronously after
     // construction — Phaser defers boot, so this lands before TownScene's
     // preload() reads it (same timing the treeObject relies on).
@@ -158,6 +162,14 @@ export default function PhaserGame({
     if (!game) return
     game.registry.set('treeObject', treeObject || null)
   }, [treeObject])
+
+  // Ground-tile catalog — boot input like treeObject; pushing it keeps the
+  // registry fresh for the next VillageGame mount / reload.
+  useEffect(() => {
+    const game = gameRef.current
+    if (!game) return
+    game.registry.set('groundTiles', groundTiles || [])
+  }, [groundTiles])
 
   // Like treeObject, the character manifest is a scene-boot input read once in
   // preload(); pushing it keeps the registry fresh for the next mount/reload.

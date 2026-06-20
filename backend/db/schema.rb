@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_19_000002) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_20_000001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -52,6 +52,19 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_19_000002) do
     t.string "title", null: false
     t.datetime "updated_at", null: false
     t.index ["board_id"], name: "index_content_items_on_board_id"
+  end
+
+  create_table "ground_tiles", force: :cascade do |t|
+    t.integer "cell", default: 32, null: false
+    t.integer "col", null: false
+    t.datetime "created_at", null: false
+    t.string "label", default: "", null: false
+    t.integer "row", null: false
+    t.string "tile_type", null: false
+    t.string "tileset", null: false
+    t.datetime "updated_at", null: false
+    t.index ["tile_type"], name: "index_ground_tiles_on_tile_type"
+    t.index ["tileset", "col", "row"], name: "index_ground_tiles_on_cell", unique: true
   end
 
   create_table "houses", force: :cascade do |t|
