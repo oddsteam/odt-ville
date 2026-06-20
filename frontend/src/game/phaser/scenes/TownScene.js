@@ -575,12 +575,14 @@ export default class TownScene extends Phaser.Scene {
     return out
   }
 
-  // Edge tiles from the catalog, as `{ type: { side: { key, frame } } }`.
-  // Only role:'edge' tiles with a side; the fill map ignores these.
+  // Edge + corner tiles from the catalog, as `{ type: { side: { key, frame } } }`.
+  // Orthogonal sides (N/E/S/W) are edges, diagonal (NE/NW/SE/SW) are corners;
+  // they share the keyspace since the side names don't collide. Fill tiles are
+  // ignored here (they live in the fill map).
   buildEdgeMap() {
     const out = {}
     for (const t of this._groundTiles || []) {
-      if (t.role !== 'edge' || !t.side) continue
+      if ((t.role !== 'edge' && t.role !== 'corner') || !t.side) continue
       const key = `gtset.${t.tileset}`
       if (!this.textures.exists(key)) continue
       const cols = Math.max(1, Math.floor(this.textures.get(key).getSourceImage().width / t.cell))
@@ -607,6 +609,13 @@ export default class TownScene extends Phaser.Scene {
       { d: 'S', dx: 0, dy: 1 },
       { d: 'E', dx: 1, dy: 0 },
       { d: 'W', dx: -1, dy: 0 },
+    ]
+    // Outer corners: a diagonal tile spanning two adjacent orthogonal borders.
+    const CORNERS = [
+      { c: 'NE', a: 'N', b: 'E' },
+      { c: 'NW', a: 'N', b: 'W' },
+      { c: 'SE', a: 'S', b: 'E' },
+      { c: 'SW', a: 'S', b: 'W' },
     ]
     const stamp = (x, y, t, depth) => {
       if (!t) return
@@ -640,19 +649,35 @@ export default class TownScene extends Phaser.Scene {
         // Surface layer.
         if (ch === ':' || ch === 'g') continue // base is the surface — nothing on top
         if (isGrass) {
-          // Grass border sides: an orthogonal non-grass neighbour with an edge
-          // tile. Each edge is mostly opaque grass with a transparent fringe
-          // toward that side, revealing the base below. No border → plain fill.
-          const sides = []
+          // Which orthogonal sides border a non-grass type.
+          const border = {}
           for (const { d, dx, dy } of DIRS) {
             const nType = typeForTileChar(tileChar(this.town, x + dx, y + dy))
-            if (nType && nType !== 'grass' && edges.grass?.[d]) sides.push(d)
+            border[d] = Boolean(nType && nType !== 'grass')
           }
-          if (sides.length) {
-            for (const d of sides) stamp(x, y, edges.grass[d], 0.2)
-          } else {
-            stamp(x, y, grassFill, 0.2)
+          const g = edges.grass || {}
+          const used = new Set()
+          let drew = false
+          // Outer corners first: two adjacent borders (e.g. road to the S and E)
+          // collapse to one corner tile instead of two overlapping edges. The
+          // corner is mostly grass with a transparent diagonal revealing the
+          // base. Falls back to the edge pair if the corner tile isn't tagged.
+          for (const { c, a, b } of CORNERS) {
+            if (border[a] && border[b] && g[c]) {
+              stamp(x, y, g[c], 0.2)
+              used.add(a)
+              used.add(b)
+              drew = true
+            }
           }
+          // Remaining single edges (a transparent fringe toward that side).
+          for (const d of ['N', 'E', 'S', 'W']) {
+            if (border[d] && !used.has(d) && g[d]) {
+              stamp(x, y, g[d], 0.2)
+              drew = true
+            }
+          }
+          if (!drew) stamp(x, y, grassFill, 0.2)
           continue
         }
         // Sign + anything unrecognised: procedural texture (opaque) on top.

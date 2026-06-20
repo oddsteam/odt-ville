@@ -27,8 +27,8 @@ module Api
           cell: params[:cell].presence || tile.cell || 32,
           label: params[:label].to_s,
           role: role,
-          # Side is meaningful only for edge tiles; a fill tile clears it.
-          side: role == "edge" ? params[:side].presence : nil
+          # Side is meaningful for edge + corner tiles; a fill tile clears it.
+          side: role == "fill" ? nil : params[:side].presence
         )
         tile.save!
 

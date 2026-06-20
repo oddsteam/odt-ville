@@ -19,6 +19,7 @@
   background: #2a2a36; color: #9ab8ff; border: 1px solid #34343f; white-space: nowrap;
 }
 .role-badge.edge { background: #2e2438; color: #d7a8ff; border-color: #4a3a5f; }
+.role-badge.corner { background: #38302a; color: #ffc98a; border-color: #5f4a3a; }
 
 .catalog { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
 .cat-group { display: flex; flex-direction: column; gap: 4px; }

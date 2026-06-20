@@ -13,6 +13,8 @@ import './styles.css'
 // No laying logic here: this only builds the catalog you see on the right.
 
 const PRESETS = ['grass', 'road', 'dirt', 'water', 'sand']
+const EDGE_SIDES = ['N', 'E', 'S', 'W'] // orthogonal — for edge tiles
+const CORNER_SIDES = ['NE', 'NW', 'SE', 'SW'] // diagonal — for corner tiles
 
 // Module-level cache of loaded tileset images. The roster can span several
 // tilesets, so thumbnails load each on demand without re-fetching.
@@ -175,9 +177,10 @@ export default function GroundTileMapper() {
     try {
       const saved = await saveGroundTile({
         tile_type: type.trim(), tileset, col: sel.c, row: sel.r, cell, label: label.trim(),
-        role, side: role === 'edge' ? side : null,
+        role, side: role === 'fill' ? null : side,
       })
-      const desc = saved.role === 'edge' ? `${saved.tile_type} edge·${saved.side}` : saved.tile_type
+      const desc =
+        saved.role === 'fill' ? saved.tile_type : `${saved.tile_type} ${saved.role}·${saved.side}`
       setStatus(`Saved cell ${saved.col},${saved.row} as "${desc}".`)
       refreshCatalog()
     } catch (e) {
@@ -258,20 +261,26 @@ export default function GroundTileMapper() {
           <div className="role-block">
             <span className="role-label">Role</span>
             <div className="presets">
-              {['fill', 'edge'].map((r) => (
+              {['fill', 'edge', 'corner'].map((r) => (
                 <button
                   key={r}
                   type="button"
                   className={`preset${role === r ? ' on' : ''}`}
-                  onClick={() => setRole(r)}
+                  onClick={() => {
+                    setRole(r)
+                    // Keep the side valid for the role: orthogonal for edges,
+                    // diagonal for corners.
+                    if (r === 'edge' && !EDGE_SIDES.includes(side)) setSide('N')
+                    if (r === 'corner' && !CORNER_SIDES.includes(side)) setSide('NE')
+                  }}
                 >
                   {r}
                 </button>
               ))}
             </div>
-            {role === 'edge' && (
+            {role !== 'fill' && (
               <div className="presets sides">
-                {['N', 'E', 'S', 'W'].map((s) => (
+                {(role === 'corner' ? CORNER_SIDES : EDGE_SIDES).map((s) => (
                   <button
                     key={s}
                     type="button"
@@ -298,7 +307,7 @@ export default function GroundTileMapper() {
                   <div key={t.id} className="cat-row">
                     <Thumb tile={t} />
                     <span className={`role-badge ${t.role}`}>
-                      {t.role === 'edge' ? `edge·${t.side || '?'}` : 'fill'}
+                      {t.role === 'fill' ? 'fill' : `${t.role}·${t.side || '?'}`}
                     </span>
                     <span className="cat-meta">
                       r{t.row} c{t.col}
