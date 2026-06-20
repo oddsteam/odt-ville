@@ -1,5 +1,5 @@
 /* ============================================================
-   One Rev Village — top-down Pokémon Game Boy Color theme.
+   ODT Ville — top-down Pokémon Game Boy Color theme.
    Font + character sprites borrowed from the local pokemon-js repo.
    ============================================================ */
 
@@ -355,7 +355,7 @@ button:disabled {
 /* Topbar label override when the player is inside a community —
    PhaserGame sets `gb-topbar-label interior-title` and swaps the
    text to the community name. Pulled out so we can tune the active-
-   community label independently of the static "ONE REV VILLAGE". */
+   community label independently of the static "ODT VILLE". */
 .interior-title {
   font-size: 9px;
   letter-spacing: 1px;

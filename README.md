@@ -1,4 +1,4 @@
-# One Rev Village
+# ODT Ville
 
 An MVP prototype of a playful, **top-down Pokémon Game Boy-style village** that
 sits on top of an ordinary corporate-content app. An employee walks an avatar
@@ -74,7 +74,7 @@ The API is now on **http://localhost:3130**.
 `bin/rails db:seed` is **re-runnable** — it clears the village tables and
 recreates them. It produces:
 
-- 1 company — **One Rev**
+- 1 company — **ODT**
 - 1 user — **Alex Rivera** (`branch_employee`)
 - 5 houses — **Compliance House, Product House, Branch Ops House, Learning
   House, Community Lounge**

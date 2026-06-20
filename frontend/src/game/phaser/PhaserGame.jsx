@@ -197,12 +197,12 @@ export default function PhaserGame({
   const onAButton = () => bus.emit('aButton')
 
   // Dynamic topbar label — community title while inside a house,
-  // "ONE REV VILLAGE" when in the town.
+  // "ODT VILLE" when in the town.
   const activeCommunity =
     activeCommunityId != null
       ? communities.find((c) => c.id === activeCommunityId)
       : null
-  const topbarLabel = activeCommunity?.title || 'ONE REV VILLAGE'
+  const topbarLabel = activeCommunity?.title || 'ODT VILLE'
 
   return (
     <div className="village-map">

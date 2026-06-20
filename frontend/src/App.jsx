@@ -157,7 +157,7 @@ export default function App() {
       <div className="app-shell app-centered">
         <div className="loading-card">
           <div className="loading-pixel" />
-          <p>LOADING ONE REV VILLAGE…</p>
+          <p>LOADING ODT VILLE…</p>
         </div>
       </div>
     )
@@ -185,7 +185,7 @@ export default function App() {
         <div className="app-brand">
           <span className="app-logo">🕹️</span>
           <div>
-            <h1>ONE REV VILLAGE</h1>
+            <h1>ODT VILLE</h1>
             <p className="app-company">{me.company.name}</p>
           </div>
         </div>

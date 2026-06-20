@@ -1,4 +1,4 @@
-// One Rev Village — top-down, Pokémon Game Boy-style town.
+// ODT Ville — top-down, Pokémon Game Boy-style town.
 // Character sprites + the layout idea are borrowed from the local `pokemon-js`
 // reference repo; the town here is generated and data-driven.
 
