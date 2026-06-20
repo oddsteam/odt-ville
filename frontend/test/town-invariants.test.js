@@ -8,6 +8,7 @@ import {
   coverageTerrainForCell,
   dirtLayerTileForCell,
   groundPaintStackForCell,
+  roadLayerCoversCell,
 } from '../src/game/phaser/groundModel.js'
 
 const colLabel = (index) => {
@@ -138,4 +139,13 @@ test('dirt underlay forms two complete autotiled rectangles around the road', ()
   }
   assert.equal(dirtLayerTileForCell(town, 8, 9), null, 'I10 road remains separate')
   assert.equal(dirtLayerTileForCell(town, 8, 17), null, 'I18 road remains separate')
+})
+
+test('road base bleed includes diagonal cap and boundary cells', () => {
+  const town = buildTown(1)
+  for (const cell of ['P7', 'P8', 'P9', 'A1', 'B1', 'C1', 'A20', 'B20', 'C20']) {
+    const x = cell.charCodeAt(0) - 65
+    const y = Number(cell.slice(1)) - 1
+    assert.equal(roadLayerCoversCell(town, x, y), true, cell)
+  }
 })

@@ -22,6 +22,7 @@ import {
   dirtLayerBorders,
   dirtLayerCoversCell,
   groundPaintStackForCell,
+  roadLayerCoversCell,
   terrainBorders,
   typeForTileChar,
 } from '../groundModel.js'
@@ -708,8 +709,13 @@ export default class TownScene extends Phaser.Scene {
       for (let y = 0; y < this.town.rows; y++) {
         for (let x = 0; x < this.town.cols; x++) {
           const cType = typeForTileChar(this.town.map[y][x])
+          const roadCoverage = layer === 'road' && roadLayerCoversCell(this.town, x, y)
           const dirtCoverage = layer === 'dirt' && dirtLayerCoversCell(this.town, x, y)
-          if (cType === layer || dirtCoverage) {
+          if (cType === layer || roadCoverage || dirtCoverage) {
+            if (layer === 'road') {
+              stamp(x, y, f, depth, bucketFor(layer))
+              continue
+            }
             if (layer === 'dirt') {
               const dirtBorders = dirtLayerBorders(this.town, x, y)
               const roadBacking = coverageTerrainForCell(
@@ -719,7 +725,10 @@ export default class TownScene extends Phaser.Scene {
                 'dirt',
                 dirtBorders,
               )
-              if (roadBacking === 'road') {
+              if (
+                roadBacking === 'road' &&
+                !roadLayerCoversCell(this.town, x, y)
+              ) {
                 stamp(x, y, fillFor.road, 0, bucketFor('road'))
               }
               drawOwn(layer, x, y, depth, dirtBorders)
@@ -727,9 +736,10 @@ export default class TownScene extends Phaser.Scene {
             }
             const plan = groundPaintStackForCell(this.town, x, y, edges)
             const backing = plan.find(({ role }) => role === 'coverage')
-            const alreadyPaintedByDirt =
-              backing?.terrain === 'dirt' && dirtLayerCoversCell(this.town, x, y)
-            if (!alreadyPaintedByDirt) {
+            const alreadyPaintedByLowerLayer =
+              (backing?.terrain === 'dirt' && dirtLayerCoversCell(this.town, x, y)) ||
+              (backing?.terrain === 'road' && roadLayerCoversCell(this.town, x, y))
+            if (!alreadyPaintedByLowerLayer) {
               stamp(
                 x,
                 y,

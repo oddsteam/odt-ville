@@ -91,6 +91,10 @@ diagonal corner cells, and autotiles that mask independently. For the generated
 field this produces two complete rectangles separated by the entrance road;
 grass still paints above the mask at its unchanged depth.
 
+The Road base uses an eight-neighbour one-cell mask around logical road cells.
+This includes diagonal cap/corner coverage while remaining at depth zero; dirt
+and grass retain their logical ownership above it.
+
 ## Out of scope
 
 - Per-side / per-pixel precision when a single cell borders two different lower

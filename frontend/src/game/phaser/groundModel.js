@@ -81,6 +81,20 @@ export function groundPaintStackForCell(town, x, y, edgeSets = null) {
   ]
 }
 
+// Road is the bottom layer, so its base extends one cell in every direction
+// beneath neighbouring higher terrain. Diagonal cells are included to keep
+// caps and corners covered even though edge ownership is orthogonal.
+export function roadLayerCoversCell(town, x, y) {
+  if (terrainForCell(town, x, y) === 'road') return true
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      if (!dx && !dy) continue
+      if (terrainForCell(town, x + dx, y + dy) === 'road') return true
+    }
+  }
+  return false
+}
+
 // Dirt's lower-layer coverage is a one-cell mask beneath neighbouring grass.
 // It does not change the logical/top terrain: grass still paints above it, and
 // roads are never absorbed into the dirt mask.
