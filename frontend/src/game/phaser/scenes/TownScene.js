@@ -29,6 +29,26 @@ import {
 // not walkable, doors are special-cased below.
 const BLOCKED_TILE_CHARS = new Set(['T', 's'])
 
+// Dev-only layer inspector (press L for a panel, number keys to toggle each
+// layer; also window.__game.layers in the console). import.meta.env.DEV is
+// statically false in production builds, so Vite strips all of this. The first
+// five are flat ground bands (one depth each); the last three are depth-sorted
+// sprite groups (trees/buildings/trainer aren't a single layer, but toggling
+// their visibility works the same regardless of depth).
+const DEV = import.meta.env.DEV
+const DEV_LAYERS = [
+  { key: 'roadBase', label: 'Road base' },
+  { key: 'dirtBase', label: 'Dirt base' },
+  { key: 'grassFill', label: 'Grass fill' },
+  { key: 'grassEdge', label: 'Grass edges' },
+  { key: 'grassCorner', label: 'Grass corners' },
+  { key: 'trees', label: 'Trees / props' },
+  { key: 'buildings', label: 'Buildings' },
+  { key: 'npc', label: 'NPCs (trainer)' },
+]
+// Phaser keyboard event names for the digit keys 1..8.
+const DEV_NUM_KEYS = ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX', 'SEVEN', 'EIGHT']
+
 // Asset URLs are imported by PhaserGame and pushed into the registry so a
 // scene doesn't need to know module paths. The registry shape:
 //   {
@@ -176,6 +196,17 @@ export default class TownScene extends Phaser.Scene {
     //                          narrow roads are never overdrawn by grass.
     // Fill + edge cells come from the ground-tile mapper; unknowns (the sign)
     // fall back to the procedural textures.
+    // Dev layer inspector — bucket each ground sprite so it can be toggled
+    // (see setupDevLayers, called after the test API is up). Stripped in prod.
+    if (DEV) {
+      this.devLayers = {}
+      this.layerVisible = {}
+      for (const l of DEV_LAYERS) {
+        this.devLayers[l.key] = []
+        this.layerVisible[l.key] = true
+      }
+    }
+
     this.groundTiles = this.buildGroundTileMap()
     this.paintGround()
 
@@ -267,6 +298,10 @@ export default class TownScene extends Phaser.Scene {
         }),
       }
     }
+
+    // Dev-only ground-layer inspector (after the test API so it can hang off
+    // window.__game). Stripped from production builds.
+    if (DEV) this.setupDevLayers()
 
     // React → Phaser registry watchers. The rule for what the scene
     // subscribes to: **structural data is a scene-boot input, not a
@@ -484,6 +519,7 @@ export default class TownScene extends Phaser.Scene {
     const scale = targetH / sprite.height
     sprite.setScale(scale)
     this.trainerSprite = sprite
+    if (DEV) this.devLayers?.npc?.push(sprite)
 
     // Sight markers — soft red pulsing squares on each sight cell.
     // Drawn as a single Graphics with one rect per cell so a single
@@ -493,6 +529,7 @@ export default class TownScene extends Phaser.Scene {
       g.fillStyle(0xff5050, 0.32)
       g.fillCircle(c.x * TILE + TILE / 2, c.y * TILE + TILE / 2, TILE * 0.45)
     }
+    if (DEV) this.devLayers?.npc?.push(g)
     this.tweens.add({
       targets: g,
       alpha: { from: 0.55, to: 0.95 },
@@ -617,13 +654,14 @@ export default class TownScene extends Phaser.Scene {
       { c: 'SE', a: 'S', b: 'E' },
       { c: 'SW', a: 'S', b: 'W' },
     ]
-    const stamp = (x, y, t, depth) => {
+    const stamp = (x, y, t, depth, layer) => {
       if (!t) return
-      this.add
+      const img = this.add
         .image(x * TILE, y * TILE, t.key, t.frame)
         .setOrigin(0, 0)
         .setDepth(depth)
         .setDisplaySize(TILE, TILE)
+      if (DEV && layer) this.devLayers[layer]?.push(img)
     }
     // Is any of the 8 neighbours of `type`? Used for the base halo.
     const nearType = (x, y, type) => {
@@ -643,8 +681,8 @@ export default class TownScene extends Phaser.Scene {
 
         // Base layers — a terrain's own cells, plus a one-tile halo but only
         // under grass (so a road/dirt cell is never covered by the other base).
-        if (road && (ch === ':' || (isGrass && nearType(x, y, 'road')))) stamp(x, y, road, 0)
-        if (dirt && (ch === 'g' || (isGrass && nearType(x, y, 'dirt')))) stamp(x, y, dirt, 0.1)
+        if (road && (ch === ':' || (isGrass && nearType(x, y, 'road')))) stamp(x, y, road, 0, 'roadBase')
+        if (dirt && (ch === 'g' || (isGrass && nearType(x, y, 'dirt')))) stamp(x, y, dirt, 0.1, 'dirtBase')
 
         // Surface layer.
         if (ch === ':' || ch === 'g') continue // base is the surface — nothing on top
@@ -664,7 +702,7 @@ export default class TownScene extends Phaser.Scene {
           // base. Falls back to the edge pair if the corner tile isn't tagged.
           for (const { c, a, b } of CORNERS) {
             if (border[a] && border[b] && g[c]) {
-              stamp(x, y, g[c], 0.2)
+              stamp(x, y, g[c], 0.2, 'grassCorner')
               used.add(a)
               used.add(b)
               drew = true
@@ -673,18 +711,84 @@ export default class TownScene extends Phaser.Scene {
           // Remaining single edges (a transparent fringe toward that side).
           for (const d of ['N', 'E', 'S', 'W']) {
             if (border[d] && !used.has(d) && g[d]) {
-              stamp(x, y, g[d], 0.2)
+              stamp(x, y, g[d], 0.2, 'grassEdge')
               drew = true
             }
           }
-          if (!drew) stamp(x, y, grassFill, 0.2)
+          if (!drew) stamp(x, y, grassFill, 0.2, 'grassFill')
           continue
         }
         // Sign + anything unrecognised: procedural texture (opaque) on top.
         const key = keyForTileChar(ch)
-        if (key) this.add.image(x * TILE, y * TILE, key).setOrigin(0, 0).setDepth(0.2)
+        if (key) {
+          const img = this.add.image(x * TILE, y * TILE, key).setOrigin(0, 0).setDepth(0.2)
+          if (DEV) this.devLayers.grassFill?.push(img)
+        }
       }
     }
+  }
+
+  // ---- dev-only ground-layer inspector (gated by DEV in create()) ---------
+  // A counterpart to the G grid: press L for a legend panel, 1–5 to toggle each
+  // ground layer; also exposed as window.__game.layers for the console.
+  setupDevLayers() {
+    const panel = this.add
+      .text(8, 8, '', {
+        fontFamily: 'monospace',
+        fontSize: '12px',
+        color: '#e8e8ee',
+        backgroundColor: 'rgba(10,12,16,0.82)',
+        padding: { x: 8, y: 6 },
+        lineSpacing: 2,
+      })
+      .setScrollFactor(0) // pin to the camera as the player walks
+      .setDepth(9001) // above the grid overlay
+      .setVisible(false)
+    this.devLayerPanel = panel
+    this.showLayerPanel = false
+    this.refreshDevLayerPanel()
+
+    this.input.keyboard.on('keydown-L', () => {
+      this.showLayerPanel = !this.showLayerPanel
+      panel.setVisible(this.showLayerPanel)
+    })
+    DEV_LAYERS.forEach((l, i) => {
+      this.input.keyboard.on(`keydown-${DEV_NUM_KEYS[i]}`, () => this.toggleDevLayer(l.key))
+    })
+
+    if (typeof window !== 'undefined' && window.__game) {
+      window.__game.layers = {
+        list: () => DEV_LAYERS.map((l) => ({ ...l, visible: this.layerVisible[l.key] })),
+        toggle: (key) => this.toggleDevLayer(key),
+        show: (key) => this.setDevLayer(key, true),
+        hide: (key) => this.setDevLayer(key, false),
+      }
+    }
+    // eslint-disable-next-line no-console
+    console.log('[dev] ground layers: L = panel, 1–5 toggle, or window.__game.layers')
+  }
+
+  toggleDevLayer(key) {
+    this.setDevLayer(key, !this.layerVisible[key])
+  }
+
+  setDevLayer(key, visible) {
+    const bucket = this.devLayers?.[key]
+    if (!bucket) return
+    this.layerVisible[key] = visible
+    for (const s of bucket) s.setVisible(visible)
+    this.refreshDevLayerPanel()
+  }
+
+  refreshDevLayerPanel() {
+    if (!this.devLayerPanel) return
+    const lines = ['GROUND LAYERS  (L)']
+    DEV_LAYERS.forEach((l, i) => {
+      const on = this.layerVisible[l.key]
+      const count = this.devLayers[l.key].length
+      lines.push(`${i + 1} [${on ? '×' : ' '}] ${l.label}  (${count})`)
+    })
+    this.devLayerPanel.setText(lines.join('\n'))
   }
 
   // Build the two-layer building sprite. We don't yet hue-rotate from
@@ -710,14 +814,14 @@ export default class TownScene extends Phaser.Scene {
       .setDepth((plot.row + plot.h) * 10 - 1)
 
     // Body — bottom 64%.
-    this.add
+    const body = this.add
       .image(cx, cy + h * 0.36, `building.${key}.body`)
       .setOrigin(0, 0)
       .setDisplaySize(w, h * 0.64)
       .setDepth((plot.row + plot.h) * 10 - 1)
 
     // Nameplate under the building — small text, dark on light.
-    this.add
+    const plate = this.add
       .text(cx + w / 2, cy + h - 4, community.title.toUpperCase(), {
         fontFamily: 'monospace',
         fontSize: '11px',
@@ -727,6 +831,8 @@ export default class TownScene extends Phaser.Scene {
       })
       .setOrigin(0.5, 0)
       .setDepth((plot.row + plot.h) * 10 + 1)
+
+    if (DEV) this.devLayers?.buildings?.push(roof, body, plate)
 
     // Approximate per-community tint by tinting the roof — until we have
     // a hue-rotate shader, this is the cheapest way to differentiate
@@ -754,11 +860,12 @@ export default class TownScene extends Phaser.Scene {
       const useTree = key === 'prop.tree' && tree
       const wTiles = (useTree ? tree.footprint_w : def?.wTiles) || 1
       const hTiles = (useTree ? tree.footprint_h : def?.hTiles) || 1
-      this.add
+      const sprite = this.add
         .image(col * TILE + TILE / 2, (row + 1) * TILE, key)
         .setOrigin(0.5, 1)
         .setDisplaySize(wTiles * TILE, hTiles * TILE)
         .setDepth((row + 1) * 10 - 1)
+      if (DEV) this.devLayers?.trees?.push(sprite)
       if (def?.blocks) this.propCells.add(`${col},${row}`)
     }
   }
