@@ -49,8 +49,8 @@ export const PER_ROW = 5 // buildings per street row
 const BAND_H = 7 // per row band: 4 building + 1 street-path + 2 grass gap
 const TOP_MARGIN = 2 // grass rows above the first building row
 const BOTTOM_MARGIN = 2 // grass rows below the last street, before the gate
-const FIELD_GAP = 1 // grass row between the last street row and the field
-const FIELD_H = 5 // height of the tall-grass field block (wild encounters)
+const FIELD_GAP = 0 // field starts right after the band's own grass rows
+const FIELD_H = 7 // height of the tall-grass field block (wild encounters)
 
 // Build the whole town for a given number of building plots. Returns a `town`
 // object: { cols, rows, map (string[]), plots, entrance }.
@@ -89,13 +89,13 @@ export function buildTown(plotCount) {
   // encountered. The entrance stem cuts a safe (no-encounter) path through it.
   const fieldTop = 1 + TOP_MARGIN + numRows * BAND_H + FIELD_GAP
   const fieldBottom = fieldTop + FIELD_H - 1
-  // Start the field at x=4, not x=3, so there are two grass tiles (x2,x3)
-  // between the side-avenue road (x1) and the field. A single grass tile there
-  // would have to transition to road on one side and dirt on the other at once,
-  // which the 3x3 edge set can't express (the two opposite edges overlap into
-  // solid grass). Two tiles give each side its own clean single-edge cell.
-  const fieldLeft = 4
-  const fieldRight = cols - 4
+  // The field is sized one tile bigger than the encounter core on every side,
+  // so the dirt patch's own edge/corner tiles form a visible border ring around
+  // it. (fieldLeft=3 puts the left edge one tile from the side-avenue road
+  // again — the 1-wide grass strip that creates at x2 is handled by the
+  // layer/painter work, not here.)
+  const fieldLeft = 3
+  const fieldRight = cols - 3
 
   // Ground tile for (x,y): T tree / s sign (blocked) · . grass / : path /
   // g tall grass (all walkable; g rolls for wild encounters).

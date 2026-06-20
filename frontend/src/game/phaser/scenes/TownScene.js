@@ -48,13 +48,16 @@ const DEV_LAYERS = [
 // Phaser keyboard event names for the digit keys 1..8.
 const DEV_NUM_KEYS = ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX', 'SEVEN', 'EIGHT']
 
-// Ground terrain layers, stacked bottom → top. Every layer is painted by the
-// SAME rule (see paintGround): draw its own (autotiled) tile on its cells, and
-// bleed its flat fill under adjacent cells whose terrain stacks ABOVE it so a
-// higher layer's transparent edge can reveal it. A terrain's depth and bleed
-// behaviour fall out of its position here — there is no per-terrain special
-// casing. Append future terrains in stack order.
+// Ground terrain layers, stacked bottom → top. Each layer draws its own
+// (autotiled) tile on its OWN cells. Depth falls out of position here; a
+// transparent edge reveals whatever a lower layer drew in the same cell, else
+// the canvas. Append future terrains in stack order.
 const GROUND_STACK = ['road', 'dirt', 'grass']
+// Layers that additionally "bleed" — spill their flat fill one tile into
+// adjacent cells whose terrain stacks ABOVE them, so a higher layer's
+// transparent edge reveals them at the seam. Opt-in per layer: only the
+// bottom road base bleeds; dirt/grass paint strictly their own cells.
+const BLEED_LAYERS = new Set(['road'])
 
 // Asset URLs are imported by PhaserGame and pushed into the registry so a
 // scene doesn't need to know module paths. The registry shape:
@@ -677,7 +680,7 @@ export default class TownScene extends Phaser.Scene {
         .setDisplaySize(TILE, TILE)
       if (DEV && bucket) this.devLayers[bucket]?.push(img)
     }
-    // Does this cell have an 8-neighbour of terrain `type`?
+    // Does this cell have an 8-neighbour of terrain `type`? Used for the bleed.
     const near = (x, y, type) => {
       for (let dy = -1; dy <= 1; dy++) {
         for (let dx = -1; dx <= 1; dx++) {
@@ -725,22 +728,23 @@ export default class TownScene extends Phaser.Scene {
       if (!drew) stamp(x, y, f, depth, bucketFor(layer))
     }
 
-    // One generic pass per layer, bottom → top. Each layer: draw its own tile
-    // on its cells, and bleed its flat fill under adjacent cells whose terrain
-    // stacks ABOVE it (so a higher layer's transparent edge reveals it).
-    // Compositing is dumb depth order (depth = rank × 0.1, all < 1 so the
-    // ground stays beneath sight markers / player / props). The "road spills
-    // freely, dirt only under grass" asymmetry falls out of the stack order.
+    // One generic pass per layer, bottom → top. Each layer draws its own
+    // (autotiled) tile on its own cells. A bleed layer (BLEED_LAYERS) also
+    // spills its flat fill one tile into adjacent higher-stacked cells so a
+    // higher transparent edge can reveal it; non-bleed layers touch only their
+    // own cells. Compositing is dumb depth order (depth = rank × 0.1, all < 1 so
+    // the ground stays beneath sight markers / player / props).
     GROUND_STACK.forEach((layer, i) => {
       const f = fillFor[layer]
       if (!f) return // terrain has no fill tile tagged yet
+      const bleeds = BLEED_LAYERS.has(layer)
       const depth = i * 0.1
       for (let y = 0; y < this.town.rows; y++) {
         for (let x = 0; x < this.town.cols; x++) {
           const cType = typeForTileChar(this.town.map[y][x])
           if (cType === layer) {
             drawOwn(layer, x, y, depth)
-          } else if (cType && rank(cType) > i && near(x, y, layer)) {
+          } else if (bleeds && cType && rank(cType) > i && near(x, y, layer)) {
             stamp(x, y, f, depth, bucketFor(layer)) // bleed under a higher layer
           }
         }
@@ -749,7 +753,7 @@ export default class TownScene extends Phaser.Scene {
 
     // Non-terrain chars (the signpost) keep their procedural texture, drawn on
     // top of the ground layers. typeForTileChar treats 's' as grass for
-    // neighbour/bleed purposes, so the ground beneath is already painted.
+    // neighbour purposes, and the grass layer already paints the cell beneath.
     for (let y = 0; y < this.town.rows; y++) {
       for (let x = 0; x < this.town.cols; x++) {
         if (this.town.map[y][x] !== 's') continue
