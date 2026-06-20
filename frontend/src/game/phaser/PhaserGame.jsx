@@ -23,8 +23,7 @@ import rightWalk2 from '../assets/character/rpg-char-01/r2-c2.png'
 import upStill from '../assets/character/rpg-char-01/r3-c0.png'
 import upWalk1 from '../assets/character/rpg-char-01/r3-c1.png'
 import upWalk2 from '../assets/character/rpg-char-01/r3-c2.png'
-import roofImg from '../assets/buildings/guild-roof.png'
-import bodyImg from '../assets/buildings/guild-body.png'
+import { BUILDINGS } from '../buildings.js'
 
 // 3 frames per direction: index 0 still, 1+2 walk cycle.
 const ASSETS = {
@@ -34,10 +33,9 @@ const ASSETS = {
     left: [leftStill, leftWalk1, leftWalk2],
     right: [rightStill, rightWalk1, rightWalk2],
   },
-  buildings: {
-    roofUrl: roofImg,
-    bodyUrl: bodyImg,
-  },
+  // Map of building-key → { roofUrl, bodyUrl }, auto-discovered from
+  // assets/buildings/. TownScene loads every entry and picks per community.
+  buildings: BUILDINGS,
 }
 
 // Design resolution matches the DOM town for a 5-community seed
@@ -55,6 +53,7 @@ export default function PhaserGame({
   communities,
   session,
   treeObject,
+  characterManifest,
   dailyBrief,
   activeCommunityId,
   onEnterCommunity,
@@ -107,6 +106,10 @@ export default function PhaserGame({
     game.registry.set('communities', communities)
     game.registry.set('session', session)
     game.registry.set('treeObject', treeObject || null)
+    // The active character manifest (sprite-mapper). Set synchronously after
+    // construction — Phaser defers boot, so this lands before TownScene's
+    // preload() reads it (same timing the treeObject relies on).
+    game.registry.set('characterManifest', characterManifest || null)
     game.registry.set('trainerDefeated', Boolean(trainerDefeated))
 
     gameRef.current = game
@@ -155,6 +158,14 @@ export default function PhaserGame({
     if (!game) return
     game.registry.set('treeObject', treeObject || null)
   }, [treeObject])
+
+  // Like treeObject, the character manifest is a scene-boot input read once in
+  // preload(); pushing it keeps the registry fresh for the next mount/reload.
+  useEffect(() => {
+    const game = gameRef.current
+    if (!game) return
+    game.registry.set('characterManifest', characterManifest || null)
+  }, [characterManifest])
 
   useEffect(() => {
     const game = gameRef.current

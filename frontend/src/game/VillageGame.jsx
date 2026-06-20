@@ -29,6 +29,7 @@ export default function VillageGame({
   communities,
   session,
   treeObject,
+  characterManifest,
   dailyBrief,
   activeCommunityId,
   onEnterCommunity,
@@ -42,6 +43,7 @@ export default function VillageGame({
       communities={communities}
       session={session}
       treeObject={treeObject}
+      characterManifest={characterManifest}
       dailyBrief={dailyBrief}
       activeCommunityId={activeCommunityId}
       onEnterCommunity={onEnterCommunity}

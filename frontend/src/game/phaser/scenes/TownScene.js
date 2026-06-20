@@ -6,6 +6,14 @@ import {
   PROPS,
   tallPropsFor,
 } from '../townTileset.js'
+import { buildingKeyFor, DEFAULT_BUILDING } from '../../buildings.js'
+import {
+  CHAR_SHEET_KEY,
+  preloadCharacter,
+  buildCharacterRig,
+  characterScale,
+  applyFacing,
+} from '../characterRig.js'
 import bus from '../bus.js'
 import {
   GATE_TRAINER,
@@ -38,6 +46,13 @@ export default class TownScene extends Phaser.Scene {
     this.player = null
     this.playerTile = { x: 0, y: 0 }
     this.facing = 'up'
+    // Manifest-driven character (sprite-mapper). When a manifest + its sheet
+    // are present the player is an animated Sprite; otherwise we fall back to
+    // the bundled rpg-char-01 frames. charDir holds the per-direction
+    // { animKey, idleFrame, flips } lookup built in setupCharacter().
+    this._charManifest = null
+    this.usingManifest = false
+    this.charDir = null
     this.movingTween = null
     this.town = null
     this.buildings = [] // [{ community, col, row, w, h, doorCol, doorRow, sprite }]
@@ -88,9 +103,16 @@ export default class TownScene extends Phaser.Scene {
       })
     }
 
-    if (reg.buildings) {
-      this.load.image('building.roof', reg.buildings.roofUrl)
-      this.load.image('building.body', reg.buildings.bodyUrl)
+    // Active character manifest (sprite-mapper). When present, its sheet drives
+    // the player; the bundled frames above remain the fallback. The rig (frame
+    // slicing + walk anims) is built in create() via setupCharacter().
+    this._charManifest = preloadCharacter(this)
+
+    // reg.buildings is a map of key → { roofUrl, bodyUrl }. Load every one
+    // as `building.<key>.roof` / `.body`; addBuildingSprite picks per plot.
+    for (const [key, art] of Object.entries(reg.buildings || {})) {
+      if (art.roofUrl) this.load.image(`building.${key}.roof`, art.roofUrl)
+      if (art.bodyUrl) this.load.image(`building.${key}.body`, art.bodyUrl)
     }
 
     // Gate trainer + opponent sprites. `encounters.js` already imports
@@ -165,9 +187,13 @@ export default class TownScene extends Phaser.Scene {
     const sorted = [...communities].sort((a, b) => a.position_order - b.position_order)
     this.buildings = sorted.map((community, i) => {
       const plot = this.town.plots[i]
-      const sprite = this.addBuildingSprite(community, plot)
+      const sprite = this.addBuildingSprite(community, plot, i)
       return { community, ...plot, sprite }
     })
+
+    // Slice the manifest sheet into frames + walk anims (no-op when there's no
+    // manifest, leaving usingManifest false → bundled-frame player).
+    this.setupCharacter()
 
     // Player sprite + spawn. Falls back to the entrance if the session is
     // empty or names a community that no longer exists.
@@ -307,7 +333,7 @@ export default class TownScene extends Phaser.Scene {
 
     if (!this.walkable(tx, ty)) {
       // Bumped a wall — face the direction in still pose; no tween.
-      this.player.setTexture(`player.${this.facing}.0`)
+      this.setPlayerWalking(false)
       return
     }
 
@@ -319,27 +345,26 @@ export default class TownScene extends Phaser.Scene {
     // depth set at spawn would never change and the player would slip
     // behind any building that happens to be south of its spawn row.
     this.player.setDepth(ty * 10 + 5)
-    // rpg-char-01 has 3 frames per direction: 0 still, 1 step-A, 2 step-B.
-    // Alternate walk-A and walk-B with each step so the gait reads as
-    // left-foot / right-foot — same scheme as InteriorScene.
-    this.player.setTexture(
-      `player.${this.facing}.${(this.player.stepCount++ % 2) + 1}`,
-    )
+    this.setPlayerWalking(true)
     this.movingTween = this.tweens.add({
       targets: this.player,
       x: tx * TILE + TILE / 2,
-      // Feet land at the destination tile's floor (matches setOrigin),
-      // offset by PLAYER_FEET_LIFT to account for the sprite's foot
-      // position inside its display box (+y = down in Phaser).
-      y: (ty + 1) * TILE + PLAYER_FEET_LIFT,
+      // Feet land at the destination tile's floor (matches setOrigin). The
+      // bundled rpg-char-01 needs PLAYER_FEET_LIFT for its padded box; the
+      // manifest sprite is tightly cropped, so its feet sit on the floor.
+      y: (ty + 1) * TILE + (this.usingManifest ? 0 : PLAYER_FEET_LIFT),
       duration: MOVE_MS,
       onComplete: () => {
         this.movingTween = null
-        // Snap back to still at the end of the slide so a single tap
-        // doesn't leave the sprite stuck mid-stride. If the player is
-        // still holding a direction, update() will immediately call
-        // step() again and the next walk frame takes over.
-        this.player.setTexture(`player.${this.facing}.0`)
+        // Snap back to still at the end of the slide so a single tap doesn't
+        // leave the sprite stuck mid-stride. With a held direction update()
+        // re-steps immediately; the manifest path keeps its walk loop running
+        // (only idling when no direction is held) to avoid a per-tile stutter.
+        if (this.usingManifest) {
+          if (!this.activeDirection()) this.applyFacing(this.facing, false)
+        } else {
+          this.player.setTexture(`player.${this.facing}.0`)
+        }
         // Trainer sight is checked first — when the player lands in
         // his line of sight, the duel takes priority over a wild
         // encounter on the same step.
@@ -348,6 +373,21 @@ export default class TownScene extends Phaser.Scene {
         }
       },
     })
+  }
+
+  // Set the player's frame for walking vs standing in the current facing.
+  // Manifest sprites play/stop their walk anim; the bundled player alternates
+  // its two walk frames (0 = still, 1/2 = step A/B), same as InteriorScene.
+  setPlayerWalking(walking) {
+    if (this.usingManifest) {
+      this.applyFacing(this.facing, walking)
+    } else if (walking) {
+      this.player.setTexture(
+        `player.${this.facing}.${(this.player.stepCount++ % 2) + 1}`,
+      )
+    } else {
+      this.player.setTexture(`player.${this.facing}.0`)
+    }
   }
 
   // Trainer line-of-sight check. Returns true if a duel was triggered
@@ -479,29 +519,48 @@ export default class TownScene extends Phaser.Scene {
   // handled inline in step() (frame alternation + onComplete snap
   // back to this still pose).
   updatePlayerFrame() {
-    this.player.setTexture(`player.${this.facing}.0`)
+    if (this.usingManifest) this.applyFacing(this.facing, false)
+    else this.player.setTexture(`player.${this.facing}.0`)
+  }
+
+  // Build the manifest character rig (shared with InteriorScene). No-op effect
+  // when there's no manifest: usingManifest stays false and the bundled
+  // rpg-char-01 player is used instead.
+  setupCharacter() {
+    const rig = buildCharacterRig(this, this._charManifest)
+    this.usingManifest = rig.usingManifest
+    this.charDir = rig.charDir
+  }
+
+  applyFacing(dir, walking) {
+    if (this.usingManifest) applyFacing(this.player, this.charDir, dir, walking)
   }
 
   // Build the two-layer building sprite. We don't yet hue-rotate from
   // the community color — Phaser tint is RGB-only and a per-roof
   // hue-rotate would need a custom shader. PR-B accepts a uniform roof
   // color for now; PR-C+ adds the shader / palette-swap.
-  addBuildingSprite(community, plot) {
+  addBuildingSprite(community, plot, index = 0) {
     const cx = plot.col * TILE
     const cy = plot.row * TILE
     const w = plot.w * TILE
     const h = plot.h * TILE
 
+    // Which art to use. Falls back to the default if the chosen key never
+    // loaded (e.g. a community.building naming art that isn't present).
+    let key = buildingKeyFor(community, index)
+    if (!this.textures.exists(`building.${key}.roof`)) key = DEFAULT_BUILDING
+
     // Roof — top 36% of the footprint.
     const roof = this.add
-      .image(cx, cy, 'building.roof')
+      .image(cx, cy, `building.${key}.roof`)
       .setOrigin(0, 0)
       .setDisplaySize(w, h * 0.36)
       .setDepth((plot.row + plot.h) * 10 - 1)
 
     // Body — bottom 64%.
     this.add
-      .image(cx, cy + h * 0.36, 'building.body')
+      .image(cx, cy + h * 0.36, `building.${key}.body`)
       .setOrigin(0, 0)
       .setDisplaySize(w, h * 0.64)
       .setDepth((plot.row + plot.h) * 10 - 1)
@@ -567,23 +626,36 @@ export default class TownScene extends Phaser.Scene {
 
     this.playerTile = { x: spawn.x, y: spawn.y }
     this.facing = spawn.facing
-    this.player = this.add
-      .image(
-        spawn.x * TILE + TILE / 2,
-        // Feet anchor at the tile floor — same as the trainer sprite,
-        // so when they stand side by side their feet line up. Offset
-        // by PLAYER_FEET_LIFT so the rpg-char-01 sprite's visible feet
-        // (which sit inside its 96×96 display box's padding) land
-        // where the eye expects them on the tile (+y = down in Phaser).
-        (spawn.y + 1) * TILE + PLAYER_FEET_LIFT,
-        `player.${spawn.facing}.0`,
-      )
-      .setOrigin(0.5, 1)
-      .setDepth(spawn.y * 10 + 5)
-      // rpg-char-01 has heavy transparent padding inside its 32×32
-      // box, so 96×96 brings the visible body to a Pokémon-faithful
-      // on-screen height. Source PNG is square; display kept square.
-      .setDisplaySize(96, 96)
+    const px = spawn.x * TILE + TILE / 2
+    const depth = spawn.y * 10 + 5
+
+    if (this.usingManifest) {
+      // Manifest sprite: a tightly-cropped sheet, so feet sit on the tile
+      // floor (no PLAYER_FEET_LIFT). Origin from the manifest's render block
+      // (bottom-centre by convention) so the figure overflows upward.
+      const render = this._charManifest.render || { originX: 0.5, originY: 1, scale: 1 }
+      this.player = this.add
+        .sprite(px, (spawn.y + 1) * TILE, CHAR_SHEET_KEY, this.charDir.down.idleFrame)
+        .setOrigin(render.originX, render.originY)
+        .setDepth(depth)
+      // Scale relative to the 32-px authoring grid → matches the map-preview.
+      this.player.setScale(characterScale(this._charManifest))
+    } else {
+      this.player = this.add
+        .image(
+          px,
+          // Feet anchor at the tile floor — same as the trainer sprite, so
+          // side-by-side feet line up. PLAYER_FEET_LIFT accounts for the
+          // rpg-char-01 sprite's feet sitting inside its padded display box.
+          (spawn.y + 1) * TILE + PLAYER_FEET_LIFT,
+          `player.${spawn.facing}.0`,
+        )
+        .setOrigin(0.5, 1)
+        .setDepth(depth)
+        // rpg-char-01 has heavy transparent padding inside its 32×32 box, so
+        // 96×96 brings the visible body to a Pokémon-faithful on-screen height.
+        .setDisplaySize(96, 96)
+    }
     this.player.stepCount = 0
     this.updatePlayerFrame()
     this.cameras.main.startFollow(this.player, true, 0.15, 0.15)
