@@ -68,8 +68,8 @@ await page.waitForTimeout(700)
 // rest of the walk is deterministic.
 await clearPhaserGateTrainer(page)
 
-// Spawn (12, 17) → Compliance doormat (3, 7) → step into door.
-await press('ArrowUp', 9)
+// Spawn (12, 18), trainer step to row 17, then Compliance doormat (3, 7).
+await press('ArrowUp', 10)
 await press('ArrowLeft', 9)
 await press('ArrowUp', 1)
 

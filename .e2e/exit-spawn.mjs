@@ -76,7 +76,7 @@ await clearPhaserGateTrainer(page)
 
 // Spawn → Compliance doormat: up the entrance stem to the street,
 // then west along the street.
-await press('ArrowUp', 9) // (entranceCol, 7)
+await press('ArrowUp', 10) // (entranceCol, 7)
 await press('ArrowLeft', 9) // (3, 7) — facing Compliance's door
 await press('ArrowUp', 1) // step into the doorway
 await waitForScene('Interior')
