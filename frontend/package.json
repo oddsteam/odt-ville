@@ -6,7 +6,8 @@
   "packageManager": "pnpm@11.5.0",
   "scripts": {
     "dev": "vite",
-    "test": "node --test",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
     "build": "vite build",
     "preview": "vite preview",
     "map:build": "node ../scripts/tmx-to-tiledjson.mjs public/maps/downtown.tmx public/maps/downtown.json",
@@ -22,6 +23,8 @@
   "devDependencies": {
     "@vitejs/plugin-react": "^6.0.2",
     "sharp": "^0.35.1",
-    "vite": "^8.0.14"
+    "typescript": "^6.0.3",
+    "vite": "^8.0.14",
+    "vitest": "^4.1.9"
   }
 }
