@@ -10,7 +10,7 @@ import { loadActiveManifest } from './character/manifest.js'
 
 // Demo target for every board's "open content list" action. Replaced in a
 // follow-up by per-board content-list views (see issue #15 follow-ups).
-const DEMO_BOARD_URL = 'https://onerev-sit.dev.krungthai.com/'
+const DEMO_BOARD_URL = 'https://app.basecamp.com/4877526/'
 
 // Tiny inline fetch for the current viewer — the header above the game.
 // Kept inline (rather than its own client module) because there is only one
