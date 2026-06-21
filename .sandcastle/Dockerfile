@@ -30,11 +30,19 @@ ARG AGENT_GID=1000
 RUN groupmod -o -g $AGENT_GID node && usermod -o -u $AGENT_UID -g $AGENT_GID -d /home/agent -m -l agent node
 USER ${AGENT_UID}:${AGENT_GID}
 
-# Install Claude Code CLI
-RUN curl -fsSL https://claude.ai/install.sh | bash
+# Install Claude Code CLI. Download to a file first instead of `curl | bash`:
+# if curl can't reach the server, the pipe would feed empty input to bash,
+# which exits 0 and silently ships an image with no Claude. With `-o` + `&&`
+# a network failure fails the build loudly.
+RUN curl -fsSL https://claude.ai/install.sh -o /tmp/install.sh \
+  && bash /tmp/install.sh \
+  && rm /tmp/install.sh
 
 # Add Claude to PATH
 ENV PATH="/home/agent/.local/bin:$PATH"
+
+# Fail the build if Claude didn't actually land on PATH.
+RUN claude --version
 
 WORKDIR /home/agent
 
