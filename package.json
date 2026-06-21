@@ -1,0 +1,12 @@
+{
+  "name": "odt-ville",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.5.0",
+  "scripts": {
+    "sandcastle": "pnpm dlx tsx .sandcastle/main.ts"
+  },
+  "devDependencies": {
+    "@ai-hero/sandcastle": "^0.10.0"
+  }
+}

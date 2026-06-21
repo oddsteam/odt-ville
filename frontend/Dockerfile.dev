@@ -6,9 +6,13 @@ FROM node:22-bookworm-slim
 
 WORKDIR /app
 
+# Enable pnpm via corepack (bundled with node:22), pinned to match the
+# packageManager field in frontend/package.json.
+RUN corepack enable && corepack prepare pnpm@11.5.0 --activate
+
 EXPOSE 5460
 
 # node_modules lives in a named volume (see compose.yaml) so the host's
 # macOS-arm sharp binary never shadows the Linux one. The command is supplied
 # by compose.yaml.
-CMD ["bash", "-c", "npm install && npm run dev -- --host 0.0.0.0"]
+CMD ["bash", "-c", "pnpm install && pnpm run dev --host 0.0.0.0"]

@@ -39,7 +39,7 @@ export default defineConfig({
     // Accept the public hostname used by the Cloudflare tunnel.
     allowedHosts: ['localhost', '.p2d.uk'],
     // VITE_PROXY_TARGET points at the backend container under Docker Compose;
-    // defaults to localhost for a plain local `npm run dev`.
+    // defaults to localhost for a plain local `pnpm run dev`.
     //
     // No `changeOrigin`: we deliberately pass the browser's Host header through
     // to the backend. Rails host authorization allows `localhost` and `.p2d.uk`

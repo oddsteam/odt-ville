@@ -77,7 +77,7 @@ Notes:
 
 - **Dependencies live in named volumes** (`bundle`, `frontend_node_modules`),
   not on the host, so native gems and `sharp` are built for the Linux
-  containers instead of macOS. You don't run `bundle install` / `npm install`
+  containers instead of macOS. You don't run `bundle install` / `pnpm install`
   yourself — the containers do it on first boot (so the first `up` is slow).
 - **Data persists** across `docker compose down && docker compose up`. To wipe
   the database, use `docker compose down -v` (removes the `pgdata` volume).
@@ -116,7 +116,7 @@ Day-to-day operations (all via `ssh homeserver 'cd ~/apps/odt-ville && ...'`):
 | Status | `docker compose -f compose.yaml ps` |
 | Logs (follow) | `docker compose -f compose.yaml logs -f backend` |
 | Apply a **new migration** | `docker compose -f compose.yaml exec backend bin/rails db:migrate` |
-| Pick up new **gems / npm deps** | `docker compose -f compose.yaml up -d --build` |
+| Pick up new **gems / pnpm deps** | `docker compose -f compose.yaml up -d --build` |
 | Stop | `docker compose -f compose.yaml down` (add `-v` to also wipe the DB) |
 
 Notes:
@@ -167,8 +167,8 @@ In a second terminal:
 
 ```bash
 cd frontend
-npm install
-npm run dev
+pnpm install
+pnpm run dev
 ```
 
 Open **http://localhost:5390**. (Keep the backend running — the frontend proxies
