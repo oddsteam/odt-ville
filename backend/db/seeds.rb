@@ -1,4 +1,4 @@
-# One Rev Village seed data.
+# ODT Ville seed data.
 #
 # Creates one company, one user, and five "community houses", each with the
 # three standard boards (Must Know / Should Know / Nice to Know) and example
@@ -295,7 +295,7 @@ ActiveRecord::Base.transaction do
   User.delete_all
   Company.delete_all
 
-  company = Company.create!(name: "One Rev")
+  company = Company.create!(name: "ODT")
   user = User.create!(company: company, name: "Alex Rivera", role: "branch_employee")
   UserLocationState.create!(user: user, company: company, last_area: "town")
 

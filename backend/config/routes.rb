@@ -18,6 +18,23 @@ Rails.application.routes.draw do
       # Village game session — spawn point + last visited (game-only).
       get  "game/session", to: "game_sessions#show"
       put  "game/session", to: "game_sessions#update"
+
+      # Character sprite manifests — saved by the sprite-mapper tool, read by
+      # the game/preview. `active` is the single live character.
+      resources :character_manifests, only: [:index, :create, :show] do
+        get :active, on: :collection
+      end
+
+      # Tile objects — trees/props cropped from an atlas in the tile-object
+      # mapper, rendered on the town map. `active?kind=` is the live one.
+      resources :tile_objects, only: [:index, :create] do
+        get :active, on: :collection
+      end
+
+      # Ground tiles — grass/road/… cells tagged in the ground-tile mapper by
+      # their atlas coordinate, drawn via the tilemap renderer. A flat catalog
+      # (no single-active); edge/corner autotiling comes later.
+      resources :ground_tiles, only: [:index, :create, :destroy]
     end
   end
 end

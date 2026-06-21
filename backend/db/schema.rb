@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_22_100007) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_20_000002) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -21,6 +21,16 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_22_100007) do
     t.datetime "updated_at", null: false
     t.index ["house_id", "board_type"], name: "index_boards_on_house_id_and_board_type", unique: true
     t.index ["house_id"], name: "index_boards_on_house_id"
+  end
+
+  create_table "character_manifests", force: :cascade do |t|
+    t.boolean "active", default: false, null: false
+    t.datetime "created_at", null: false
+    t.jsonb "data", default: {}, null: false
+    t.string "name", null: false
+    t.datetime "updated_at", null: false
+    t.index ["active"], name: "index_character_manifests_single_active", unique: true, where: "active"
+    t.index ["name"], name: "index_character_manifests_on_name", unique: true
   end
 
   create_table "companies", force: :cascade do |t|
@@ -44,6 +54,21 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_22_100007) do
     t.index ["board_id"], name: "index_content_items_on_board_id"
   end
 
+  create_table "ground_tiles", force: :cascade do |t|
+    t.integer "cell", default: 32, null: false
+    t.integer "col", null: false
+    t.datetime "created_at", null: false
+    t.string "label", default: "", null: false
+    t.string "role", default: "fill", null: false
+    t.integer "row", null: false
+    t.string "side"
+    t.string "tile_type", null: false
+    t.string "tileset", null: false
+    t.datetime "updated_at", null: false
+    t.index ["tile_type"], name: "index_ground_tiles_on_tile_type"
+    t.index ["tileset", "col", "row"], name: "index_ground_tiles_on_cell", unique: true
+  end
+
   create_table "houses", force: :cascade do |t|
     t.boolean "active", default: true, null: false
     t.string "category_key", null: false
@@ -56,6 +81,19 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_22_100007) do
     t.datetime "updated_at", null: false
     t.index ["company_id", "position_order"], name: "index_houses_on_company_id_and_position_order"
     t.index ["company_id"], name: "index_houses_on_company_id"
+  end
+
+  create_table "tile_objects", force: :cascade do |t|
+    t.boolean "active", default: false, null: false
+    t.datetime "created_at", null: false
+    t.float "footprint_h", default: 1.0, null: false
+    t.float "footprint_w", default: 1.0, null: false
+    t.text "image", null: false
+    t.string "kind", default: "prop", null: false
+    t.string "name", null: false
+    t.datetime "updated_at", null: false
+    t.index ["kind"], name: "index_tile_objects_one_active_per_kind", unique: true, where: "active"
+    t.index ["name"], name: "index_tile_objects_on_name", unique: true
   end
 
   create_table "user_content_states", force: :cascade do |t|

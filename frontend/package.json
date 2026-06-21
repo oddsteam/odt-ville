@@ -1,12 +1,14 @@
 {
-  "name": "one-rev-village-frontend",
+  "name": "odt-ville-frontend",
   "private": true,
   "version": "0.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "test": "node --test",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "map:build": "node ../scripts/tmx-to-tiledjson.mjs public/maps/downtown.tmx public/maps/downtown.json"
   },
   "dependencies": {
     "phaser": "^4.1.0",

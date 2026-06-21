@@ -1,7 +1,31 @@
 import Phaser from 'phaser'
 import { TILE, MOVE_MS, PLAYER_FEET_LIFT, buildTown, tileChar } from '../../constants.js'
 import { ensureTileTextures } from '../tileTextures.js'
+import {
+  ENABLED as TILESET_ENABLED,
+  PROPS,
+  tallPropsFor,
+} from '../townTileset.js'
+import { buildingKeyFor, DEFAULT_BUILDING } from '../../buildings.js'
+import {
+  CHAR_SHEET_KEY,
+  preloadCharacter,
+  buildCharacterRig,
+  characterScale,
+  applyFacing,
+} from '../characterRig.js'
 import bus from '../bus.js'
+import {
+  GROUND_STACK,
+  EDGE_CORNERS,
+  coverageTerrainForCell,
+  dirtLayerBorders,
+  dirtLayerCoversCell,
+  groundPaintStackForCell,
+  roadLayerCoversCell,
+  terrainBorders,
+  typeForTileChar,
+} from '../groundModel.js'
 import {
   GATE_TRAINER,
   resolveTrainerStart,
@@ -15,6 +39,30 @@ import {
 // constants.js: anything not in this set is walkable ground; tree/sign are
 // not walkable, doors are special-cased below.
 const BLOCKED_TILE_CHARS = new Set(['T', 's'])
+
+// Dev-only layer inspector (press L for a panel, number keys to toggle each
+// layer; also window.__game.layers in the console). import.meta.env.DEV is
+// statically false in production builds, so Vite strips all of this. The first
+// three are the ground terrain layers (road/dirt base + the merged grass layer,
+// fill/edges/corners together); the last three are depth-sorted sprite groups
+// (trees/buildings/trainer aren't a single layer, but toggling their visibility
+// works the same regardless of depth).
+const DEV = import.meta.env.DEV
+const DEV_LAYERS = [
+  { key: 'roadBase', label: 'Road base' },
+  { key: 'dirtBase', label: 'Dirt base' },
+  { key: 'grass', label: 'Grass' },
+  { key: 'trees', label: 'Trees / props' },
+  { key: 'buildings', label: 'Buildings' },
+  { key: 'npc', label: 'NPCs (trainer)' },
+]
+// Phaser keyboard event names for the digit keys 1..8.
+const DEV_NUM_KEYS = ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX', 'SEVEN', 'EIGHT']
+
+// Ground terrain layers, stacked bottom → top. Each layer draws its own
+// (autotiled) tile on its OWN cells. Depth falls out of position here; a
+// transparent edge receives a targeted neighbouring-terrain fill in the same
+// cell immediately beneath it. Append future terrains in stack order.
 
 // Asset URLs are imported by PhaserGame and pushed into the registry so a
 // scene doesn't need to know module paths. The registry shape:
@@ -33,9 +81,17 @@ export default class TownScene extends Phaser.Scene {
     this.player = null
     this.playerTile = { x: 0, y: 0 }
     this.facing = 'up'
+    // Manifest-driven character (sprite-mapper). When a manifest + its sheet
+    // are present the player is an animated Sprite; otherwise we fall back to
+    // the bundled rpg-char-01 frames. charDir holds the per-direction
+    // { animKey, idleFrame, flips } lookup built in setupCharacter().
+    this._charManifest = null
+    this.usingManifest = false
+    this.charDir = null
     this.movingTween = null
     this.town = null
     this.buildings = [] // [{ community, col, row, w, h, doorCol, doorRow, sprite }]
+    this.propCells = new Set() // "x,y" tiles blocked by tall props (atlas mode)
     this.heldDirs = []
     // When InteriorScene exits via the doormat it scene.starts us with
     // `{ exitedCommunityId }`; we honor that over session-based spawn so
@@ -82,15 +138,47 @@ export default class TownScene extends Phaser.Scene {
       })
     }
 
-    if (reg.buildings) {
-      this.load.image('building.roof', reg.buildings.roofUrl)
-      this.load.image('building.body', reg.buildings.bodyUrl)
+    // Active character manifest (sprite-mapper). When present, its sheet drives
+    // the player; the bundled frames above remain the fallback. The rig (frame
+    // slicing + walk anims) is built in create() via setupCharacter().
+    this._charManifest = preloadCharacter(this)
+
+    // reg.buildings is a map of key → { roofUrl, bodyUrl }. Load every one
+    // as `building.<key>.roof` / `.body`; addBuildingSprite picks per plot.
+    for (const [key, art] of Object.entries(reg.buildings || {})) {
+      if (art.roofUrl) this.load.image(`building.${key}.roof`, art.roofUrl)
+      if (art.bodyUrl) this.load.image(`building.${key}.body`, art.bodyUrl)
     }
 
     // Gate trainer + opponent sprites. `encounters.js` already imports
     // these as Vite-resolved URLs; we just reuse them so the engines
     // share one source of truth for the opponent table.
     this.load.image('trainer.boss-k', GATE_TRAINER.sprite)
+
+    // Tall-prop art for the overlay pass. An admin-defined tree object
+    // (tile-object mapper → registry) wins; otherwise the bundled tree art
+    // from townTileset.js is used.
+    this._treeObject = this.registry.get('treeObject') || null
+    if (this._treeObject?.image) {
+      this.load.image('prop.tree', this._treeObject.image)
+    } else if (TILESET_ENABLED) {
+      for (const prop of Object.values(PROPS)) this.load.image(prop.key, prop.url)
+    }
+
+    // Ground-tile catalog (ground-tile mapper). Each referenced tileset loads
+    // once as a uniform spritesheet (frame = cell), so create() can stamp a
+    // specific cell — grass/dirt/road — onto the map by frame index.
+    this._groundTiles = this.registry.get('groundTiles') || []
+    const seenSheets = new Set()
+    for (const t of this._groundTiles) {
+      const key = `gtset.${t.tileset}`
+      if (seenSheets.has(key)) continue
+      seenSheets.add(key)
+      this.load.spritesheet(key, `/maps/tilesets/${t.tileset}.png`, {
+        frameWidth: t.cell,
+        frameHeight: t.cell,
+      })
+    }
   }
 
   create() {
@@ -114,15 +202,40 @@ export default class TownScene extends Phaser.Scene {
     this.cameras.main.setBounds(0, 0, worldW, worldH)
     this.physics?.world.setBounds(0, 0, worldW, worldH)
 
-    // Ground layer — one image per tile. This is more sprites than a
-    // tilemap-backed approach, but tile count tops out around 24×19 today
-    // and Phaser batches identical-texture sprites efficiently.
-    for (let y = 0; y < this.town.rows; y++) {
-      for (let x = 0; x < this.town.cols; x++) {
-        const ch = this.town.map[y][x]
-        const key = keyForTileChar(ch)
-        if (key) this.add.image(x * TILE, y * TILE, key).setOrigin(0, 0).setDepth(0)
+    // Ground is rendered at fixed road → dirt → grass depths. The higher layer
+    // owns each seam and reveals a targeted lower-layer fill beneath its edge.
+    // Fill + edge cells come from the ground-tile mapper; unknowns (the sign)
+    // fall back to the procedural textures.
+    // Dev layer inspector — bucket each ground sprite so it can be toggled
+    // (see setupDevLayers, called after the test API is up). Stripped in prod.
+    if (DEV) {
+      this.devLayers = {}
+      this.layerVisible = {}
+      for (const l of DEV_LAYERS) {
+        this.devLayers[l.key] = []
+        this.layerVisible[l.key] = true
       }
+    }
+
+    this.groundTiles = this.buildGroundTileMap()
+    this.paintGround()
+
+    // Tall props (trees) — bottom-anchored sprites that overflow their tile
+    // and y-sort against the player. Runs if either the bundled art or an
+    // admin tree object is available.
+    if (TILESET_ENABLED || this._treeObject?.image) this.addTallProps()
+
+    // Tile-grid overlay (dev-only authoring aid) — toggle with G. Drawn above
+    // everything so tile boundaries are visible over ground, buildings, and
+    // props. Hidden by default and gated behind DEV (stripped in prod).
+    if (DEV) {
+      const grid = this.add.graphics().setDepth(9000)
+      grid.lineStyle(1, 0xffffff, 0.22)
+      for (let x = 0; x <= this.town.cols; x++) grid.lineBetween(x * TILE, 0, x * TILE, worldH)
+      for (let y = 0; y <= this.town.rows; y++) grid.lineBetween(0, y * TILE, worldW, y * TILE)
+      grid.setVisible(false)
+      this.gridGfx = grid
+      this.showGrid = false
     }
 
     // Buildings — placement sorted by position_order, dropped onto the
@@ -130,9 +243,13 @@ export default class TownScene extends Phaser.Scene {
     const sorted = [...communities].sort((a, b) => a.position_order - b.position_order)
     this.buildings = sorted.map((community, i) => {
       const plot = this.town.plots[i]
-      const sprite = this.addBuildingSprite(community, plot)
+      const sprite = this.addBuildingSprite(community, plot, i)
       return { community, ...plot, sprite }
     })
+
+    // Slice the manifest sheet into frames + walk anims (no-op when there's no
+    // manifest, leaving usingManifest false → bundled-frame player).
+    this.setupCharacter()
 
     // Player sprite + spawn. Falls back to the entrance if the session is
     // empty or names a community that no longer exists.
@@ -151,6 +268,17 @@ export default class TownScene extends Phaser.Scene {
       left: Phaser.Input.Keyboard.KeyCodes.A,
       right: Phaser.Input.Keyboard.KeyCodes.D,
     })
+    // G toggles the tile-grid overlay + A1 coordinate labels (dev-only). The
+    // labels are built lazily on first reveal; combined with a layer name,
+    // "grass D5" names one tile on one layer in text.
+    if (DEV) {
+      this.input.keyboard.on('keydown-G', () => {
+        this.showGrid = !this.showGrid
+        this.gridGfx.setVisible(this.showGrid)
+        if (this.showGrid && !this.gridLabels) this.buildGridLabels()
+        this.gridLabels?.setVisible(this.showGrid)
+      })
+    }
     // Overlay D-pad — React emits press/release events on the bus so
     // we drive movement from tap/click input the same way keyboard
     // input feeds activeDirection().
@@ -188,6 +316,10 @@ export default class TownScene extends Phaser.Scene {
         }),
       }
     }
+
+    // Dev-only ground-layer inspector (after the test API so it can hang off
+    // window.__game). Stripped from production builds.
+    if (DEV) this.setupDevLayers()
 
     // React → Phaser registry watchers. The rule for what the scene
     // subscribes to: **structural data is a scene-boot input, not a
@@ -267,7 +399,7 @@ export default class TownScene extends Phaser.Scene {
 
     if (!this.walkable(tx, ty)) {
       // Bumped a wall — face the direction in still pose; no tween.
-      this.player.setTexture(`player.${this.facing}.0`)
+      this.setPlayerWalking(false)
       return
     }
 
@@ -279,27 +411,26 @@ export default class TownScene extends Phaser.Scene {
     // depth set at spawn would never change and the player would slip
     // behind any building that happens to be south of its spawn row.
     this.player.setDepth(ty * 10 + 5)
-    // rpg-char-01 has 3 frames per direction: 0 still, 1 step-A, 2 step-B.
-    // Alternate walk-A and walk-B with each step so the gait reads as
-    // left-foot / right-foot — same scheme as InteriorScene.
-    this.player.setTexture(
-      `player.${this.facing}.${(this.player.stepCount++ % 2) + 1}`,
-    )
+    this.setPlayerWalking(true)
     this.movingTween = this.tweens.add({
       targets: this.player,
       x: tx * TILE + TILE / 2,
-      // Feet land at the destination tile's floor (matches setOrigin),
-      // offset by PLAYER_FEET_LIFT to account for the sprite's foot
-      // position inside its display box (+y = down in Phaser).
-      y: (ty + 1) * TILE + PLAYER_FEET_LIFT,
+      // Feet land at the destination tile's floor (matches setOrigin). The
+      // bundled rpg-char-01 needs PLAYER_FEET_LIFT for its padded box; the
+      // manifest sprite is tightly cropped, so its feet sit on the floor.
+      y: (ty + 1) * TILE + (this.usingManifest ? 0 : PLAYER_FEET_LIFT),
       duration: MOVE_MS,
       onComplete: () => {
         this.movingTween = null
-        // Snap back to still at the end of the slide so a single tap
-        // doesn't leave the sprite stuck mid-stride. If the player is
-        // still holding a direction, update() will immediately call
-        // step() again and the next walk frame takes over.
-        this.player.setTexture(`player.${this.facing}.0`)
+        // Snap back to still at the end of the slide so a single tap doesn't
+        // leave the sprite stuck mid-stride. With a held direction update()
+        // re-steps immediately; the manifest path keeps its walk loop running
+        // (only idling when no direction is held) to avoid a per-tile stutter.
+        if (this.usingManifest) {
+          if (!this.activeDirection()) this.applyFacing(this.facing, false)
+        } else {
+          this.player.setTexture(`player.${this.facing}.0`)
+        }
         // Trainer sight is checked first — when the player lands in
         // his line of sight, the duel takes priority over a wild
         // encounter on the same step.
@@ -308,6 +439,21 @@ export default class TownScene extends Phaser.Scene {
         }
       },
     })
+  }
+
+  // Set the player's frame for walking vs standing in the current facing.
+  // Manifest sprites play/stop their walk anim; the bundled player alternates
+  // its two walk frames (0 = still, 1/2 = step A/B), same as InteriorScene.
+  setPlayerWalking(walking) {
+    if (this.usingManifest) {
+      this.applyFacing(this.facing, walking)
+    } else if (walking) {
+      this.player.setTexture(
+        `player.${this.facing}.${(this.player.stepCount++ % 2) + 1}`,
+      )
+    } else {
+      this.player.setTexture(`player.${this.facing}.0`)
+    }
   }
 
   // Trainer line-of-sight check. Returns true if a duel was triggered
@@ -364,6 +510,7 @@ export default class TownScene extends Phaser.Scene {
       return false
     }
     if (this.trainer && this.trainer.x === x && this.trainer.y === y) return false
+    if (this.propCells.has(`${x},${y}`)) return false
     return true
   }
 
@@ -390,6 +537,7 @@ export default class TownScene extends Phaser.Scene {
     const scale = targetH / sprite.height
     sprite.setScale(scale)
     this.trainerSprite = sprite
+    if (DEV) this.devLayers?.npc?.push(sprite)
 
     // Sight markers — soft red pulsing squares on each sight cell.
     // Drawn as a single Graphics with one rect per cell so a single
@@ -399,6 +547,7 @@ export default class TownScene extends Phaser.Scene {
       g.fillStyle(0xff5050, 0.32)
       g.fillCircle(c.x * TILE + TILE / 2, c.y * TILE + TILE / 2, TILE * 0.45)
     }
+    if (DEV) this.devLayers?.npc?.push(g)
     this.tweens.add({
       targets: g,
       alpha: { from: 0.55, to: 0.95 },
@@ -438,35 +587,303 @@ export default class TownScene extends Phaser.Scene {
   // handled inline in step() (frame alternation + onComplete snap
   // back to this still pose).
   updatePlayerFrame() {
-    this.player.setTexture(`player.${this.facing}.0`)
+    if (this.usingManifest) this.applyFacing(this.facing, false)
+    else this.player.setTexture(`player.${this.facing}.0`)
+  }
+
+  // Build the manifest character rig (shared with InteriorScene). No-op effect
+  // when there's no manifest: usingManifest stays false and the bundled
+  // rpg-char-01 player is used instead.
+  setupCharacter() {
+    const rig = buildCharacterRig(this, this._charManifest)
+    this.usingManifest = rig.usingManifest
+    this.charDir = rig.charDir
+  }
+
+  applyFacing(dir, walking) {
+    if (this.usingManifest) applyFacing(this.player, this.charDir, dir, walking)
+  }
+
+  // Resolve the ground-tile catalog into a `tileChar -> { key, frame }` lookup
+  // for the ground layer. Surface types map onto the town's map chars:
+  //   grass -> '.' open ground AND '*' flower patches (same grass cell)
+  //   dirt  -> 'g' tall-grass encounter field
+  //   road  -> ':' streets, side avenue, entrance stem
+  // The spritesheet was loaded in preload(); the cell's frame index is
+  // row * columns + col, with columns derived from the loaded image width.
+  buildGroundTileMap() {
+    const TYPE_TO_CHARS = { grass: ['.', '*'], dirt: ['g'], road: [':'] }
+    const out = {}
+    for (const t of this._groundTiles || []) {
+      // Only fill tiles paint the interior; edge tiles (role: 'edge') are
+      // resolved by the boundary pass — Step 2, not yet wired here.
+      if (t.role && t.role !== 'fill') continue
+      const chars = TYPE_TO_CHARS[t.tile_type]
+      if (!chars) continue
+      const key = `gtset.${t.tileset}`
+      if (!this.textures.exists(key)) continue
+      const width = this.textures.get(key).getSourceImage().width
+      const cols = Math.max(1, Math.floor(width / t.cell))
+      const cell = { key, frame: t.row * cols + t.col }
+      for (const ch of chars) out[ch] = cell
+    }
+    return out
+  }
+
+  // Edge + corner tiles from the catalog, as `{ type: { side: { key, frame } } }`.
+  // Orthogonal sides (N/E/S/W) are edges, diagonal (NE/NW/SE/SW) are corners;
+  // they share the keyspace since the side names don't collide. Fill tiles are
+  // ignored here (they live in the fill map).
+  buildEdgeMap() {
+    const out = {}
+    for (const t of this._groundTiles || []) {
+      if ((t.role !== 'edge' && t.role !== 'corner') || !t.side) continue
+      const key = `gtset.${t.tileset}`
+      if (!this.textures.exists(key)) continue
+      const cols = Math.max(1, Math.floor(this.textures.get(key).getSourceImage().width / t.cell))
+      ;(out[t.tile_type] ||= {})[t.side] = { key, frame: t.row * cols + t.col }
+    }
+    return out
+  }
+
+  // Render fixed road → dirt → grass layers. Logical terrain ownership never
+  // changes: the higher terrain owns each seam, and its transparent edge gets
+  // the highest applicable lower terrain as backing at that terrain's depth.
+  paintGround() {
+    const fill = this.groundTiles
+    const edges = this.buildEdgeMap()
+    // Flat fill tile per terrain type (the char fill map keyed by terrain).
+    const fillFor = { road: fill[':'] || null, dirt: fill.g || null, grass: fill['.'] || null }
+    // Outer corners: a diagonal tile spanning two adjacent orthogonal borders.
+    const stamp = (x, y, t, depth, bucket) => {
+      if (!t) return
+      const img = this.add
+        .image(x * TILE, y * TILE, t.key, t.frame)
+        .setOrigin(0, 0)
+        .setDepth(depth)
+        .setDisplaySize(TILE, TILE)
+      if (DEV && bucket) this.devLayers[bucket]?.push(img)
+    }
+    // Dev-inspector bucket for a layer. Grass fill/edges/corners are one layer;
+    // road/dirt are their base layers.
+    const bucketFor = (layer) => (layer === 'grass' ? 'grass' : `${layer}Base`)
+
+    // Draw a terrain's own tile at (x,y): autotiled (fill / edge / corner) when
+    // the terrain has edge tiles tagged — grass today, dirt/road automatically
+    // once tagged — otherwise a flat fill. Generic across every terrain.
+    const drawOwn = (layer, x, y, depth, borderOverride = null) => {
+      const e = edges[layer]
+      const f = fillFor[layer]
+      if (!e) {
+        stamp(x, y, f, depth, bucketFor(layer))
+        return
+      }
+      const border = borderOverride || terrainBorders(this.town, x, y, layer)
+      const used = new Set()
+      let drew = false
+      for (const { c, a, b } of EDGE_CORNERS) {
+        if (border[a] && border[b] && e[c]) {
+          stamp(x, y, e[c], depth, bucketFor(layer))
+          used.add(a)
+          used.add(b)
+          drew = true
+        }
+      }
+      for (const d of ['N', 'E', 'S', 'W']) {
+        if (border[d] && !used.has(d) && e[d]) {
+          stamp(x, y, e[d], depth, bucketFor(layer))
+          drew = true
+        }
+      }
+      if (!drew) stamp(x, y, f, depth, bucketFor(layer))
+    }
+
+    // One generic pass per layer, bottom → top. Dirt also paints its autotiled
+    // underlay mask beneath neighbouring grass; this never changes the logical
+    // surface. Other transparent edges stamp the selected lower neighbour at
+    // its canonical depth.
+    GROUND_STACK.forEach((layer, i) => {
+      const f = fillFor[layer]
+      if (!f) return // terrain has no fill tile tagged yet
+      const depth = i * 0.1
+      for (let y = 0; y < this.town.rows; y++) {
+        for (let x = 0; x < this.town.cols; x++) {
+          const cType = typeForTileChar(this.town.map[y][x])
+          const roadCoverage = layer === 'road' && roadLayerCoversCell(this.town, x, y)
+          const dirtCoverage = layer === 'dirt' && dirtLayerCoversCell(this.town, x, y)
+          if (cType === layer || roadCoverage || dirtCoverage) {
+            if (layer === 'road') {
+              stamp(x, y, f, depth, bucketFor(layer))
+              continue
+            }
+            if (layer === 'dirt') {
+              const dirtBorders = dirtLayerBorders(this.town, x, y)
+              const roadBacking = coverageTerrainForCell(
+                this.town,
+                x,
+                y,
+                'dirt',
+                dirtBorders,
+              )
+              if (
+                roadBacking === 'road' &&
+                !roadLayerCoversCell(this.town, x, y)
+              ) {
+                stamp(x, y, fillFor.road, 0, bucketFor('road'))
+              }
+              drawOwn(layer, x, y, depth, dirtBorders)
+              continue
+            }
+            const plan = groundPaintStackForCell(this.town, x, y, edges)
+            const backing = plan.find(({ role }) => role === 'coverage')
+            const alreadyPaintedByLowerLayer =
+              (backing?.terrain === 'dirt' && dirtLayerCoversCell(this.town, x, y)) ||
+              (backing?.terrain === 'road' && roadLayerCoversCell(this.town, x, y))
+            if (!alreadyPaintedByLowerLayer) {
+              stamp(
+                x,
+                y,
+                fillFor[backing?.terrain],
+                backing?.depth,
+                bucketFor(backing?.terrain),
+              )
+            }
+            drawOwn(layer, x, y, depth)
+          }
+        }
+      }
+    })
+
+    // Non-terrain chars (the signpost) keep their procedural texture, drawn on
+    // top of the ground layers. typeForTileChar treats 's' as grass for
+    // neighbour purposes, and the grass layer already paints the cell beneath.
+    for (let y = 0; y < this.town.rows; y++) {
+      for (let x = 0; x < this.town.cols; x++) {
+        if (this.town.map[y][x] !== 's') continue
+        const key = keyForTileChar('s')
+        if (!key) continue
+        const img = this.add.image(x * TILE, y * TILE, key).setOrigin(0, 0).setDepth(0.3)
+        if (DEV) this.devLayers?.grass?.push(img)
+      }
+    }
+  }
+
+  // ---- dev-only ground-layer inspector (gated by DEV in create()) ---------
+  // A counterpart to the G grid: press L for a legend panel, 1–5 to toggle each
+  // ground layer; also exposed as window.__game.layers for the console.
+  setupDevLayers() {
+    const panel = this.add
+      .text(8, 8, '', {
+        fontFamily: 'monospace',
+        fontSize: '12px',
+        color: '#e8e8ee',
+        backgroundColor: 'rgba(10,12,16,0.82)',
+        padding: { x: 8, y: 6 },
+        lineSpacing: 2,
+      })
+      .setScrollFactor(0) // pin to the camera as the player walks
+      .setDepth(9001) // above the grid overlay
+      .setVisible(false)
+    this.devLayerPanel = panel
+    this.showLayerPanel = false
+    this.refreshDevLayerPanel()
+
+    this.input.keyboard.on('keydown-L', () => {
+      this.showLayerPanel = !this.showLayerPanel
+      panel.setVisible(this.showLayerPanel)
+    })
+    DEV_LAYERS.forEach((l, i) => {
+      this.input.keyboard.on(`keydown-${DEV_NUM_KEYS[i]}`, () => this.toggleDevLayer(l.key))
+    })
+
+    if (typeof window !== 'undefined' && window.__game) {
+      window.__game.layers = {
+        list: () => DEV_LAYERS.map((l) => ({ ...l, visible: this.layerVisible[l.key] })),
+        toggle: (key) => this.toggleDevLayer(key),
+        show: (key) => this.setDevLayer(key, true),
+        hide: (key) => this.setDevLayer(key, false),
+      }
+    }
+    // eslint-disable-next-line no-console
+    console.log('[dev] ground layers: L = panel, 1–5 toggle, or window.__game.layers')
+  }
+
+  toggleDevLayer(key) {
+    this.setDevLayer(key, !this.layerVisible[key])
+  }
+
+  setDevLayer(key, visible) {
+    const bucket = this.devLayers?.[key]
+    if (!bucket) return
+    this.layerVisible[key] = visible
+    for (const s of bucket) s.setVisible(visible)
+    this.refreshDevLayerPanel()
+  }
+
+  // Build the per-cell coordinate labels for the G grid (A1 notation: column
+  // letters across, 1-based row numbers down — top-left cell is A1). Kept in a
+  // container so the G handler can toggle them all with one setVisible.
+  buildGridLabels() {
+    const c = this.add.container(0, 0).setDepth(9001)
+    for (let y = 0; y < this.town.rows; y++) {
+      for (let x = 0; x < this.town.cols; x++) {
+        const label = this.add
+          .text(x * TILE + 2, y * TILE + 1, `${colLabel(x)}${y + 1}`, {
+            fontFamily: 'monospace',
+            fontSize: '9px',
+            color: '#ffffff',
+            stroke: '#000000',
+            strokeThickness: 2,
+          })
+          .setOrigin(0, 0)
+        c.add(label)
+      }
+    }
+    this.gridLabels = c
+  }
+
+  refreshDevLayerPanel() {
+    if (!this.devLayerPanel) return
+    const lines = ['GROUND LAYERS  (L)']
+    DEV_LAYERS.forEach((l, i) => {
+      const on = this.layerVisible[l.key]
+      const count = this.devLayers[l.key].length
+      lines.push(`${i + 1} [${on ? '×' : ' '}] ${l.label}  (${count})`)
+    })
+    this.devLayerPanel.setText(lines.join('\n'))
   }
 
   // Build the two-layer building sprite. We don't yet hue-rotate from
   // the community color — Phaser tint is RGB-only and a per-roof
   // hue-rotate would need a custom shader. PR-B accepts a uniform roof
   // color for now; PR-C+ adds the shader / palette-swap.
-  addBuildingSprite(community, plot) {
+  addBuildingSprite(community, plot, index = 0) {
     const cx = plot.col * TILE
     const cy = plot.row * TILE
     const w = plot.w * TILE
     const h = plot.h * TILE
 
+    // Which art to use. Falls back to the default if the chosen key never
+    // loaded (e.g. a community.building naming art that isn't present).
+    let key = buildingKeyFor(community, index)
+    if (!this.textures.exists(`building.${key}.roof`)) key = DEFAULT_BUILDING
+
     // Roof — top 36% of the footprint.
     const roof = this.add
-      .image(cx, cy, 'building.roof')
+      .image(cx, cy, `building.${key}.roof`)
       .setOrigin(0, 0)
       .setDisplaySize(w, h * 0.36)
       .setDepth((plot.row + plot.h) * 10 - 1)
 
     // Body — bottom 64%.
-    this.add
-      .image(cx, cy + h * 0.36, 'building.body')
+    const body = this.add
+      .image(cx, cy + h * 0.36, `building.${key}.body`)
       .setOrigin(0, 0)
       .setDisplaySize(w, h * 0.64)
       .setDepth((plot.row + plot.h) * 10 - 1)
 
     // Nameplate under the building — small text, dark on light.
-    this.add
+    const plate = this.add
       .text(cx + w / 2, cy + h - 4, community.title.toUpperCase(), {
         fontFamily: 'monospace',
         fontSize: '11px',
@@ -477,6 +894,8 @@ export default class TownScene extends Phaser.Scene {
       .setOrigin(0.5, 0)
       .setDepth((plot.row + plot.h) * 10 + 1)
 
+    if (DEV) this.devLayers?.buildings?.push(roof, body, plate)
+
     // Approximate per-community tint by tinting the roof — until we have
     // a hue-rotate shader, this is the cheapest way to differentiate
     // houses visually.
@@ -486,6 +905,31 @@ export default class TownScene extends Phaser.Scene {
     }
 
     return roof
+  }
+
+  // Render tall props from the atlas (townTileset.tallPropsFor). Each is
+  // bottom-anchored on its tile so it overflows upward, and depth-sorted by
+  // its base row so the player passes in front of / behind it correctly. A
+  // prop flagged `blocks` adds its base tile to propCells for walkability.
+  addTallProps() {
+    this.propCells.clear()
+    const tree = this._treeObject
+    for (const { key, col, row } of tallPropsFor(this.town)) {
+      if (!this.textures.exists(key)) continue
+      const def = PROPS[key]
+      // Footprint: an admin tree object wins for the tree key; otherwise the
+      // bundled prop definition.
+      const useTree = key === 'prop.tree' && tree
+      const wTiles = (useTree ? tree.footprint_w : def?.wTiles) || 1
+      const hTiles = (useTree ? tree.footprint_h : def?.hTiles) || 1
+      const sprite = this.add
+        .image(col * TILE + TILE / 2, (row + 1) * TILE, key)
+        .setOrigin(0.5, 1)
+        .setDisplaySize(wTiles * TILE, hTiles * TILE)
+        .setDepth((row + 1) * 10 - 1)
+      if (DEV) this.devLayers?.trees?.push(sprite)
+      if (def?.blocks) this.propCells.add(`${col},${row}`)
+    }
   }
 
   spawnPlayer(session) {
@@ -502,23 +946,36 @@ export default class TownScene extends Phaser.Scene {
 
     this.playerTile = { x: spawn.x, y: spawn.y }
     this.facing = spawn.facing
-    this.player = this.add
-      .image(
-        spawn.x * TILE + TILE / 2,
-        // Feet anchor at the tile floor — same as the trainer sprite,
-        // so when they stand side by side their feet line up. Offset
-        // by PLAYER_FEET_LIFT so the rpg-char-01 sprite's visible feet
-        // (which sit inside its 96×96 display box's padding) land
-        // where the eye expects them on the tile (+y = down in Phaser).
-        (spawn.y + 1) * TILE + PLAYER_FEET_LIFT,
-        `player.${spawn.facing}.0`,
-      )
-      .setOrigin(0.5, 1)
-      .setDepth(spawn.y * 10 + 5)
-      // rpg-char-01 has heavy transparent padding inside its 32×32
-      // box, so 96×96 brings the visible body to a Pokémon-faithful
-      // on-screen height. Source PNG is square; display kept square.
-      .setDisplaySize(96, 96)
+    const px = spawn.x * TILE + TILE / 2
+    const depth = spawn.y * 10 + 5
+
+    if (this.usingManifest) {
+      // Manifest sprite: a tightly-cropped sheet, so feet sit on the tile
+      // floor (no PLAYER_FEET_LIFT). Origin from the manifest's render block
+      // (bottom-centre by convention) so the figure overflows upward.
+      const render = this._charManifest.render || { originX: 0.5, originY: 1, scale: 1 }
+      this.player = this.add
+        .sprite(px, (spawn.y + 1) * TILE, CHAR_SHEET_KEY, this.charDir.down.idleFrame)
+        .setOrigin(render.originX, render.originY)
+        .setDepth(depth)
+      // Scale relative to the 32-px authoring grid → matches the map-preview.
+      this.player.setScale(characterScale(this._charManifest))
+    } else {
+      this.player = this.add
+        .image(
+          px,
+          // Feet anchor at the tile floor — same as the trainer sprite, so
+          // side-by-side feet line up. PLAYER_FEET_LIFT accounts for the
+          // rpg-char-01 sprite's feet sitting inside its padded display box.
+          (spawn.y + 1) * TILE + PLAYER_FEET_LIFT,
+          `player.${spawn.facing}.0`,
+        )
+        .setOrigin(0.5, 1)
+        .setDepth(depth)
+        // rpg-char-01 has heavy transparent padding inside its 32×32 box, so
+        // 96×96 brings the visible body to a Pokémon-faithful on-screen height.
+        .setDisplaySize(96, 96)
+    }
     this.player.stepCount = 0
     this.updatePlayerFrame()
     this.cameras.main.startFollow(this.player, true, 0.15, 0.15)
@@ -530,6 +987,23 @@ export default class TownScene extends Phaser.Scene {
 // or unspecified renders as a tree; ground tiles use their dedicated
 // textures so the scene matches the DOM engine's look as closely as
 // procedural shapes can manage.
+// Spreadsheet-style column label for a 0-based column index: 0→A, 25→Z,
+// 26→AA, … (rolls to two letters for maps wider than 26 cells).
+function colLabel(n) {
+  let s = ''
+  let i = n + 1 // 1-based for the modulo math
+  while (i > 0) {
+    const r = (i - 1) % 26
+    s = String.fromCharCode(65 + r) + s
+    i = Math.floor((i - 1) / 26)
+  }
+  return s
+}
+
+// Map a tile character to its ground *type* for edge-boundary detection.
+// Mirrors the fill mapping (grass '.'/'*', dirt 'g', road ':') and treats
+// boundary trees + signs as grass (their ground is grass underneath). Anything
+// unrecognised returns null → never an edge neighbour, never receives an edge.
 function keyForTileChar(ch) {
   switch (ch) {
     case '.':

@@ -1,6 +1,12 @@
 import Phaser from 'phaser'
 import { TILE, MOVE_MS, PLAYER_FEET_LIFT } from '../../constants.js'
 import { ensureInteriorTileTextures } from '../tileTextures.js'
+import {
+  CHAR_SHEET_KEY,
+  buildCharacterRig,
+  characterScale,
+  applyFacing,
+} from '../characterRig.js'
 import bus from '../bus.js'
 
 // Mirrors the layout in src/game/buildInterior.js so the spatial behavior
@@ -45,6 +51,11 @@ export default class InteriorScene extends Phaser.Scene {
     this.facing = 'up'
     this.movingTween = null
     this.exiting = false
+    // Manifest character — shared with TownScene (same registry manifest + the
+    // CHAR_SHEET_KEY texture/anims TownScene built). False → bundled player.
+    this._charManifest = null
+    this.usingManifest = false
+    this.charDir = null
   }
 
   init(data) {
@@ -182,23 +193,38 @@ export default class InteriorScene extends Phaser.Scene {
       return { boardType, col, row: BOARD_ROW, frame, label }
     })
 
-    // Player sprite — same display math as TownScene so the avatar
-    // sits at the same scale and the same height-relative-to-tile in
-    // both scenes (46×46, anchored at the feet, 7 px gap to the tile
-    // floor, head pokes 5 px into the row above). Textures are shared
-    // with TownScene; they were preloaded there and still in the
-    // texture cache when Phaser scene-starts to us.
-    this.player = this.add
-      .image(
-        this.playerTile.x * TILE + TILE / 2,
-        (this.playerTile.y + 1) * TILE + PLAYER_FEET_LIFT,
-        `player.${this.facing}.0`,
-      )
-      .setOrigin(0.5, 1)
-      .setDepth(this.playerTile.y * 10 + 5)
-      // Same display size as TownScene (rpg-char-01 padding compensation).
-      .setDisplaySize(96, 96)
+    // Player sprite — same display math as TownScene so the avatar sits at the
+    // same scale and height-relative-to-tile in both scenes. Textures (bundled
+    // frames + the manifest sheet/anims) are shared with TownScene; they were
+    // built there and are still in the cache when Phaser scene-starts to us.
+    this._charManifest = this.registry.get('characterManifest') || null
+    const rig = buildCharacterRig(this, this._charManifest)
+    this.usingManifest = rig.usingManifest
+    this.charDir = rig.charDir
+
+    const px = this.playerTile.x * TILE + TILE / 2
+    const depth = this.playerTile.y * 10 + 5
+    if (this.usingManifest) {
+      const render = this._charManifest.render || { originX: 0.5, originY: 1, scale: 1 }
+      this.player = this.add
+        .sprite(px, (this.playerTile.y + 1) * TILE, CHAR_SHEET_KEY, this.charDir.down.idleFrame)
+        .setOrigin(render.originX, render.originY)
+        .setDepth(depth)
+      this.player.setScale(characterScale(this._charManifest))
+    } else {
+      this.player = this.add
+        .image(
+          px,
+          (this.playerTile.y + 1) * TILE + PLAYER_FEET_LIFT,
+          `player.${this.facing}.0`,
+        )
+        .setOrigin(0.5, 1)
+        .setDepth(depth)
+        // Same display size as TownScene (rpg-char-01 padding compensation).
+        .setDisplaySize(96, 96)
+    }
     this.player.stepCount = 0
+    if (this.usingManifest) applyFacing(this.player, this.charDir, this.facing, false)
 
     this.cursors = this.input.keyboard.createCursorKeys()
     this.wasd = this.input.keyboard.addKeys({
@@ -296,25 +322,41 @@ export default class InteriorScene extends Phaser.Scene {
     }
 
     if (!this.walkable(tx, ty)) {
-      this.player.setTexture(`player.${this.facing}.0`)
+      this.setPlayerWalking(false)
       return
     }
 
     this.playerTile = { x: tx, y: ty }
-    // rpg-char-01 has 3 frames per direction: 0 still, 1 step-A, 2 step-B.
-    this.player.setTexture(`player.${this.facing}.${(this.player.stepCount++ % 2) + 1}`)
+    this.setPlayerWalking(true)
     this.movingTween = this.tweens.add({
       targets: this.player,
       x: tx * TILE + TILE / 2,
-      // Feet land at the destination tile's floor, offset by
-      // PLAYER_FEET_LIFT — see TownScene for rationale.
-      y: (ty + 1) * TILE + PLAYER_FEET_LIFT,
+      // Feet land at the destination tile's floor. The bundled rpg-char-01
+      // needs PLAYER_FEET_LIFT for its padded box; the manifest sprite is
+      // tightly cropped, so its feet sit on the floor — see TownScene.
+      y: (ty + 1) * TILE + (this.usingManifest ? 0 : PLAYER_FEET_LIFT),
       duration: MOVE_MS,
       onComplete: () => {
         this.movingTween = null
-        this.player.setTexture(`player.${this.facing}.0`)
+        if (this.usingManifest) {
+          if (!this.activeDirection()) applyFacing(this.player, this.charDir, this.facing, false)
+        } else {
+          this.player.setTexture(`player.${this.facing}.0`)
+        }
       },
     })
+  }
+
+  // Walking vs standing frame for the current facing — manifest anim or the
+  // bundled two-frame walk cycle (0 still, 1/2 step A/B). Mirrors TownScene.
+  setPlayerWalking(walking) {
+    if (this.usingManifest) {
+      applyFacing(this.player, this.charDir, this.facing, walking)
+    } else if (walking) {
+      this.player.setTexture(`player.${this.facing}.${(this.player.stepCount++ % 2) + 1}`)
+    } else {
+      this.player.setTexture(`player.${this.facing}.0`)
+    }
   }
 
   // Interior walkability — same WALKABLE set as buildInterior.js: '.', 'D'.

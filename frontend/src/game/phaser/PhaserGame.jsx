@@ -23,8 +23,7 @@ import rightWalk2 from '../assets/character/rpg-char-01/r2-c2.png'
 import upStill from '../assets/character/rpg-char-01/r3-c0.png'
 import upWalk1 from '../assets/character/rpg-char-01/r3-c1.png'
 import upWalk2 from '../assets/character/rpg-char-01/r3-c2.png'
-import roofImg from '../assets/buildings/guild-roof.png'
-import bodyImg from '../assets/buildings/guild-body.png'
+import { BUILDINGS } from '../buildings.js'
 
 // 3 frames per direction: index 0 still, 1+2 walk cycle.
 const ASSETS = {
@@ -34,10 +33,9 @@ const ASSETS = {
     left: [leftStill, leftWalk1, leftWalk2],
     right: [rightStill, rightWalk1, rightWalk2],
   },
-  buildings: {
-    roofUrl: roofImg,
-    bodyUrl: bodyImg,
-  },
+  // Map of building-key → { roofUrl, bodyUrl }, auto-discovered from
+  // assets/buildings/. TownScene loads every entry and picks per community.
+  buildings: BUILDINGS,
 }
 
 // Design resolution matches the DOM town for a 5-community seed
@@ -54,6 +52,9 @@ const DESIGN_HEIGHT = 912
 export default function PhaserGame({
   communities,
   session,
+  treeObject,
+  groundTiles,
+  characterManifest,
   dailyBrief,
   activeCommunityId,
   onEnterCommunity,
@@ -105,6 +106,14 @@ export default function PhaserGame({
     game.registry.set('assets', ASSETS)
     game.registry.set('communities', communities)
     game.registry.set('session', session)
+    game.registry.set('treeObject', treeObject || null)
+    // Ground-tile catalog — read once by TownScene.preload() to load the
+    // referenced tilesets, same boot-input timing as treeObject.
+    game.registry.set('groundTiles', groundTiles || [])
+    // The active character manifest (sprite-mapper). Set synchronously after
+    // construction — Phaser defers boot, so this lands before TownScene's
+    // preload() reads it (same timing the treeObject relies on).
+    game.registry.set('characterManifest', characterManifest || null)
     game.registry.set('trainerDefeated', Boolean(trainerDefeated))
 
     gameRef.current = game
@@ -145,6 +154,31 @@ export default function PhaserGame({
     game.registry.set('session', session)
   }, [session])
 
+  // Like communities/session, the tree object is a scene-boot input: the
+  // scene reads it once in preload(). Pushing it keeps the registry fresh so
+  // the next VillageGame mount / reload renders the latest tree.
+  useEffect(() => {
+    const game = gameRef.current
+    if (!game) return
+    game.registry.set('treeObject', treeObject || null)
+  }, [treeObject])
+
+  // Ground-tile catalog — boot input like treeObject; pushing it keeps the
+  // registry fresh for the next VillageGame mount / reload.
+  useEffect(() => {
+    const game = gameRef.current
+    if (!game) return
+    game.registry.set('groundTiles', groundTiles || [])
+  }, [groundTiles])
+
+  // Like treeObject, the character manifest is a scene-boot input read once in
+  // preload(); pushing it keeps the registry fresh for the next mount/reload.
+  useEffect(() => {
+    const game = gameRef.current
+    if (!game) return
+    game.registry.set('characterManifest', characterManifest || null)
+  }, [characterManifest])
+
   useEffect(() => {
     const game = gameRef.current
     if (!game) return
@@ -175,12 +209,12 @@ export default function PhaserGame({
   const onAButton = () => bus.emit('aButton')
 
   // Dynamic topbar label — community title while inside a house,
-  // "ONE REV VILLAGE" when in the town.
+  // "ODT VILLE" when in the town.
   const activeCommunity =
     activeCommunityId != null
       ? communities.find((c) => c.id === activeCommunityId)
       : null
-  const topbarLabel = activeCommunity?.title || 'ONE REV VILLAGE'
+  const topbarLabel = activeCommunity?.title || 'ODT VILLE'
 
   return (
     <div className="village-map">
@@ -195,7 +229,7 @@ export default function PhaserGame({
           <div className="phaser-host" ref={hostRef} />
 
           <div className="screen-overlay">
-            <p className="overlay-hint">Arrows / WASD walk · A to interact</p>
+            <p className="overlay-hint">Arrows / WASD walk · A to interact · G grid</p>
 
             <div className="overlay-slot overlay-tr">
               {dailyBrief}
