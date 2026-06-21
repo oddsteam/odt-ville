@@ -92,6 +92,45 @@ Prefer running things natively? Keep reading.
 
 ---
 
+## Homeserver deployment (Docker)
+
+`https://odt-ville.p2d.uk` is served from the **homeserver** box, running this
+same dev stack in Docker. Source is kept in sync from the Mac by **mutagen**
+(`homeserver:apps/odt-ville`), so editing a file locally hot-reloads on the
+homeserver inside the containers — no rebuild needed for code changes.
+
+The homeserver uses the **base compose file only** (the `-f` flag skips
+`compose.override.yaml`), so it publishes **only** the frontend port; the
+backend and its own Postgres stay private on the compose network. The
+Cloudflare tunnel forwards `odt-ville.p2d.uk` → `localhost:5460`.
+
+```bash
+# Deploy / restart the stack (run on the homeserver):
+ssh homeserver 'cd ~/apps/odt-ville && docker compose -f compose.yaml up -d --build'
+```
+
+Day-to-day operations (all via `ssh homeserver 'cd ~/apps/odt-ville && ...'`):
+
+| Task | Command |
+| --- | --- |
+| Status | `docker compose -f compose.yaml ps` |
+| Logs (follow) | `docker compose -f compose.yaml logs -f backend` |
+| Apply a **new migration** | `docker compose -f compose.yaml exec backend bin/rails db:migrate` |
+| Pick up new **gems / npm deps** | `docker compose -f compose.yaml up -d --build` |
+| Stop | `docker compose -f compose.yaml down` (add `-v` to also wipe the DB) |
+
+Notes:
+
+- **Code changes** sync via mutagen and hot-reload automatically. **New
+  migrations do not auto-apply** (dev mode 500s with `PendingMigrationError`)
+  — run the `db:migrate` command above, or restart the backend container.
+- The stack has its **own Postgres container** (named `pgdata` volume), separate
+  from the native Postgres other homeserver apps use. It's seeded on first boot.
+- `restart: unless-stopped` means the stack comes back automatically after a
+  reboot (Docker is enabled on boot).
+
+---
+
 ## 1. Run the backend (Rails API)
 
 ```bash

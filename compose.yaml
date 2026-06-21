@@ -1,24 +1,31 @@
-# Local development stack: Postgres + Rails API + Vite dev server.
-# Usage: docker compose up --build
+# Dev stack: Postgres + Rails API + Vite dev server. Runs in development mode
+# (hot reload) both locally and on the homeserver.
 #
-# DEV ONLY. Production deploys via Kamal (backend/Dockerfile) + the homeserver
-# tunnel — this file does not touch that path.
+#   Local dev:   docker compose up --build
+#                (auto-loads compose.override.yaml, which also publishes the
+#                 backend + database to localhost for convenient curling)
+#
+#   Homeserver:  docker compose -f compose.yaml up -d --build
+#                (explicit -f skips the override, so ONLY the frontend port is
+#                 published; the Cloudflare tunnel forwards odt-ville.p2d.uk to
+#                 it. backend + db stay private on the compose network.)
 #
 # Named volumes hold the dependencies (bundle, node_modules) so platform-specific
 # native binaries are built inside the Linux containers and never shadowed by the
-# macOS host's copies via the bind mounts.
+# host's copies via the bind mounts.
 
 services:
   db:
     image: postgres:16
+    restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: one_rev_village_development
     volumes:
       - pgdata:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
+    # Host port is published only for local dev (see compose.override.yaml);
+    # on the homeserver the database stays private to the compose network.
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
@@ -29,6 +36,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile.dev
+    restart: unless-stopped
     environment:
       RAILS_ENV: development
       PORT: "3190"
@@ -37,8 +45,8 @@ services:
     volumes:
       - ./backend:/app
       - bundle:/usr/local/bundle
-    ports:
-      - "3190:3190"
+    # Reachable in-network as `backend:3190` (the Vite proxy targets that). The
+    # host port is published only for local dev (see compose.override.yaml).
     depends_on:
       db:
         condition: service_healthy
@@ -47,6 +55,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile.dev
+    restart: unless-stopped
     environment:
       # Vite proxies /api here (see frontend/vite.config.js).
       VITE_PROXY_TARGET: http://backend:3190
@@ -55,6 +64,8 @@ services:
       - ./frontend:/app
       - frontend_node_modules:/app/node_modules
     ports:
+      # The public app. On the homeserver the Cloudflare tunnel forwards
+      # odt-ville.p2d.uk -> localhost:5460.
       - "5460:5460"
     depends_on:
       - backend

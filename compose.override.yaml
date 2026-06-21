@@ -1,0 +1,13 @@
+# Local-dev conveniences. Docker Compose auto-loads this file on a plain
+# `docker compose up`, so on your laptop the backend and database are published
+# to localhost (handy for `curl localhost:3190/...` or a psql client).
+#
+# The homeserver runs `docker compose -f compose.yaml up` (explicit -f), which
+# does NOT load this file, so there it publishes only the frontend port.
+services:
+  backend:
+    ports:
+      - "3190:3190"
+  db:
+    ports:
+      - "5432:5432"

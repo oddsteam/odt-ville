@@ -40,10 +40,15 @@ export default defineConfig({
     allowedHosts: ['localhost', '.p2d.uk'],
     // VITE_PROXY_TARGET points at the backend container under Docker Compose;
     // defaults to localhost for a plain local `npm run dev`.
+    //
+    // No `changeOrigin`: we deliberately pass the browser's Host header through
+    // to the backend. Rails host authorization allows `localhost` and `.p2d.uk`
+    // (see backend/config/environments/development.rb), but `changeOrigin` would
+    // rewrite Host to the proxy target — the Docker service name `backend:3190` —
+    // which Rails blocks with "Blocked hosts: backend:3190".
     proxy: {
       '/api': {
         target: process.env.VITE_PROXY_TARGET || 'http://localhost:3190',
-        changeOrigin: true,
       },
     },
   },
