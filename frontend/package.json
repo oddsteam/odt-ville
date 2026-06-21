@@ -8,15 +8,19 @@
     "test": "node --test",
     "build": "vite build",
     "preview": "vite preview",
-    "map:build": "node ../scripts/tmx-to-tiledjson.mjs public/maps/downtown.tmx public/maps/downtown.json"
+    "map:build": "node ../scripts/tmx-to-tiledjson.mjs public/maps/downtown.tmx public/maps/downtown.json",
+    "building:prep": "node scripts/prep-building.mjs",
+    "map:palette": "node scripts/curate-palette.mjs"
   },
   "dependencies": {
     "phaser": "^4.1.0",
     "react": "^19.2.6",
-    "react-dom": "^19.2.6"
+    "react-dom": "^19.2.6",
+    "react-router-dom": "^7.18.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^6.0.2",
+    "sharp": "^0.35.1",
     "vite": "^8.0.14"
   }
 }

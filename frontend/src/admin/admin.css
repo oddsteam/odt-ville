@@ -1,0 +1,133 @@
+/* Admin console — shares the authoring-tool aesthetic (system-ui, dark) so the
+   sprite / map-object / ground mappers and the communities panel all feel like
+   one workspace. Reached by URL only (/admin); no link from the game UI. */
+
+.admin-console {
+  /* A definite height (not min-height) so the flex column gives the body — and
+     thus the embedded mappers — a bounded height to scroll within. */
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #1b1b22;
+  color: #e8e8ee;
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  /* The game theme sets body{-webkit-font-smoothing:none} for pixel text; undo
+     it here so the authoring tools render with normal anti-aliased text. */
+  -webkit-font-smoothing: auto;
+}
+
+/* The game theme (src/styles.css) is bundled globally with an unscoped
+   button{ font-family: PokemonGB; box-shadow: 3px 3px 0 } rule that leaks onto
+   the mapper buttons. Override just those two leaked properties (without
+   touching background/border, so .save / .comm-colour keep their look). */
+.admin-console button {
+  font-family: system-ui, -apple-system, sans-serif;
+  box-shadow: none;
+}
+
+.admin-console button:active:not(:disabled) {
+  transform: none;
+  box-shadow: none;
+}
+
+.admin-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: #16161d;
+  border-bottom: 1px solid #34343f;
+  flex-wrap: wrap;
+}
+
+.admin-nav-brand {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: #9a9ab0;
+  margin-right: 8px;
+}
+
+.admin-nav-link {
+  font-size: 13px;
+  padding: 5px 12px;
+  border-radius: 6px;
+  text-decoration: none;
+  color: #cfcfe0;
+  background: #24242e;
+  border: 1px solid #34343f;
+}
+
+.admin-nav-link:hover {
+  color: #fff;
+}
+
+.admin-nav-link.on {
+  background: #2e7dff;
+  color: #fff;
+  border-color: #2e7dff;
+}
+
+.admin-console-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.admin-console-body > * {
+  flex: 1;
+  min-width: 0;
+}
+
+/* The mapper tools were authored as full-viewport apps (height: 100vh). Inside
+   the console they fill the area below the nav bar instead — keep the bounded
+   height so their inner panels (.sheet-scroll / .left / .right / .catalog) scroll
+   via overflow rather than growing the whole page. */
+.admin-console-body .mapper,
+.admin-console-body .tilemapper {
+  height: 100%;
+  min-height: 0;
+}
+
+/* Let a tall sidebar scroll within itself instead of clipping. (spriteMapper's
+   .right already does this; tile/ground don't.) */
+.admin-console-body .right {
+  overflow-y: auto;
+}
+
+/* Sprite mapper: the standalone page fixed .cols to calc(100vh - 92px) and let
+   the saved-characters roster fall below the fold. Inside the console the editor
+   flexes to fill the space and the roster is pinned as an always-visible
+   horizontal strip at the bottom. */
+.admin-console-body .mapper > .cols {
+  height: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.admin-console-body .roster {
+  /* Natural height (one card row) pinned at the bottom, always visible. No
+     max-height / vertical clip — that was hiding the card's Load / Make-active
+     buttons. */
+  flex: 0 0 auto;
+}
+
+.admin-console-body .roster .roster-grid {
+  flex-wrap: nowrap; /* one horizontal row, not wrapped vertically */
+  overflow-x: auto; /* scroll sideways when there are many characters */
+}
+
+.admin-console-body .roster .roster-card {
+  flex: 0 0 132px; /* keep card width so the row overflows horizontally */
+}
+
+.admin-msg {
+  padding: 16px;
+  color: #9a9ab0;
+  font-size: 13px;
+}
+
+.admin-msg-error {
+  color: #ff9a9a;
+}

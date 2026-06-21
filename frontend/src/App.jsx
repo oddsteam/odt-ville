@@ -1,264 +1,32 @@
-import { useCallback, useEffect, useState } from 'react'
-import VillageGame from './game/VillageGame.jsx'
-import CommunitiesAdminPanel from './communities/CommunitiesAdminPanel.jsx'
-import DailyBriefShortcut from './communities/DailyBriefShortcut.jsx'
-import { listCommunities, getFeed } from './communities/client.js'
-import { getGameSession, saveGameSession } from './game-session/client.js'
-import { getActiveTileObject } from './tileObjects/client.js'
-import { listGroundTiles } from './groundTiles/client.js'
-import { loadActiveManifest } from './character/manifest.js'
+import { Routes, Route, Navigate } from 'react-router-dom'
+import RootLayout from './RootLayout.jsx'
+import VillagePage from './VillagePage.jsx'
+import AdminLayout from './admin/AdminLayout.jsx'
+import CommunitiesAdminPage from './admin/CommunitiesAdminPage.jsx'
+import SpriteMapper from './spriteMapper/SpriteMapper.jsx'
+import TileMapper from './tileMapper/TileMapper.jsx'
+import GroundTileMapper from './groundTiles/GroundTileMapper.jsx'
 
-// Demo target for every board's "open content list" action. Replaced in a
-// follow-up by per-board content-list views (see issue #15 follow-ups).
-const DEMO_BOARD_URL = 'https://app.basecamp.com/4877526/'
-
-// Tiny inline fetch for the current viewer — the header above the game.
-// Kept inline (rather than its own client module) because there is only one
-// endpoint and no reason for a third boundary.
-async function getMe() {
-  const res = await fetch('/api/v1/me')
-  if (!res.ok) throw new Error(`Request to /me failed (${res.status})`)
-  return res.json()
-}
-
-// The app shell composes three independent modules:
-//   - communities client (`./communities/client`)   — CRUD + content feed
-//   - game-session client (`./game-session/client`) — spawn + last visited
-//   - the village game (`./game/VillageGame`)        — black-box React component
-// It hands data to the game via props, listens for game events, and persists
-// session changes. Nothing here knows about tiles, sprites, or encounters.
+// Route table. RootLayout is the persistent shell (brand header + Village/Admin
+// nav); the village game lives at "/" and the admin console — the four former
+// standalone authoring pages plus communities CRUD — lives under "/admin".
 export default function App() {
-  // Top-level navigation: 'village' (the game) | 'admin' (the community
-  // CRUD console). Keeping admin out of the game module is what makes
-  // <VillageGame> a true black box — see issue #13 / PR.
-  const [view, setView] = useState('village')
-
-  // PR-E retired the DOM engine; the village game now always runs on
-  // Phaser, which owns its own scene transitions inside the canvas. The
-  // shell just tracks which community the player is inside (for the
-  // active-community-id prop / topbar label).
-  const [activeCommunityId, setActiveCommunityId] = useState(null)
-  // Gate-trainer state — once you've escaped the duel he never challenges
-  // again in this session. Lifted to the shell so it survives VillageGame
-  // remounts when you enter / exit a community.
-  const [trainerDefeated, setTrainerDefeated] = useState(false)
-
-  const [me, setMe] = useState(null)
-  const [communities, setCommunities] = useState(null)
-  const [session, setSession] = useState(null)
-  const [feed, setFeed] = useState([])
-  // The admin-defined tree object (tile-object mapper), rendered by the game.
-  // Optional enhancement — null is fine and falls back to the bundled tree.
-  const [treeObject, setTreeObject] = useState(null)
-  // Ground-tile catalog (ground-tile mapper): grass/dirt/road cells painted
-  // onto the town's ground, encounter field, and roads. Empty array falls back
-  // to the procedural tile textures, so it's a pure visual enhancement.
-  const [groundTiles, setGroundTiles] = useState([])
-  // The active character sprite (sprite-mapper manifest). Drives the town
-  // player; loadActiveManifest always resolves (remote → committed default).
-  const [characterManifest, setCharacterManifest] = useState(null)
-
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-
-  // Town-scene state — fetched on mount and after any communities-mutating
-  // action so the game always sees fresh communities + session + feed.
-  const loadTown = useCallback(async () => {
-    const [c, s, f, tree, ground, character] = await Promise.all([
-      listCommunities(),
-      getGameSession(),
-      getFeed(),
-      // Best-effort: the tree object is a visual enhancement, so swallow any
-      // failure (e.g. endpoint not migrated on this env) and fall back to null
-      // — never let it break the town load.
-      getActiveTileObject('tree').catch(() => null),
-      // Ground-tile catalog — same best-effort discipline: an empty list just
-      // means the procedural tile textures keep being used.
-      listGroundTiles().catch(() => []),
-      // The active character sprite. Never throws (falls back to the committed
-      // default), so the town always has a player even if the backend is down.
-      loadActiveManifest().catch(() => null),
-    ])
-    setCommunities(c)
-    setSession(s)
-    setFeed(f)
-    setTreeObject(tree)
-    setGroundTiles(ground || [])
-    setCharacterManifest(character)
-  }, [])
-
-  useEffect(() => {
-    let active = true
-    setLoading(true)
-    Promise.all([getMe(), loadTown()])
-      .then(([m]) => {
-        if (!active) return
-        setMe(m)
-      })
-      .catch((e) => active && setError(e.message))
-      .finally(() => active && setLoading(false))
-    return () => {
-      active = false
-    }
-  }, [loadTown])
-
-  // ---- game events --------------------------------------------------
-
-  const handleEnterCommunity = useCallback((id) => {
-    // Save session + track the active community. Phaser's InteriorScene
-    // handles the visual transition inside the canvas; the React shell
-    // just records the id (for the topbar label and the activeCommunityId
-    // prop that PhaserGame forwards back into its registry).
-    setActiveCommunityId(id)
-    saveGameSession({ last_area: 'house', last_community_id: id }).catch(() => {})
-  }, [])
-
-  // Each board's "open content list" action — for the demo every board
-  // points at the same external URL. The game module knows nothing about
-  // this; it just emits the board id and the shell decides.
-  const handleOpenBoard = useCallback(() => {
-    window.open(DEMO_BOARD_URL, '_blank', 'noopener,noreferrer')
-  }, [])
-
-  const handleExitCommunity = useCallback(
-    (idFromCaller) => {
-      // Phaser passes the exited community id via the bus event; fall
-      // back to whatever the shell most recently tracked as active.
-      const id = idFromCaller ?? activeCommunityId
-      // Optimistic local session update so the next remount (e.g. after
-      // an admin tab switch) spawns on the just-exited doormat rather
-      // than whatever the previous loadTown returned. Phaser's own
-      // scene-start data covers the within-session spawn.
-      setSession((prev) => ({
-        ...(prev || {}),
-        last_area: 'town',
-        last_community_id: id,
-        spawn: { area: 'town', last_community_id: id },
-      }))
-      saveGameSession({ last_area: 'town', last_community_id: id }).catch(() => {})
-      setActiveCommunityId(null)
-      loadTown().catch((e) => setError(e.message))
-    },
-    [activeCommunityId, loadTown],
-  )
-
-  // Tab switch: opening Admin clears the active community so the user
-  // lands back in town when they return to the village tab. VillageGame
-  // unmounts on tab switch and Phaser starts fresh at the Town Entrance
-  // / saved doormat on return — no React-side scene state to reset.
-  const goToAdmin = useCallback(() => {
-    setActiveCommunityId(null)
-    setView('admin')
-  }, [])
-
-  const goToVillage = useCallback(() => {
-    setView('village')
-  }, [])
-
-  const handleDailyBriefClose = useCallback(() => {
-    loadTown().catch((e) => setError(e.message))
-  }, [loadTown])
-
-  // ---- Render states ------------------------------------------------
-
-  if (loading && !communities) {
-    return (
-      <div className="app-shell app-centered">
-        <div className="loading-card">
-          <div className="loading-pixel" />
-          <p>LOADING ODT VILLE…</p>
-        </div>
-      </div>
-    )
-  }
-
-  if (error && !communities) {
-    return (
-      <div className="app-shell app-centered">
-        <div className="error-card">
-          <h2>CAN'T REACH THE VILLAGE</h2>
-          <p className="error-detail">{error}</p>
-          <button type="button" onClick={() => window.location.reload()}>
-            RETRY
-          </button>
-        </div>
-      </div>
-    )
-  }
-
-  if (!communities || !session || !me) return null
-
   return (
-    <div className="app-shell">
-      <header className="app-header">
-        <div className="app-brand">
-          <span className="app-logo">🕹️</span>
-          <div>
-            <h1>ODT VILLE</h1>
-            <p className="app-company">{me.company.name}</p>
-          </div>
-        </div>
-        <div className="app-user">
-          <span className="app-user-name">{me.user.name}</span>
-          <span className="app-user-role">{me.user.role}</span>
-        </div>
-      </header>
-
-      <nav className="app-tabs" aria-label="Top-level navigation">
-        <button
-          type="button"
-          className={`app-tab${view === 'village' ? ' app-tab-active' : ''}`}
-          onClick={goToVillage}
-          aria-current={view === 'village' ? 'page' : undefined}
-        >
-          🕹️ VILLAGE
-        </button>
-        <button
-          type="button"
-          className={`app-tab${view === 'admin' ? ' app-tab-active' : ''}`}
-          onClick={goToAdmin}
-          aria-current={view === 'admin' ? 'page' : undefined}
-        >
-          ⚙ ADMIN
-        </button>
-      </nav>
-
-      {error && communities && (
-        <div className="error-banner">
-          {error}
-          <button type="button" onClick={() => setError(null)}>
-            DISMISS
-          </button>
-        </div>
-      )}
-
-      <main className="app-main">
-        {view === 'village' && (
-          <VillageGame
-            communities={communities}
-            session={session}
-            treeObject={treeObject}
-            groundTiles={groundTiles}
-            characterManifest={characterManifest}
-            dailyBrief={
-              <DailyBriefShortcut items={feed} onClose={handleDailyBriefClose} />
-            }
-            activeCommunityId={activeCommunityId}
-            onEnterCommunity={handleEnterCommunity}
-            onExitCommunity={handleExitCommunity}
-            onOpenBoard={handleOpenBoard}
-            trainerDefeated={trainerDefeated}
-            onTrainerDefeated={() => setTrainerDefeated(true)}
-          />
-        )}
-
-        {view === 'admin' && (
-          <CommunitiesAdminPanel
-            communities={communities}
-            onChanged={loadTown}
-          />
-        )}
-      </main>
-    </div>
+    <Routes>
+      <Route element={<RootLayout />}>
+        <Route index element={<VillagePage />} />
+      </Route>
+      {/* The admin console is its own standalone shell (mapper-styled, dark) and
+          is reachable by URL only — no link from the game UI. */}
+      <Route path="admin" element={<AdminLayout />}>
+        <Route index element={<Navigate to="communities" replace />} />
+        <Route path="communities" element={<CommunitiesAdminPage />} />
+        <Route path="sprites" element={<SpriteMapper />} />
+        <Route path="objects" element={<TileMapper />} />
+        <Route path="ground" element={<GroundTileMapper />} />
+      </Route>
+      {/* Unknown paths fall back to the village. */}
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   )
 }

@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { categoryEmoji } from './constants.js'
 import { createCommunity, removeCommunity } from './client.js'
+import '../tileMapper/styles.css'
+import './admin.css'
 
 const CATEGORIES = [
   { key: 'compliance', label: 'Compliance' },
@@ -65,98 +67,104 @@ export default function CommunitiesAdminPanel({ communities, onChanged }) {
   }
 
   return (
-    <section className="admin-page" aria-label="Manage communities">
-      <header className="admin-page-header">
-        <h2>⚙ COMMUNITIES</h2>
-        <p className="admin-count">
+    <div className="tilemapper" aria-label="Manage communities">
+      <header className="bar">
+        <h1>Communities</h1>
+        <span className="comm-count">
           {used} {used === 1 ? 'community' : 'communities'} in the village
-        </p>
+        </span>
       </header>
 
-      <div className="admin-page-body">
-        <ul className="admin-list">
-          {communities.map((c) => (
-            <li key={c.id} className="admin-row">
-              <span className="admin-swatch" style={{ background: c.color }} />
-              <span className="admin-emoji">{categoryEmoji(c.category_key)}</span>
-              <span className="admin-row-name">{c.title}</span>
-              <button
-                type="button"
-                className="admin-del"
-                onClick={() => handleDelete(c.id)}
-                disabled={busy}
-              >
-                DELETE
-              </button>
-            </li>
-          ))}
-        </ul>
+      {error && <div className="status">{error}</div>}
 
-        <form className="admin-form" onSubmit={handleAdd}>
-          <h3 className="admin-form-title">+ NEW COMMUNITY</h3>
-
-          <label className="admin-field">
-            <span>Name</span>
-            <input
-              type="text"
-              value={title}
-              maxLength={40}
-              placeholder="e.g. Finance House"
-              onChange={(e) => setTitle(e.target.value)}
-            />
-          </label>
-
-          <label className="admin-field">
-            <span>Category</span>
-            <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-            >
-              {CATEGORIES.map((c) => (
-                <option key={c.key} value={c.key}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <div className="admin-field">
-            <span>Roof colour</span>
-            <div className="admin-colours">
-              {COLOURS.map((c) => (
+      <div className="cols">
+        <div className="left comm-left">
+          <h3 className="comm-h">In the village ({used})</h3>
+          <ul className="comm-list">
+            {communities.map((c) => (
+              <li key={c.id} className="comm-row">
+                <span className="comm-swatch" style={{ background: c.color }} />
+                <span className="comm-emoji">{categoryEmoji(c.category_key)}</span>
+                <span className="comm-name">{c.title}</span>
                 <button
                   type="button"
-                  key={c}
-                  className={`admin-colour${colour === c ? ' admin-colour-on' : ''}`}
-                  style={{ background: c }}
-                  aria-label={`colour ${c}`}
-                  onClick={() => setColour(c)}
-                />
-              ))}
+                  className="comm-del"
+                  title="Delete community"
+                  onClick={() => handleDelete(c.id)}
+                  disabled={busy}
+                >
+                  ×
+                </button>
+              </li>
+            ))}
+            {used === 0 && <li className="hint">No communities yet.</li>}
+          </ul>
+        </div>
+
+        <div className="right">
+          <h3>New community</h3>
+          <form className="comm-form" onSubmit={handleAdd}>
+            <label>
+              Name
+              <input
+                type="text"
+                value={title}
+                maxLength={40}
+                placeholder="e.g. Finance House"
+                onChange={(e) => setTitle(e.target.value)}
+              />
+            </label>
+
+            <label>
+              Category
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+              >
+                {CATEGORIES.map((c) => (
+                  <option key={c.key} value={c.key}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div className="comm-field">
+              <span className="comm-field-label">Roof colour</span>
+              <div className="comm-colours">
+                {COLOURS.map((c) => (
+                  <button
+                    type="button"
+                    key={c}
+                    className={`comm-colour${colour === c ? ' on' : ''}`}
+                    style={{ background: c }}
+                    aria-label={`colour ${c}`}
+                    onClick={() => setColour(c)}
+                  />
+                ))}
+              </div>
             </div>
-          </div>
 
-          <label className="admin-field">
-            <span>Logo URL (optional)</span>
-            <input
-              type="text"
-              value={logoUrl}
-              placeholder="https://…"
-              onChange={(e) => setLogoUrl(e.target.value)}
-            />
-          </label>
+            <label>
+              Logo URL (optional)
+              <input
+                type="text"
+                value={logoUrl}
+                placeholder="https://…"
+                onChange={(e) => setLogoUrl(e.target.value)}
+              />
+            </label>
 
-          {error && <p className="admin-error">{error}</p>}
-
-          <button
-            type="submit"
-            className="admin-add"
-            disabled={busy || !title.trim()}
-          >
-            {busy ? 'WORKING…' : 'ADD COMMUNITY'}
-          </button>
-        </form>
+            <button
+              type="submit"
+              className="save"
+              disabled={busy || !title.trim()}
+            >
+              {busy ? 'Working…' : 'Add community'}
+            </button>
+          </form>
+        </div>
       </div>
-    </section>
+    </div>
   )
 }

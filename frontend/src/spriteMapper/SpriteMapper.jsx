@@ -3,6 +3,7 @@ import SheetCanvas from './SheetCanvas.jsx'
 import PosturePanel from './PosturePanel.jsx'
 import AnimPreview from './AnimPreview.jsx'
 import CharacterRoster from './CharacterRoster.jsx'
+import './styles.css'
 import {
   POSTURE_SLOTS,
   emptyPostures,
