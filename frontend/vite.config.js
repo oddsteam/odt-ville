@@ -1,12 +1,51 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { rm } from 'node:fs/promises'
+import { resolve } from 'node:path'
+
+// The Tiled project under public/maps is intentionally self-contained (Tiled
+// needs source + tilesets together — see DISCUSSION-domains-and-workflow.md).
+// Vite copies public/ verbatim, so these authoring-only files would otherwise
+// ship to production. Strip them from the build output; the runtime only needs
+// the published artifacts (downtown.json, tilesets/, characters/, signs/).
+const AUTHORING_ONLY = [
+  'maps/maps.tiled-project',
+  'maps/downtown.tmx',
+  'maps/tipco.tmx',
+  'maps/palette',
+]
+
+function stripMapAuthoringFiles() {
+  let outDir
+  return {
+    name: 'strip-map-authoring-files',
+    apply: 'build',
+    configResolved(config) {
+      outDir = config.build.outDir
+    },
+    async closeBundle() {
+      await Promise.all(
+        AUTHORING_ONLY.map((p) =>
+          rm(resolve(outDir, p), { recursive: true, force: true }),
+        ),
+      )
+    },
+  }
+}
 
 export default defineConfig({
   server: {
-    port: 5390,
+    port: 5460,
     // Accept the public hostname used by the Cloudflare tunnel.
     allowedHosts: ['localhost', '.p2d.uk'],
-    proxy: { '/api': { target: 'http://localhost:3130', changeOrigin: true } },
+    // VITE_PROXY_TARGET points at the backend container under Docker Compose;
+    // defaults to localhost for a plain local `npm run dev`.
+    proxy: {
+      '/api': {
+        target: process.env.VITE_PROXY_TARGET || 'http://localhost:3190',
+        changeOrigin: true,
+      },
+    },
   },
-  plugins: [react()],
+  plugins: [react(), stripMapAuthoringFiles()],
 })

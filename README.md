@@ -53,6 +53,45 @@ switch users for testing.)
 
 ---
 
+## Run everything with Docker Compose (local dev)
+
+If you'd rather not install Ruby, Node, and Postgres locally, bring the whole
+stack up with one command. You only need Docker Desktop.
+
+```bash
+docker compose up --build
+```
+
+This starts three services:
+
+| Service    | URL                     | Notes                                            |
+| ---------- | ----------------------- | ------------------------------------------------ |
+| `db`       | `localhost:5432`        | Postgres 16, data persisted in the `pgdata` volume |
+| `backend`  | `localhost:3190`        | Rails API; runs `db:prepare` (create+migrate+seed) on boot |
+| `frontend` | `localhost:5460`        | Vite dev server (hot reload); proxies `/api` → `backend` |
+
+Open <http://localhost:5460>. Editing files under `backend/` or `frontend/`
+hot-reloads inside the containers (the source is bind-mounted).
+
+Notes:
+
+- **Dependencies live in named volumes** (`bundle`, `frontend_node_modules`),
+  not on the host, so native gems and `sharp` are built for the Linux
+  containers instead of macOS. You don't run `bundle install` / `npm install`
+  yourself — the containers do it on first boot (so the first `up` is slow).
+- **Data persists** across `docker compose down && docker compose up`. To wipe
+  the database, use `docker compose down -v` (removes the `pgdata` volume).
+- This is **dev only** — it uses `backend/Dockerfile.dev` and
+  `frontend/Dockerfile.dev`. Production still deploys via the root
+  `backend/Dockerfile` (Kamal/Thruster).
+- **Encrypted credentials:** development doesn't need `RAILS_MASTER_KEY`. If the
+  backend fails to boot complaining about credentials, drop your
+  `config/master.key` into `backend/config/` (it's gitignored, never commit it).
+
+Prefer running things natively? Keep reading.
+
+---
+
 ## 1. Run the backend (Rails API)
 
 ```bash

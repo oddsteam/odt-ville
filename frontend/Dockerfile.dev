@@ -1,0 +1,14 @@
+# syntax=docker/dockerfile:1
+# DEVELOPMENT image only — runs the Vite dev server with hot reload.
+# node:22 bookworm-slim (glibc, NOT alpine) so sharp/libvips prebuilt binaries
+# work without a source build.
+FROM node:22-bookworm-slim
+
+WORKDIR /app
+
+EXPOSE 5460
+
+# node_modules lives in a named volume (see compose.yaml) so the host's
+# macOS-arm sharp binary never shadows the Linux one. The command is supplied
+# by compose.yaml.
+CMD ["bash", "-c", "npm install && npm run dev -- --host 0.0.0.0"]
