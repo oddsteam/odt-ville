@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { categoryEmoji } from './constants.js'
-import { createCommunity, removeCommunity } from './client.js'
+import { CommunitiesService } from './service.ts'
+import { runEdge } from '../lib/runEdge.ts'
 import '../tileMapper/styles.css'
 import './admin.css'
 
@@ -36,12 +37,14 @@ export default function CommunitiesAdminPanel({ communities, onChanged }) {
     setBusy(true)
     setError(null)
     try {
-      await createCommunity({
-        title: title.trim(),
-        category_key: category,
-        color: colour,
-        logo_url: logoUrl.trim(),
-      })
+      await runEdge(
+        CommunitiesService.create({
+          title: title.trim(),
+          category_key: category,
+          color: colour,
+          logo_url: logoUrl.trim(),
+        }),
+      )
       setTitle('')
       setLogoUrl('')
       if (onChanged) await onChanged()
@@ -57,7 +60,7 @@ export default function CommunitiesAdminPanel({ communities, onChanged }) {
     setBusy(true)
     setError(null)
     try {
-      await removeCommunity(id)
+      await runEdge(CommunitiesService.remove(id))
       if (onChanged) await onChanged()
     } catch (err) {
       setError(err.message)

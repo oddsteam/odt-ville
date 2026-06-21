@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import CommunitiesAdminPanel from '../communities/CommunitiesAdminPanel.jsx'
-import { listCommunities } from '../communities/client.js'
+import { CommunitiesService } from '../communities/service.ts'
+import { runEdge } from '../lib/runEdge.ts'
 
-// Route wrapper for the communities CRUD panel. The panel owns its own
-// create/delete calls and asks for a refetch via onChanged; this wrapper owns
-// the list it edits. (The village route loads communities independently and
-// refetches on its own mount, so there's no shared state to keep in sync.)
+// Route wrapper for the communities CRUD panel. Owns the list it edits and
+// runs every read at the React edge via `runEdge` — the canonical pattern
+// the Effect data layer is being rolled out behind (PRD #3 / issue #5).
 export default function CommunitiesAdminPage() {
   const [communities, setCommunities] = useState(null)
   const [error, setError] = useState(null)
@@ -13,7 +13,7 @@ export default function CommunitiesAdminPage() {
   const load = useCallback(async () => {
     try {
       setError(null)
-      setCommunities(await listCommunities())
+      setCommunities(await runEdge(CommunitiesService.list()))
     } catch (e) {
       setError(e.message)
     }

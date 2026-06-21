@@ -1,6 +1,18 @@
-// Communities + content data client. No game / spatial concepts here — this
-// module is the reusable boundary on the frontend, mirroring /api/v1/communities
-// and the content_items endpoints.
+// Communities + content data client.
+//
+// The community resource (list / create / remove + getFeed) lives in
+// `service.ts` as a typed Effect service with @effect/schema decoders. The
+// helpers below are thin Promise façades over that service for the existing
+// JSX call sites (VillagePage, DailyBriefShortcut). `/admin/communities`
+// invokes the service directly via `runEdge`.
+//
+// The remaining helpers (getCommunity, openItem, acknowledgeItem) are still
+// untyped fetch — they'll be migrated to the Effect pattern in follow-up
+// slices once this architecture gate is signed off.
+
+import { runEdge } from '../lib/runEdge.ts'
+import { CommunitiesService } from './service.ts'
+
 const BASE = '/api/v1'
 
 async function request(path, options = {}) {
@@ -22,33 +34,25 @@ async function request(path, options = {}) {
 
 const jsonHeaders = { 'Content-Type': 'application/json' }
 
-// GET /communities -> { communities: [...] }
 export function listCommunities() {
-  return request('/communities').then((d) => d.communities)
+  return runEdge(CommunitiesService.list())
+}
+
+export function createCommunity(attrs) {
+  return runEdge(CommunitiesService.create(attrs))
+}
+
+export function removeCommunity(id) {
+  return runEdge(CommunitiesService.remove(id))
+}
+
+export function getFeed() {
+  return runEdge(CommunitiesService.getFeed())
 }
 
 // GET /communities/:id -> { community, boards }
 export function getCommunity(id) {
   return request(`/communities/${id}`)
-}
-
-// POST /communities { title, color, logo_url, category_key }
-export function createCommunity(attrs) {
-  return request('/communities', {
-    method: 'POST',
-    headers: jsonHeaders,
-    body: JSON.stringify(attrs),
-  })
-}
-
-// DELETE /communities/:id
-export function removeCommunity(id) {
-  return request(`/communities/${id}`, { method: 'DELETE' })
-}
-
-// GET /content_items/feed -> { items: [...] }
-export function getFeed() {
-  return request('/content_items/feed').then((d) => d.items)
 }
 
 // POST /content_items/:id/open
