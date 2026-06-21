@@ -65,14 +65,14 @@ const press = async (key, times = 1) => {
 // First step up the entrance stem triggers the gate trainer's duel —
 // dismiss it so the rest of the planned walk is deterministic. After
 // this returns the trainer is defeated for the rest of the page
-// session and the player is one tile above the entrance (9 more ups
+// session and the player is one tile above the entrance (10 more ups
 // to reach the street row).
 await clearPhaserGateTrainer(page)
 
 // Town Entrance → up the entrance stem (which crosses the tall-grass
 // field safely) to the street, then west along the street under
 // Compliance House.
-await press('ArrowUp', 9)
+await press('ArrowUp', 10)
 const afterUp = await playerTile()
 await press('ArrowLeft', 9)
 const afterLeft = await playerTile()
@@ -99,7 +99,7 @@ await page.screenshot({ path: `${OUT}/03-compliance-interior.png`, fullPage: tru
 
 const ok =
   spawn.x === 12 &&
-  spawn.y === 17 &&
+  spawn.y === 18 &&
   buildings === 5 &&
   afterUp.x === 12 &&
   afterUp.y === 7 &&
