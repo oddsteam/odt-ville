@@ -1,14 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Outlet } from 'react-router-dom'
 
-// Tiny inline fetch for the current viewer — the header above everything.
-// Kept inline (rather than its own client module) because there is only one
-// endpoint and no reason for a third boundary.
-async function getMe() {
-  const res = await fetch('/api/v1/me')
-  if (!res.ok) throw new Error(`Request to /me failed (${res.status})`)
-  return res.json()
-}
+import { runEdge } from './lib/runEdge.ts'
+import { ViewerService } from './viewer/service.ts'
 
 // The game shell: brand header + the village game via <Outlet>. The admin
 // console is a separate top-level route (see App + AdminLayout) with no link
@@ -19,7 +13,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     let active = true
-    getMe()
+    runEdge(ViewerService.get())
       .then((m) => active && setMe(m))
       .catch(() => {})
     return () => {
