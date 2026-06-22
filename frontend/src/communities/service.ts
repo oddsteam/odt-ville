@@ -5,7 +5,7 @@
 // non-React UIs.
 
 import * as Effect from 'effect/Effect'
-import * as Schema from '@effect/schema/Schema'
+import * as Schema from 'effect/Schema'
 
 import { DecodeError, Http } from '../lib/http.ts'
 import type { HttpError } from '../lib/http.ts'

@@ -1,10 +1,10 @@
-// @effect/schema decoders for the communities + content-feed API surface.
+// effect/Schema decoders for the communities + content-feed API surface.
 // These shapes mirror the Rails serializers (CommunitiesSerializer,
 // ContentFeedSerializer, Serialization.content_item) and act as the single
 // source of truth for what the frontend will accept from the backend. Decode
 // failures surface as typed errors at the data-layer edge.
 
-import * as Schema from '@effect/schema/Schema'
+import * as Schema from 'effect/Schema'
 
 export const BoardType = Schema.Literal('must_know', 'should_know', 'nice_to_know')
 export const Priority = Schema.Literal('urgent', 'important', 'normal')

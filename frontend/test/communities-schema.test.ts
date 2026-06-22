@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import * as Schema from '@effect/schema/Schema'
+import * as Schema from 'effect/Schema'
 import { Either } from 'effect'
 
 import { CommunitiesResponse, FeedResponse } from '../src/communities/schema.ts'

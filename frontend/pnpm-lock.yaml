@@ -8,9 +8,6 @@ importers:
 
   .:
     dependencies:
-      '@effect/schema':
-        specifier: ^0.75.5
-        version: 0.75.5(effect@3.21.4)
       effect:
         specifier: ^3.21.4
         version: 3.21.4
@@ -44,12 +41,6 @@ importers:
         version: 4.1.9(vite@8.0.16)
 
 packages:
-
-  '@effect/schema@0.75.5':
-    resolution: {integrity: sha512-TQInulTVCuF+9EIbJpyLP6dvxbQJMphrnRqgexm/Ze39rSjfhJuufF7XvU3SxTgg3HnL7B/kpORTJbHhlE6thw==}
-    deprecated: this package has been merged into the main effect package
-    peerDependencies:
-      effect: ^3.9.2
 
   '@emnapi/core@1.10.0':
     resolution: {integrity: sha512-yq6OkJ4p82CAfPl0u9mQebQHKPJkY7WrIuk205cTYnYe+k2Z8YBh11FrbRG/H6ihirqcacOgl2BIO8oyMQLeXw==}
@@ -723,11 +714,6 @@ packages:
     hasBin: true
 
 snapshots:
-
-  '@effect/schema@0.75.5(effect@3.21.4)':
-    dependencies:
-      effect: 3.21.4
-      fast-check: 3.23.2
 
   '@emnapi/core@1.10.0':
     dependencies:

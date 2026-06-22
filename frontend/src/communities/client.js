@@ -1,7 +1,7 @@
 // Communities + content data client.
 //
 // The community resource (list / create / remove + getFeed) lives in
-// `service.ts` as a typed Effect service with @effect/schema decoders. The
+// `service.ts` as a typed Effect service with effect/Schema decoders. The
 // helpers below are thin Promise façades over that service for the existing
 // JSX call sites (VillagePage, DailyBriefShortcut). `/admin/communities`
 // invokes the service directly via `runEdge`.
