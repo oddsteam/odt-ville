@@ -2,6 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { saveTileObject } from '../tileObjects/client.js'
 import './styles.css'
 
+type Atlas = { img: HTMLImageElement; src: string; width: number; height: number }
+type Sel = { c0: number; r0: number; c1: number; r1: number }
+type DragAnchor = { c: number; r: number }
+
 // Tile-Object Mapper — admins upload an atlas PNG, drag a rectangle over the
 // cell grid to select a whole object (a tree, a prop), then save it. The
 // browser crops that region to a standalone PNG (data URL) so the game just
@@ -11,18 +15,18 @@ import './styles.css'
 const MAP_TILE = 48 // px per tile in the game — used to preview real map size.
 
 export default function TileMapper() {
-  const [atlas, setAtlas] = useState(null) // { img, src, width, height }
+  const [atlas, setAtlas] = useState<Atlas | null>(null) // { img, src, width, height }
   const [cell, setCell] = useState(16)
   const [zoom, setZoom] = useState(3)
-  const [sel, setSel] = useState(null) // { c0, r0, c1, r1 } inclusive cell range
+  const [sel, setSel] = useState<Sel | null>(null) // { c0, r0, c1, r1 } inclusive cell range
   const [name, setName] = useState('tree')
   const [kind, setKind] = useState('tree')
   const [fpW, setFpW] = useState(1.4)
   const [fpH, setFpH] = useState(1.8)
   const [status, setStatus] = useState('Upload an atlas PNG to begin.')
 
-  const canvasRef = useRef(null)
-  const dragRef = useRef(null) // { c, r } drag anchor while the mouse is down
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const dragRef = useRef<DragAnchor | null>(null) // { c, r } drag anchor while the mouse is down
 
   const cols = atlas ? Math.floor(atlas.width / cell) : 0
   const rows = atlas ? Math.floor(atlas.height / cell) : 0
@@ -37,19 +41,19 @@ export default function TileMapper() {
       }
     : null
 
-  const onUpload = useCallback((e) => {
+  const onUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     const reader = new FileReader()
     reader.onload = () => {
       const img = new Image()
       img.onload = () => {
-        setAtlas({ img, src: reader.result, width: img.naturalWidth, height: img.naturalHeight })
+        setAtlas({ img, src: reader.result as string, width: img.naturalWidth, height: img.naturalHeight })
         setSel(null)
         setStatus(`Loaded atlas (${img.naturalWidth}×${img.naturalHeight}). Drag to select an object.`)
       }
       img.onerror = () => setStatus('Could not read that image.')
-      img.src = reader.result
+      img.src = reader.result as string
     }
     reader.readAsDataURL(file)
   }, [])
@@ -60,7 +64,7 @@ export default function TileMapper() {
     if (!canvas || !atlas) return
     canvas.width = atlas.width * zoom
     canvas.height = atlas.height * zoom
-    const ctx = canvas.getContext('2d')
+    const ctx = canvas.getContext('2d')!
     ctx.imageSmoothingEnabled = false
     ctx.clearRect(0, 0, canvas.width, canvas.height)
     ctx.drawImage(atlas.img, 0, 0, canvas.width, canvas.height)
@@ -95,7 +99,7 @@ export default function TileMapper() {
   }, [atlas, cell, zoom, cols, rows, selBox])
 
   // ---- live preview of the cropped object at map scale --------------
-  const previewRef = useRef(null)
+  const previewRef = useRef<HTMLCanvasElement>(null)
   useEffect(() => {
     const canvas = previewRef.current
     if (!canvas || !atlas || !selBox) return
@@ -103,7 +107,7 @@ export default function TileMapper() {
     const h = Math.max(1, Math.round(fpH * MAP_TILE))
     canvas.width = w
     canvas.height = h
-    const ctx = canvas.getContext('2d')
+    const ctx = canvas.getContext('2d')!
     ctx.imageSmoothingEnabled = false
     ctx.clearRect(0, 0, w, h)
     ctx.drawImage(
@@ -114,8 +118,8 @@ export default function TileMapper() {
   }, [atlas, cell, selBox, fpW, fpH])
 
   // ---- drag-select on the canvas ------------------------------------
-  function cellAt(e) {
-    const rect = canvasRef.current.getBoundingClientRect()
+  function cellAt(e: React.MouseEvent<HTMLCanvasElement>) {
+    const rect = canvasRef.current!.getBoundingClientRect()
     const step = cell * zoom
     const c = Math.floor((e.clientX - rect.left) / step)
     const r = Math.floor((e.clientY - rect.top) / step)
@@ -124,13 +128,13 @@ export default function TileMapper() {
       r: Math.max(0, Math.min(rows - 1, r)),
     }
   }
-  function onDown(e) {
+  function onDown(e: React.MouseEvent<HTMLCanvasElement>) {
     if (!atlas) return
     const { c, r } = cellAt(e)
     dragRef.current = { c, r }
     setSel({ c0: c, r0: r, c1: c, r1: r })
   }
-  function onMove(e) {
+  function onMove(e: React.MouseEvent<HTMLCanvasElement>) {
     if (!dragRef.current) return
     const { c, r } = cellAt(e)
     setSel({ c0: dragRef.current.c, r0: dragRef.current.r, c1: c, r1: r })
@@ -161,7 +165,7 @@ export default function TileMapper() {
     const off = document.createElement('canvas')
     off.width = selBox.w * cell
     off.height = selBox.h * cell
-    const ctx = off.getContext('2d')
+    const ctx = off.getContext('2d')!
     ctx.imageSmoothingEnabled = false
     ctx.drawImage(
       atlas.img,
@@ -180,8 +184,8 @@ export default function TileMapper() {
         footprint_h: Number(fpH) || selBox.h,
       })
       setStatus(`Saved "${saved.name}" as the active ${saved.kind}. It'll show on the map on reload.`)
-    } catch (err) {
-      setStatus(`Save failed: ${err.message}`)
+    } catch (err: unknown) {
+      setStatus(`Save failed: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
 

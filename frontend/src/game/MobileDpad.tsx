@@ -1,10 +1,18 @@
+import type React from 'react'
+
 // On-screen directional pad. Uses pointer press/release so holding a button
 // keeps the avatar walking — the shared touch control on every device.
-export default function MobileDpad({ onPress, onRelease }) {
-  const noFocus = (e) => e.preventDefault()
+export default function MobileDpad({
+  onPress,
+  onRelease,
+}: {
+  onPress: (dir: string) => void
+  onRelease: (dir: string) => void
+}) {
+  const noFocus = (e: React.MouseEvent) => e.preventDefault()
 
-  const dir = (d) => ({
-    onPointerDown: (e) => {
+  const dir = (d: string) => ({
+    onPointerDown: (e: React.PointerEvent) => {
       e.preventDefault()
       onPress(d)
     },

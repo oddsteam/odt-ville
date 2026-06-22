@@ -1,11 +1,21 @@
 import { useEffect, useRef } from 'react'
 import { useImage } from './useImage.js'
 
+type FrameRect = { x: number; y: number; w: number; h: number }
+type Sheet = { src: string; width: number; height: number }
+type Props = {
+  sheet: Sheet | null
+  grid: { frameW: number; frameH: number }
+  zoom: number
+  frames: FrameRect[]
+  onToggleFrame: (rect: FrameRect) => void
+}
+
 // Renders the source sheet on a canvas with a frame grid overlay. Clicking a
 // grid cell toggles that frame in the active posture. Frames already in the
 // active posture are highlighted with their 1-based order number.
-export default function SheetCanvas({ sheet, grid, zoom, frames, onToggleFrame }) {
-  const canvasRef = useRef(null)
+export default function SheetCanvas({ sheet, grid, zoom, frames, onToggleFrame }: Props) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
   const img = useImage(sheet?.src)
   const fw = grid.frameW
   const fh = grid.frameH
@@ -17,7 +27,7 @@ export default function SheetCanvas({ sheet, grid, zoom, frames, onToggleFrame }
     const H = sheet.height * zoom
     cv.width = W
     cv.height = H
-    const ctx = cv.getContext('2d')
+    const ctx = cv.getContext('2d')!
     ctx.imageSmoothingEnabled = false
     ctx.clearRect(0, 0, W, H)
     ctx.drawImage(img, 0, 0, W, H)
@@ -39,7 +49,7 @@ export default function SheetCanvas({ sheet, grid, zoom, frames, onToggleFrame }
     }
 
     // Active-posture frames, in order.
-    frames.forEach((r, i) => {
+    frames.forEach((r: FrameRect, i: number) => {
       ctx.fillStyle = 'rgba(46,125,255,0.32)'
       ctx.fillRect(r.x * zoom, r.y * zoom, r.w * zoom, r.h * zoom)
       ctx.strokeStyle = '#2e7dff'
@@ -51,9 +61,9 @@ export default function SheetCanvas({ sheet, grid, zoom, frames, onToggleFrame }
     })
   }, [img, sheet, zoom, fw, fh, frames])
 
-  function handleClick(e) {
+  function handleClick(e: React.MouseEvent<HTMLCanvasElement>) {
     if (!img) return
-    const rect = canvasRef.current.getBoundingClientRect()
+    const rect = canvasRef.current!.getBoundingClientRect()
     const px = (e.clientX - rect.left) / zoom
     const py = (e.clientY - rect.top) / zoom
     const col = Math.floor(px / fw)

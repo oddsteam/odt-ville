@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { TILESETS, tilesetUrl } from './tilesets.js'
 import { listGroundTiles, saveGroundTile, deleteGroundTile } from './client.js'
+import type { GroundTile } from './schema.ts'
 import '../tileMapper/styles.css'
 import './styles.css'
 
@@ -18,10 +19,10 @@ const CORNER_SIDES = ['NE', 'NW', 'SE', 'SW'] // diagonal — for corner tiles
 
 // Module-level cache of loaded tileset images. The roster can span several
 // tilesets, so thumbnails load each on demand without re-fetching.
-const imgCache = new Map()
-function loadTileset(name) {
-  if (imgCache.has(name)) return imgCache.get(name)
-  const p = new Promise((resolve, reject) => {
+const imgCache = new Map<string, Promise<HTMLImageElement>>()
+function loadTileset(name: string): Promise<HTMLImageElement> {
+  if (imgCache.has(name)) return imgCache.get(name)!
+  const p = new Promise<HTMLImageElement>((resolve, reject) => {
     const img = new Image()
     img.onload = () => resolve(img)
     img.onerror = () => reject(new Error(`Could not load tileset ${name}.png`))
@@ -32,14 +33,15 @@ function loadTileset(name) {
 }
 
 // A tiny canvas that crops one cell out of its tileset for the roster.
-function Thumb({ tile, size = 32 }) {
-  const ref = useRef(null)
+type ThumbProps = { tile: GroundTile; size?: number }
+function Thumb({ tile, size = 32 }: ThumbProps) {
+  const ref = useRef<HTMLCanvasElement>(null)
   useEffect(() => {
     let alive = true
     loadTileset(tile.tileset)
-      .then((img) => {
+      .then((img: HTMLImageElement) => {
         if (!alive || !ref.current) return
-        const ctx = ref.current.getContext('2d')
+        const ctx = ref.current.getContext('2d')!
         ctx.imageSmoothingEnabled = false
         ctx.clearRect(0, 0, size, size)
         ctx.drawImage(
@@ -56,19 +58,19 @@ function Thumb({ tile, size = 32 }) {
 
 export default function GroundTileMapper() {
   const [tileset, setTileset] = useState(TILESETS[0].name)
-  const [atlas, setAtlas] = useState(null) // { img, width, height }
+  const [atlas, setAtlas] = useState<{ img: HTMLImageElement; width: number; height: number } | null>(null) // { img, width, height }
   const [zoom, setZoom] = useState(2)
-  const [sel, setSel] = useState(null) // { c, r } single cell
+  const [sel, setSel] = useState<{ c: number; r: number } | null>(null) // { c, r } single cell
   const [type, setType] = useState('grass')
   const [label, setLabel] = useState('')
   // Boundary role: 'fill' (interior) or 'edge' (a transition tile facing a
   // side). Side is only meaningful for edges; corners come later.
   const [role, setRole] = useState('fill')
   const [side, setSide] = useState('N')
-  const [catalog, setCatalog] = useState([])
+  const [catalog, setCatalog] = useState<GroundTile[]>([])
   const [status, setStatus] = useState('Pick a tileset, click a cell, set its type, then save.')
 
-  const canvasRef = useRef(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
   const meta = TILESETS.find((t) => t.name === tileset) || TILESETS[0]
   const cell = meta.cell
   const cols = atlas ? Math.floor(atlas.width / cell) : 0
@@ -82,8 +84,8 @@ export default function GroundTileMapper() {
 
   const refreshCatalog = useCallback(() => {
     listGroundTiles()
-      .then((rows) => setCatalog(rows || []))
-      .catch((e) => setStatus(`Load failed: ${e.message}`))
+      .then((rows) => setCatalog(rows ? [...rows] : []))
+      .catch((e: unknown) => setStatus(`Load failed: ${(e as Error).message}`))
   }, [])
 
   useEffect(() => { refreshCatalog() }, [refreshCatalog])
@@ -94,12 +96,12 @@ export default function GroundTileMapper() {
     setAtlas(null)
     setSel(null)
     loadTileset(tileset)
-      .then((img) => {
+      .then((img: HTMLImageElement) => {
         if (!alive) return
         setAtlas({ img, width: img.naturalWidth, height: img.naturalHeight })
         setStatus(`Loaded ${tileset} (${img.naturalWidth}×${img.naturalHeight}). Click a cell.`)
       })
-      .catch((e) => { if (alive) setStatus(e.message) })
+      .catch((e: unknown) => { if (alive) setStatus((e as Error).message) })
     return () => { alive = false }
   }, [tileset])
 
@@ -110,7 +112,7 @@ export default function GroundTileMapper() {
     const step = cell * zoom
     canvas.width = cols * step
     canvas.height = rows * step
-    const ctx = canvas.getContext('2d')
+    const ctx = canvas.getContext('2d')!
     ctx.imageSmoothingEnabled = false
     ctx.clearRect(0, 0, canvas.width, canvas.height)
     ctx.drawImage(atlas.img, 0, 0, canvas.width, canvas.height)
@@ -145,8 +147,8 @@ export default function GroundTileMapper() {
     }
   }, [atlas, cell, zoom, cols, rows, sel, catalog, tileset])
 
-  function cellAt(e) {
-    const rect = canvasRef.current.getBoundingClientRect()
+  function cellAt(e: React.MouseEvent<HTMLCanvasElement>) {
+    const rect = canvasRef.current!.getBoundingClientRect()
     const step = cell * zoom
     return {
       c: Math.max(0, Math.min(cols - 1, Math.floor((e.clientX - rect.left) / step))),
@@ -154,7 +156,7 @@ export default function GroundTileMapper() {
     }
   }
 
-  function onCanvasClick(e) {
+  function onCanvasClick(e: React.MouseEvent<HTMLCanvasElement>) {
     if (!atlas) return
     const { c, r } = cellAt(e)
     setSel({ c, r })
@@ -183,23 +185,23 @@ export default function GroundTileMapper() {
         saved.role === 'fill' ? saved.tile_type : `${saved.tile_type} ${saved.role}·${saved.side}`
       setStatus(`Saved cell ${saved.col},${saved.row} as "${desc}".`)
       refreshCatalog()
-    } catch (e) {
-      setStatus(`Save failed: ${e.message}`)
+    } catch (e: unknown) {
+      setStatus(`Save failed: ${(e as Error).message}`)
     }
   }
 
-  async function onDelete(id) {
+  async function onDelete(id: number) {
     try {
       await deleteGroundTile(id)
       refreshCatalog()
       setStatus('Removed tile from the catalog.')
-    } catch (e) {
-      setStatus(`Delete failed: ${e.message}`)
+    } catch (e: unknown) {
+      setStatus(`Delete failed: ${(e as Error).message}`)
     }
   }
 
   // Group the catalog by surface type for the roster.
-  const byType = {}
+  const byType: Record<string, GroundTile[]> = {}
   for (const t of catalog) (byType[t.tile_type] ||= []).push(t)
   const types = Object.keys(byType).sort()
 

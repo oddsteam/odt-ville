@@ -2,13 +2,17 @@ import { useEffect, useRef } from 'react'
 import { POSTURE_SLOTS } from '../character/manifest.js'
 import { useImage } from './useImage.js'
 
+type FrameRect = { x: number; y: number; w: number; h: number }
+type Postures = Record<string, FrameRect[]>
+type Sheet = { src?: string }
+
 // A single frame thumbnail, drawn cropped from the sheet.
-function Thumb({ img, rect, size = 44 }) {
-  const ref = useRef(null)
+function Thumb({ img, rect, size = 44 }: { img: HTMLImageElement | null; rect: FrameRect; size?: number }) {
+  const ref = useRef<HTMLCanvasElement>(null)
   useEffect(() => {
     const cv = ref.current
     if (!cv || !img) return
-    const ctx = cv.getContext('2d')
+    const ctx = cv.getContext('2d')!
     ctx.imageSmoothingEnabled = false
     cv.width = size
     cv.height = size
@@ -21,6 +25,15 @@ function Thumb({ img, rect, size = 44 }) {
   return <canvas ref={ref} className="thumb" />
 }
 
+type Props = {
+  sheet: Sheet | null
+  postures: Postures
+  activeSlot: string
+  onSelectSlot: (key: string) => void
+  onRemoveFrame: (slot: string, i: number) => void
+  onClearSlot: (slot: string) => void
+}
+
 // Lists the eight posture slots (frame counts), lets the user pick the active
 // slot, and shows the active slot's ordered frames with per-frame removal.
 export default function PosturePanel({
@@ -30,7 +43,7 @@ export default function PosturePanel({
   onSelectSlot,
   onRemoveFrame,
   onClearSlot,
-}) {
+}: Props) {
   const img = useImage(sheet?.src)
   const activeLabel = POSTURE_SLOTS.find((s) => s.key === activeSlot)?.label
   const activeFrames = postures[activeSlot] || []
@@ -67,7 +80,7 @@ export default function PosturePanel({
           )}
         </div>
         <div className="thumbs">
-          {activeFrames.map((r, i) => (
+          {activeFrames.map((r: FrameRect, i: number) => (
             <div key={`${r.x},${r.y},${i}`} className="thumb-wrap" title={`frame ${i + 1}`}>
               <Thumb img={img} rect={r} />
               <span className="thumb-idx">{i + 1}</span>

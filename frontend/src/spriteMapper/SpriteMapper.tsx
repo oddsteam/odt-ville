@@ -1,8 +1,8 @@
 import { useCallback, useState } from 'react'
-import SheetCanvas from './SheetCanvas.jsx'
-import PosturePanel from './PosturePanel.jsx'
-import AnimPreview from './AnimPreview.jsx'
-import CharacterRoster from './CharacterRoster.jsx'
+import SheetCanvas from './SheetCanvas.tsx'
+import PosturePanel from './PosturePanel.tsx'
+import AnimPreview from './AnimPreview.tsx'
+import CharacterRoster from './CharacterRoster.tsx'
 import './styles.css'
 import {
   POSTURE_SLOTS,
@@ -15,6 +15,17 @@ import {
 import { CharacterService } from '../character/service.ts'
 import { runEdge } from '../lib/runEdge.ts'
 
+type FrameRect = { x: number; y: number; w: number; h: number }
+type Postures = Record<string, FrameRect[]>
+type Sheet = {
+  src: string
+  path?: string
+  dataUrl?: string | ArrayBuffer | null
+  isBundled: boolean
+  width: number
+  height: number
+}
+
 // Character sheets bundled in the repo, with their natural grid sizes.
 const BUNDLED = [
   { name: 'scout', path: '/maps/characters/sheets/scout.png', frameW: 32, frameH: 64 },
@@ -22,7 +33,7 @@ const BUNDLED = [
   { name: 'zombie', path: '/maps/characters/sheets/zombie.png', frameW: 32, frameH: 32 },
 ]
 
-function loadImageDims(src) {
+function loadImageDims(src: string): Promise<{ width: number; height: number }> {
   return new Promise((resolve, reject) => {
     const im = new Image()
     im.onload = () => resolve({ width: im.naturalWidth, height: im.naturalHeight })
@@ -32,17 +43,17 @@ function loadImageDims(src) {
 }
 
 export default function SpriteMapper() {
-  const [sheet, setSheet] = useState(null) // { src, path?, dataUrl?, isBundled, width, height }
+  const [sheet, setSheet] = useState<Sheet | null>(null) // { src, path?, dataUrl?, isBundled, width, height }
   const [grid, setGrid] = useState({ frameW: 32, frameH: 64 })
   const [zoom, setZoom] = useState(1)
-  const [postures, setPostures] = useState(emptyPostures())
+  const [postures, setPostures] = useState<Postures>(emptyPostures())
   const [activeSlot, setActiveSlot] = useState('walkDown')
   const [name, setName] = useState('scout')
-  const [frameRate, setFrameRate] = useState(9)
+  const [frameRate, setFrameRate] = useState<number | string>(9)
   const [status, setStatus] = useState('')
   const [rosterSignal, setRosterSignal] = useState(0) // bump to refresh the roster
 
-  const selectBundled = useCallback(async (value) => {
+  const selectBundled = useCallback(async (value: string) => {
     const b = BUNDLED.find((x) => x.name === value)
     if (!b) return
     try {
@@ -56,7 +67,7 @@ export default function SpriteMapper() {
     }
   }, [])
 
-  const onUpload = useCallback((e) => {
+  const onUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     const objUrl = URL.createObjectURL(file)
@@ -79,13 +90,14 @@ export default function SpriteMapper() {
   }, [])
 
   function buildManifest() {
-    const sheetMeta = sheet.isBundled
-      ? { path: sheet.path, width: sheet.width, height: sheet.height }
+    const s = sheet!
+    const sheetMeta = s.isBundled
+      ? { path: s.path, width: s.width, height: s.height }
       : {
           path: `/maps/characters/sheets/${name}.png`,
-          width: sheet.width,
-          height: sheet.height,
-          dataUrl: sheet.dataUrl,
+          width: s.width,
+          height: s.height,
+          dataUrl: s.dataUrl,
         }
     return normalizeManifest({
       version: 1,
@@ -131,8 +143,8 @@ export default function SpriteMapper() {
         `Saved to server as "${saved?.name ?? name}" — now the active character everywhere. Open /map-preview.html to see it.`,
       )
       setRosterSignal((n) => n + 1)
-    } catch (err) {
-      setStatus(`Server save failed: ${err.message}`)
+    } catch (err: unknown) {
+      setStatus(`Server save failed: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
 
@@ -144,7 +156,7 @@ export default function SpriteMapper() {
 
   // Load a normalized manifest into the editor. Shared by "Load current" and
   // the roster's per-character "Load" button.
-  const applyManifest = useCallback((m) => {
+  const applyManifest = useCallback((m: any) => {
     const src = m.sheet.dataUrl || m.sheet.path
     if (!src) {
       setStatus('That manifest has no sheet.')
@@ -170,7 +182,7 @@ export default function SpriteMapper() {
   }
 
   const toggleFrame = useCallback(
-    (rect) => {
+    (rect: FrameRect) => {
       setPostures((p) => {
         const arr = p[activeSlot] || []
         const idx = arr.findIndex(
@@ -183,11 +195,11 @@ export default function SpriteMapper() {
     [activeSlot],
   )
 
-  const removeFrame = useCallback((slot, i) => {
-    setPostures((p) => ({ ...p, [slot]: (p[slot] || []).filter((_, idx) => idx !== i) }))
+  const removeFrame = useCallback((slot: string, i: number) => {
+    setPostures((p) => ({ ...p, [slot]: (p[slot] || []).filter((_: FrameRect, idx: number) => idx !== i) }))
   }, [])
 
-  const clearSlot = useCallback((slot) => {
+  const clearSlot = useCallback((slot: string) => {
     setPostures((p) => ({ ...p, [slot]: [] }))
   }, [])
 

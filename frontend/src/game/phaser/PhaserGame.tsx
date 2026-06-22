@@ -1,10 +1,14 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import Phaser from 'phaser'
 import TownScene from './scenes/TownScene.js'
 import InteriorScene from './scenes/InteriorScene.js'
 import EncounterScene from './scenes/EncounterScene.js'
-import MobileDpad from '../MobileDpad.jsx'
+import MobileDpad from '../MobileDpad.tsx'
 import bus from './bus.js'
+import type { Community } from '../../communities/schema.ts'
+import type { GameSession } from '../../game-session/schema.ts'
+import type { TileObject } from '../../tileObjects/schema.ts'
+import type { GroundTile } from '../../groundTiles/schema.ts'
 
 // Player walks — rpg-char-01 sprite sheet from the pokemon-js external
 // assets. 32×32 PNGs, rows = direction (r0 down, r1 left, r2 right,
@@ -49,6 +53,21 @@ const DESIGN_HEIGHT = 912
 // renders the DOM overlay (D-pad / A button / FULL / Daily Brief)
 // floating on top of it. The overlay forwards taps + clicks to the
 // scenes via the bus so on-screen and keyboard input behave identically.
+export type PhaserGameProps = {
+  communities: readonly Community[]
+  session: GameSession
+  treeObject: TileObject | null
+  groundTiles: readonly GroundTile[]
+  characterManifest: object | null
+  dailyBrief: ReactNode
+  activeCommunityId: number | null
+  onEnterCommunity: (id: number) => void
+  onExitCommunity: (id?: number | null) => void
+  onOpenBoard: (boardType?: string) => void
+  trainerDefeated: boolean
+  onTrainerDefeated: () => void
+}
+
 export default function PhaserGame({
   communities,
   session,
@@ -62,10 +81,10 @@ export default function PhaserGame({
   onOpenBoard,
   trainerDefeated,
   onTrainerDefeated,
-}) {
-  const hostRef = useRef(null)
-  const shellRef = useRef(null)
-  const gameRef = useRef(null)
+}: PhaserGameProps) {
+  const hostRef = useRef<HTMLDivElement>(null)
+  const shellRef = useRef<HTMLDivElement>(null)
+  const gameRef = useRef<Phaser.Game | null>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
 
   const enterCommunityRef = useRef(onEnterCommunity)
@@ -118,9 +137,9 @@ export default function PhaserGame({
 
     gameRef.current = game
 
-    const onEnter = (id) => enterCommunityRef.current?.(id)
-    const onExit = (id) => exitCommunityRef.current?.(id)
-    const onOpen = (boardType) => openBoardRef.current?.(boardType)
+    const onEnter = (id: number) => enterCommunityRef.current?.(id)
+    const onExit = (id: number) => exitCommunityRef.current?.(id)
+    const onOpen = (boardType: string) => openBoardRef.current?.(boardType)
     const onTrainerDefeatedEvent = () => trainerDefeatedRef.current?.()
     bus.on('enterCommunity', onEnter)
     bus.on('exitCommunity', onExit)
@@ -134,8 +153,8 @@ export default function PhaserGame({
       bus.off('trainerDefeated', onTrainerDefeatedEvent)
       game.destroy(true)
       gameRef.current = null
-      if (typeof window !== 'undefined' && window.__game) {
-        delete window.__game
+      if (typeof window !== 'undefined' && (window as any).__game) {
+        delete (window as any).__game
       }
     }
   }, [])
@@ -204,8 +223,8 @@ export default function PhaserGame({
   // ---- Overlay button handlers — emit on the bus so scenes treat
   // tap input identically to keyboard. D-pad press/release maps to
   // pressDir/releaseDir in the scene's input loop.
-  const onDpadPress = (dir) => bus.emit('dpadPress', dir)
-  const onDpadRelease = (dir) => bus.emit('dpadRelease', dir)
+  const onDpadPress = (dir: string) => bus.emit('dpadPress', dir)
+  const onDpadRelease = (dir: string) => bus.emit('dpadRelease', dir)
   const onAButton = () => bus.emit('aButton')
 
   // Dynamic topbar label — community title while inside a house,
