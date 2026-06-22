@@ -1,4 +1,4 @@
-import PhaserGame from './phaser/PhaserGame.jsx'
+import PhaserGame, { type PhaserGameProps } from './phaser/PhaserGame.tsx'
 
 // The Village Game black box. Receives community list + game session as
 // props; emits door-entry and admin events. Has no API knowledge, no
@@ -38,7 +38,7 @@ export default function VillageGame({
   onOpenBoard,
   trainerDefeated,
   onTrainerDefeated,
-}) {
+}: PhaserGameProps) {
   return (
     <PhaserGame
       communities={communities}

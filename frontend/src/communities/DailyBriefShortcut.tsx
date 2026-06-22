@@ -2,26 +2,33 @@ import { useState } from 'react'
 import { PRIORITY_RANK, BOARD_LABELS } from './constants.js'
 import { openItem, acknowledgeItem } from './client.js'
 import { formatDate, formatExpiry } from './format.js'
-import PriorityChip from './PriorityChip.jsx'
-import StateBadge from './StateBadge.jsx'
+import PriorityChip from './PriorityChip.tsx'
+import StateBadge from './StateBadge.tsx'
+import type { FeedItem } from './schema.ts'
 
 // A single brief row — ContentCard-like but flattened for the list modal.
-function BriefRow({ item, onItemUpdate }) {
+function BriefRow({
+  item,
+  onItemUpdate,
+}: {
+  item: FeedItem
+  onItemUpdate: (res: FeedItem) => void
+}) {
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState(null)
+  const [error, setError] = useState<string | null>(null)
 
   const isOpened = item.state === 'opened' || item.state === 'acknowledged'
   const isAcknowledged = item.state === 'acknowledged'
   const needsAck = item.requires_ack && !isAcknowledged
 
-  async function run(fn) {
+  async function run(fn: typeof openItem) {
     setBusy(true)
     setError(null)
     try {
       const res = await fn(item.id)
       onItemUpdate(res)
     } catch (e) {
-      setError(e.message)
+      setError((e as Error).message)
     } finally {
       setBusy(false)
     }
@@ -100,10 +107,16 @@ function BriefRow({ item, onItemUpdate }) {
 
 // A "Daily Brief" button + modal. The fallback so the game layer never
 // blocks content access. After closing, the parent refetches the village.
-export default function DailyBriefShortcut({ items, onClose }) {
+export default function DailyBriefShortcut({
+  items,
+  onClose,
+}: {
+  items: readonly FeedItem[]
+  onClose?: () => void
+}) {
   const [open, setOpen] = useState(false)
   // Local copy so open/acknowledge render immediately within the modal.
-  const [briefItems, setBriefItems] = useState(items || [])
+  const [briefItems, setBriefItems] = useState<readonly FeedItem[]>(items || [])
 
   // Keep local list in sync if the village data changes underneath us.
   function openModal() {
@@ -116,7 +129,7 @@ export default function DailyBriefShortcut({ items, onClose }) {
     if (onClose) onClose()
   }
 
-  function handleItemUpdate(res) {
+  function handleItemUpdate(res: FeedItem) {
     setBriefItems((prev) =>
       prev.map((it) => (it.id === res.id ? { ...it, ...res } : it)),
     )

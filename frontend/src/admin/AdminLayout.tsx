@@ -14,7 +14,7 @@ const TOOLS = [
 ]
 
 export default function AdminLayout() {
-  const linkClass = ({ isActive }) =>
+  const linkClass = ({ isActive }: { isActive: boolean }) =>
     `admin-nav-link${isActive ? ' on' : ''}`
 
   return (

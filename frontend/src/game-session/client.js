@@ -15,6 +15,9 @@ export function getGameSession() {
 }
 
 // PUT /game/session
+/**
+ * @param {{ last_area?: string, last_community_id?: number | null, last_room?: string | null }} body
+ */
 export function saveGameSession({ last_area, last_community_id, last_room }) {
   return runEdge(GameSessionService.save({ last_area, last_community_id, last_room }))
 }

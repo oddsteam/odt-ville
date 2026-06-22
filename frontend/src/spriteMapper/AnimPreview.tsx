@@ -1,17 +1,27 @@
 import { useEffect, useRef } from 'react'
 import { useImage } from './useImage.js'
 
+type FrameRect = { x: number; y: number; w: number; h: number }
+type Sheet = { src?: string } | null
+type Props = {
+  sheet: Sheet
+  frames: FrameRect[]
+  frameRate: number
+  scale?: number
+  flipX?: boolean
+}
+
 // Plays the given frame rects as a looping animation at frameRate, drawn
 // pixel-scaled. One frame → static; zero → blank. Used to preview the active
 // posture live as the user assigns frames.
-export default function AnimPreview({ sheet, frames, frameRate, scale = 3, flipX = false }) {
-  const ref = useRef(null)
+export default function AnimPreview({ sheet, frames, frameRate, scale = 3, flipX = false }: Props) {
+  const ref = useRef<HTMLCanvasElement>(null)
   const img = useImage(sheet?.src)
 
   useEffect(() => {
     const cv = ref.current
     if (!cv) return undefined
-    const ctx = cv.getContext('2d')
+    const ctx = cv.getContext('2d')!
     ctx.imageSmoothingEnabled = false
 
     if (!img || !frames.length) {
@@ -21,8 +31,8 @@ export default function AnimPreview({ sheet, frames, frameRate, scale = 3, flipX
       return undefined
     }
 
-    const maxW = Math.max(...frames.map((f) => f.w))
-    const maxH = Math.max(...frames.map((f) => f.h))
+    const maxW = Math.max(...frames.map((f: FrameRect) => f.w))
+    const maxH = Math.max(...frames.map((f: FrameRect) => f.h))
     cv.width = maxW * scale
     cv.height = maxH * scale
 
@@ -31,7 +41,7 @@ export default function AnimPreview({ sheet, frames, frameRate, scale = 3, flipX
     let last = 0
     let raf = 0
 
-    const draw = (t) => {
+    const draw = (t: number) => {
       if (t - last >= interval) {
         last = t
         i = (i + 1) % frames.length

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import AnimPreview from './AnimPreview.jsx'
+import AnimPreview from './AnimPreview.tsx'
 import {
   POSTURE_KEYS,
   normalizeManifest,
@@ -16,9 +16,23 @@ import { runEdge } from '../lib/runEdge.ts'
 // The index endpoint is blob-free, so we fetch each manifest's full data
 // (sheet + postures) to animate it.
 
+type FrameRect = { x: number; y: number; w: number; h: number }
+type ManifestRow = {
+  id: number
+  name: string
+  active: boolean
+  updated_at: string
+  manifest: any
+}
+
+type Props = {
+  reloadSignal: number
+  onLoad: (m: any) => void
+}
+
 // The posture to preview: a walking Down loop reads best; fall back to idle
 // Down, then to whatever posture has frames.
-function previewFrames(m) {
+function previewFrames(m: any): FrameRect[] {
   if (m.postures?.walkDown?.length) return m.postures.walkDown
   if (m.postures?.idleDown?.length) return m.postures.idleDown
   for (const k of POSTURE_KEYS) {
@@ -27,8 +41,8 @@ function previewFrames(m) {
   return []
 }
 
-export default function CharacterRoster({ reloadSignal, onLoad }) {
-  const [rows, setRows] = useState([]) // [{ id, name, active, manifest }]
+export default function CharacterRoster({ reloadSignal, onLoad }: Props) {
+  const [rows, setRows] = useState<ManifestRow[]>([]) // [{ id, name, active, manifest }]
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
@@ -38,14 +52,14 @@ export default function CharacterRoster({ reloadSignal, onLoad }) {
     try {
       const summaries = await runEdge(CharacterService.list())
       const full = await Promise.all(
-        summaries.map(async (s) => {
+        summaries.map(async (s: any) => {
           const data = await runEdge(CharacterService.getById(s.id)).catch(() => null)
           return { ...s, manifest: data ? normalizeManifest(data) : null }
         }),
       )
-      setRows(full.filter((r) => r.manifest))
-    } catch (err) {
-      setError(`Could not load the roster: ${err.message}`)
+      setRows(full.filter((r: any) => r.manifest))
+    } catch (err: unknown) {
+      setError(`Could not load the roster: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
       setBusy(false)
     }
@@ -56,13 +70,13 @@ export default function CharacterRoster({ reloadSignal, onLoad }) {
   }, [refresh, reloadSignal])
 
   const makeActive = useCallback(
-    async (m) => {
+    async (m: any) => {
       setBusy(true)
       try {
         await runEdge(CharacterService.save(normalizeManifest(m)))
         await refresh()
-      } catch (err) {
-        setError(`Activate failed: ${err.message}`)
+      } catch (err: unknown) {
+        setError(`Activate failed: ${err instanceof Error ? err.message : String(err)}`)
         setBusy(false)
       }
     },

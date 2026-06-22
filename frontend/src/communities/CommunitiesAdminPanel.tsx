@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { categoryEmoji } from './constants.js'
 import { CommunitiesService } from './service.ts'
+import type { Community } from './schema.ts'
 import { runEdge } from '../lib/runEdge.ts'
 import '../tileMapper/styles.css'
 import './admin.css'
@@ -21,17 +22,23 @@ const COLOURS = [
 // Community CRUD console — lives outside the village game so the game can stay
 // a true black box. Owns its own API calls and asks the shell to refetch via
 // `onChanged()` after each mutation so the village/feed reflect the new state.
-export default function CommunitiesAdminPanel({ communities, onChanged }) {
+export default function CommunitiesAdminPanel({
+  communities,
+  onChanged,
+}: {
+  communities: readonly Community[]
+  onChanged?: () => void | Promise<void>
+}) {
   const [title, setTitle] = useState('')
   const [category, setCategory] = useState('community')
   const [colour, setColour] = useState('#16A085')
   const [logoUrl, setLogoUrl] = useState('')
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState(null)
+  const [error, setError] = useState<string | null>(null)
 
   const used = communities.length
 
-  async function handleAdd(e) {
+  async function handleAdd(e: React.FormEvent) {
     e.preventDefault()
     if (busy || !title.trim()) return
     setBusy(true)
@@ -49,13 +56,13 @@ export default function CommunitiesAdminPanel({ communities, onChanged }) {
       setLogoUrl('')
       if (onChanged) await onChanged()
     } catch (err) {
-      setError(err.message)
+      setError((err as Error).message)
     } finally {
       setBusy(false)
     }
   }
 
-  async function handleDelete(id) {
+  async function handleDelete(id: number) {
     if (busy) return
     setBusy(true)
     setError(null)
@@ -63,7 +70,7 @@ export default function CommunitiesAdminPanel({ communities, onChanged }) {
       await runEdge(CommunitiesService.remove(id))
       if (onChanged) await onChanged()
     } catch (err) {
-      setError(err.message)
+      setError((err as Error).message)
     } finally {
       setBusy(false)
     }

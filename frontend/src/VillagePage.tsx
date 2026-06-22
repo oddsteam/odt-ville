@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
-import VillageGame from './game/VillageGame.jsx'
-import DailyBriefShortcut from './communities/DailyBriefShortcut.jsx'
+import VillageGame from './game/VillageGame.tsx'
+import DailyBriefShortcut from './communities/DailyBriefShortcut.tsx'
 import { saveGameSession } from './game-session/client.js'
 import { loadTown as loadTownData } from './game/townLoader.ts'
 import { runEdge } from './lib/runEdge.ts'
+import type { Community, FeedItem } from './communities/schema.ts'
+import type { GameSession } from './game-session/schema.ts'
+import type { TileObject } from './tileObjects/schema.ts'
+import type { GroundTile } from './groundTiles/schema.ts'
 
 // Demo target for every board's "open content list" action. Replaced in a
 // follow-up by per-board content-list views (see issue #15 follow-ups).
@@ -18,28 +22,28 @@ export default function VillagePage() {
   // Phaser, which owns its own scene transitions inside the canvas. The
   // page just tracks which community the player is inside (for the
   // active-community-id prop forwarded into PhaserGame's registry).
-  const [activeCommunityId, setActiveCommunityId] = useState(null)
+  const [activeCommunityId, setActiveCommunityId] = useState<number | null>(null)
   // Gate-trainer state — once you've escaped the duel he never challenges
   // again in this session. Lifted to the page so it survives VillageGame
   // remounts when you enter / exit a community.
   const [trainerDefeated, setTrainerDefeated] = useState(false)
 
-  const [communities, setCommunities] = useState(null)
-  const [session, setSession] = useState(null)
-  const [feed, setFeed] = useState([])
+  const [communities, setCommunities] = useState<readonly Community[] | null>(null)
+  const [session, setSession] = useState<GameSession | null>(null)
+  const [feed, setFeed] = useState<readonly FeedItem[]>([])
   // The admin-defined tree object (tile-object mapper), rendered by the game.
   // Optional enhancement — null is fine and falls back to the bundled tree.
-  const [treeObject, setTreeObject] = useState(null)
+  const [treeObject, setTreeObject] = useState<TileObject | null>(null)
   // Ground-tile catalog (ground-tile mapper): grass/dirt/road cells painted
   // onto the town's ground, encounter field, and roads. Empty array falls back
   // to the procedural tile textures, so it's a pure visual enhancement.
-  const [groundTiles, setGroundTiles] = useState([])
+  const [groundTiles, setGroundTiles] = useState<readonly GroundTile[]>([])
   // The active character sprite (sprite-mapper manifest). Drives the town
   // player; loadActiveManifest always resolves (remote → committed default).
-  const [characterManifest, setCharacterManifest] = useState(null)
+  const [characterManifest, setCharacterManifest] = useState<object | null>(null)
 
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
+  const [error, setError] = useState<string | null>(null)
 
   // Town-scene state — fetched on mount and after any communities-mutating
   // action so the game always sees fresh communities + session + feed.
@@ -66,7 +70,7 @@ export default function VillagePage() {
 
   // ---- game events --------------------------------------------------
 
-  const handleEnterCommunity = useCallback((id) => {
+  const handleEnterCommunity = useCallback((id: number) => {
     // Save session + track the active community. Phaser's InteriorScene
     // handles the visual transition inside the canvas; the React page
     // just records the id (for the activeCommunityId prop that PhaserGame
@@ -83,7 +87,7 @@ export default function VillagePage() {
   }, [])
 
   const handleExitCommunity = useCallback(
-    (idFromCaller) => {
+    (idFromCaller?: number | null) => {
       // Phaser passes the exited community id via the bus event; fall
       // back to whatever the page most recently tracked as active.
       const id = idFromCaller ?? activeCommunityId
@@ -96,7 +100,7 @@ export default function VillagePage() {
         last_area: 'town',
         last_community_id: id,
         spawn: { area: 'town', last_community_id: id },
-      }))
+      }) as GameSession)
       saveGameSession({ last_area: 'town', last_community_id: id }).catch(() => {})
       setActiveCommunityId(null)
       loadTown().catch((e) => setError(e.message))

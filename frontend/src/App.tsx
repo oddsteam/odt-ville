@@ -1,11 +1,11 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
-import RootLayout from './RootLayout.jsx'
-import VillagePage from './VillagePage.jsx'
-import AdminLayout from './admin/AdminLayout.jsx'
-import CommunitiesAdminPage from './admin/CommunitiesAdminPage.jsx'
-import SpriteMapper from './spriteMapper/SpriteMapper.jsx'
-import TileMapper from './tileMapper/TileMapper.jsx'
-import GroundTileMapper from './groundTiles/GroundTileMapper.jsx'
+import RootLayout from './RootLayout.tsx'
+import VillagePage from './VillagePage.tsx'
+import AdminLayout from './admin/AdminLayout.tsx'
+import CommunitiesAdminPage from './admin/CommunitiesAdminPage.tsx'
+import SpriteMapper from './spriteMapper/SpriteMapper.tsx'
+import TileMapper from './tileMapper/TileMapper.tsx'
+import GroundTileMapper from './groundTiles/GroundTileMapper.tsx'
 
 // Route table. RootLayout is the persistent shell (brand header + Village/Admin
 // nav); the village game lives at "/" and the admin console — the four former
