@@ -9,10 +9,11 @@ import {
   emptyPostures,
   normalizeManifest,
   saveActiveManifest,
-  saveActiveManifestRemote,
   downloadManifest,
   loadActiveManifest,
 } from '../character/manifest.js'
+import { CharacterService } from '../character/service.ts'
+import { runEdge } from '../lib/runEdge.ts'
 
 // Character sheets bundled in the repo, with their natural grid sizes.
 const BUNDLED = [
@@ -123,7 +124,9 @@ export default function SpriteMapper() {
     if (!requireSheet()) return
     setStatus('Saving to server…')
     try {
-      const saved = await saveActiveManifestRemote(buildManifest())
+      const saved = await runEdge(
+        CharacterService.save(normalizeManifest(buildManifest())),
+      )
       setStatus(
         `Saved to server as "${saved?.name ?? name}" — now the active character everywhere. Open /map-preview.html to see it.`,
       )

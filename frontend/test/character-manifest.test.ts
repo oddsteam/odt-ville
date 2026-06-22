@@ -1,7 +1,10 @@
 import { describe, expect, it, afterEach, vi } from 'vitest'
+import * as Cause from 'effect/Cause'
+import * as Exit from 'effect/Exit'
 
 import { CharacterService } from '../src/character/service.ts'
 import { runEdge } from '../src/lib/runEdge.ts'
+import { AppRuntime } from '../src/lib/runtime.ts'
 import {
   ACTIVE_KEY,
   loadActiveManifest,
@@ -65,6 +68,85 @@ describe('CharacterService.getActive', () => {
 
     const data = await runEdge(CharacterService.getActive())
     expect(data).toBeNull()
+  })
+})
+
+describe('CharacterService.list', () => {
+  it('returns the decoded roster summaries', async () => {
+    const summaries = [
+      { id: 1, name: 'scout', active: true, updated_at: '2026-06-22T00:00:00.000Z' },
+      { id: 2, name: 'ranger', active: false, updated_at: '2026-06-21T00:00:00.000Z' },
+    ]
+    globalThis.fetch = routeFetch({
+      '/character_manifests': new Response(JSON.stringify(summaries), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    }) as unknown as typeof fetch
+
+    const out = await runEdge(CharacterService.list())
+    expect(out).toEqual(summaries)
+  })
+
+  it('surfaces a typed DecodeError when the roster row is malformed', async () => {
+    globalThis.fetch = routeFetch({
+      '/character_manifests': new Response(
+        JSON.stringify([{ id: 1, name: 'scout', active: 'yes', updated_at: '' }]),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    }) as unknown as typeof fetch
+
+    const exit = await AppRuntime.runPromiseExit(CharacterService.list())
+    expect(Exit.isFailure(exit)).toBe(true)
+    if (Exit.isFailure(exit)) {
+      const fail = Cause.failureOption(exit.cause)
+      expect(fail._tag).toBe('Some')
+      if (fail._tag === 'Some') {
+        const e = fail.value as { _tag: string; path: string }
+        expect(e._tag).toBe('DecodeError')
+        expect(e.path).toBe('/character_manifests')
+      }
+    }
+  })
+})
+
+describe('CharacterService.getById', () => {
+  it('returns the decoded data blob for a manifest by id', async () => {
+    globalThis.fetch = routeFetch({
+      '/character_manifests/1': new Response(JSON.stringify(envelope), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    }) as unknown as typeof fetch
+
+    const data = await runEdge(CharacterService.getById(1))
+    expect(data).toEqual(envelope.data)
+  })
+})
+
+describe('CharacterService.save', () => {
+  it('POSTs the manifest with active:true and decodes the saved envelope', async () => {
+    const calls: { url: string; init?: RequestInit }[] = []
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ url: String(input), init })
+      return new Response(JSON.stringify(envelope), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }) as unknown as typeof fetch
+
+    const body = { version: 1, name: 'scout', postures: {} }
+    const saved = await runEdge(CharacterService.save(body))
+    expect(saved.name).toBe('scout')
+    expect(saved.data).toEqual(envelope.data)
+
+    expect(calls).toHaveLength(1)
+    expect(calls[0]!.url).toBe('/api/v1/character_manifests')
+    expect(calls[0]!.init?.method).toBe('POST')
+    expect(JSON.parse(String(calls[0]!.init?.body))).toEqual({
+      manifest: body,
+      active: true,
+    })
   })
 })
 

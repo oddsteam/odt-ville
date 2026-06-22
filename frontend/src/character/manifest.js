@@ -92,10 +92,6 @@ function cap(s) {
 
 // --- persistence -------------------------------------------------------
 
-// Backend API for shared, cross-origin persistence (see the Rails
-// character_manifests controller). The dev server proxies /api to Rails.
-const API_BASE = '/api/v1'
-
 export function saveActiveManifest(m) {
   try {
     localStorage.setItem(ACTIVE_KEY, JSON.stringify(m))
@@ -104,52 +100,6 @@ export function saveActiveManifest(m) {
     // Most likely the quota was exceeded by an embedded data-URL sheet.
     console.warn('saveActiveManifest failed:', err)
     return false
-  }
-}
-
-// Persist the manifest to the backend so every browser and origin sees it,
-// and make it the single active character. Throws on failure (the caller
-// surfaces the message); does NOT touch localStorage.
-export async function saveActiveManifestRemote(m) {
-  const res = await fetch(`${API_BASE}/character_manifests`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ manifest: normalizeManifest(m), active: true }),
-  })
-  if (!res.ok) {
-    const detail = await res.text().catch(() => '')
-    throw new Error(`Save failed (${res.status})${detail ? `: ${detail}` : ''}`)
-  }
-  const text = await res.text()
-  return text ? JSON.parse(text) : null
-}
-
-// List all saved manifests (lightweight roster rows: id/name/active/updated_at,
-// no data blob). Returns [] when the backend is unreachable.
-export async function listManifests() {
-  try {
-    const res = await fetch(`${API_BASE}/character_manifests`)
-    if (!res.ok) return []
-    const text = await res.text()
-    return text ? JSON.parse(text) : []
-  } catch (err) {
-    console.warn('listing manifests failed:', err)
-    return []
-  }
-}
-
-// Fetch one manifest's full data by id, normalized. Returns null on failure.
-export async function fetchManifest(id) {
-  try {
-    const res = await fetch(`${API_BASE}/character_manifests/${id}`)
-    if (!res.ok) return null
-    const text = await res.text()
-    if (!text) return null
-    const payload = JSON.parse(text)
-    return payload?.data ? normalizeManifest(payload.data) : null
-  } catch (err) {
-    console.warn('fetching manifest failed:', err)
-    return null
   }
 }
 

@@ -2,11 +2,11 @@ import { useCallback, useEffect, useState } from 'react'
 import AnimPreview from './AnimPreview.jsx'
 import {
   POSTURE_KEYS,
-  listManifests,
-  fetchManifest,
-  saveActiveManifestRemote,
+  normalizeManifest,
   resolveSheetSrc,
 } from '../character/manifest.js'
+import { CharacterService } from '../character/service.ts'
+import { runEdge } from '../lib/runEdge.ts'
 
 // Roster of every saved character, each shown as a looping animation. Lives in
 // the sprite-mapper (the admin authoring page) and refreshes whenever a save
@@ -36,9 +36,12 @@ export default function CharacterRoster({ reloadSignal, onLoad }) {
     setBusy(true)
     setError('')
     try {
-      const summaries = await listManifests()
+      const summaries = await runEdge(CharacterService.list())
       const full = await Promise.all(
-        summaries.map(async (s) => ({ ...s, manifest: await fetchManifest(s.id) })),
+        summaries.map(async (s) => {
+          const data = await runEdge(CharacterService.getById(s.id)).catch(() => null)
+          return { ...s, manifest: data ? normalizeManifest(data) : null }
+        }),
       )
       setRows(full.filter((r) => r.manifest))
     } catch (err) {
@@ -56,7 +59,7 @@ export default function CharacterRoster({ reloadSignal, onLoad }) {
     async (m) => {
       setBusy(true)
       try {
-        await saveActiveManifestRemote(m)
+        await runEdge(CharacterService.save(normalizeManifest(m)))
         await refresh()
       } catch (err) {
         setError(`Activate failed: ${err.message}`)
