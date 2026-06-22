@@ -8,6 +8,7 @@ import {
   applyFacing,
 } from '../characterRig.js'
 import bus from '../bus.js'
+import { resolveDirection, stepTile } from '../movement.ts'
 
 // Mirrors the layout in src/game/buildInterior.js so the spatial behavior
 // matches the DOM engine tile-for-tile.
@@ -295,14 +296,11 @@ export default class InteriorScene extends Phaser.Scene {
   }
 
   activeDirection() {
-    if (this.dpadDir) return this.dpadDir
-    const c = this.cursors
-    const w = this.wasd
-    if (c.up.isDown || w.up.isDown) return 'up'
-    if (c.down.isDown || w.down.isDown) return 'down'
-    if (c.left.isDown || w.left.isDown) return 'left'
-    if (c.right.isDown || w.right.isDown) return 'right'
-    return null
+    return resolveDirection({
+      dpadDir: this.dpadDir,
+      cursors: this.cursors,
+      wasd: this.wasd,
+    })
   }
 
   step(dir) {
@@ -321,22 +319,26 @@ export default class InteriorScene extends Phaser.Scene {
       return
     }
 
-    if (!this.walkable(tx, ty)) {
-      this.setPlayerWalking(false)
-      return
-    }
-
-    this.playerTile = { x: tx, y: ty }
-    this.setPlayerWalking(true)
-    this.movingTween = this.tweens.add({
-      targets: this.player,
-      x: tx * TILE + TILE / 2,
+    const result = stepTile({
+      scene: this,
+      target: this.player,
+      from: this.playerTile,
+      dir,
+      walkable: (x, y) => this.walkable(x, y),
       // Feet land at the destination tile's floor. The bundled rpg-char-01
       // needs PLAYER_FEET_LIFT for its padded box; the manifest sprite is
       // tightly cropped, so its feet sit on the floor — see TownScene.
-      y: (ty + 1) * TILE + (this.usingManifest ? 0 : PLAYER_FEET_LIFT),
+      toWorldXY: (t) => ({
+        x: t.x * TILE + TILE / 2,
+        y: (t.y + 1) * TILE + (this.usingManifest ? 0 : PLAYER_FEET_LIFT),
+      }),
       duration: MOVE_MS,
-      onComplete: () => {
+      onStart: (t) => {
+        this.playerTile = t
+        this.setPlayerWalking(true)
+      },
+      onBlocked: () => this.setPlayerWalking(false),
+      onArrive: () => {
         this.movingTween = null
         if (this.usingManifest) {
           if (!this.activeDirection()) applyFacing(this.player, this.charDir, this.facing, false)
@@ -345,6 +347,7 @@ export default class InteriorScene extends Phaser.Scene {
         }
       },
     })
+    this.movingTween = result.tween
   }
 
   // Walking vs standing frame for the current facing — manifest anim or the

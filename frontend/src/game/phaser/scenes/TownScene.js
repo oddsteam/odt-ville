@@ -15,6 +15,7 @@ import {
   applyFacing,
 } from '../characterRig.js'
 import bus from '../bus.js'
+import { resolveDirection, stepTile } from '../movement.ts'
 import {
   GROUND_STACK,
   EDGE_CORNERS,
@@ -363,23 +364,19 @@ export default class TownScene extends Phaser.Scene {
 
   // ---- helpers ------------------------------------------------------
 
-  // Resolve which direction key is currently held; the most-recently
-  // pressed direction wins so changing direction mid-walk feels snappy.
-  // Overlay D-pad press wins over keyboard since taps are usually
-  // mutually exclusive with held keys on the same device.
+  // Resolve which direction is currently held — delegated to the shared
+  // movement module so InteriorScene resolves the same way.
   activeDirection() {
-    if (this.dpadDir) return this.dpadDir
-    const c = this.cursors
-    const w = this.wasd
-    if (c.up.isDown || w.up.isDown) return 'up'
-    if (c.down.isDown || w.down.isDown) return 'down'
-    if (c.left.isDown || w.left.isDown) return 'left'
-    if (c.right.isDown || w.right.isDown) return 'right'
-    return null
+    return resolveDirection({
+      dpadDir: this.dpadDir,
+      cursors: this.cursors,
+      wasd: this.wasd,
+    })
   }
 
-  // One tile step. Mirrors `step(dir)` in VillageMap exactly so the
-  // player's behavior is unchanged between engines.
+  // One tile step. The shared movement module owns the walkable check + tween;
+  // the town-specific door collision and trainer/wild-grass arrival checks are
+  // wired in here as callbacks.
   step(dir) {
     this.facing = dir
     const dx = dir === 'left' ? -1 : dir === 'right' ? 1 : 0
@@ -397,30 +394,30 @@ export default class TownScene extends Phaser.Scene {
       return
     }
 
-    if (!this.walkable(tx, ty)) {
-      // Bumped a wall — face the direction in still pose; no tween.
-      this.setPlayerWalking(false)
-      return
-    }
-
-    this.playerTile = { x: tx, y: ty }
-    // Depth tracks the player's current row so south-of-player buildings
-    // (higher row → higher depth) draw on top and north-of-player
-    // buildings (lower row → lower depth) draw behind — same y-sort
-    // discipline the buildings themselves use. Without this update the
-    // depth set at spawn would never change and the player would slip
-    // behind any building that happens to be south of its spawn row.
-    this.player.setDepth(ty * 10 + 5)
-    this.setPlayerWalking(true)
-    this.movingTween = this.tweens.add({
-      targets: this.player,
-      x: tx * TILE + TILE / 2,
+    const result = stepTile({
+      scene: this,
+      target: this.player,
+      from: this.playerTile,
+      dir,
+      walkable: (x, y) => this.walkable(x, y),
       // Feet land at the destination tile's floor (matches setOrigin). The
       // bundled rpg-char-01 needs PLAYER_FEET_LIFT for its padded box; the
       // manifest sprite is tightly cropped, so its feet sit on the floor.
-      y: (ty + 1) * TILE + (this.usingManifest ? 0 : PLAYER_FEET_LIFT),
+      toWorldXY: (t) => ({
+        x: t.x * TILE + TILE / 2,
+        y: (t.y + 1) * TILE + (this.usingManifest ? 0 : PLAYER_FEET_LIFT),
+      }),
       duration: MOVE_MS,
-      onComplete: () => {
+      onStart: (t) => {
+        this.playerTile = t
+        // Depth tracks the player's current row so south-of-player buildings
+        // (higher row → higher depth) draw on top and north-of-player
+        // buildings (lower row → lower depth) draw behind.
+        this.player.setDepth(t.y * 10 + 5)
+        this.setPlayerWalking(true)
+      },
+      onBlocked: () => this.setPlayerWalking(false),
+      onArrive: (t) => {
         this.movingTween = null
         // Snap back to still at the end of the slide so a single tap doesn't
         // leave the sprite stuck mid-stride. With a held direction update()
@@ -434,11 +431,12 @@ export default class TownScene extends Phaser.Scene {
         // Trainer sight is checked first — when the player lands in
         // his line of sight, the duel takes priority over a wild
         // encounter on the same step.
-        if (!this.maybeTrainerSpot(tx, ty)) {
-          this.maybeWildEncounter(tx, ty)
+        if (!this.maybeTrainerSpot(t.x, t.y)) {
+          this.maybeWildEncounter(t.x, t.y)
         }
       },
     })
+    this.movingTween = result.tween
   }
 
   // Set the player's frame for walking vs standing in the current facing.
