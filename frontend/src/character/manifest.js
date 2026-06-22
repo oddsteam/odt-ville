@@ -3,6 +3,9 @@
 // posture slots (idle/walk × 4 directions) to ordered lists of frame rects
 // on a source sheet. See public/maps/characters/scout.json for the shape.
 
+import { runEdge } from '../lib/runEdge.ts'
+import { CharacterService } from './service.ts'
+
 export const DIRECTIONS = ['down', 'up', 'left', 'right']
 
 // Posture slot keys in display order, grouped idle/walk per direction.
@@ -150,20 +153,16 @@ export async function fetchManifest(id) {
   }
 }
 
-// Fetch the active manifest from the backend. Returns a normalized manifest,
-// or null when nothing is saved (204) or the backend is unreachable.
+// Fetch the active manifest from the backend via the typed Effect service.
+// Returns a normalized manifest, or null when nothing is saved (204) or the
+// backend is unreachable (any data-layer error -> swallowed to null, so the
+// fallback chain continues).
 async function fetchRemoteActive() {
-  try {
-    const res = await fetch(`${API_BASE}/character_manifests/active`)
-    if (res.status === 204 || !res.ok) return null
-    const text = await res.text()
-    if (!text) return null
-    const payload = JSON.parse(text)
-    return payload?.data ? normalizeManifest(payload.data) : null
-  } catch (err) {
+  const data = await runEdge(CharacterService.getActive()).catch((err) => {
     console.warn('fetching remote manifest failed:', err)
     return null
-  }
+  })
+  return data ? normalizeManifest(data) : null
 }
 
 // Resolve the active manifest, preferring shared backend state, then this
