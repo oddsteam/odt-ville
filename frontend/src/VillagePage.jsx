@@ -1,11 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import VillageGame from './game/VillageGame.jsx'
 import DailyBriefShortcut from './communities/DailyBriefShortcut.jsx'
-import { listCommunities, getFeed } from './communities/client.js'
-import { getGameSession, saveGameSession } from './game-session/client.js'
-import { getActiveTileObject } from './tileObjects/client.js'
-import { listGroundTiles } from './groundTiles/client.js'
-import { loadActiveManifest } from './character/manifest.js'
+import { saveGameSession } from './game-session/client.js'
+import { loadTown as loadTownData } from './game/townLoader.ts'
+import { runEdge } from './lib/runEdge.ts'
 
 // Demo target for every board's "open content list" action. Replaced in a
 // follow-up by per-board content-list views (see issue #15 follow-ups).
@@ -46,27 +44,13 @@ export default function VillagePage() {
   // Town-scene state — fetched on mount and after any communities-mutating
   // action so the game always sees fresh communities + session + feed.
   const loadTown = useCallback(async () => {
-    const [c, s, f, tree, ground, character] = await Promise.all([
-      listCommunities(),
-      getGameSession(),
-      getFeed(),
-      // Best-effort: the tree object is a visual enhancement, so swallow any
-      // failure (e.g. endpoint not migrated on this env) and fall back to null
-      // — never let it break the town load.
-      getActiveTileObject('tree').catch(() => null),
-      // Ground-tile catalog — same best-effort discipline: an empty list just
-      // means the procedural tile textures keep being used.
-      listGroundTiles().catch(() => []),
-      // The active character sprite. Never throws (falls back to the committed
-      // default), so the town always has a player even if the backend is down.
-      loadActiveManifest().catch(() => null),
-    ])
-    setCommunities(c)
-    setSession(s)
-    setFeed(f)
-    setTreeObject(tree)
-    setGroundTiles(ground || [])
-    setCharacterManifest(character)
+    const town = await runEdge(loadTownData())
+    setCommunities(town.communities)
+    setSession(town.session)
+    setFeed(town.feed)
+    setTreeObject(town.treeObject)
+    setGroundTiles(town.groundTiles)
+    setCharacterManifest(town.characterManifest)
   }, [])
 
   useEffect(() => {
