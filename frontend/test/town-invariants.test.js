@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'vitest'
 
-import { buildTown, tileChar, typeForTileChar } from '../src/game/town.js'
+import { buildTown, tileChar, typeForTileChar } from '../src/game/town.ts'
 import {
   AUTOTILED_TERRAINS,
   ORTHOGONAL_DIRS,

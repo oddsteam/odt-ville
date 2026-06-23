@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
-import { TILE, MOVE_MS, PLAYER_FEET_LIFT, buildTown, tileChar } from '../../constants.js'
+import { TILE, MOVE_MS, PLAYER_FEET_LIFT, buildTown } from '../../constants.js'
+import { isWalkable } from '../../town.ts'
 import { ensureTileTextures } from '../tileTextures.js'
 import {
   ENABLED as TILESET_ENABLED,
@@ -36,11 +37,6 @@ import {
   pickWildPokemon,
   GRACE_STEPS,
 } from '../../encounters.js'
-
-// Tile classes that block movement. Mirrors `isGroundWalkable` in
-// constants.js: anything not in this set is walkable ground; tree/sign are
-// not walkable, doors are special-cased below.
-const BLOCKED_TILE_CHARS = new Set(['T', 's'])
 
 // Dev-only layer inspector (press L for a panel, number keys to toggle each
 // layer; also window.__game.layers in the console). import.meta.env.DEV is
@@ -482,24 +478,13 @@ export default class TownScene extends Phaser.Scene {
     this.refreshTrainerVisuals()
   }
 
-  // Walkability check — ground class + building footprint exclusion.
-  // Doors are walkable: they're how the player enters. The gate trainer
-  // also occupies a tile and blocks pass-through (defeated trainers
-  // still stand there in Pokémon, you walk around).
+  // Walkability check — delegates to the pure town/World rule. The scene only
+  // assembles the dynamic blockers: tall props plus the gate-trainer tile
+  // (defeated trainers still stand there in Pokémon, you walk around).
   walkable(x, y) {
-    const ch = tileChar(this.town, x, y)
-    if (BLOCKED_TILE_CHARS.has(ch)) return false
-    if (this.buildings.some((b) => b.doorCol === x && b.doorRow === y)) return true
-    if (
-      this.buildings.some(
-        (b) => x >= b.col && x < b.col + b.w && y >= b.row && y < b.row + b.h,
-      )
-    ) {
-      return false
-    }
-    if (this.trainer && this.trainer.x === x && this.trainer.y === y) return false
-    if (this.propCells.has(`${x},${y}`)) return false
-    return true
+    const blockers = new Set(this.propCells)
+    if (this.trainer) blockers.add(`${this.trainer.x},${this.trainer.y}`)
+    return isWalkable(this.town, this.buildings, blockers, x, y)
   }
 
   // Place the gate trainer + render his line-of-sight markers. Called
@@ -748,9 +733,7 @@ export default class TownScene extends Phaser.Scene {
     for (let y = 0; y < this.town.rows; y++) {
       for (let x = 0; x < this.town.cols; x++) {
         if (this.town.map[y][x] !== 's') continue
-        const key = keyForTileChar('s')
-        if (!key) continue
-        const img = this.add.image(x * TILE, y * TILE, key).setOrigin(0, 0).setDepth(0.3)
+        const img = this.add.image(x * TILE, y * TILE, 'tile.sign').setOrigin(0, 0).setDepth(0.3)
         if (DEV) this.devLayers?.grass?.push(img)
       }
     }
@@ -986,27 +969,4 @@ function colLabel(n) {
     i = Math.floor((i - 1) / 26)
   }
   return s
-}
-
-// Map a tile character to its ground *type* for edge-boundary detection.
-// Mirrors the fill mapping (grass '.'/'*', dirt 'g', road ':') and treats
-// boundary trees + signs as grass (their ground is grass underneath). Anything
-// unrecognised returns null → never an edge neighbour, never receives an edge.
-function keyForTileChar(ch) {
-  switch (ch) {
-    case '.':
-      return 'tile.grass'
-    case ':':
-      return 'tile.path'
-    case '*':
-      return 'tile.flower'
-    case 'g':
-      return 'tile.tallgrass'
-    case 'T':
-      return 'tile.tree'
-    case 's':
-      return 'tile.sign'
-    default:
-      return null
-  }
 }

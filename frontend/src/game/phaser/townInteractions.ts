@@ -9,7 +9,7 @@
 // roll and grace-step rate limiting stay in the scene; this only says *which*
 // interactions apply, not how the stateful ones resolve.
 
-import { tileChar } from '../town.js'
+import { tileChar } from '../town.ts'
 
 export interface Tile {
   x: number
