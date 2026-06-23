@@ -9,10 +9,18 @@ const community = { id: 'odd-team' }
 const buildings = [{ doorCol: 0, doorRow: 0, community }]
 
 describe('townInteractionsAt', () => {
-  it('yields enter-community on a door tile', () => {
+  it('yields enter-community with no gate on an ungated door tile', () => {
     expect(townInteractionsAt({ town, buildings, sightCells: [] }, { x: 0, y: 0 })).toEqual([
-      { kind: 'enterCommunity', community },
+      { kind: 'enterCommunity', community, gate: null },
     ])
+  })
+
+  it('carries the community entryGate on a gated door tile', () => {
+    const gated = { id: 'hr', entryGate: 'posture-login' }
+    const gatedBuildings = [{ doorCol: 0, doorRow: 0, community: gated }]
+    expect(
+      townInteractionsAt({ town, buildings: gatedBuildings, sightCells: [] }, { x: 0, y: 0 }),
+    ).toEqual([{ kind: 'enterCommunity', community: gated, gate: 'posture-login' }])
   })
 
   it('yields maybe-wild on a tall-grass tile', () => {
