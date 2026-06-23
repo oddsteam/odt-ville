@@ -10,6 +10,7 @@ import {
 } from '../characterRig.js'
 import bus from '../bus.js'
 import { resolveDirection, stepTile } from '../movement.ts'
+import { initialPerfStallState, observeFrame } from '../perfStall.ts'
 import { townInteractionsAt } from '../townInteractions.ts'
 import { render, setupDevTools, preloadAssets } from '../townRenderer.ts'
 import {
@@ -83,6 +84,7 @@ export default class TownScene extends Phaser.Scene {
     this.movingTween = null
     this.dpadDir = null
     this.graceSteps = 0
+    this.perfStall = initialPerfStallState()
   }
 
   preload() {
@@ -216,10 +218,27 @@ export default class TownScene extends Phaser.Scene {
     })
   }
 
-  update() {
+  update(_time, delta) {
+    this.observePerf(delta)
     if (this.movingTween) return // already animating to next tile
     const dir = this.activeDirection()
     if (dir) this.step(dir)
+  }
+
+  // Feed the frame delta into the stall detector. A throttling browser
+  // extension produces multi-hundred-millisecond freezes in the RAF loop;
+  // after the threshold trips enough times we fire `perfStall` once on the
+  // bus so the React shell can surface a dismissible hint. console.warn
+  // helps anyone reading devtools spot the same condition.
+  observePerf(delta) {
+    if (typeof delta !== 'number' || !Number.isFinite(delta)) return
+    const r = observeFrame(this.perfStall, delta)
+    this.perfStall = r.state
+    if (r.fire) {
+      // eslint-disable-next-line no-console
+      console.warn('[perf] repeated long frames detected — likely a browser extension throttling the game loop')
+      bus.emit('perfStall')
+    }
   }
 
   // ---- helpers ------------------------------------------------------

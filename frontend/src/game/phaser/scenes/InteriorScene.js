@@ -9,6 +9,7 @@ import {
 } from '../characterRig.js'
 import bus from '../bus.js'
 import { resolveDirection, stepTile } from '../movement.ts'
+import { initialPerfStallState, observeFrame } from '../perfStall.ts'
 
 // Mirrors the layout in src/game/buildInterior.js so the spatial behavior
 // matches the DOM engine tile-for-tile.
@@ -70,6 +71,7 @@ export default class InteriorScene extends Phaser.Scene {
     // mid-walk.
     this.movingTween = null
     this.dpadDir = null
+    this.perfStall = initialPerfStallState()
   }
 
   create() {
@@ -289,10 +291,23 @@ export default class InteriorScene extends Phaser.Scene {
     })
   }
 
-  update() {
+  update(_time, delta) {
+    this.observePerf(delta)
     if (this.exiting || this.movingTween) return
     const dir = this.activeDirection()
     if (dir) this.step(dir)
+  }
+
+  // See TownScene.observePerf — same detector, same once-fire semantics.
+  observePerf(delta) {
+    if (typeof delta !== 'number' || !Number.isFinite(delta)) return
+    const r = observeFrame(this.perfStall, delta)
+    this.perfStall = r.state
+    if (r.fire) {
+      // eslint-disable-next-line no-console
+      console.warn('[perf] repeated long frames detected — likely a browser extension throttling the game loop')
+      bus.emit('perfStall')
+    }
   }
 
   activeDirection() {

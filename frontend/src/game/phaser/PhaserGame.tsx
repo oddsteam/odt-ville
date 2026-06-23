@@ -4,6 +4,7 @@ import TownScene from './scenes/TownScene.js'
 import InteriorScene from './scenes/InteriorScene.js'
 import EncounterScene from './scenes/EncounterScene.js'
 import MobileDpad from '../MobileDpad.tsx'
+import PerfStallNotice from '../PerfStallNotice.tsx'
 import bus from './bus.js'
 import type { Community } from '../../communities/schema.ts'
 import type { GameSession } from '../../game-session/schema.ts'
@@ -249,6 +250,8 @@ export default function PhaserGame({
 
           <div className="screen-overlay">
             <p className="overlay-hint">Arrows / WASD walk · A to interact · G grid</p>
+
+            <PerfStallNotice />
 
             <div className="overlay-slot overlay-tr">
               {dailyBrief}

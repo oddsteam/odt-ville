@@ -13,6 +13,8 @@ import Phaser from 'phaser'
 //   'exitCommunity'   (communityId: number) — interior doormat → town
 //   'openBoard'       (boardType)            — interior A on a board
 //   'trainerDefeated' ()                     — encounter RUN AWAY (trainer)
+//   'perfStall'       ()                     — repeated long frames detected
+//                                              (likely a throttling extension)
 //
 // Events emitted by the React overlay (PR-E onward) so Phaser scenes
 // can treat tap/click input identically to keyboard:

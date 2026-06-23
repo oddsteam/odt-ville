@@ -412,6 +412,46 @@ button:disabled {
   opacity: 1;
 }
 
+/* Perf-stall notice — issue #23.
+   A dismissible banner that appears over the canvas only when the Phaser
+   scenes detect repeated long frames (a browser extension throttling RAF).
+   Anchored top-centre with pointer-events on so the user can read + dismiss
+   it without falling through to the canvas. */
+.perf-stall-notice {
+  position: absolute;
+  top: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 360px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  background: rgba(11, 13, 18, 0.92);
+  border: 2px solid var(--amber);
+  color: var(--paper);
+  font-size: 8px;
+  line-height: 1.4;
+  letter-spacing: 0.4px;
+  pointer-events: auto;
+  z-index: 65;
+}
+
+.perf-stall-notice-body {
+  margin: 0;
+  text-align: center;
+}
+
+.perf-stall-notice-dismiss {
+  padding: 4px 8px;
+  font-size: 8px;
+  border: 2px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 2px 2px 0 var(--ink);
+}
+
 .overlay-tr {
   top: 8px;
   right: 10px;
