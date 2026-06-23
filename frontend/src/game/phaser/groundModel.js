@@ -1,5 +1,5 @@
-import { tileChar, typeForTileChar } from '../town.js'
-export { typeForTileChar } from '../town.js'
+import { tileChar, typeForTileChar } from '../town.ts'
+export { typeForTileChar } from '../town.ts'
 
 export const GROUND_STACK = ['road', 'dirt', 'grass']
 export const AUTOTILED_TERRAINS = new Set(['grass', 'dirt'])

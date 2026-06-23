@@ -18,7 +18,7 @@ import rightStill from './assets/character/right-still.png'
 import rightWalk1 from './assets/character/right-walk-1.png'
 import rightWalk2 from './assets/character/right-walk-2.png'
 import rightWalk3 from './assets/character/right-walk-3.png'
-export { PER_ROW, buildTown, tileChar, isGroundWalkable } from './town.js'
+export { PER_ROW, buildTown, tileChar, isGroundWalkable } from './town.ts'
 
 export const TILE = 48 // rendered px per tile
 export const MOVE_MS = 170 // ms to slide one tile
