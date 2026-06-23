@@ -102,6 +102,19 @@ The game stays a true black box: it renders a building with a door. The
 shell looks at `house.type` and decides which detail component to mount
 when the door opens.
 
+#### Entry gates
+
+Orthogonal to type, a house may carry an **entry gate** — a requirement the
+player must satisfy *before* the door opens. Entry is therefore a gateable
+interaction, not a binary cut: the game stops the avatar in the doorway,
+pauses, and emits `requestEntry`; the shell runs the gate and tells the game
+to enter or release. The first gate is **posture-login** — a standalone
+verification service where the credential is a hand shape, run on the
+service's own hosted page and confirmed server-to-server by our backend. The
+game never knows what the gate *is*; it only learns the avatar is approved.
+See [`docs/adr/0001-gated-door-entry.md`](docs/adr/0001-gated-door-entry.md).
+This is the same gatekeeper shape as the gate trainer, but scoped per door.
+
 ### Relevance is a coordinate, not an algorithm
 
 The original mental model was a single global village containing every
