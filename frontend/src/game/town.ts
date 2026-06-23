@@ -135,6 +135,14 @@ export function isGroundWalkable(town: TileGrid, x: number, y: number): boolean 
   return WALKABLE.has(tileChar(town, x, y))
 }
 
+// Player render depth at a tile. On a building's door tile, beat that building's
+// sprite depth ((row+h)*10 - 1 in townRenderer) so the avatar reads as standing
+// in the doorway instead of clipping under it; elsewhere, the row-banded default.
+export function playerDepthAt(buildings: Building[], x: number, y: number): number {
+  const door = buildings.find((b) => b.doorCol === x && b.doorRow === y)
+  return door ? (door.row + door.h) * 10 : y * 10 + 5
+}
+
 // Authoritative town walkability rule, pure and Node-runnable. Out-of-bounds
 // and blocked tile classes (tree/sign) block; doors are always walkable (the
 // way into a house); a building footprint blocks; `blockers` is the scene's

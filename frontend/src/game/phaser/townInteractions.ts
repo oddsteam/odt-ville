@@ -19,7 +19,7 @@ export interface Tile {
 interface Building {
   doorCol: number
   doorRow: number
-  community: unknown
+  community: { entryGate?: string | null } & Record<string, unknown>
 }
 
 interface TownLike {
@@ -37,13 +37,17 @@ export interface TownContext {
 }
 
 export type TownInteraction =
-  | { kind: 'enterCommunity'; community: unknown }
+  // gate is the house's entry requirement (e.g. 'posture-login') or null when
+  // the door opens immediately; the scene branches on it. See issue #24.
+  | { kind: 'enterCommunity'; community: unknown; gate: string | null }
   | { kind: 'startDuel' }
   | { kind: 'maybeWild' }
 
 export function townInteractionsAt(ctx: TownContext, tile: Tile): TownInteraction[] {
   const door = ctx.buildings.find((b) => b.doorCol === tile.x && b.doorRow === tile.y)
-  if (door) return [{ kind: 'enterCommunity', community: door.community }]
+  if (door) {
+    return [{ kind: 'enterCommunity', community: door.community, gate: door.community.entryGate ?? null }]
+  }
 
   const out: TownInteraction[] = []
   if (ctx.sightCells.some((c) => c.x === tile.x && c.y === tile.y)) out.push({ kind: 'startDuel' })

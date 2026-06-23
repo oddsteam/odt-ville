@@ -1,6 +1,6 @@
 import Phaser from 'phaser'
 import { TILE, MOVE_MS, PLAYER_FEET_LIFT, buildTown } from '../../constants.js'
-import { isWalkable } from '../../town.ts'
+import { isWalkable, playerDepthAt } from '../../town.ts'
 import { ensureTileTextures } from '../tileTextures.js'
 import {
   CHAR_SHEET_KEY,
@@ -276,8 +276,10 @@ export default class TownScene extends Phaser.Scene {
         this.playerTile = t
         // Depth tracks the player's current row so south-of-player buildings
         // (higher row → higher depth) draw on top and north-of-player
-        // buildings (lower row → lower depth) draw behind.
-        this.player.setDepth(t.y * 10 + 5)
+        // buildings (lower row → lower depth) draw behind. Stepping onto a door
+        // tile elevates above that building from the start of the step, so the
+        // avatar rises into the doorway instead of sliding under it (issue #22).
+        this.player.setDepth(playerDepthAt(this.buildings, t.x, t.y))
         this.setPlayerWalking(true)
       },
       onBlocked: () => this.setPlayerWalking(false),
@@ -324,8 +326,17 @@ export default class TownScene extends Phaser.Scene {
     const ctx = { town: this.town, buildings: this.buildings, sightCells }
     for (const it of townInteractionsAt(ctx, t)) {
       if (it.kind === 'enterCommunity') {
-        bus.emit('enterCommunity', it.community.id)
-        this.scene.start('Interior', { community: it.community })
+        if (it.gate) {
+          // Gated door: stop at the doorway (already depth-elevated + facing up),
+          // freeze the world, and hand the gate off to the shell. The shell runs
+          // it and resumes us on pass / release on fail (issue #24). Dormant until
+          // a community carries entryGate, so no resumer is needed yet.
+          this.scene.pause()
+          bus.emit('requestEntry', { communityId: it.community.id, gate: it.gate })
+        } else {
+          bus.emit('enterCommunity', it.community.id)
+          this.scene.start('Interior', { community: it.community })
+        }
         return
       }
       if (it.kind === 'startDuel') {
