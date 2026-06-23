@@ -16,6 +16,7 @@ import {
 } from '../characterRig.js'
 import bus from '../bus.js'
 import { resolveDirection, stepTile } from '../movement.ts'
+import { townInteractionsAt } from '../townInteractions.ts'
 import {
   GROUND_STACK,
   EDGE_CORNERS,
@@ -379,21 +380,6 @@ export default class TownScene extends Phaser.Scene {
   // wired in here as callbacks.
   step(dir) {
     this.facing = dir
-    const dx = dir === 'left' ? -1 : dir === 'right' ? 1 : 0
-    const dy = dir === 'up' ? -1 : dir === 'down' ? 1 : 0
-    const tx = this.playerTile.x + dx
-    const ty = this.playerTile.y + dy
-
-    // Door collision — stepping onto a doorway emits enterCommunity for
-    // the React shell (session save) and transitions Phaser to the
-    // interior scene with the community payload attached.
-    const door = this.buildings.find((b) => b.doorCol === tx && b.doorRow === ty)
-    if (door) {
-      bus.emit('enterCommunity', door.community.id)
-      this.scene.start('Interior', { community: door.community })
-      return
-    }
-
     const result = stepTile({
       scene: this,
       target: this.player,
@@ -428,12 +414,9 @@ export default class TownScene extends Phaser.Scene {
         } else {
           this.player.setTexture(`player.${this.facing}.0`)
         }
-        // Trainer sight is checked first — when the player lands in
-        // his line of sight, the duel takes priority over a wild
-        // encounter on the same step.
-        if (!this.maybeTrainerSpot(t.x, t.y)) {
-          this.maybeWildEncounter(t.x, t.y)
-        }
+        // Arrival interactions (door / trainer / wild) come from the
+        // declarative townInteractions list, resolved in order.
+        this.handleArrival(t)
       },
     })
     this.movingTween = result.tween
@@ -454,28 +437,35 @@ export default class TownScene extends Phaser.Scene {
     }
   }
 
-  // Trainer line-of-sight check. Returns true if a duel was triggered
-  // so the caller can skip the wild-grass roll on the same step.
-  maybeTrainerSpot(x, y) {
-    if (!this.trainer) return false
-    if (this.registry.get('trainerDefeated')) return false
-    const inSight = this.sightCells.some((c) => c.x === x && c.y === y)
-    if (!inSight) return false
-    this.launchEncounter({ ...GATE_TRAINER })
-    return true
+  // Run the arrival interactions for a tile in declared order: a door enters
+  // the community (and stops there); otherwise a trainer sight cell starts the
+  // duel before — and instead of — the wild-grass roll on the same tile.
+  handleArrival(t) {
+    const sightCells =
+      this.trainer && !this.registry.get('trainerDefeated') ? this.sightCells : []
+    const ctx = { town: this.town, buildings: this.buildings, sightCells }
+    for (const it of townInteractionsAt(ctx, t)) {
+      if (it.kind === 'enterCommunity') {
+        bus.emit('enterCommunity', it.community.id)
+        this.scene.start('Interior', { community: it.community })
+        return
+      }
+      if (it.kind === 'startDuel') {
+        this.launchEncounter({ ...GATE_TRAINER })
+        return
+      }
+      if (it.kind === 'maybeWild') this.resolveWild()
+    }
   }
 
-  // Wild-encounter roll — only fires on a tall-grass tile, only when
-  // not in the GRACE_STEPS window after the last encounter.
-  maybeWildEncounter(x, y) {
-    if (tileChar(this.town, x, y) !== 'g') return
+  // The stateful half of the wild interaction: burn a grace step, else roll.
+  // Only reached on a tall-grass tile (townInteractions already checked).
+  resolveWild() {
     if (this.graceSteps > 0) {
       this.graceSteps -= 1
       return
     }
-    if (rollEncounter()) {
-      this.launchEncounter(pickWildPokemon())
-    }
+    if (rollEncounter()) this.launchEncounter(pickWildPokemon())
   }
 
   launchEncounter(opponent) {
