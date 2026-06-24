@@ -11,6 +11,7 @@
 // helpers (buildGroundTileMap / buildEdgeMap) are exported for unit tests.
 
 import { TILE } from '../constants.js'
+import { planFlowers } from '../town.js'
 import { buildingKeyFor, DEFAULT_BUILDING } from '../buildings.js'
 import { ENABLED as TILESET_ENABLED, PROPS, tallPropsFor } from './townTileset.js'
 import { preloadCharacter } from './characterRig.js'
@@ -97,11 +98,14 @@ export function preloadAssets(scene: Scene) {
     for (const prop of Object.values<any>(PROPS)) scene.load.image(prop.key, prop.url)
   }
 
-  // Admin flower art (tile-object mapper, kind 'prop') — when present it
-  // replaces the procedural flower buds at every '*' cell (issue #26). Absent
-  // (no active object) → the procedural tile.flower buds are used.
-  scene._propObject = scene.registry.get('propObject') || null
-  if (scene._propObject?.image) scene.load.image('prop.flower', scene._propObject.image)
+  // Admin flower art (tile-object mapper) for the '*' scatter. The 'flower-group'
+  // object is tiled across contiguous clusters; 'flower-single' fills leftover/
+  // lone cells (#27). Either absent → that role falls back to the procedural
+  // tile.flower buds (#26 behaviour for a 1x1 group).
+  scene._flowerGroup = scene.registry.get('flowerGroup') || null
+  scene._flowerSingle = scene.registry.get('flowerSingle') || null
+  if (scene._flowerGroup?.image) scene.load.image('prop.flowerGroup', scene._flowerGroup.image)
+  if (scene._flowerSingle?.image) scene.load.image('prop.flowerSingle', scene._flowerSingle.image)
 
   // Ground-tile catalog (ground-tile mapper). Each referenced tileset loads
   // once as a uniform spritesheet (frame = cell), so create() can stamp a
@@ -315,23 +319,35 @@ function paintGround(scene: Scene) {
   // the grass beneath — the ground-tile mapper renders '*' identically to '.',
   // so without this pass the scatter is invisible. Above the ground fills, below
   // props/buildings/player (issue #25). The admin-saved flower object (kind
-  // 'prop') replaces the procedural buds when present; sized to its footprint,
-  // and kept at the flat 0.35 depth so it never draws over the player (#26).
-  const flowerObj = scene._propObject?.image && scene.textures.exists('prop.flower') ? scene._propObject : null
-  const flowerKey = flowerObj ? 'prop.flower' : 'tile.flower'
-  const flowerW = (flowerObj?.footprint_w || 1) * TILE
-  const flowerH = (flowerObj?.footprint_h || 1) * TILE
-  for (let y = 0; y < scene.town.rows; y++) {
-    for (let x = 0; x < scene.town.cols; x++) {
-      if (scene.town.map[y][x] !== '*') continue
-      const img = scene.add
-        .image(x * TILE, y * TILE, flowerKey)
-        .setOrigin(0, 0)
-        .setDisplaySize(flowerW, flowerH)
-        .setDepth(0.35)
-      if (DEV) scene.devLayers?.grass?.push(img)
-    }
+  // 'prop') replaces the procedural buds when present; kept at the flat 0.35
+  // depth so it never draws over the player (#26).
+  //
+  // For a multi-tile group footprint, stamping it at every '*' overlaps into a
+  // mess, so planFlowers (town.ts, #27) tiles the group across contiguous '*'
+  // clusters and leaves the leftover/lone cells as 1x1 singles. A 1x1 group
+  // (no admin group art) degenerates to one stamp per '*' — the pre-#27 paint.
+  const groupObj = scene._flowerGroup?.image && scene.textures.exists('prop.flowerGroup') ? scene._flowerGroup : null
+  const singleObj = scene._flowerSingle?.image && scene.textures.exists('prop.flowerSingle') ? scene._flowerSingle : null
+  const groupKey = groupObj ? 'prop.flowerGroup' : 'tile.flower'
+  const singleKey = singleObj ? 'prop.flowerSingle' : 'tile.flower'
+  const fw = groupObj?.footprint_w || 1
+  const fh = groupObj?.footprint_h || 1
+  const stampFlower = (x: number, y: number, key: string, w: number, h: number) => {
+    const img = scene.add
+      .image(x * TILE, y * TILE, key)
+      .setOrigin(0, 0)
+      .setDisplaySize(w * TILE, h * TILE)
+      .setDepth(0.35)
+    if (DEV) scene.devLayers?.grass?.push(img)
   }
+  // planFlowers floors the footprint to whole tiles for the cluster grid, but
+  // we stamp at the real footprint so fractional art (e.g. the #26 default
+  // 1.4×1.8) keeps its size instead of snapping to 1×1.
+  const { groups, singles } = planFlowers(scene.town, fw, fh)
+  for (const g of groups) stampFlower(g.x, g.y, groupKey, fw, fh)
+  // Leftover/lone cells get the single art (admin 'flower-single', else the
+  // procedural bud) — never the group art squished into one cell.
+  for (const s of singles) stampFlower(s.x, s.y, singleKey, 1, 1)
 }
 
 // Build the two-layer building sprite. We don't yet hue-rotate from
