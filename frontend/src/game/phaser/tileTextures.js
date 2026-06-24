@@ -50,10 +50,9 @@ export function ensureTileTextures(scene) {
     g.strokeRect(0.5, 0.5, TILE - 1, TILE - 1)
   })
 
-  // Flower: grass background + two tiny coloured 8×8 buds.
+  // Flower: a few tiny coloured buds on a TRANSPARENT tile, so it overlays
+  // whatever grass (procedural or admin tileset art) is painted beneath it.
   drawTile(scene, 'tile.flower', (g) => {
-    g.fillStyle(PALETTE.grass, 1)
-    g.fillRect(0, 0, TILE, TILE)
     g.fillStyle(PALETTE.flowerA, 1)
     g.fillRect(14, 16, 8, 8)
     g.fillStyle(PALETTE.flowerB, 1)
