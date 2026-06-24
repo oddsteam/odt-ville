@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { saveTileObject } from '../tileObjects/client.js'
+import { activateTileObject, deactivateTileObject, listTileObjects, saveTileObject } from '../tileObjects/client.js'
+import type { TileObjectSummary } from '../tileObjects/schema.ts'
 import './styles.css'
 
 type Atlas = { img: HTMLImageElement; src: string; width: number; height: number }
@@ -24,9 +25,35 @@ export default function TileMapper() {
   const [fpW, setFpW] = useState(1.4)
   const [fpH, setFpH] = useState(1.8)
   const [status, setStatus] = useState('Upload an atlas PNG to begin.')
+  const [saved, setSaved] = useState<readonly TileObjectSummary[]>([]) // roster for the saved-objects list
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const dragRef = useRef<DragAnchor | null>(null) // { c, r } drag anchor while the mouse is down
+
+  // Saved-objects roster — which tile-objects exist and which is the active one
+  // of each kind. Refreshed on mount and after every save/activate.
+  const refreshSaved = useCallback(() => {
+    listTileObjects().then(setSaved).catch(() => {})
+  }, [])
+  useEffect(() => refreshSaved(), [refreshSaved])
+
+  const onActivate = useCallback(
+    (id: number) => {
+      activateTileObject(id)
+        .then(() => refreshSaved())
+        .catch((err: unknown) => setStatus(`Activate failed: ${err instanceof Error ? err.message : String(err)}`))
+    },
+    [refreshSaved],
+  )
+
+  const onDeactivate = useCallback(
+    (id: number) => {
+      deactivateTileObject(id)
+        .then(() => refreshSaved())
+        .catch((err: unknown) => setStatus(`Deactivate failed: ${err instanceof Error ? err.message : String(err)}`))
+    },
+    [refreshSaved],
+  )
 
   const cols = atlas ? Math.floor(atlas.width / cell) : 0
   const rows = atlas ? Math.floor(atlas.height / cell) : 0
@@ -176,14 +203,15 @@ export default function TileMapper() {
 
     setStatus('Saving…')
     try {
-      const saved = await saveTileObject({
+      const obj = await saveTileObject({
         name: name.trim(),
         kind,
         image,
         footprint_w: Number(fpW) || selBox.w,
         footprint_h: Number(fpH) || selBox.h,
       })
-      setStatus(`Saved "${saved.name}" as the active ${saved.kind}. It'll show on the map on reload.`)
+      setStatus(`Saved "${obj.name}" as the active ${obj.kind}. It'll show on the map on reload.`)
+      refreshSaved()
     } catch (err: unknown) {
       setStatus(`Save failed: ${err instanceof Error ? err.message : String(err)}`)
     }
@@ -245,6 +273,8 @@ export default function TileMapper() {
             <select value={kind} onChange={(e) => setKind(e.target.value)}>
               <option value="tree">tree</option>
               <option value="prop">prop</option>
+              <option value="flower-group">flower-group</option>
+              <option value="flower-single">flower-single</option>
             </select>
           </label>
           <div className="fp">
@@ -268,6 +298,30 @@ export default function TileMapper() {
           <button type="button" className="save" onClick={onSave} disabled={!selBox}>
             Save to server
           </button>
+
+          <h3>Saved objects</h3>
+          <ul className="saved-list">
+            {saved.length === 0 && <li className="hint">No saved objects yet.</li>}
+            {saved.map((o) => (
+              <li key={o.id} className={o.active ? 'is-active' : ''}>
+                <span className="saved-name">{o.name}</span>
+                <span className="saved-kind">{o.kind}</span>
+                <span className="saved-fp">{o.footprint_w}×{o.footprint_h}</span>
+                {o.active ? (
+                  <>
+                    <span className="saved-badge">active</span>
+                    <button type="button" onClick={() => onDeactivate(o.id)}>
+                      Deactivate
+                    </button>
+                  </>
+                ) : (
+                  <button type="button" onClick={() => onActivate(o.id)}>
+                    Activate
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
         </div>
       </div>
     </div>

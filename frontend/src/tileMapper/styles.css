@@ -47,3 +47,20 @@ body { margin: 0; font-family: system-ui, sans-serif; background: #1b1b22; color
   background: #2e7dff; color: #fff; border: 0; border-radius: 6px; cursor: pointer;
 }
 .save:disabled { background: #3a3a47; color: #6a6a7a; cursor: not-allowed; }
+
+/* Saved-objects roster (#27): which tile-objects exist + the active one per kind. */
+.saved-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.saved-list li {
+  display: flex; align-items: center; gap: 8px; font-size: 12px;
+  padding: 5px 8px; background: #15151b; border: 1px solid #2a2a34; border-radius: 4px;
+}
+.saved-list li.is-active { border-color: #2e7dff; }
+.saved-name { flex: 1; color: #e8e8ee; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.saved-kind { color: #9a9ab0; }
+.saved-fp { color: #6a6a7a; }
+.saved-badge { color: #2e7dff; font-weight: 600; }
+.saved-list button {
+  background: #2a2a34; color: #e8e8ee; border: 1px solid #3a3a47;
+  border-radius: 4px; padding: 3px 8px; font-size: 12px; cursor: pointer;
+}
+.saved-list button:hover { background: #34343f; }

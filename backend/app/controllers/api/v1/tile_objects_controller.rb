@@ -39,6 +39,24 @@ module Api
 
         render json: TileObjectSerializer.call(obj.reload)
       end
+
+      # PATCH /api/v1/tile_objects/:id/activate — make an existing object the
+      # live one of its kind (the mapper's saved-objects list uses this to swap
+      # which flower-group/single/tree the game renders).
+      def activate
+        obj = TileObject.find(params[:id])
+        obj.activate!
+        render json: TileObjectSerializer.summary(obj.reload)
+      end
+
+      # POST /api/v1/tile_objects/:id/deactivate — turn this object off so its
+      # kind has no live object and the game falls back to its procedural
+      # default (e.g. the flower scatter reverts to the bundled buds).
+      def deactivate
+        obj = TileObject.find(params[:id])
+        obj.update!(active: false)
+        render json: TileObjectSerializer.summary(obj.reload)
+      end
     end
   end
 end

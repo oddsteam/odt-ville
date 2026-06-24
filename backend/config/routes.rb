@@ -29,6 +29,8 @@ Rails.application.routes.draw do
       # mapper, rendered on the town map. `active?kind=` is the live one.
       resources :tile_objects, only: [:index, :create] do
         get :active, on: :collection
+        post :activate, on: :member
+        post :deactivate, on: :member
       end
 
       # Ground tiles — grass/road/… cells tagged in the ground-tile mapper by

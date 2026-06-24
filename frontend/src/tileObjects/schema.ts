@@ -6,7 +6,9 @@
 
 import * as Schema from 'effect/Schema'
 
-export const TileObject = Schema.Struct({
+// Roster row from GET /tile_objects (the `summary` serializer): everything but
+// the heavy image blob. The mapper's saved-objects list renders these.
+export const TileObjectSummary = Schema.Struct({
   id: Schema.Number,
   name: Schema.String,
   kind: Schema.String,
@@ -14,8 +16,11 @@ export const TileObject = Schema.Struct({
   footprint_h: Schema.Number,
   active: Schema.Boolean,
   updated_at: Schema.String,
-  image: Schema.String,
 })
+export type TileObjectSummary = Schema.Schema.Type<typeof TileObjectSummary>
+
+// The full object the game draws — a summary plus the image data URL.
+export const TileObject = Schema.Struct({ ...TileObjectSummary.fields, image: Schema.String })
 export type TileObject = Schema.Schema.Type<typeof TileObject>
 
 // Body the mapper POSTs to save a tile object. Echoes the controller's permit

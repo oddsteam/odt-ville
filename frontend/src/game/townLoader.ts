@@ -21,9 +21,18 @@ export const loadTown = () =>
       // Optional visual enhancements: swallow any failure to a fallback so a
       // missing/erroring endpoint never breaks the town load.
       treeObject: Effect.orElseSucceed(TileObjectsService.getActive('tree'), () => null),
-      // The active scatter prop (bush/rock/…), sprinkled on grass by the noise
-      // field. Same best-effort fallback: none → no scatter, town still renders.
-      propObject: Effect.orElseSucceed(TileObjectsService.getActive('prop'), () => null),
+      // Flower art for the '*' scatter (#27). The multi-tile group is tiled
+      // across contiguous '*' clusters; the single is the per-cell fallback for
+      // leftover/lone cells. The group falls back to the legacy 'prop' kind
+      // (#26) so existing flower art keeps rendering. Both best-effort: none →
+      // procedural buds, town still renders.
+      flowerGroup: Effect.orElseSucceed(
+        TileObjectsService.getActive('flower-group').pipe(
+          Effect.flatMap((g) => (g ? Effect.succeed(g) : TileObjectsService.getActive('prop'))),
+        ),
+        () => null,
+      ),
+      flowerSingle: Effect.orElseSucceed(TileObjectsService.getActive('flower-single'), () => null),
       groundTiles: Effect.orElseSucceed(GroundTilesService.list(), () => []),
       // loadActiveManifest owns its own fallback chain and never throws; mirror
       // today's `.catch(() => null)` for parity.

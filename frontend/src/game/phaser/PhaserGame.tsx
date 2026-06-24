@@ -58,7 +58,8 @@ export type PhaserGameProps = {
   communities: readonly Community[]
   session: GameSession
   treeObject: TileObject | null
-  propObject: TileObject | null
+  flowerGroup: TileObject | null
+  flowerSingle: TileObject | null
   groundTiles: readonly GroundTile[]
   characterManifest: object | null
   dailyBrief: ReactNode
@@ -74,7 +75,8 @@ export default function PhaserGame({
   communities,
   session,
   treeObject,
-  propObject,
+  flowerGroup,
+  flowerSingle,
   groundTiles,
   characterManifest,
   dailyBrief,
@@ -129,7 +131,8 @@ export default function PhaserGame({
     game.registry.set('communities', communities)
     game.registry.set('session', session)
     game.registry.set('treeObject', treeObject || null)
-    game.registry.set('propObject', propObject || null)
+    game.registry.set('flowerGroup', flowerGroup || null)
+    game.registry.set('flowerSingle', flowerSingle || null)
     // Ground-tile catalog — read once by TownScene.preload() to load the
     // referenced tilesets, same boot-input timing as treeObject.
     game.registry.set('groundTiles', groundTiles || [])
@@ -186,12 +189,19 @@ export default function PhaserGame({
     game.registry.set('treeObject', treeObject || null)
   }, [treeObject])
 
-  // Scatter prop — boot input like treeObject; keep the registry fresh.
+  // Flower art (group + single) — boot inputs like treeObject; keep the
+  // registry fresh for the next VillageGame mount / reload.
   useEffect(() => {
     const game = gameRef.current
     if (!game) return
-    game.registry.set('propObject', propObject || null)
-  }, [propObject])
+    game.registry.set('flowerGroup', flowerGroup || null)
+  }, [flowerGroup])
+
+  useEffect(() => {
+    const game = gameRef.current
+    if (!game) return
+    game.registry.set('flowerSingle', flowerSingle || null)
+  }, [flowerSingle])
 
   // Ground-tile catalog — boot input like treeObject; pushing it keeps the
   // registry fresh for the next VillageGame mount / reload.

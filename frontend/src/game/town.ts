@@ -176,6 +176,49 @@ export function flowerAt(x: number, y: number): boolean {
   return valueNoise(x, y) + jitter > FLOWER_THRESHOLD
 }
 
+export interface FlowerGroup {
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+export interface FlowerLayout {
+  groups: FlowerGroup[] // each a full WxH stamp of the flower-group art
+  singles: Array<{ x: number; y: number }> // leftover/lone '*' cells → 1x1 fallback
+}
+
+// Cluster-aware flower placement (#27). A greedy row-major scan anchors a full
+// WxH flower-group wherever every covered cell is an uncovered '*', so big '*'
+// patches read as the authored group instead of N identical tiles, and a group
+// never clips across a non-flower cell. Whatever's left over (patch edges, lone
+// '*') falls to single 1x1 cells. Pure + deterministic, like flowerAt. A 1x1
+// footprint degenerates to one group per '*' — the pre-#27 one-per-cell paint.
+export function planFlowers(town: TileGrid, w: number, h: number): FlowerLayout {
+  const gw = Math.max(1, Math.floor(w))
+  const gh = Math.max(1, Math.floor(h))
+  const covered = new Set<string>()
+  const isFree = (x: number, y: number) => tileChar(town, x, y) === '*' && !covered.has(`${x},${y}`)
+  const fits = (x: number, y: number) => {
+    for (let dy = 0; dy < gh; dy++) for (let dx = 0; dx < gw; dx++) if (!isFree(x + dx, y + dy)) return false
+    return true
+  }
+
+  const groups: FlowerGroup[] = []
+  for (let y = 0; y < town.rows; y++) {
+    for (let x = 0; x < town.cols; x++) {
+      if (!fits(x, y)) continue
+      groups.push({ x, y, w: gw, h: gh })
+      for (let dy = 0; dy < gh; dy++) for (let dx = 0; dx < gw; dx++) covered.add(`${x + dx},${y + dy}`)
+    }
+  }
+
+  const singles: Array<{ x: number; y: number }> = []
+  for (let y = 0; y < town.rows; y++)
+    for (let x = 0; x < town.cols; x++) if (isFree(x, y)) singles.push({ x, y })
+  return { groups, singles }
+}
+
 // Player render depth at a tile. On a building's door tile, beat that building's
 // sprite depth ((row+h)*10 - 1 in townRenderer) so the avatar reads as standing
 // in the doorway instead of clipping under it; elsewhere, the row-banded default.

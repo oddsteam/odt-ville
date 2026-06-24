@@ -34,9 +34,11 @@ export default function VillagePage() {
   // The admin-defined tree object (tile-object mapper), rendered by the game.
   // Optional enhancement — null is fine and falls back to the bundled tree.
   const [treeObject, setTreeObject] = useState<TileObject | null>(null)
-  // The admin-defined scatter prop (tile-object mapper, kind 'prop'), sprinkled
-  // on grass by the game. Optional — null falls back to no scatter.
-  const [propObject, setPropObject] = useState<TileObject | null>(null)
+  // Admin flower art (tile-object mapper, kinds 'flower-group' / 'flower-single')
+  // for the '*' scatter (#27): the group is tiled across clusters, the single
+  // fills leftover cells. Optional — null falls back to the procedural buds.
+  const [flowerGroup, setFlowerGroup] = useState<TileObject | null>(null)
+  const [flowerSingle, setFlowerSingle] = useState<TileObject | null>(null)
   // Ground-tile catalog (ground-tile mapper): grass/dirt/road cells painted
   // onto the town's ground, encounter field, and roads. Empty array falls back
   // to the procedural tile textures, so it's a pure visual enhancement.
@@ -56,7 +58,8 @@ export default function VillagePage() {
     setSession(town.session)
     setFeed(town.feed)
     setTreeObject(town.treeObject)
-    setPropObject(town.propObject)
+    setFlowerGroup(town.flowerGroup)
+    setFlowerSingle(town.flowerSingle)
     setGroundTiles(town.groundTiles)
     setCharacterManifest(town.characterManifest)
   }, [])
@@ -156,7 +159,8 @@ export default function VillagePage() {
         communities={communities}
         session={session}
         treeObject={treeObject}
-        propObject={propObject}
+        flowerGroup={flowerGroup}
+        flowerSingle={flowerSingle}
         groundTiles={groundTiles}
         characterManifest={characterManifest}
         dailyBrief={
