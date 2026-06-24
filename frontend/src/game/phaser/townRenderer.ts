@@ -97,6 +97,12 @@ export function preloadAssets(scene: Scene) {
     for (const prop of Object.values<any>(PROPS)) scene.load.image(prop.key, prop.url)
   }
 
+  // Admin flower art (tile-object mapper, kind 'prop') — when present it
+  // replaces the procedural flower buds at every '*' cell (issue #26). Absent
+  // (no active object) → the procedural tile.flower buds are used.
+  scene._propObject = scene.registry.get('propObject') || null
+  if (scene._propObject?.image) scene.load.image('prop.flower', scene._propObject.image)
+
   // Ground-tile catalog (ground-tile mapper). Each referenced tileset loads
   // once as a uniform spritesheet (frame = cell), so create() can stamp a
   // specific cell — grass/dirt/road — onto the map by frame index.
@@ -305,14 +311,24 @@ function paintGround(scene: Scene) {
     }
   }
 
-  // Flowers ('*' cells from the procedural scatter, town.ts) are a transparent
-  // buds overlay over the grass beneath — the ground-tile mapper renders '*'
-  // identically to '.', so without this pass the scatter is invisible. Above
-  // the ground fills, below props/buildings/player (issue #25).
+  // Flowers ('*' cells from the procedural scatter, town.ts) are an overlay over
+  // the grass beneath — the ground-tile mapper renders '*' identically to '.',
+  // so without this pass the scatter is invisible. Above the ground fills, below
+  // props/buildings/player (issue #25). The admin-saved flower object (kind
+  // 'prop') replaces the procedural buds when present; sized to its footprint,
+  // and kept at the flat 0.35 depth so it never draws over the player (#26).
+  const flowerObj = scene._propObject?.image && scene.textures.exists('prop.flower') ? scene._propObject : null
+  const flowerKey = flowerObj ? 'prop.flower' : 'tile.flower'
+  const flowerW = (flowerObj?.footprint_w || 1) * TILE
+  const flowerH = (flowerObj?.footprint_h || 1) * TILE
   for (let y = 0; y < scene.town.rows; y++) {
     for (let x = 0; x < scene.town.cols; x++) {
       if (scene.town.map[y][x] !== '*') continue
-      const img = scene.add.image(x * TILE, y * TILE, 'tile.flower').setOrigin(0, 0).setDepth(0.35)
+      const img = scene.add
+        .image(x * TILE, y * TILE, flowerKey)
+        .setOrigin(0, 0)
+        .setDisplaySize(flowerW, flowerH)
+        .setDepth(0.35)
       if (DEV) scene.devLayers?.grass?.push(img)
     }
   }
