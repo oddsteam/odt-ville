@@ -21,6 +21,9 @@ export const loadTown = () =>
       // Optional visual enhancements: swallow any failure to a fallback so a
       // missing/erroring endpoint never breaks the town load.
       treeObject: Effect.orElseSucceed(TileObjectsService.getActive('tree'), () => null),
+      // The active scatter prop (bush/rock/…), sprinkled on grass by the noise
+      // field. Same best-effort fallback: none → no scatter, town still renders.
+      propObject: Effect.orElseSucceed(TileObjectsService.getActive('prop'), () => null),
       groundTiles: Effect.orElseSucceed(GroundTilesService.list(), () => []),
       // loadActiveManifest owns its own fallback chain and never throws; mirror
       // today's `.catch(() => null)` for parity.
