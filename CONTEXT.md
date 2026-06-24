@@ -76,6 +76,18 @@ These boundaries exist so the game could be reused or replaced without
 touching the content layer, and so the content layer could be reused by a
 different UI (list, dashboard, bot) tomorrow.
 
+Inside the game, the same discipline applies (the R1–R4 split): the scene
+(`TownScene`) is an **orchestrator**, not a feature owner. Procedural map
+decoration — the grass, the flower scatter, props — is generated in the pure
+**World** layer (`town.ts`, baked into the map data) and drawn in the
+**Presentation** layer (`townRenderer`); it is deliberately invisible to the
+orchestrator, the Navigation/Interaction layers, and the shell. A purely
+cosmetic feature like flowers should touch those two leaf layers and *nothing
+else* — `'*'` is already walkable and inert to interactions. The single hook
+for future per-map variation (per-hometown flora, admin-tuned density) is a
+**seed input threaded into `buildTown`** — until that need is real, decoration
+stays a deterministic function of map size, with no orchestration footprint.
+
 ## Where the model is heading
 
 The current code calls everything "community," but the conceptual model is

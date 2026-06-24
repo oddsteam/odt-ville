@@ -90,7 +90,7 @@ export function buildTown(plotCount: number): Town {
     if (y >= fieldTop && y <= fieldBottom && x >= fieldLeft && x <= fieldRight)
       return 'g'
     if (y === rows - 2 && x === entranceCol - 1) return 's'
-    if (!buildingRows.has(y) && (x * 5 + y * 3) % 11 === 0) return '*'
+    if (!buildingRows.has(y) && flowerAt(x, y)) return '*'
     return '.'
   }
 
@@ -133,6 +133,47 @@ export function typeForTileChar(ch: string): 'grass' | 'dirt' | 'road' | null {
 
 export function isGroundWalkable(town: TileGrid, x: number, y: number): boolean {
   return WALKABLE.has(tileChar(town, x, y))
+}
+
+// Coherent flower scatter. A deterministic value-noise field (smooth hash,
+// bilinearly interpolated) thresholded into patches: nearby tiles share similar
+// noise, so flowers clump; a little per-tile jitter ragged-edges the patches and
+// sprinkles outliers. Pure + seeded (no Math.random) so the map is stable and
+// Node-testable. Replaces the old (x*5+y*3)%11 lattice that striped the grass.
+const FLOWER_SEED = 1337
+const FLOWER_CELL = 4 // noise grid size in tiles — bigger = larger patches
+const FLOWER_THRESHOLD = 0.62
+const FLOWER_JITTER = 0.18 // ragged edges + outliers
+
+// 32-bit integer hash → [0,1). Math.imul keeps the multiplies exact (and so
+// deterministic across platforms), unlike float-rounded `*`.
+function hash2(x: number, y: number, seed: number): number {
+  let h = Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263) + Math.imul(seed | 0, 1442695041)
+  h = Math.imul(h ^ (h >>> 13), 1274126177)
+  h ^= h >>> 16
+  return (h >>> 0) / 4294967296
+}
+
+function valueNoise(x: number, y: number): number {
+  const gx = Math.floor(x / FLOWER_CELL)
+  const gy = Math.floor(y / FLOWER_CELL)
+  const fx = x / FLOWER_CELL - gx
+  const fy = y / FLOWER_CELL - gy
+  // smoothstep the cell fractions so patch edges aren't linearly faceted
+  const sx = fx * fx * (3 - 2 * fx)
+  const sy = fy * fy * (3 - 2 * fy)
+  const n00 = hash2(gx, gy, FLOWER_SEED)
+  const n10 = hash2(gx + 1, gy, FLOWER_SEED)
+  const n01 = hash2(gx, gy + 1, FLOWER_SEED)
+  const n11 = hash2(gx + 1, gy + 1, FLOWER_SEED)
+  const a = n00 + (n10 - n00) * sx
+  const b = n01 + (n11 - n01) * sx
+  return a + (b - a) * sy
+}
+
+export function flowerAt(x: number, y: number): boolean {
+  const jitter = (hash2(x, y, FLOWER_SEED ^ 0x9e37) - 0.5) * FLOWER_JITTER
+  return valueNoise(x, y) + jitter > FLOWER_THRESHOLD
 }
 
 // Player render depth at a tile. On a building's door tile, beat that building's

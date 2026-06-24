@@ -304,6 +304,18 @@ function paintGround(scene: Scene) {
       if (DEV) scene.devLayers?.grass?.push(img)
     }
   }
+
+  // Flowers ('*' cells from the procedural scatter, town.ts) are a transparent
+  // buds overlay over the grass beneath — the ground-tile mapper renders '*'
+  // identically to '.', so without this pass the scatter is invisible. Above
+  // the ground fills, below props/buildings/player (issue #25).
+  for (let y = 0; y < scene.town.rows; y++) {
+    for (let x = 0; x < scene.town.cols; x++) {
+      if (scene.town.map[y][x] !== '*') continue
+      const img = scene.add.image(x * TILE, y * TILE, 'tile.flower').setOrigin(0, 0).setDepth(0.35)
+      if (DEV) scene.devLayers?.grass?.push(img)
+    }
+  }
 }
 
 // Build the two-layer building sprite. We don't yet hue-rotate from
