@@ -22,6 +22,7 @@ body { margin: 0; font-family: system-ui, sans-serif; background: #1b1b22; color
 .right {
   width: 300px; flex-shrink: 0; padding: 16px; background: #20202a;
   border-left: 1px solid #34343f; display: flex; flex-direction: column; gap: 12px;
+  overflow-y: auto; min-height: 0;
 }
 .right h3 { margin: 4px 0; font-size: 13px; text-transform: uppercase; color: #9a9ab0; }
 .right label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
@@ -36,10 +37,10 @@ body { margin: 0; font-family: system-ui, sans-serif; background: #1b1b22; color
 .empty { padding: 40px; color: #6a6a7a; }
 
 .preview-box {
-  min-height: 96px; display: flex; align-items: center; justify-content: center;
+  min-height: 96px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
   background: #101015; border: 1px solid #34343f; border-radius: 6px; padding: 12px;
 }
-.preview-box canvas { image-rendering: pixelated; }
+.preview-box canvas { image-rendering: pixelated; max-width: 100%; height: auto; }
 .hint { color: #6a6a7a; font-size: 13px; margin: 0; }
 
 .save {
