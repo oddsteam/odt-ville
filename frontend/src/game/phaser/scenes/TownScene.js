@@ -1,6 +1,6 @@
 import Phaser from 'phaser'
 import { TILE, MOVE_MS, PLAYER_FEET_LIFT, buildTown } from '../../constants.js'
-import { isWalkable, playerDepthAt, doorAnchorFor } from '../../town.ts'
+import { isWalkable, playerDepthAt, doorAnchorFor, footprintFor } from '../../town.ts'
 import { ensureTileTextures } from '../tileTextures.js'
 import {
   CHAR_SHEET_KEY,
@@ -105,8 +105,14 @@ export default class TownScene extends Phaser.Scene {
     // game's design data.
     // An admin-mapped house (#29) overrides the hardcoded bottom-centre door
     // with its authored anchor; absent → default (doorAnchorFor returns undefined).
+    // It also drives each plot's footprint (#30, clamped 3..6 x 4..6) so a
+    // non-3x4 house renders undistorted with the grid re-spaced around it.
     const buildingObject = this.registry.get('buildingObject') || null
-    this.town = buildTown(Math.max(communities.length, 1), doorAnchorFor(buildingObject))
+    this.town = buildTown(
+      Math.max(communities.length, 1),
+      doorAnchorFor(buildingObject),
+      footprintFor(buildingObject),
+    )
 
     // With Scale.RESIZE in PhaserGame, the canvas display size matches
     // .gb-screen at 1:1 device pixels (TILE=48 → 48 screen px, same as

@@ -35,7 +35,12 @@ export interface Building {
 }
 
 export const PER_ROW = 5 // buildings per street row
-const BAND_H = 7 // per row band: 4 building + 1 street-path + 2 grass gap
+const STREET_H = 1 // street-path rows below each building row
+const GRASS_GAP = 2 // grass rows between the street and the next band/field —
+// the minimum margin that keeps an autotiled grass cell from touching road and
+// dirt on opposite orthogonal sides (the no-thin-strip invariant). Fixed,
+// independent of building height.
+const COL_GAP = 1 // grass cells between adjacent plots in a row
 const TOP_MARGIN = 2 // grass rows above the first building row
 const BOTTOM_MARGIN = 2 // grass rows below the last street, before the gate
 const FIELD_GAP = 0 // field starts right after the band's own grass rows
@@ -49,7 +54,6 @@ export interface DoorAnchor {
   dx: number
   dy: number
 }
-const DEFAULT_DOOR: DoorAnchor = { dx: 1, dy: 3 }
 
 // Pull the door anchor off the active "building" tile-object, or undefined when
 // none authored one (tree/flower/absent) → buildTown keeps the default.
@@ -60,46 +64,108 @@ export function doorAnchorFor(
   return { dx: building.door_dx, dy: building.door_dy }
 }
 
-const PLOT_W = 3
-const PLOT_H = 4
+// A plot's tile footprint (#30). Sourced from the active mapped building, but
+// clamped to a sane range so the uniform grid never runs away: width 3..6,
+// height 4..6. Today's 3x4 is the minimum (the nameplate + roof/body 36/64
+// split need it); 6x6 the documented cap.
+export interface Footprint {
+  w: number
+  h: number
+}
+const MIN_W = 3
+const MAX_W = 6
+const MIN_H = 4
+const MAX_H = 6
+const DEFAULT_FOOTPRINT: Footprint = { w: MIN_W, h: MIN_H }
+
+// Clamp an authored footprint to [3..6] x [4..6], floored to whole tiles.
+// Non-finite input falls back to the minimum so a malformed object can't break
+// the grid arithmetic.
+export function clampFootprint(w: number, h: number): Footprint {
+  const cw = Number.isFinite(w) ? Math.floor(w) : MIN_W
+  const ch = Number.isFinite(h) ? Math.floor(h) : MIN_H
+  return {
+    w: Math.max(MIN_W, Math.min(MAX_W, cw)),
+    h: Math.max(MIN_H, Math.min(MAX_H, ch)),
+  }
+}
+
+// Pull the footprint off the active "building" tile-object, clamped. Absent or
+// null fields fall back to today's 3x4 so non-mapped towns stay identical.
+export function footprintFor(
+  building: { footprint_w?: number | null; footprint_h?: number | null } | null | undefined,
+): Footprint {
+  if (building == null) return { ...DEFAULT_FOOTPRINT }
+  return clampFootprint(building.footprint_w ?? MIN_W, building.footprint_h ?? MIN_H)
+}
+
+// The default door: bottom-centre of the footprint. Lands on the perimeter
+// (street below) for any size, so it is always reachable. At 3x4 this is {1,3}
+// — matching today's hardcoded col+1, row+3.
+export function defaultDoorFor(w: number, h: number): DoorAnchor {
+  return { dx: Math.floor((w - 1) / 2), dy: h - 1 }
+}
+
+// A door is reachable only if at least one orthogonal neighbour lies outside
+// the footprint box (every outside cell around a plot is walkable ground/street).
+// An interior door is walled in by its own building and can't be entered.
+function doorOnPerimeter(w: number, h: number, dx: number, dy: number): boolean {
+  return dx === 0 || dx === w - 1 || dy === 0 || dy === h - 1
+}
 
 // Build the whole town for a given number of building plots. Returns a `town`
-// object: { cols, rows, map (string[]), plots, entrance }.
-export function buildTown(plotCount: number, door: DoorAnchor = DEFAULT_DOOR): Town {
+// object: { cols, rows, map (string[]), plots, entrance }. Every plot shares the
+// single active building's footprint (#30); mixed footprints stay out of scope.
+export function buildTown(
+  plotCount: number,
+  door?: DoorAnchor,
+  footprint?: Footprint,
+): Town {
   const count = Math.max(plotCount, 1)
+  const { w: W, h: H } = clampFootprint(footprint?.w ?? MIN_W, footprint?.h ?? MIN_H)
+  const bandH = H + STREET_H + GRASS_GAP // building rows + 1 street + 2 grass
+  const stride = W + COL_GAP // plot width + 1 grass column between plots
   const numRows = Math.ceil(count / PER_ROW)
   const colsUsed = Math.max(Math.min(count, PER_ROW), 3)
-  const cols = 4 * colsUsed + 4
+  const cols = (colsUsed - 1) * stride + W + 5
   const rows =
-    1 + TOP_MARGIN + numRows * BAND_H + FIELD_GAP + FIELD_H + BOTTOM_MARGIN + 1
+    1 + TOP_MARGIN + numRows * bandH + FIELD_GAP + FIELD_H + BOTTOM_MARGIN + 1
 
-  // Clamp the authored offset into the plot so the door can never escape the
-  // footprint, whatever the building art declared.
-  const ddx = Math.max(0, Math.min(PLOT_W - 1, Math.floor(door.dx)))
-  const ddy = Math.max(0, Math.min(PLOT_H - 1, Math.floor(door.dy)))
+  // Door: authored anchor or computed bottom-centre default, clamped to the
+  // footprint box so it can never escape the building. An interior door (no
+  // orthogonal neighbour outside the box) is unreachable, so snap it to the
+  // default (#30 runtime safety net; #32 replaces this with an authored interior
+  // walk mask).
+  const def = defaultDoorFor(W, H)
+  let ddx = Math.max(0, Math.min(W - 1, Math.floor(door?.dx ?? def.dx)))
+  let ddy = Math.max(0, Math.min(H - 1, Math.floor(door?.dy ?? def.dy)))
+  if (!doorOnPerimeter(W, H, ddx, ddy)) {
+    ddx = def.dx
+    ddy = def.dy
+  }
 
-  // Each plot: 3 wide x 4 tall; door at the authored offset (bottom-centre by
-  // default). The first plots (by position_order) sit on the bottom-most row.
+  // Each plot is W wide x H tall; door at the (clamped) authored offset. The
+  // first plots (by position_order) sit on the bottom-most row.
   const plots: Plot[] = []
   for (let i = 0; i < count; i++) {
     const slot = i % PER_ROW
     const r = Math.floor(i / PER_ROW)
-    const col = 2 + slot * 4
-    const row = 1 + TOP_MARGIN + (numRows - 1 - r) * BAND_H
-    plots.push({ col, row, w: PLOT_W, h: PLOT_H, doorCol: col + ddx, doorRow: row + ddy })
+    const col = 2 + slot * stride
+    const row = 1 + TOP_MARGIN + (numRows - 1 - r) * bandH
+    plots.push({ col, row, w: W, h: H, doorCol: col + ddx, doorRow: row + ddy })
   }
 
   const streetPathRows = new Set<number>()
   const buildingRows = new Set<number>()
   for (let r = 0; r < numRows; r++) {
-    const top = 1 + TOP_MARGIN + r * BAND_H
-    streetPathRows.add(top + 4)
-    for (let k = 0; k < 4; k++) buildingRows.add(top + k)
+    const top = 1 + TOP_MARGIN + r * bandH
+    streetPathRows.add(top + H)
+    for (let k = 0; k < H; k++) buildingRows.add(top + k)
   }
-  const lastStreetPath = 1 + TOP_MARGIN + (numRows - 1) * BAND_H + 4
+  const lastStreetPath = 1 + TOP_MARGIN + (numRows - 1) * bandH + H
   const entranceCol = Math.floor(cols / 2)
 
-  const fieldTop = 1 + TOP_MARGIN + numRows * BAND_H + FIELD_GAP
+  const fieldTop = 1 + TOP_MARGIN + numRows * bandH + FIELD_GAP
   const fieldBottom = fieldTop + FIELD_H - 1
   // Two grass cells separate the avenue from the dirt field. This is the
   // minimum margin that prevents an autotiled grass cell from having road and

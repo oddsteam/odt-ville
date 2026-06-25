@@ -100,7 +100,10 @@ building's footprint.
 **Footprint**:
 A building art's *authored* tile size (`footprint_w`/`footprint_h` on the
 building tile-object). #30 makes the plot adopt the footprint instead of
-stretching the art into 3×4.
+stretching the art into 3×4. Clamped to **3..6 wide × 4..6 tall** (`clampFootprint`
+in `town.ts`): 3×4 is the minimum the nameplate + roof/body split needs, 6×6 the
+documented cap that keeps the town from running away; out-of-range art stretches
+into the clamped box.
 _Avoid_: "size", "dimensions" (ambiguous between tiles and pixels).
 
 **Uniform grid**:
