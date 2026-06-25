@@ -15,13 +15,14 @@ export function getActiveTileObject(kind = 'tree') {
 }
 
 // POST /tile_objects -> upsert by name + make it the live object of its kind.
-// door_dx/door_dy are only sent for 'building' objects (issue #29).
+// door_dx/door_dy + walk_mask are only sent for 'building' objects (#29, #32).
 /**
  * @param {{ name: string, kind: string, image: string, footprint_w: number,
- *   footprint_h: number, door_dx?: number, door_dy?: number }} o
+ *   footprint_h: number, door_dx?: number, door_dy?: number,
+ *   walk_mask?: readonly string[] }} o
  */
-export function saveTileObject({ name, kind, image, footprint_w, footprint_h, door_dx, door_dy }) {
-  return runEdge(TileObjectsService.save({ name, kind, image, footprint_w, footprint_h, door_dx, door_dy }))
+export function saveTileObject({ name, kind, image, footprint_w, footprint_h, door_dx, door_dy, walk_mask }) {
+  return runEdge(TileObjectsService.save({ name, kind, image, footprint_w, footprint_h, door_dx, door_dy, walk_mask }))
 }
 
 // GET /tile_objects[?kind=] -> roster summaries (no image blobs).

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_25_000001) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_25_000002) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -94,6 +94,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_25_000001) do
     t.string "kind", default: "prop", null: false
     t.string "name", null: false
     t.datetime "updated_at", null: false
+    t.text "walk_mask"
     t.index ["kind"], name: "index_tile_objects_one_active_per_kind", unique: true, where: "active"
     t.index ["name"], name: "index_tile_objects_on_name", unique: true
   end

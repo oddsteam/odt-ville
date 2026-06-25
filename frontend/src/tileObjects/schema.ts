@@ -17,6 +17,9 @@ export const TileObjectSummary = Schema.Struct({
   // Authored door cell for a 'building' object (issue #29); null otherwise.
   door_dx: Schema.NullOr(Schema.Number),
   door_dy: Schema.NullOr(Schema.Number),
+  // Authored interior walk mask for a 'building' (issue #32): a row-major grid
+  // the size of the footprint, '#' = solid, '.' = walkable. Null otherwise.
+  walk_mask: Schema.NullOr(Schema.Array(Schema.String)),
   active: Schema.Boolean,
   updated_at: Schema.String,
 })
@@ -38,5 +41,7 @@ export const NewTileObject = Schema.Struct({
   // Door cell, only sent for 'building' objects (issue #29).
   door_dx: Schema.optional(Schema.Number),
   door_dy: Schema.optional(Schema.Number),
+  // Interior walk mask, only sent for 'building' objects (issue #32).
+  walk_mask: Schema.optional(Schema.Array(Schema.String)),
 })
 export type NewTileObject = Schema.Schema.Type<typeof NewTileObject>

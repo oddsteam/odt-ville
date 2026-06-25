@@ -44,6 +44,20 @@ module Api
         assert_equal [0, 1], [json[:door_dx], json[:door_dy]]
       end
 
+      test "create persists an interior walk mask, round-tripped as rows" do
+        mask = ["###", "#.#", "#.#", "#.#"]
+        post "/api/v1/tile_objects",
+             params: { name: "Cottage", kind: "building", image: "data:img", footprint_w: 3, footprint_h: 4, door_dx: 1, door_dy: 3, walk_mask: mask },
+             headers: auth(@user)
+
+        assert_response :success
+        assert_equal mask, json[:walk_mask]
+
+        get "/api/v1/tile_objects/active", params: { kind: "building" }, headers: auth(@user)
+        assert_response :success
+        assert_equal mask, json[:walk_mask]
+      end
+
       test "deactivate turns the object off so its kind has no active object" do
         a = TileObject.create!(name: "A", kind: "flower-group", image: "i", footprint_w: 2, footprint_h: 2, active: true)
 

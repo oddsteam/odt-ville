@@ -35,7 +35,10 @@ module Api
           footprint_h: params[:footprint_h].presence || obj.footprint_h || 1,
           # Door anchor — only authored for "building" objects; nil otherwise.
           door_dx: params.key?(:door_dx) ? params[:door_dx] : obj.door_dx,
-          door_dy: params.key?(:door_dy) ? params[:door_dy] : obj.door_dy
+          door_dy: params.key?(:door_dy) ? params[:door_dy] : obj.door_dy,
+          # Interior walk mask (#32) — a row-major array of strings from the
+          # mapper, stored newline-joined. Only authored for buildings.
+          walk_mask: params.key?(:walk_mask) ? Array(params[:walk_mask]).join("\n") : obj.walk_mask
         )
         obj.save!
         obj.activate! unless params[:active] == false

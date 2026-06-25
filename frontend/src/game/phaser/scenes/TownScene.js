@@ -1,6 +1,6 @@
 import Phaser from 'phaser'
 import { TILE, MOVE_MS, PLAYER_FEET_LIFT, buildTown } from '../../constants.js'
-import { isWalkable, playerDepthAt, doorAnchorFor, footprintFor } from '../../town.ts'
+import { isWalkable, playerDepthAt, doorAnchorFor, footprintFor, walkMaskFor } from '../../town.ts'
 import { ensureTileTextures } from '../tileTextures.js'
 import {
   CHAR_SHEET_KEY,
@@ -112,6 +112,9 @@ export default class TownScene extends Phaser.Scene {
       Math.max(communities.length, 1),
       doorAnchorFor(buildingObject),
       footprintFor(buildingObject),
+      // Authored interior walk mask (#32): which footprint cells the avatar may
+      // stand on. Stamped onto every plot; absent → solid box (just the door).
+      walkMaskFor(buildingObject),
     )
 
     // With Scale.RESIZE in PhaserGame, the canvas display size matches

@@ -8,6 +8,7 @@ export interface Plot {
   h: number
   doorCol: number
   doorRow: number
+  mask?: string[]
 }
 
 // Just the tile grid — all the terrain/walkability reads need. A full `Town`
@@ -24,7 +25,8 @@ export interface Town extends TileGrid {
 }
 
 // A placed building footprint. The renderer adds sprite/community fields; the
-// walkability rule only needs the footprint box + door cell.
+// walkability rule only needs the footprint box + door cell + optional walk
+// mask (#32) marking which interior cells the avatar may stand on.
 export interface Building {
   col: number
   row: number
@@ -32,6 +34,7 @@ export interface Building {
   h: number
   doorCol: number
   doorRow: number
+  mask?: string[]
 }
 
 export const PER_ROW = 5 // buildings per street row
@@ -62,6 +65,80 @@ export function doorAnchorFor(
 ): DoorAnchor | undefined {
   if (building == null || building.door_dx == null || building.door_dy == null) return undefined
   return { dx: building.door_dx, dy: building.door_dy }
+}
+
+// An authored interior walk mask (#32): a row-major grid the size of the
+// footprint, '#' = solid, '.' = walkable (the porch/path leading to the door).
+// The door cell (door_dx/door_dy, #29) is always walkable on top of this. Pull
+// it off the active building object, or undefined when none authored one.
+export function walkMaskFor(
+  building: { walk_mask?: string[] | null } | null | undefined,
+): string[] | undefined {
+  if (building == null || building.walk_mask == null || building.walk_mask.length === 0) return undefined
+  return building.walk_mask
+}
+
+// Is the cell (x,y) walkable within a w×h walk mask? The door cell is walkable
+// regardless of the mask; otherwise a '.' marks walkable and anything else (or
+// out of bounds) is solid.
+function maskCellWalkable(
+  mask: string[],
+  w: number,
+  h: number,
+  door: { dx: number; dy: number },
+  x: number,
+  y: number,
+): boolean {
+  if (x < 0 || x >= w || y < 0 || y >= h) return false
+  if (x === door.dx && y === door.dy) return true
+  return mask[y]?.[x] === '.'
+}
+
+// Is the door reachable from outside the footprint? Flood-fill from the door
+// over walkable mask cells; the door is reachable if any reached cell lies on
+// the footprint perimeter (every cell just outside the box is walkable ground).
+export function walkMaskConnected(
+  mask: string[],
+  w: number,
+  h: number,
+  door: { dx: number; dy: number },
+): boolean {
+  if (!maskCellWalkable(mask, w, h, door, door.dx, door.dy)) return false
+  const seen = new Set<string>([`${door.dx},${door.dy}`])
+  const queue: Array<[number, number]> = [[door.dx, door.dy]]
+  while (queue.length) {
+    const [x, y] = queue.shift()!
+    if (x === 0 || x === w - 1 || y === 0 || y === h - 1) return true
+    for (const [nx, ny] of [
+      [x + 1, y],
+      [x - 1, y],
+      [x, y + 1],
+      [x, y - 1],
+    ] as Array<[number, number]>) {
+      const k = `${nx},${ny}`
+      if (!seen.has(k) && maskCellWalkable(mask, w, h, door, nx, ny)) {
+        seen.add(k)
+        queue.push([nx, ny])
+      }
+    }
+  }
+  return false
+}
+
+// Save-time validation (#32). A building's walk mask is valid only when a door
+// is defined, at least one walkable tile is painted, and the door connects to a
+// footprint edge via walkable tiles. Pure, so the admin UI and any backend
+// guard can share it.
+export function validateWalkMask(
+  mask: string[] | null | undefined,
+  w: number,
+  h: number,
+  door: { dx: number; dy: number } | null | undefined,
+): { ok: boolean; reason?: 'no-door' | 'no-walkable' | 'unreachable' } {
+  if (door == null) return { ok: false, reason: 'no-door' }
+  if (mask == null || !mask.some((row) => row.includes('.'))) return { ok: false, reason: 'no-walkable' }
+  if (!walkMaskConnected(mask, w, h, door)) return { ok: false, reason: 'unreachable' }
+  return { ok: true }
 }
 
 // A plot's tile footprint (#30). Sourced from the active mapped building, but
@@ -120,9 +197,18 @@ export function buildTown(
   plotCount: number,
   door?: DoorAnchor,
   footprint?: Footprint,
+  walkMask?: string[],
 ): Town {
   const count = Math.max(plotCount, 1)
   const { w: W, h: H } = clampFootprint(footprint?.w ?? MIN_W, footprint?.h ?? MIN_H)
+
+  // Stamp the authored walk mask onto every plot, but only when its dimensions
+  // match the clamped footprint — a mismatched mask (e.g. authored before a
+  // footprint edit) is ignored so the building falls back to a solid box.
+  const mask =
+    walkMask && walkMask.length === H && walkMask.every((row) => row.length === W)
+      ? walkMask
+      : undefined
   const bandH = H + STREET_H + GRASS_GAP // building rows + 1 street + 2 grass
   const stride = W + COL_GAP // plot width + 1 grass column between plots
   const numRows = Math.ceil(count / PER_ROW)
@@ -136,10 +222,16 @@ export function buildTown(
   // orthogonal neighbour outside the box) is unreachable, so snap it to the
   // default (#30 runtime safety net; #32 replaces this with an authored interior
   // walk mask).
+  // A door is reachable when it sits on the footprint perimeter, or — with an
+  // authored walk mask (#32) — when a walkable path connects it to an edge.
+  // Unreachable doors snap to the bottom-centre default (#30 safety net).
   const def = defaultDoorFor(W, H)
   let ddx = Math.max(0, Math.min(W - 1, Math.floor(door?.dx ?? def.dx)))
   let ddy = Math.max(0, Math.min(H - 1, Math.floor(door?.dy ?? def.dy)))
-  if (!doorOnPerimeter(W, H, ddx, ddy)) {
+  const reachable = mask
+    ? walkMaskConnected(mask, W, H, { dx: ddx, dy: ddy })
+    : doorOnPerimeter(W, H, ddx, ddy)
+  if (!reachable) {
     ddx = def.dx
     ddy = def.dy
   }
@@ -152,7 +244,7 @@ export function buildTown(
     const r = Math.floor(i / PER_ROW)
     const col = 2 + slot * stride
     const row = 1 + TOP_MARGIN + (numRows - 1 - r) * bandH
-    plots.push({ col, row, w: W, h: H, doorCol: col + ddx, doorRow: row + ddy })
+    plots.push({ col, row, w: W, h: H, doorCol: col + ddx, doorRow: row + ddy, mask })
   }
 
   const streetPathRows = new Set<number>()
@@ -333,8 +425,11 @@ export function isWalkable(
 ): boolean {
   if (BLOCKED_TILE_CHARS.has(tileChar(town, x, y))) return false
   if (buildings.some((b) => b.doorCol === x && b.doorRow === y)) return true
-  if (buildings.some((b) => x >= b.col && x < b.col + b.w && y >= b.row && y < b.row + b.h)) {
-    return false
+  const inside = buildings.find((b) => x >= b.col && x < b.col + b.w && y >= b.row && y < b.row + b.h)
+  if (inside) {
+    // A footprint cell is walkable only where the authored mask marks it (#32);
+    // an unmasked building stays a solid box.
+    return inside.mask?.[y - inside.row]?.[x - inside.col] === '.'
   }
   return !blockers.has(`${x},${y}`)
 }

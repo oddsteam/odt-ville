@@ -13,6 +13,7 @@ describe('TileObject schema', () => {
     footprint_h: 3,
     door_dx: null,
     door_dy: null,
+    walk_mask: null,
     active: true,
     updated_at: '2026-06-22T00:00:00.000Z',
     image: 'data:image/png;base64,xxx',
@@ -20,6 +21,12 @@ describe('TileObject schema', () => {
 
   it('decodes a well-formed payload from the Rails tile-object endpoint', () => {
     expect(Either.isRight(Schema.decodeUnknownEither(TileObject)(valid))).toBe(true)
+  })
+
+  it('decodes an authored walk mask as an array of strings (#32)', () => {
+    const mask = ['###', '#.#', '#.#', '#.#']
+    const decoded = Schema.decodeUnknownSync(TileObject)({ ...valid, walk_mask: mask })
+    expect(decoded.walk_mask).toEqual(mask)
   })
 
   it('rejects a missing image (the blob the game draws)', () => {

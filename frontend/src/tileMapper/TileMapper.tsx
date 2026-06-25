@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { activateTileObject, deactivateTileObject, listTileObjects, saveTileObject } from '../tileObjects/client.js'
 import type { TileObjectSummary } from '../tileObjects/schema.ts'
+import { validateWalkMask } from '../game/town.ts'
 import './styles.css'
 
 type Atlas = { img: HTMLImageElement; src: string; width: number; height: number }
@@ -25,6 +26,19 @@ export function doorCellFromClick(
   return { dx: clamp((px / rectW) * cols, cols), dy: clamp((py / rectH) * rows, rows) }
 }
 
+// Turn the set of painted walkable cells ("dx,dy") into the row-major walk mask
+// the town stamps (issue #32): '.' = walkable (porch/path), '#' = solid. Cells
+// outside the cols×rows footprint are dropped.
+export function buildWalkMask(walk: ReadonlySet<string>, cols: number, rows: number): string[] {
+  const out: string[] = []
+  for (let r = 0; r < rows; r++) {
+    let row = ''
+    for (let c = 0; c < cols; c++) row += walk.has(`${c},${r}`) ? '.' : '#'
+    out.push(row)
+  }
+  return out
+}
+
 export default function TileMapper() {
   const [atlas, setAtlas] = useState<Atlas | null>(null) // { img, src, width, height }
   const [cell, setCell] = useState(16)
@@ -37,6 +51,10 @@ export default function TileMapper() {
   // Door cell for a 'building' (#29) — the admin clicks the entrance on the
   // footprint preview; offset from the footprint's top-left. Null until picked.
   const [door, setDoor] = useState<{ dx: number; dy: number } | null>(null)
+  // Authored walk mask for a 'building' (#32) — the set of "dx,dy" cells the
+  // admin painted walkable (porch/path). Plus which the preview click edits.
+  const [walk, setWalk] = useState<ReadonlySet<string>>(new Set())
+  const [paintMode, setPaintMode] = useState<'walk' | 'door'>('walk')
   const [status, setStatus] = useState('Upload an atlas PNG to begin.')
   const [saved, setSaved] = useState<readonly TileObjectSummary[]>([]) // roster for the saved-objects list
 
@@ -161,11 +179,16 @@ export default function TileMapper() {
       0, 0, w, h,
     )
 
-    // For a building, overlay the footprint grid + highlight the picked door
-    // cell so the admin can see where the entrance lands (issue #29).
+    // For a building, overlay the footprint grid, the painted walkable cells
+    // (#32), and the picked door cell so the admin sees the authored entry path
+    // and where the entrance lands (issue #29).
     if (!isBuilding) return
     const cw = w / doorCols
     const ch = h / doorRows
+    ctx.fillStyle = 'rgba(46,125,255,0.35)' // painted walkable cells
+    for (let r = 0; r < doorRows; r++)
+      for (let c = 0; c < doorCols; c++)
+        if (walk.has(`${c},${r}`)) ctx.fillRect(c * cw, r * ch, cw, ch)
     ctx.strokeStyle = 'rgba(0,0,0,0.4)'
     ctx.lineWidth = 1
     for (let c = 1; c < doorCols; c++) ctx.strokeRect(c * cw + 0.5, 0, 0, h)
@@ -174,13 +197,24 @@ export default function TileMapper() {
       ctx.fillStyle = 'rgba(46,200,90,0.45)'
       ctx.fillRect(door.dx * cw, door.dy * ch, cw, ch)
     }
-  }, [atlas, cell, selBox, fpW, fpH, isBuilding, doorCols, doorRows, door])
+  }, [atlas, cell, selBox, fpW, fpH, isBuilding, doorCols, doorRows, door, walk])
 
-  // Click the preview to mark the building's entrance cell.
+  // Click the preview to either mark the entrance (door mode) or toggle a
+  // walkable cell (walk mode) — issue #29/#32.
   function onPreviewClick(e: React.MouseEvent<HTMLCanvasElement>) {
     if (!isBuilding) return
     const rect = previewRef.current!.getBoundingClientRect()
-    setDoor(doorCellFromClick(e.clientX - rect.left, e.clientY - rect.top, rect.width, rect.height, doorCols, doorRows))
+    const cell = doorCellFromClick(e.clientX - rect.left, e.clientY - rect.top, rect.width, rect.height, doorCols, doorRows)
+    if (paintMode === 'door') {
+      setDoor(cell)
+      return
+    }
+    setWalk((prev) => {
+      const next = new Set(prev)
+      const key = `${cell.dx},${cell.dy}`
+      next.has(key) ? next.delete(key) : next.add(key)
+      return next
+    })
   }
 
   // ---- drag-select on the canvas ------------------------------------
@@ -227,6 +261,23 @@ export default function TileMapper() {
       setStatus('Give the object a name.')
       return
     }
+    // A building must ship an authored, reachable interior walk mask (#32): a
+    // door + at least one walkable tile + a path connecting them to a footprint
+    // edge, so the avatar can actually enter. Block the save otherwise.
+    const mask = isBuilding ? buildWalkMask(walk, doorCols, doorRows) : undefined
+    if (isBuilding) {
+      const v = validateWalkMask(mask, doorCols, doorRows, door)
+      if (!v.ok) {
+        setStatus(
+          v.reason === 'no-door'
+            ? 'Place the door before saving (Door mode, then click the entrance).'
+            : v.reason === 'no-walkable'
+              ? 'Paint at least one walkable tile (the porch/path to the door).'
+              : 'The door is not reachable — paint a walkable path from the door to a footprint edge.',
+        )
+        return
+      }
+    }
     // Crop the selection to a standalone PNG at native pixel size.
     const off = document.createElement('canvas')
     off.width = selBox.w * cell
@@ -252,6 +303,8 @@ export default function TileMapper() {
         // bottom-centre (its existing hardcoded door).
         door_dx: isBuilding && door ? door.dx : undefined,
         door_dy: isBuilding && door ? door.dy : undefined,
+        // Authored interior walk mask (#32) — only for buildings, validated above.
+        walk_mask: mask,
       })
       setStatus(`Saved "${obj.name}" as the active ${obj.kind}. It'll show on the map on reload.`)
       refreshSaved()
@@ -313,7 +366,7 @@ export default function TileMapper() {
           </label>
           <label>
             Kind
-            <select value={kind} onChange={(e) => { setKind(e.target.value); setDoor(null) }}>
+            <select value={kind} onChange={(e) => { setKind(e.target.value); setDoor(null); setWalk(new Set()) }}>
               <option value="tree">tree</option>
               <option value="prop">prop</option>
               <option value="flower-group">flower-group</option>
@@ -339,9 +392,32 @@ export default function TileMapper() {
             {selBox ? <canvas ref={previewRef} onClick={onPreviewClick} /> : <p className="hint">Drag a rectangle on the atlas.</p>}
           </div>
           {isBuilding && selBox && (
-            <p className="hint">
-              {door ? `Door at cell ${door.dx},${door.dy}.` : 'Click the preview to mark the entrance'} (defaults to bottom-centre).
-            </p>
+            <>
+              <div className="paint-mode">
+                <span>Paint:</span>
+                <button
+                  type="button"
+                  className={paintMode === 'walk' ? 'is-on' : ''}
+                  onClick={() => setPaintMode('walk')}
+                >
+                  Walkable
+                </button>
+                <button
+                  type="button"
+                  className={paintMode === 'door' ? 'is-on' : ''}
+                  onClick={() => setPaintMode('door')}
+                >
+                  Door
+                </button>
+              </div>
+              <p className="hint">
+                {paintMode === 'walk'
+                  ? 'Click cells to paint the walkable porch/path (toggle).'
+                  : 'Click the entrance cell.'}{' '}
+                {door ? `Door at ${door.dx},${door.dy}.` : 'No door yet.'} Save is blocked until the door
+                is reachable from a footprint edge via walkable tiles.
+              </p>
+            </>
           )}
 
           <button type="button" className="save" onClick={onSave} disabled={!selBox}>
