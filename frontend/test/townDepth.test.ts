@@ -15,4 +15,18 @@ describe('playerDepthAt', () => {
     expect(playerDepthAt([building], 3, 8)).toBe(85) // street tile below the door
     expect(playerDepthAt([building], 0, 0)).toBe(5)
   })
+
+  // #32: standing on an authored walk-mask path cell (porch) must also beat the
+  // building sprite, or the avatar clips under the house on its own porch.
+  const masked = { ...building, mask: ['###', '###', '#.#', '#.#'] } // dy=2 & door row dy=3 walkable
+
+  it('elevates the player above the building on a walk-mask path cell, not just the door', () => {
+    // (x=3,y=6) -> mask cell dx=1,dy=2 = '.', a non-door porch tile.
+    expect(playerDepthAt([masked], 3, 6)).toBe(80) // building is at 79; default would be 65
+  })
+
+  it('keeps the row-banded depth on a solid (non-walkable) footprint cell', () => {
+    // (x=2,y=6) -> mask cell dx=0,dy=2 = '#', not standable.
+    expect(playerDepthAt([masked], 2, 6)).toBe(65)
+  })
 })

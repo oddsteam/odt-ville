@@ -404,12 +404,21 @@ export function planFlowers(town: TileGrid, w: number, h: number): FlowerLayout 
   return { groups, singles }
 }
 
-// Player render depth at a tile. On a building's door tile, beat that building's
-// sprite depth ((row+h)*10 - 1 in townRenderer) so the avatar reads as standing
-// in the doorway instead of clipping under it; elsewhere, the row-banded default.
+// Player render depth at a tile. On a building's door tile OR an authored
+// walk-mask path cell (#32), beat that building's sprite depth ((row+h)*10 - 1
+// in townRenderer) so the avatar reads as standing in the doorway / on the porch
+// instead of clipping under the house; elsewhere, the row-banded default.
 export function playerDepthAt(buildings: Building[], x: number, y: number): number {
-  const door = buildings.find((b) => b.doorCol === x && b.doorRow === y)
-  return door ? (door.row + door.h) * 10 : y * 10 + 5
+  const on = buildings.find(
+    (b) =>
+      (b.doorCol === x && b.doorRow === y) ||
+      (x >= b.col &&
+        x < b.col + b.w &&
+        y >= b.row &&
+        y < b.row + b.h &&
+        b.mask?.[y - b.row]?.[x - b.col] === '.'),
+  )
+  return on ? (on.row + on.h) * 10 : y * 10 + 5
 }
 
 // Authoritative town walkability rule, pure and Node-runnable. Out-of-bounds
