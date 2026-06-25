@@ -88,6 +88,42 @@ for future per-map variation (per-hometown flora, admin-tuned density) is a
 **seed input threaded into `buildTown`** — until that need is real, decoration
 stays a deterministic function of map size, with no orchestration footprint.
 
+## Language
+
+Spatial primitives the town generator (`town.ts`) works in:
+
+**Plot**:
+A building's reserved cell on the town grid — its `col`/`row` origin plus `w`/`h`
+in tiles. Today every plot is a fixed 3×4; #30 sizes it from the active
+building's footprint.
+
+**Footprint**:
+A building art's *authored* tile size (`footprint_w`/`footprint_h` on the
+building tile-object). #30 makes the plot adopt the footprint instead of
+stretching the art into 3×4.
+_Avoid_: "size", "dimensions" (ambiguous between tiles and pixels).
+
+**Uniform grid**:
+The town layout when every plot shares one footprint — regular arithmetic, no
+fitting logic. The #30 model.
+
+**Packer**:
+A layout pass that fits *different*-sized plots together with row wrapping —
+only needed once footprints vary per plot (deferred to #31). Not used while the
+grid is uniform.
+
+**Door anchor**:
+The single cell (`door_dx`/`door_dy` offset from a plot's top-left) the avatar
+enters through — read by `isWalkable` / `playerDepthAt` / interactions. #30
+clamps it to the footprint bounds, not the old 3×4.
+
+**Walk mask**:
+A per-building, tile-aligned grid of which footprint tiles the avatar may stand
+on (porch / path leading to the door); everything else in the footprint stays
+solid. Authored in the admin tool and validated so the door is reachable before
+save (#32). Until #32 lands, a footprint is solid except its door, and an
+unreachable authored door snaps to bottom-centre at runtime (#30).
+
 ## Where the model is heading
 
 The current code calls everything "community," but the conceptual model is
