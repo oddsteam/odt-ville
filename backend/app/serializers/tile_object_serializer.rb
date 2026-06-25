@@ -15,6 +15,8 @@ module TileObjectSerializer
       kind: obj.kind,
       footprint_w: obj.footprint_w,
       footprint_h: obj.footprint_h,
+      door_dx: obj.door_dx,
+      door_dy: obj.door_dy,
       active: obj.active,
       updated_at: obj.updated_at
     }

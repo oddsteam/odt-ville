@@ -11,6 +11,8 @@ describe('TileObject schema', () => {
     kind: 'tree',
     footprint_w: 2,
     footprint_h: 3,
+    door_dx: null,
+    door_dy: null,
     active: true,
     updated_at: '2026-06-22T00:00:00.000Z',
     image: 'data:image/png;base64,xxx',

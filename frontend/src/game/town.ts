@@ -41,9 +41,31 @@ const BOTTOM_MARGIN = 2 // grass rows below the last street, before the gate
 const FIELD_GAP = 0 // field starts right after the band's own grass rows
 const FIELD_H = 7 // height of the tall-grass field block (wild encounters)
 
+// Where the door sits within a 3x4 plot, as a cell offset from its top-left.
+// Default is bottom-centre (today's hardcoded col+1, row+3). An admin-mapped
+// building (issue #29) overrides it so the entrance lines up with its art —
+// this single cell is what isWalkable / playerDepthAt / townInteractions read.
+export interface DoorAnchor {
+  dx: number
+  dy: number
+}
+const DEFAULT_DOOR: DoorAnchor = { dx: 1, dy: 3 }
+
+// Pull the door anchor off the active "building" tile-object, or undefined when
+// none authored one (tree/flower/absent) → buildTown keeps the default.
+export function doorAnchorFor(
+  building: { door_dx?: number | null; door_dy?: number | null } | null | undefined,
+): DoorAnchor | undefined {
+  if (building == null || building.door_dx == null || building.door_dy == null) return undefined
+  return { dx: building.door_dx, dy: building.door_dy }
+}
+
+const PLOT_W = 3
+const PLOT_H = 4
+
 // Build the whole town for a given number of building plots. Returns a `town`
 // object: { cols, rows, map (string[]), plots, entrance }.
-export function buildTown(plotCount: number): Town {
+export function buildTown(plotCount: number, door: DoorAnchor = DEFAULT_DOOR): Town {
   const count = Math.max(plotCount, 1)
   const numRows = Math.ceil(count / PER_ROW)
   const colsUsed = Math.max(Math.min(count, PER_ROW), 3)
@@ -51,15 +73,20 @@ export function buildTown(plotCount: number): Town {
   const rows =
     1 + TOP_MARGIN + numRows * BAND_H + FIELD_GAP + FIELD_H + BOTTOM_MARGIN + 1
 
-  // Each plot: 3 wide x 4 tall; door is the bottom-centre tile.
-  // The first plots (by position_order) sit on the bottom-most building row.
+  // Clamp the authored offset into the plot so the door can never escape the
+  // footprint, whatever the building art declared.
+  const ddx = Math.max(0, Math.min(PLOT_W - 1, Math.floor(door.dx)))
+  const ddy = Math.max(0, Math.min(PLOT_H - 1, Math.floor(door.dy)))
+
+  // Each plot: 3 wide x 4 tall; door at the authored offset (bottom-centre by
+  // default). The first plots (by position_order) sit on the bottom-most row.
   const plots: Plot[] = []
   for (let i = 0; i < count; i++) {
     const slot = i % PER_ROW
     const r = Math.floor(i / PER_ROW)
     const col = 2 + slot * 4
     const row = 1 + TOP_MARGIN + (numRows - 1 - r) * BAND_H
-    plots.push({ col, row, w: 3, h: 4, doorCol: col + 1, doorRow: row + 3 })
+    plots.push({ col, row, w: PLOT_W, h: PLOT_H, doorCol: col + ddx, doorRow: row + ddy })
   }
 
   const streetPathRows = new Set<number>()

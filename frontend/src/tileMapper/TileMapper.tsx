@@ -15,6 +15,16 @@ type DragAnchor = { c: number; r: number }
 
 const MAP_TILE = 48 // px per tile in the game — used to preview real map size.
 
+// Map a click on the footprint preview (rectW×rectH px showing cols×rows tiles)
+// to a clamped door-cell offset. The town uses this single cell as the building
+// entrance — what isWalkable / playerDepthAt / door-entry all read (issue #29).
+export function doorCellFromClick(
+  px: number, py: number, rectW: number, rectH: number, cols: number, rows: number,
+): { dx: number; dy: number } {
+  const clamp = (v: number, max: number) => Math.min(max - 1, Math.max(0, Math.floor(v)))
+  return { dx: clamp((px / rectW) * cols, cols), dy: clamp((py / rectH) * rows, rows) }
+}
+
 export default function TileMapper() {
   const [atlas, setAtlas] = useState<Atlas | null>(null) // { img, src, width, height }
   const [cell, setCell] = useState(16)
@@ -24,6 +34,9 @@ export default function TileMapper() {
   const [kind, setKind] = useState('tree')
   const [fpW, setFpW] = useState(1.4)
   const [fpH, setFpH] = useState(1.8)
+  // Door cell for a 'building' (#29) — the admin clicks the entrance on the
+  // footprint preview; offset from the footprint's top-left. Null until picked.
+  const [door, setDoor] = useState<{ dx: number; dy: number } | null>(null)
   const [status, setStatus] = useState('Upload an atlas PNG to begin.')
   const [saved, setSaved] = useState<readonly TileObjectSummary[]>([]) // roster for the saved-objects list
 
@@ -57,6 +70,11 @@ export default function TileMapper() {
 
   const cols = atlas ? Math.floor(atlas.width / cell) : 0
   const rows = atlas ? Math.floor(atlas.height / cell) : 0
+
+  // The building footprint as a whole-tile grid for the door picker.
+  const isBuilding = kind === 'building'
+  const doorCols = Math.max(1, Math.round(fpW))
+  const doorRows = Math.max(1, Math.round(fpH))
 
   // Normalized selection in cells (inclusive), or null.
   const selBox = sel
@@ -142,7 +160,28 @@ export default function TileMapper() {
       selBox.c * cell, selBox.r * cell, selBox.w * cell, selBox.h * cell,
       0, 0, w, h,
     )
-  }, [atlas, cell, selBox, fpW, fpH])
+
+    // For a building, overlay the footprint grid + highlight the picked door
+    // cell so the admin can see where the entrance lands (issue #29).
+    if (!isBuilding) return
+    const cw = w / doorCols
+    const ch = h / doorRows
+    ctx.strokeStyle = 'rgba(0,0,0,0.4)'
+    ctx.lineWidth = 1
+    for (let c = 1; c < doorCols; c++) ctx.strokeRect(c * cw + 0.5, 0, 0, h)
+    for (let r = 1; r < doorRows; r++) ctx.strokeRect(0, r * ch + 0.5, w, 0)
+    if (door) {
+      ctx.fillStyle = 'rgba(46,200,90,0.45)'
+      ctx.fillRect(door.dx * cw, door.dy * ch, cw, ch)
+    }
+  }, [atlas, cell, selBox, fpW, fpH, isBuilding, doorCols, doorRows, door])
+
+  // Click the preview to mark the building's entrance cell.
+  function onPreviewClick(e: React.MouseEvent<HTMLCanvasElement>) {
+    if (!isBuilding) return
+    const rect = previewRef.current!.getBoundingClientRect()
+    setDoor(doorCellFromClick(e.clientX - rect.left, e.clientY - rect.top, rect.width, rect.height, doorCols, doorRows))
+  }
 
   // ---- drag-select on the canvas ------------------------------------
   function cellAt(e: React.MouseEvent<HTMLCanvasElement>) {
@@ -209,6 +248,10 @@ export default function TileMapper() {
         image,
         footprint_w: Number(fpW) || selBox.w,
         footprint_h: Number(fpH) || selBox.h,
+        // Building entrance, when picked. Unsent → the town defaults to
+        // bottom-centre (its existing hardcoded door).
+        door_dx: isBuilding && door ? door.dx : undefined,
+        door_dy: isBuilding && door ? door.dy : undefined,
       })
       setStatus(`Saved "${obj.name}" as the active ${obj.kind}. It'll show on the map on reload.`)
       refreshSaved()
@@ -270,11 +313,12 @@ export default function TileMapper() {
           </label>
           <label>
             Kind
-            <select value={kind} onChange={(e) => setKind(e.target.value)}>
+            <select value={kind} onChange={(e) => { setKind(e.target.value); setDoor(null) }}>
               <option value="tree">tree</option>
               <option value="prop">prop</option>
               <option value="flower-group">flower-group</option>
               <option value="flower-single">flower-single</option>
+              <option value="building">building</option>
             </select>
           </label>
           <div className="fp">
@@ -292,8 +336,13 @@ export default function TileMapper() {
 
           <h3>Preview (map scale)</h3>
           <div className="preview-box">
-            {selBox ? <canvas ref={previewRef} /> : <p className="hint">Drag a rectangle on the atlas.</p>}
+            {selBox ? <canvas ref={previewRef} onClick={onPreviewClick} /> : <p className="hint">Drag a rectangle on the atlas.</p>}
           </div>
+          {isBuilding && selBox && (
+            <p className="hint">
+              {door ? `Door at cell ${door.dx},${door.dy}.` : 'Click the preview to mark the entrance'} (defaults to bottom-centre).
+            </p>
+          )}
 
           <button type="button" className="save" onClick={onSave} disabled={!selBox}>
             Save to server

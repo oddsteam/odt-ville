@@ -14,6 +14,9 @@ export const TileObjectSummary = Schema.Struct({
   kind: Schema.String,
   footprint_w: Schema.Number,
   footprint_h: Schema.Number,
+  // Authored door cell for a 'building' object (issue #29); null otherwise.
+  door_dx: Schema.NullOr(Schema.Number),
+  door_dy: Schema.NullOr(Schema.Number),
   active: Schema.Boolean,
   updated_at: Schema.String,
 })
@@ -32,5 +35,8 @@ export const NewTileObject = Schema.Struct({
   image: Schema.String,
   footprint_w: Schema.Number,
   footprint_h: Schema.Number,
+  // Door cell, only sent for 'building' objects (issue #29).
+  door_dx: Schema.optional(Schema.Number),
+  door_dy: Schema.optional(Schema.Number),
 })
 export type NewTileObject = Schema.Schema.Type<typeof NewTileObject>

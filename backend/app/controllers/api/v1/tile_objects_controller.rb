@@ -32,7 +32,10 @@ module Api
           kind: params[:kind].presence || obj.kind || "prop",
           image: params[:image],
           footprint_w: params[:footprint_w].presence || obj.footprint_w || 1,
-          footprint_h: params[:footprint_h].presence || obj.footprint_h || 1
+          footprint_h: params[:footprint_h].presence || obj.footprint_h || 1,
+          # Door anchor — only authored for "building" objects; nil otherwise.
+          door_dx: params.key?(:door_dx) ? params[:door_dx] : obj.door_dx,
+          door_dy: params.key?(:door_dy) ? params[:door_dy] : obj.door_dy
         )
         obj.save!
         obj.activate! unless params[:active] == false

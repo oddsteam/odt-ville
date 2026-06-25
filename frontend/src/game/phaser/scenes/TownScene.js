@@ -1,6 +1,6 @@
 import Phaser from 'phaser'
 import { TILE, MOVE_MS, PLAYER_FEET_LIFT, buildTown } from '../../constants.js'
-import { isWalkable, playerDepthAt } from '../../town.ts'
+import { isWalkable, playerDepthAt, doorAnchorFor } from '../../town.ts'
 import { ensureTileTextures } from '../tileTextures.js'
 import {
   CHAR_SHEET_KEY,
@@ -103,7 +103,10 @@ export default class TownScene extends Phaser.Scene {
     // Town geometry is identical to the DOM engine's — we keep a single
     // source of truth in constants.js so PR-B doesn't drift from the
     // game's design data.
-    this.town = buildTown(Math.max(communities.length, 1))
+    // An admin-mapped house (#29) overrides the hardcoded bottom-centre door
+    // with its authored anchor; absent → default (doorAnchorFor returns undefined).
+    const buildingObject = this.registry.get('buildingObject') || null
+    this.town = buildTown(Math.max(communities.length, 1), doorAnchorFor(buildingObject))
 
     // With Scale.RESIZE in PhaserGame, the canvas display size matches
     // .gb-screen at 1:1 device pixels (TILE=48 → 48 screen px, same as

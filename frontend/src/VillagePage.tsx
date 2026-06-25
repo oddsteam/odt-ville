@@ -39,6 +39,9 @@ export default function VillagePage() {
   // fills leftover cells. Optional — null falls back to the procedural buds.
   const [flowerGroup, setFlowerGroup] = useState<TileObject | null>(null)
   const [flowerSingle, setFlowerSingle] = useState<TileObject | null>(null)
+  // Admin-mapped house (tile-object mapper, kind 'building', #29) — replaces the
+  // bundled buildings and carries the door anchor. Null falls back to bundled art.
+  const [building, setBuilding] = useState<TileObject | null>(null)
   // Ground-tile catalog (ground-tile mapper): grass/dirt/road cells painted
   // onto the town's ground, encounter field, and roads. Empty array falls back
   // to the procedural tile textures, so it's a pure visual enhancement.
@@ -60,6 +63,7 @@ export default function VillagePage() {
     setTreeObject(town.treeObject)
     setFlowerGroup(town.flowerGroup)
     setFlowerSingle(town.flowerSingle)
+    setBuilding(town.building)
     setGroundTiles(town.groundTiles)
     setCharacterManifest(town.characterManifest)
   }, [])
@@ -161,6 +165,7 @@ export default function VillagePage() {
         treeObject={treeObject}
         flowerGroup={flowerGroup}
         flowerSingle={flowerSingle}
+        building={building}
         groundTiles={groundTiles}
         characterManifest={characterManifest}
         dailyBrief={
