@@ -30,6 +30,18 @@ export const getActive = (
     return raw === null ? null : yield* decode(path)(raw)
   })
 
+// GET /tile_objects/:id -> the full object incl. image, for loading a saved
+// object back into the mapper to add/adjust its door anchor or walk mask.
+export const get = (
+  id: number,
+): Effect.Effect<TileObject, HttpError, Http> =>
+  Effect.gen(function* () {
+    const http = yield* Http
+    const path = `/tile_objects/${id}`
+    const raw = yield* http.get(path)
+    return yield* decode(path)(raw)
+  })
+
 // POST /tile_objects -> the saved object, made the live object of its kind.
 export const save = (
   body: NewTileObject,
@@ -75,4 +87,4 @@ export const deactivate = (
     return yield* decodeSummary(path)(raw)
   })
 
-export const TileObjectsService = { getActive, save, list, activate, deactivate } as const
+export const TileObjectsService = { getActive, get, save, list, activate, deactivate } as const

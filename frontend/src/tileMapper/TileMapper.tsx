@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { activateTileObject, deactivateTileObject, listTileObjects, saveTileObject } from '../tileObjects/client.js'
-import type { TileObjectSummary } from '../tileObjects/schema.ts'
+import { activateTileObject, deactivateTileObject, getTileObject, listTileObjects, saveTileObject } from '../tileObjects/client.js'
+import type { TileObject, TileObjectSummary } from '../tileObjects/schema.ts'
 import { validateWalkMask } from '../game/town.ts'
 import './styles.css'
 
@@ -39,6 +39,17 @@ export function buildWalkMask(walk: ReadonlySet<string>, cols: number, rows: num
   return out
 }
 
+// Inverse of buildWalkMask — turn a stored row-major walk mask back into the set
+// of painted "dx,dy" walkable cells, so a saved building loads into the editor
+// with its porch/path already painted (#32).
+export function walkCellsFromMask(mask: readonly string[]): Set<string> {
+  const out = new Set<string>()
+  mask.forEach((row, r) => {
+    for (let c = 0; c < row.length; c++) if (row[c] === '.') out.add(`${c},${r}`)
+  })
+  return out
+}
+
 export default function TileMapper() {
   const [atlas, setAtlas] = useState<Atlas | null>(null) // { img, src, width, height }
   const [cell, setCell] = useState(16)
@@ -57,6 +68,10 @@ export default function TileMapper() {
   const [paintMode, setPaintMode] = useState<'walk' | 'door'>('walk')
   const [status, setStatus] = useState('Upload an atlas PNG to begin.')
   const [saved, setSaved] = useState<readonly TileObjectSummary[]>([]) // roster for the saved-objects list
+  // When editing a saved object (#29/#32), its cropped art loads here and drives
+  // the preview instead of an atlas selection — so the admin can add/adjust the
+  // door + walkable path without re-uploading and re-selecting the atlas.
+  const [editImg, setEditImg] = useState<HTMLImageElement | null>(null)
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const dragRef = useRef<DragAnchor | null>(null) // { c, r } drag anchor while the mouse is down
@@ -86,6 +101,32 @@ export default function TileMapper() {
     [refreshSaved],
   )
 
+  // Load a saved object back into the editor: restore its fields + painted walk
+  // mask, and draw its stored art in the preview so the door/path can be placed
+  // against the real building (#29/#32). Re-saving upserts by name → same record.
+  const onEdit = useCallback((id: number) => {
+    setStatus('Loading…')
+    getTileObject(id)
+      .then((o: TileObject) => {
+        setName(o.name)
+        setKind(o.kind)
+        setFpW(o.footprint_w)
+        setFpH(o.footprint_h)
+        setDoor(o.door_dx != null && o.door_dy != null ? { dx: o.door_dx, dy: o.door_dy } : null)
+        setWalk(o.walk_mask ? walkCellsFromMask(o.walk_mask) : new Set())
+        setPaintMode('walk')
+        setSel(null) // leave atlas-selection mode; the loaded art drives the preview
+        const img = new Image()
+        img.onload = () => {
+          setEditImg(img)
+          setStatus(`Editing "${o.name}". Add/adjust the door + walkable path, then Save.`)
+        }
+        img.onerror = () => setStatus('Could not load the saved image.')
+        img.src = o.image
+      })
+      .catch((err: unknown) => setStatus(`Load failed: ${err instanceof Error ? err.message : String(err)}`))
+  }, [])
+
   const cols = atlas ? Math.floor(atlas.width / cell) : 0
   const rows = atlas ? Math.floor(atlas.height / cell) : 0
 
@@ -113,6 +154,7 @@ export default function TileMapper() {
       img.onload = () => {
         setAtlas({ img, src: reader.result as string, width: img.naturalWidth, height: img.naturalHeight })
         setSel(null)
+        setEditImg(null) // a fresh atlas leaves saved-object edit mode
         setStatus(`Loaded atlas (${img.naturalWidth}×${img.naturalHeight}). Drag to select an object.`)
       }
       img.onerror = () => setStatus('Could not read that image.')
@@ -165,7 +207,7 @@ export default function TileMapper() {
   const previewRef = useRef<HTMLCanvasElement>(null)
   useEffect(() => {
     const canvas = previewRef.current
-    if (!canvas || !atlas || !selBox) return
+    if (!canvas || (!editImg && !(atlas && selBox))) return
     const w = Math.max(1, Math.round(fpW * MAP_TILE))
     const h = Math.max(1, Math.round(fpH * MAP_TILE))
     canvas.width = w
@@ -173,11 +215,16 @@ export default function TileMapper() {
     const ctx = canvas.getContext('2d')!
     ctx.imageSmoothingEnabled = false
     ctx.clearRect(0, 0, w, h)
-    ctx.drawImage(
-      atlas.img,
-      selBox.c * cell, selBox.r * cell, selBox.w * cell, selBox.h * cell,
-      0, 0, w, h,
-    )
+    if (editImg) {
+      // Editing a saved object — its art is already cropped, draw it whole.
+      ctx.drawImage(editImg, 0, 0, w, h)
+    } else if (atlas && selBox) {
+      ctx.drawImage(
+        atlas.img,
+        selBox.c * cell, selBox.r * cell, selBox.w * cell, selBox.h * cell,
+        0, 0, w, h,
+      )
+    }
 
     // For a building, overlay the footprint grid, the painted walkable cells
     // (#32), and the picked door cell so the admin sees the authored entry path
@@ -197,7 +244,7 @@ export default function TileMapper() {
       ctx.fillStyle = 'rgba(46,200,90,0.45)'
       ctx.fillRect(door.dx * cw, door.dy * ch, cw, ch)
     }
-  }, [atlas, cell, selBox, fpW, fpH, isBuilding, doorCols, doorRows, door, walk])
+  }, [atlas, cell, selBox, editImg, fpW, fpH, isBuilding, doorCols, doorRows, door, walk])
 
   // Click the preview to either mark the entrance (door mode) or toggle a
   // walkable cell (walk mode) — issue #29/#32.
@@ -245,6 +292,7 @@ export default function TileMapper() {
       return
     }
     dragRef.current = null
+    setEditImg(null) // a new atlas selection leaves saved-object edit mode
     // Default the footprint to the selected cell span (1 cell ≈ 1 tile), which
     // the admin can then tune for how big it should read on the map.
     setFpW(selBox.w)
@@ -253,7 +301,7 @@ export default function TileMapper() {
   }
 
   async function onSave() {
-    if (!atlas || !selBox) {
+    if (!editImg && (!atlas || !selBox)) {
       setStatus('Select a region on the atlas first.')
       return
     }
@@ -278,18 +326,24 @@ export default function TileMapper() {
         return
       }
     }
-    // Crop the selection to a standalone PNG at native pixel size.
-    const off = document.createElement('canvas')
-    off.width = selBox.w * cell
-    off.height = selBox.h * cell
-    const ctx = off.getContext('2d')!
-    ctx.imageSmoothingEnabled = false
-    ctx.drawImage(
-      atlas.img,
-      selBox.c * cell, selBox.r * cell, off.width, off.height,
-      0, 0, off.width, off.height,
-    )
-    const image = off.toDataURL('image/png')
+    // In edit mode the art is already a standalone PNG; otherwise crop the atlas
+    // selection to one at native pixel size.
+    let image: string
+    if (editImg) {
+      image = editImg.src
+    } else {
+      const off = document.createElement('canvas')
+      off.width = selBox!.w * cell
+      off.height = selBox!.h * cell
+      const ctx = off.getContext('2d')!
+      ctx.imageSmoothingEnabled = false
+      ctx.drawImage(
+        atlas!.img,
+        selBox!.c * cell, selBox!.r * cell, off.width, off.height,
+        0, 0, off.width, off.height,
+      )
+      image = off.toDataURL('image/png')
+    }
 
     setStatus('Saving…')
     try {
@@ -297,8 +351,8 @@ export default function TileMapper() {
         name: name.trim(),
         kind,
         image,
-        footprint_w: Number(fpW) || selBox.w,
-        footprint_h: Number(fpH) || selBox.h,
+        footprint_w: Number(fpW) || selBox?.w || 1,
+        footprint_h: Number(fpH) || selBox?.h || 1,
         // Building entrance, when picked. Unsent → the town defaults to
         // bottom-centre (its existing hardcoded door).
         door_dx: isBuilding && door ? door.dx : undefined,
@@ -389,9 +443,9 @@ export default function TileMapper() {
 
           <h3>Preview (map scale)</h3>
           <div className="preview-box">
-            {selBox ? <canvas ref={previewRef} onClick={onPreviewClick} /> : <p className="hint">Drag a rectangle on the atlas.</p>}
+            {selBox || editImg ? <canvas ref={previewRef} onClick={onPreviewClick} /> : <p className="hint">Drag a rectangle on the atlas, or Edit a saved object.</p>}
           </div>
-          {isBuilding && selBox && (
+          {isBuilding && (selBox || editImg) && (
             <>
               <div className="paint-mode">
                 <span>Paint:</span>
@@ -420,7 +474,7 @@ export default function TileMapper() {
             </>
           )}
 
-          <button type="button" className="save" onClick={onSave} disabled={!selBox}>
+          <button type="button" className="save" onClick={onSave} disabled={!selBox && !editImg}>
             Save to server
           </button>
 
@@ -432,6 +486,9 @@ export default function TileMapper() {
                 <span className="saved-name">{o.name}</span>
                 <span className="saved-kind">{o.kind}</span>
                 <span className="saved-fp">{o.footprint_w}×{o.footprint_h}</span>
+                <button type="button" onClick={() => onEdit(o.id)}>
+                  Edit
+                </button>
                 {o.active ? (
                   <>
                     <span className="saved-badge">active</span>

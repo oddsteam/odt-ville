@@ -8,6 +8,14 @@ module Api
         render json: scope.map { |o| TileObjectSerializer.summary(o) }
       end
 
+      # GET /api/v1/tile_objects/:id — the full object (incl. image) so the
+      # mapper can load a saved object back into the editor to add/adjust its
+      # door anchor or interior walk mask.
+      def show
+        obj = TileObject.find(params[:id])
+        render json: TileObjectSerializer.call(obj)
+      end
+
       # GET /api/v1/tile_objects/active?kind=tree — the live object of a kind
       # the game renders. 204 when none is active yet.
       def active

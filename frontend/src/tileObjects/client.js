@@ -25,6 +25,12 @@ export function saveTileObject({ name, kind, image, footprint_w, footprint_h, do
   return runEdge(TileObjectsService.save({ name, kind, image, footprint_w, footprint_h, door_dx, door_dy, walk_mask }))
 }
 
+// GET /tile_objects/:id -> the full object (incl. image), for loading a saved
+// object back into the mapper to add/adjust its door or walk mask (#29, #32).
+export function getTileObject(id) {
+  return runEdge(TileObjectsService.get(id))
+}
+
 // GET /tile_objects[?kind=] -> roster summaries (no image blobs).
 export function listTileObjects(kind) {
   return runEdge(TileObjectsService.list(kind))

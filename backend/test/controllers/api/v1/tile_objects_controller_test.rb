@@ -58,6 +58,18 @@ module Api
         assert_equal mask, json[:walk_mask]
       end
 
+      test "show returns the full object including the image blob, for editing" do
+        obj = TileObject.create!(name: "Cottage", kind: "building", image: "data:img", footprint_w: 3, footprint_h: 4, door_dx: 1, door_dy: 3, walk_mask: "###\n#.#\n#.#\n#.#", active: true)
+
+        get "/api/v1/tile_objects/#{obj.id}", headers: auth(@user)
+
+        assert_response :success
+        assert_equal obj.id, json[:id]
+        assert_equal "data:img", json[:image], "show carries the image so the mapper can redraw the preview"
+        assert_equal [1, 3], [json[:door_dx], json[:door_dy]]
+        assert_equal ["###", "#.#", "#.#", "#.#"], json[:walk_mask]
+      end
+
       test "deactivate turns the object off so its kind has no active object" do
         a = TileObject.create!(name: "A", kind: "flower-group", image: "i", footprint_w: 2, footprint_h: 2, active: true)
 
