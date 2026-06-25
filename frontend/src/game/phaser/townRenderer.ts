@@ -107,6 +107,11 @@ export function preloadAssets(scene: Scene) {
   if (scene._flowerGroup?.image) scene.load.image('prop.flowerGroup', scene._flowerGroup.image)
   if (scene._flowerSingle?.image) scene.load.image('prop.flowerSingle', scene._flowerSingle.image)
 
+  // Admin-mapped house (#29). When present it replaces the bundled roof/body
+  // stack on every plot (addBuildingSprite); absent → the bundled art.
+  scene._buildingObject = scene.registry.get('buildingObject') || null
+  if (scene._buildingObject?.image) scene.load.image('building.mapped', scene._buildingObject.image)
+
   // Ground-tile catalog (ground-tile mapper). Each referenced tileset loads
   // once as a uniform spritesheet (frame = cell), so create() can stamp a
   // specific cell — grass/dirt/road — onto the map by frame index.
@@ -359,6 +364,30 @@ function addBuildingSprite(scene: Scene, community: any, plot: any) {
   const cy = plot.row * TILE
   const w = plot.w * TILE
   const h = plot.h * TILE
+  const depth = (plot.row + plot.h) * 10 - 1
+
+  // Nameplate under the building — shared by both the mapped and bundled art.
+  const addPlate = () =>
+    scene.add
+      .text(cx + w / 2, cy + h - 4, community.title.toUpperCase(), {
+        fontFamily: 'monospace',
+        fontSize: '11px',
+        color: '#2c1d10',
+        backgroundColor: '#f3e6bb',
+        padding: { x: 4, y: 1 },
+      })
+      .setOrigin(0.5, 0)
+      .setDepth(depth + 2)
+
+  // Admin-mapped house (#29): one baked sprite filling the plot, replacing the
+  // roof/body stack + per-community tint. The door anchor it carries is honoured
+  // in town.ts (buildTown), so walkability/entry/depth already line up.
+  if (scene._buildingObject?.image && scene.textures.exists('building.mapped')) {
+    const house = scene.add.image(cx, cy, 'building.mapped').setOrigin(0, 0).setDisplaySize(w, h).setDepth(depth)
+    const nameplate = addPlate()
+    if (DEV) scene.devLayers?.buildings?.push(house, nameplate)
+    return house
+  }
 
   // Which art to use. Falls back to the default if the chosen key never
   // loaded (e.g. a community.building naming art that isn't present).
@@ -370,26 +399,16 @@ function addBuildingSprite(scene: Scene, community: any, plot: any) {
     .image(cx, cy, `building.${key}.roof`)
     .setOrigin(0, 0)
     .setDisplaySize(w, h * 0.36)
-    .setDepth((plot.row + plot.h) * 10 - 1)
+    .setDepth(depth)
 
   // Body — bottom 64%.
   const body = scene.add
     .image(cx, cy + h * 0.36, `building.${key}.body`)
     .setOrigin(0, 0)
     .setDisplaySize(w, h * 0.64)
-    .setDepth((plot.row + plot.h) * 10 - 1)
+    .setDepth(depth)
 
-  // Nameplate under the building — small text, dark on light.
-  const plate = scene.add
-    .text(cx + w / 2, cy + h - 4, community.title.toUpperCase(), {
-      fontFamily: 'monospace',
-      fontSize: '11px',
-      color: '#2c1d10',
-      backgroundColor: '#f3e6bb',
-      padding: { x: 4, y: 1 },
-    })
-    .setOrigin(0.5, 0)
-    .setDepth((plot.row + plot.h) * 10 + 1)
+  const plate = addPlate()
 
   if (DEV) scene.devLayers?.buildings?.push(roof, body, plate)
 

@@ -31,6 +31,7 @@ export default function VillageGame({
   treeObject,
   flowerGroup,
   flowerSingle,
+  building,
   groundTiles,
   characterManifest,
   dailyBrief,
@@ -48,6 +49,7 @@ export default function VillageGame({
       treeObject={treeObject}
       flowerGroup={flowerGroup}
       flowerSingle={flowerSingle}
+      building={building}
       groundTiles={groundTiles}
       characterManifest={characterManifest}
       dailyBrief={dailyBrief}

@@ -33,6 +33,9 @@ export const loadTown = () =>
         () => null,
       ),
       flowerSingle: Effect.orElseSucceed(TileObjectsService.getActive('flower-single'), () => null),
+      // Admin-mapped house (#29): replaces the bundled roof/body art on every
+      // plot and supplies the door anchor. Absent → bundled buildings.
+      building: Effect.orElseSucceed(TileObjectsService.getActive('building'), () => null),
       groundTiles: Effect.orElseSucceed(GroundTilesService.list(), () => []),
       // loadActiveManifest owns its own fallback chain and never throws; mirror
       // today's `.catch(() => null)` for parity.

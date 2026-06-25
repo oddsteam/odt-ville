@@ -60,6 +60,7 @@ export type PhaserGameProps = {
   treeObject: TileObject | null
   flowerGroup: TileObject | null
   flowerSingle: TileObject | null
+  building: TileObject | null
   groundTiles: readonly GroundTile[]
   characterManifest: object | null
   dailyBrief: ReactNode
@@ -77,6 +78,7 @@ export default function PhaserGame({
   treeObject,
   flowerGroup,
   flowerSingle,
+  building,
   groundTiles,
   characterManifest,
   dailyBrief,
@@ -133,6 +135,7 @@ export default function PhaserGame({
     game.registry.set('treeObject', treeObject || null)
     game.registry.set('flowerGroup', flowerGroup || null)
     game.registry.set('flowerSingle', flowerSingle || null)
+    game.registry.set('buildingObject', building || null)
     // Ground-tile catalog — read once by TownScene.preload() to load the
     // referenced tilesets, same boot-input timing as treeObject.
     game.registry.set('groundTiles', groundTiles || [])
@@ -202,6 +205,14 @@ export default function PhaserGame({
     if (!game) return
     game.registry.set('flowerSingle', flowerSingle || null)
   }, [flowerSingle])
+
+  // Admin-mapped house (#29) — boot input like the flower art; refresh the
+  // registry so the next VillageGame mount / reload renders the latest house.
+  useEffect(() => {
+    const game = gameRef.current
+    if (!game) return
+    game.registry.set('buildingObject', building || null)
+  }, [building])
 
   // Ground-tile catalog — boot input like treeObject; pushing it keeps the
   // registry fresh for the next VillageGame mount / reload.
