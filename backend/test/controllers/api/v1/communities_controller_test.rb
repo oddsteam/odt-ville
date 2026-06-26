@@ -34,6 +34,21 @@ module Api
         assert_equal 2, mk[:unread_count]
       end
 
+      test "index exposes each community's entry gate (null when ungated)" do
+        gated = make_community(company: @company, title: "Gated")
+        gated.update!(entry_gate: "posture-login", posture_set_id: "set-123")
+        make_community(company: @company, title: "Open")
+
+        get "/api/v1/communities", headers: auth(@user)
+
+        assert_response :success
+        by_title = json[:communities].index_by { _1[:title] }
+        assert_equal "posture-login", by_title["Gated"][:entry_gate]
+        assert_nil by_title["Open"][:entry_gate]
+        # posture_set_id is server-only — never shipped to the browser.
+        assert_not by_title["Gated"].key?(:posture_set_id)
+      end
+
       test "index excludes other companies' communities" do
         make_community(company: @company, title: "Mine")
         other_company, _ = setup_company(name: "Other Co")
