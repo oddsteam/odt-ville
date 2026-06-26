@@ -1,7 +1,11 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import VillageGame from './game/VillageGame.tsx'
 import DailyBriefShortcut from './communities/DailyBriefShortcut.tsx'
 import { saveGameSession } from './game-session/client.js'
+import { startPosture, confirmPosture } from './posture/client.ts'
+import { runPostureGate } from './posture/runGate.ts'
+import { openGatePopup, awaitGateResult } from './posture/popup.ts'
+import { CALLBACK_PATH } from './posture/callback.ts'
 import { loadTown as loadTownData } from './game/townLoader.ts'
 import { runEdge } from './lib/runEdge.ts'
 import type { Community, FeedItem } from './communities/schema.ts'
@@ -90,6 +94,36 @@ export default function VillagePage() {
     saveGameSession({ last_area: 'house', last_community_id: id }).catch(() => {})
   }, [])
 
+  // Houses unlocked this session — a posture pass lasts once per session
+  // (the grant lives here, not the DB), so re-entering skips the gate.
+  const grantedRef = useRef<Set<number>>(new Set())
+
+  // A gated door asked the shell to run its gate (issue #24). Drive the
+  // posture-login loop and resolve true (enter) / false (release). The backend
+  // confirm is the only thing that opens the gate; the popup is just UX.
+  const handleRequestEntry = useCallback(
+    async ({ communityId, gate }: { communityId: number; gate: string }) => {
+      if (gate !== 'posture-login') return false
+      if (grantedRef.current.has(communityId)) return true
+
+      const callbackUrl = new URL(CALLBACK_PATH, window.location.origin).toString()
+      try {
+        const { granted } = await runPostureGate(communityId, {
+          start: (id) => startPosture(id, callbackUrl),
+          openPopup: (url) => openGatePopup(url),
+          awaitResult: (popup) => awaitGateResult(popup as Window),
+          confirm: (sessionId) => confirmPosture(sessionId),
+        })
+        if (granted) grantedRef.current.add(communityId)
+        return granted
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Entry check failed')
+        return false
+      }
+    },
+    [],
+  )
+
   // Each board's "open content list" action — for the demo every board
   // points at the same external URL. The game module knows nothing about
   // this; it just emits the board id and the page decides.
@@ -175,6 +209,7 @@ export default function VillagePage() {
         onEnterCommunity={handleEnterCommunity}
         onExitCommunity={handleExitCommunity}
         onOpenBoard={handleOpenBoard}
+        onRequestEntry={handleRequestEntry}
         trainerDefeated={trainerDefeated}
         onTrainerDefeated={() => setTrainerDefeated(true)}
       />

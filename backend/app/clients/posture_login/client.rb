@@ -23,15 +23,22 @@ module PostureLogin
     # Build a Client from env, with the seeded dev credentials as defaults
     # (posture-login `pnpm db:seed`). Override in any deployed env.
     def self.from_env(env = ENV)
+      service_url = env.fetch("POSTURE_SERVICE_URL", "http://localhost:3000")
       new(
-        service_url: env.fetch("POSTURE_SERVICE_URL", "http://localhost:3000"),
+        service_url: service_url,
+        # The browser-reachable base for hosted_url. Equals service_url in a
+        # normal deploy (single public URL); locally the backend reaches the
+        # service over a different host than the browser, so set it to the
+        # browser's URL (e.g. http://localhost:3000).
+        public_url: env.fetch("POSTURE_PUBLIC_URL", service_url),
         client_id: env.fetch("POSTURE_CLIENT_ID", "dev-game-app"),
         client_secret: env.fetch("POSTURE_CLIENT_SECRET", "dev-secret-do-not-use-in-prod")
       )
     end
 
-    def initialize(service_url:, client_id:, client_secret:, http: nil)
+    def initialize(service_url:, client_id:, client_secret:, public_url: nil, http: nil)
       @service_url = service_url.chomp("/")
+      @public_url = (public_url || service_url).chomp("/")
       @client_id = client_id
       @client_secret = client_secret
       @http = http || method(:net_http)
@@ -48,7 +55,7 @@ module PostureLogin
       })
       raise Error, "start-verification failed: HTTP #{status}" unless status == 201
 
-      { session_id: json["session_id"], hosted_url: json["hosted_url"] }
+      { session_id: json["session_id"], hosted_url: browser_url(json["hosted_url"]) }
     end
 
     # Step 4 — confirm the outcome server-to-server with our credentials.
@@ -65,6 +72,17 @@ module PostureLogin
     private
 
     def url(path) = "#{@service_url}#{path}"
+
+    # Swap the hosted_url's origin for the browser-reachable public base, keeping
+    # its path + query. No-op when public_url == the service's own origin.
+    def browser_url(hosted)
+      u = URI.parse(hosted)
+      b = URI.parse(@public_url)
+      u.scheme, u.host, u.port = b.scheme, b.host, b.port
+      u.to_s
+    rescue URI::InvalidURIError
+      hosted
+    end
 
     # Default transport — a thin POST-JSON over Net::HTTP. A non-JSON body
     # parses to {} so the gate stays shut rather than raising.

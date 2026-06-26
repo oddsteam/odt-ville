@@ -15,8 +15,8 @@ describe('townInteractionsAt', () => {
     ])
   })
 
-  it('carries the community entryGate on a gated door tile', () => {
-    const gated = { id: 'hr', entryGate: 'posture-login' }
+  it('carries the community entry_gate on a gated door tile', () => {
+    const gated = { id: 'hr', entry_gate: 'posture-login' }
     const gatedBuildings = [{ doorCol: 0, doorRow: 0, community: gated }]
     expect(
       townInteractionsAt({ town, buildings: gatedBuildings, sightCells: [] }, { x: 0, y: 0 }),

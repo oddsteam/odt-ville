@@ -39,6 +39,20 @@ module PostureLogin
       assert_equal "https://game.example/posture/callback", call[:body][:callback_url]
     end
 
+    test "start_verification rewrites the hosted_url origin to the public base for the browser" do
+      # The service derives hosted_url from its own request origin, which behind
+      # Docker is an internal hostname the browser can't reach. With a public_url
+      # set, we rewrite the origin (keeping the path) to a browser-reachable base.
+      http, = stub_http(status: 201, json: { "session_id" => "s1", "hosted_url" => "http://b9e7e2b4b3af:3000/v/s1" })
+      c = Client.new(
+        service_url: "http://host.docker.internal:3000",
+        public_url: "http://localhost:3000",
+        client_id: "dev-game-app", client_secret: "shh", http: http
+      )
+
+      assert_equal "http://localhost:3000/v/s1", c.start_verification(posture_set_id: "set-9", callback_url: "http://game/cb")[:hosted_url]
+    end
+
     test "start_verification raises when the service does not return 201" do
       http, = stub_http(status: 422, json: { "error" => "bad set" })
       assert_raises(Client::Error) do

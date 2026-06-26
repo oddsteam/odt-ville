@@ -6,6 +6,7 @@ import CommunitiesAdminPage from './admin/CommunitiesAdminPage.tsx'
 import SpriteMapper from './spriteMapper/SpriteMapper.tsx'
 import TileMapper from './tileMapper/TileMapper.tsx'
 import GroundTileMapper from './groundTiles/GroundTileMapper.tsx'
+import PostureCallbackPage from './posture/CallbackPage.tsx'
 
 // Route table. RootLayout is the persistent shell (brand header + Village/Admin
 // nav); the village game lives at "/" and the admin console — the four former
@@ -25,6 +26,9 @@ export default function App() {
         <Route path="objects" element={<TileMapper />} />
         <Route path="ground" element={<GroundTileMapper />} />
       </Route>
+      {/* posture-login popup return (issue #24) — bare page, no app chrome;
+          it posts the result home to the opener and closes. */}
+      <Route path="posture/callback" element={<PostureCallbackPage />} />
       {/* Unknown paths fall back to the village. */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

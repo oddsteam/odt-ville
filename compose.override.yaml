@@ -8,6 +8,13 @@ services:
   backend:
     ports:
       - "3190:3190"
+    environment:
+      # Local posture-login (issue #24) runs on the host at :3000; the backend
+      # reaches it for the server-to-server gate calls via host.docker.internal,
+      # but the browser opens the hosted page at localhost:3000 — so the backend
+      # rewrites hosted_url's origin to this public base.
+      POSTURE_SERVICE_URL: http://host.docker.internal:3000
+      POSTURE_PUBLIC_URL: http://localhost:3000
   db:
     ports:
       - "5432:5432"

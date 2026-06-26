@@ -19,7 +19,7 @@ export interface Tile {
 interface Building {
   doorCol: number
   doorRow: number
-  community: { entryGate?: string | null } & Record<string, unknown>
+  community: { entry_gate?: string | null } & Record<string, unknown>
 }
 
 interface TownLike {
@@ -46,7 +46,7 @@ export type TownInteraction =
 export function townInteractionsAt(ctx: TownContext, tile: Tile): TownInteraction[] {
   const door = ctx.buildings.find((b) => b.doorCol === tile.x && b.doorRow === tile.y)
   if (door) {
-    return [{ kind: 'enterCommunity', community: door.community, gate: door.community.entryGate ?? null }]
+    return [{ kind: 'enterCommunity', community: door.community, gate: door.community.entry_gate ?? null }]
   }
 
   const out: TownInteraction[] = []
