@@ -1,6 +1,9 @@
 # OS
 .DS_Store
 
+# Local secrets (posture-login creds etc.) — referenced by compose.override.yaml
+.env
+
 # Dependencies
 node_modules/
 .pnpm-store/
