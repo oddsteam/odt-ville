@@ -39,6 +39,7 @@ export default function VillageGame({
   onEnterCommunity,
   onExitCommunity,
   onOpenBoard,
+  onRequestEntry,
   trainerDefeated,
   onTrainerDefeated,
 }: PhaserGameProps) {
@@ -57,6 +58,7 @@ export default function VillageGame({
       onEnterCommunity={onEnterCommunity}
       onExitCommunity={onExitCommunity}
       onOpenBoard={onOpenBoard}
+      onRequestEntry={onRequestEntry}
       trainerDefeated={trainerDefeated}
       onTrainerDefeated={onTrainerDefeated}
     />

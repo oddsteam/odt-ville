@@ -22,6 +22,8 @@ module CommunitiesSerializer
       logo_url: community.logo_url,
       category_key: community.category_key,
       position_order: community.position_order,
+      # Gate type only (issue #24) — the door's posture_set_id stays server-side.
+      entry_gate: community.entry_gate,
       badges: {
         unread: all_items.count { |ci| state_of(ci, user) == "unread" },
         urgent: urgent_signage_count(effective_by_board, user),

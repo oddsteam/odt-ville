@@ -13,7 +13,8 @@ module CommunitySerializer
         color: community.color,
         logo_url: community.logo_url,
         category_key: community.category_key,
-        position_order: community.position_order
+        position_order: community.position_order,
+        entry_gate: community.entry_gate
       },
       boards: boards.map { |b| board_payload(b, user, now) }
     }

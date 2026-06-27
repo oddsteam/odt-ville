@@ -167,6 +167,20 @@ export default class TownScene extends Phaser.Scene {
     bus.on('dpadPress', this._onDpadPress)
     bus.on('dpadRelease', this._onDpadRelease)
 
+    // Gated-door resolution from the shell (issue #24). handleArrival paused us
+    // and emitted 'requestEntry'; the shell runs the gate, then reports back:
+    // enter the community on a pass, just resume in place (release) on a fail.
+    this._onEntryResolved = ({ communityId, granted }) => {
+      const b = this.buildings.find((x) => x.community.id === communityId)
+      if (granted && b) {
+        bus.emit('enterCommunity', b.community.id)
+        this.scene.start('Interior', { community: b.community })
+      } else {
+        this.scene.resume()
+      }
+    }
+    bus.on('entryResolved', this._onEntryResolved)
+
     // Test API. PR-A only exposed `engine`; PR-B+ hang reads off the
     // same object so Playwright can introspect scene state without
     // poking around Phaser internals.
@@ -224,6 +238,7 @@ export default class TownScene extends Phaser.Scene {
       this.events.off(Phaser.Scenes.Events.RESUME, this.handleResume, this)
       bus.off('dpadPress', this._onDpadPress)
       bus.off('dpadRelease', this._onDpadRelease)
+      bus.off('entryResolved', this._onEntryResolved)
       if (typeof window !== 'undefined' && window.__game?.engine === 'phaser') {
         delete window.__game
       }

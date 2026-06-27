@@ -68,6 +68,10 @@ export type PhaserGameProps = {
   onEnterCommunity: (id: number) => void
   onExitCommunity: (id?: number | null) => void
   onOpenBoard: (boardType?: string) => void
+  // Gated door (issue #24): the scene paused and asked the shell to run the
+  // gate; the shell resolves to true (enter) / false (release). PhaserGame
+  // bridges the result back to the scene over the bus.
+  onRequestEntry: (payload: { communityId: number; gate: string }) => Promise<boolean>
   trainerDefeated: boolean
   onTrainerDefeated: () => void
 }
@@ -86,6 +90,7 @@ export default function PhaserGame({
   onEnterCommunity,
   onExitCommunity,
   onOpenBoard,
+  onRequestEntry,
   trainerDefeated,
   onTrainerDefeated,
 }: PhaserGameProps) {
@@ -100,6 +105,8 @@ export default function PhaserGame({
   exitCommunityRef.current = onExitCommunity
   const openBoardRef = useRef(onOpenBoard)
   openBoardRef.current = onOpenBoard
+  const requestEntryRef = useRef(onRequestEntry)
+  requestEntryRef.current = onRequestEntry
   const trainerDefeatedRef = useRef(onTrainerDefeated)
   trainerDefeatedRef.current = onTrainerDefeated
 
@@ -151,15 +158,23 @@ export default function PhaserGame({
     const onExit = (id: number) => exitCommunityRef.current?.(id)
     const onOpen = (boardType: string) => openBoardRef.current?.(boardType)
     const onTrainerDefeatedEvent = () => trainerDefeatedRef.current?.()
+    // Run the gate in the shell, then report the verdict back to the paused
+    // scene so it enters (pass) or resumes in place (fail). Issue #24.
+    const onRequest = async (payload: { communityId: number; gate: string }) => {
+      const granted = await requestEntryRef.current?.(payload)
+      bus.emit('entryResolved', { communityId: payload.communityId, granted: Boolean(granted) })
+    }
     bus.on('enterCommunity', onEnter)
     bus.on('exitCommunity', onExit)
     bus.on('openBoard', onOpen)
+    bus.on('requestEntry', onRequest)
     bus.on('trainerDefeated', onTrainerDefeatedEvent)
 
     return () => {
       bus.off('enterCommunity', onEnter)
       bus.off('exitCommunity', onExit)
       bus.off('openBoard', onOpen)
+      bus.off('requestEntry', onRequest)
       bus.off('trainerDefeated', onTrainerDefeatedEvent)
       game.destroy(true)
       gameRef.current = null

@@ -19,6 +19,11 @@ Rails.application.routes.draw do
       get  "game/session", to: "game_sessions#show"
       put  "game/session", to: "game_sessions#update"
 
+      # Posture-login entry gate (issue #24). start kicks off a Verification for
+      # a gated house; confirm reads its result server-to-server to open the door.
+      post "game/posture/start", to: "posture#start"
+      post "game/posture/confirm", to: "posture#confirm"
+
       # Character sprite manifests — saved by the sprite-mapper tool, read by
       # the game/preview. `active` is the single live character.
       resources :character_manifests, only: [:index, :create, :show] do
