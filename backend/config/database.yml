@@ -56,7 +56,13 @@ development:
 # Do not set this db to the same as development or production.
 test:
   <<: *default
-  database: one_rev_village_test
+  # Explicit url OVERRIDES the container's global DATABASE_URL (compose.yaml sets
+  # it to the *development* database). Without this, `RAILS_ENV=test` — and any
+  # destructive Rails op run under it — connects to one_rev_village_development
+  # and can WIPE real dev data. Derive from the same server as DATABASE_URL but
+  # force the database name to one_rev_village_test, so tests can never reach the
+  # dev DB whether run in-container (host `db`) or on the host (localhost).
+  url: <%= (ENV["DATABASE_URL"] || "postgres://postgres:postgres@localhost:5432/one_rev_village").sub(%r{/[^/?]+(\?|$)}, '/one_rev_village_test\1') %>
 
 # As with config/credentials.yml, you never want to store sensitive information,
 # like your database password, in your source code. If your source code is
