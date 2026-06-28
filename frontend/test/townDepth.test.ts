@@ -29,4 +29,14 @@ describe('playerDepthAt', () => {
     // (x=2,y=6) -> mask cell dx=0,dy=2 = '#', not standable.
     expect(playerDepthAt([masked], 2, 6)).toBe(65)
   })
+
+  // #46: with a door north of the footprint's south edge, the avatar must stay
+  // above the building sprite on every door-column tile from the door down to
+  // the edge, or it vanishes mid-exit on the tile directly south of the door.
+  const midDoor = { col: 2, row: 4, w: 3, h: 4, doorCol: 3, doorRow: 6 }
+
+  it('elevates the player on the footprint tile south of the door (exit corridor)', () => {
+    // (x=3,y=7): inside the footprint, directly south of the door, not the door tile.
+    expect(playerDepthAt([midDoor], 3, 7)).toBeGreaterThan(79) // building is at 79; default would be 75
+  })
 })
