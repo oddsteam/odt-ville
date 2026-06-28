@@ -142,20 +142,20 @@ export function validateWalkMask(
 }
 
 // A plot's tile footprint (#30). Sourced from the active mapped building, but
-// clamped to a sane range so the uniform grid never runs away: width 3..6,
-// height 4..6. Today's 3x4 is the minimum (the nameplate + roof/body 36/64
-// split need it); 6x6 the documented cap.
+// clamped to a sane range so the uniform grid never runs away: width 3..15,
+// height 4..15. Today's 3x4 is the minimum (the nameplate + roof/body 36/64
+// split need it); 15x15 the documented cap (matches the mapper's MAX_FP).
 export interface Footprint {
   w: number
   h: number
 }
 const MIN_W = 3
-const MAX_W = 6
+const MAX_W = 15
 const MIN_H = 4
-const MAX_H = 6
+const MAX_H = 15
 const DEFAULT_FOOTPRINT: Footprint = { w: MIN_W, h: MIN_H }
 
-// Clamp an authored footprint to [3..6] x [4..6], floored to whole tiles.
+// Clamp an authored footprint to [3..15] x [4..15], floored to whole tiles.
 // Non-finite input falls back to the minimum so a malformed object can't break
 // the grid arithmetic.
 export function clampFootprint(w: number, h: number): Footprint {

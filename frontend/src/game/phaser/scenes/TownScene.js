@@ -105,7 +105,7 @@ export default class TownScene extends Phaser.Scene {
     // game's design data.
     // An admin-mapped house (#29) overrides the hardcoded bottom-centre door
     // with its authored anchor; absent → default (doorAnchorFor returns undefined).
-    // It also drives each plot's footprint (#30, clamped 3..6 x 4..6) so a
+    // It also drives each plot's footprint (#30, clamped 3..15 x 4..15) so a
     // non-3x4 house renders undistorted with the grid re-spaced around it.
     const buildingObject = this.registry.get('buildingObject') || null
     this.town = buildTown(
