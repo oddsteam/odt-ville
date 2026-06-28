@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_28_000002) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_29_000001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -85,6 +85,17 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_28_000002) do
     t.index ["company_id"], name: "index_houses_on_company_id"
   end
 
+  create_table "monsters", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.boolean "enabled", default: true, null: false
+    t.text "encounter_dialog"
+    t.integer "encounter_rate", default: 0, null: false
+    t.text "image", null: false
+    t.string "name", null: false
+    t.datetime "updated_at", null: false
+    t.index ["name"], name: "index_monsters_on_name", unique: true
+  end
+
   create_table "tile_objects", force: :cascade do |t|
     t.boolean "active", default: false, null: false
     t.datetime "created_at", null: false
@@ -97,7 +108,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_28_000002) do
     t.text "image", null: false
     t.string "kind", default: "prop", null: false
     t.string "name", null: false
-    t.integer "overhang", default: 0, null: false
     t.datetime "updated_at", null: false
     t.text "walk_mask"
     t.index ["kind"], name: "index_tile_objects_one_active_per_kind", unique: true, where: "active"

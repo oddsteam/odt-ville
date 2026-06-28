@@ -41,6 +41,10 @@ Rails.application.routes.draw do
         post :deactivate, on: :member
       end
 
+      # Monsters — the weighted wild-encounter pool, authored in the monster
+      # admin. Probability per monster = its rate / sum(enabled rates).
+      resources :monsters, only: [:index, :create]
+
       # Ground tiles — grass/road/… cells tagged in the ground-tile mapper by
       # their atlas coordinate, drawn via the tilemap renderer. A flat catalog
       # (no single-active); edge/corner autotiling comes later.

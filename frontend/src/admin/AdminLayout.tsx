@@ -11,6 +11,7 @@ const TOOLS = [
   { to: 'sprites', label: 'Sprites' },
   { to: 'objects', label: 'Map Objects' },
   { to: 'ground', label: 'Ground Tiles' },
+  { to: 'monsters', label: 'Monsters' },
 ]
 
 export default function AdminLayout() {
