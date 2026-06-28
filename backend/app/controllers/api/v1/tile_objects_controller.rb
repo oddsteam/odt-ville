@@ -46,7 +46,10 @@ module Api
           door_dy: params.key?(:door_dy) ? params[:door_dy] : obj.door_dy,
           # Interior walk mask (#32) — a row-major array of strings from the
           # mapper, stored newline-joined. Only authored for buildings.
-          walk_mask: params.key?(:walk_mask) ? Array(params[:walk_mask]).join("\n") : obj.walk_mask
+          walk_mask: params.key?(:walk_mask) ? Array(params[:walk_mask]).join("\n") : obj.walk_mask,
+          # Foreground mask (#36) — a PNG data URL marking which house pixels
+          # render over the avatar. Stored as-is; only authored for buildings.
+          fg_mask: params.key?(:fg_mask) ? params[:fg_mask] : obj.fg_mask
         )
         obj.save!
         obj.activate! unless params[:active] == false

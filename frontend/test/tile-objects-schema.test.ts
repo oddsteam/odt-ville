@@ -17,6 +17,7 @@ describe('TileObject schema', () => {
     active: true,
     updated_at: '2026-06-22T00:00:00.000Z',
     image: 'data:image/png;base64,xxx',
+    fg_mask: null,
   }
 
   it('decodes a well-formed payload from the Rails tile-object endpoint', () => {
@@ -27,6 +28,12 @@ describe('TileObject schema', () => {
     const mask = ['###', '#.#', '#.#', '#.#']
     const decoded = Schema.decodeUnknownSync(TileObject)({ ...valid, walk_mask: mask })
     expect(decoded.walk_mask).toEqual(mask)
+  })
+
+  it('decodes a foreground mask data URL (#36)', () => {
+    const fg = 'data:image/png;base64,maskblob'
+    const decoded = Schema.decodeUnknownSync(TileObject)({ ...valid, fg_mask: fg })
+    expect(decoded.fg_mask).toBe(fg)
   })
 
   it('rejects a missing image (the blob the game draws)', () => {

@@ -58,6 +58,20 @@ module Api
         assert_equal mask, json[:walk_mask]
       end
 
+      test "create persists a foreground mask, round-tripped on the full object" do
+        fg = "data:image/png;base64,maskblob"
+        post "/api/v1/tile_objects",
+             params: { name: "Cottage", kind: "building", image: "data:img", footprint_w: 3, footprint_h: 4, door_dx: 1, door_dy: 3, walk_mask: ["###", "#.#", "#.#", "#.#"], fg_mask: fg },
+             headers: auth(@user)
+
+        assert_response :success
+        assert_equal fg, json[:fg_mask]
+
+        get "/api/v1/tile_objects/active", params: { kind: "building" }, headers: auth(@user)
+        assert_response :success
+        assert_equal fg, json[:fg_mask]
+      end
+
       test "show returns the full object including the image blob, for editing" do
         obj = TileObject.create!(name: "Cottage", kind: "building", image: "data:img", footprint_w: 3, footprint_h: 4, door_dx: 1, door_dy: 3, walk_mask: "###\n#.#\n#.#\n#.#", active: true)
 

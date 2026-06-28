@@ -83,3 +83,13 @@ body { margin: 0; font-family: system-ui, sans-serif; background: #1b1b22; color
   border-radius: 4px; padding: 3px 10px; font-size: 12px; cursor: pointer;
 }
 .paint-mode button.is-on { background: #2e7dff; border-color: #2e7dff; color: #fff; }
+
+/* Foreground-mask editor (#36) — reuses the paint-mode button styling. */
+.fg-editor { margin: 6px 0; }
+.fg-tools { display: flex; align-items: center; gap: 6px; margin: 6px 0; font-size: 13px; color: #9a9ab0; }
+.fg-tools button {
+  background: #2a2a34; color: #e8e8ee; border: 1px solid #3a3a47;
+  border-radius: 4px; padding: 3px 10px; font-size: 12px; cursor: pointer;
+}
+.fg-tools button.is-on { background: #2e7dff; border-color: #2e7dff; color: #fff; }
+.fg-canvas { display: block; image-rendering: pixelated; max-width: 100%; height: auto; cursor: crosshair; border: 1px solid #3a3a47; }

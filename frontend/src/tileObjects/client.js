@@ -19,10 +19,10 @@ export function getActiveTileObject(kind = 'tree') {
 /**
  * @param {{ name: string, kind: string, image: string, footprint_w: number,
  *   footprint_h: number, door_dx?: number, door_dy?: number,
- *   walk_mask?: readonly string[] }} o
+ *   walk_mask?: readonly string[], fg_mask?: string }} o
  */
-export function saveTileObject({ name, kind, image, footprint_w, footprint_h, door_dx, door_dy, walk_mask }) {
-  return runEdge(TileObjectsService.save({ name, kind, image, footprint_w, footprint_h, door_dx, door_dy, walk_mask }))
+export function saveTileObject({ name, kind, image, footprint_w, footprint_h, door_dx, door_dy, walk_mask, fg_mask }) {
+  return runEdge(TileObjectsService.save({ name, kind, image, footprint_w, footprint_h, door_dx, door_dy, walk_mask, fg_mask }))
 }
 
 // GET /tile_objects/:id -> the full object (incl. image), for loading a saved

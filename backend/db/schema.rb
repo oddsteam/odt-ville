@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_26_000001) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_28_000001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -90,6 +90,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_26_000001) do
     t.datetime "created_at", null: false
     t.integer "door_dx"
     t.integer "door_dy"
+    t.text "fg_mask"
     t.float "footprint_h", default: 1.0, null: false
     t.float "footprint_w", default: 1.0, null: false
     t.text "image", null: false

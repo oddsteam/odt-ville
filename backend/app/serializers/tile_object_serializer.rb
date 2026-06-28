@@ -5,7 +5,9 @@ module TileObjectSerializer
   module_function
 
   def call(obj)
-    summary(obj).merge(image: obj.image)
+    # Foreground mask (#36) rides on the full object only — it's an image-
+    # resolution blob, too heavy for the roster summary.
+    summary(obj).merge(image: obj.image, fg_mask: obj.fg_mask)
   end
 
   def summary(obj)
