@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { activateTileObject, deactivateTileObject, getTileObject, listTileObjects, saveTileObject } from '../tileObjects/client.js'
+import { activateTileObject, deactivateTileObject, deleteTileObject, getTileObject, listTileObjects, saveTileObject } from '../tileObjects/client.js'
 import type { TileObject, TileObjectSummary } from '../tileObjects/schema.ts'
 import { validateWalkMask } from '../game/town.ts'
 import './styles.css'
@@ -97,6 +97,18 @@ export default function TileMapper() {
       deactivateTileObject(id)
         .then(() => refreshSaved())
         .catch((err: unknown) => setStatus(`Deactivate failed: ${err instanceof Error ? err.message : String(err)}`))
+    },
+    [refreshSaved],
+  )
+
+  // Delete a saved object for good (#35). Deletes are irreversible, so confirm
+  // first; if it was the active one of its kind, the game falls back to default.
+  const onDelete = useCallback(
+    (o: TileObjectSummary) => {
+      if (!window.confirm(`Delete "${o.name}"? This can't be undone.`)) return
+      deleteTileObject(o.id)
+        .then(() => refreshSaved())
+        .catch((err: unknown) => setStatus(`Delete failed: ${err instanceof Error ? err.message : String(err)}`))
     },
     [refreshSaved],
   )
@@ -483,24 +495,31 @@ export default function TileMapper() {
             {saved.length === 0 && <li className="hint">No saved objects yet.</li>}
             {saved.map((o) => (
               <li key={o.id} className={o.active ? 'is-active' : ''}>
-                <span className="saved-name">{o.name}</span>
-                <span className="saved-kind">{o.kind}</span>
-                <span className="saved-fp">{o.footprint_w}×{o.footprint_h}</span>
-                <button type="button" onClick={() => onEdit(o.id)}>
-                  Edit
-                </button>
-                {o.active ? (
-                  <>
-                    <span className="saved-badge">active</span>
+                <div className="saved-head">
+                  <span className="saved-name">{o.name}</span>
+                  {o.active && <span className="saved-badge">active</span>}
+                </div>
+                <div className="saved-meta">
+                  <span className="saved-kind">{o.kind}</span>
+                  <span className="saved-fp">{o.footprint_w}×{o.footprint_h}</span>
+                </div>
+                <div className="saved-actions">
+                  <button type="button" onClick={() => onEdit(o.id)}>
+                    Edit
+                  </button>
+                  {o.active ? (
                     <button type="button" onClick={() => onDeactivate(o.id)}>
                       Deactivate
                     </button>
-                  </>
-                ) : (
-                  <button type="button" onClick={() => onActivate(o.id)}>
-                    Activate
+                  ) : (
+                    <button type="button" onClick={() => onActivate(o.id)}>
+                      Activate
+                    </button>
+                  )}
+                  <button type="button" className="danger" onClick={() => onDelete(o)}>
+                    Delete
                   </button>
-                )}
+                </div>
               </li>
             ))}
           </ul>

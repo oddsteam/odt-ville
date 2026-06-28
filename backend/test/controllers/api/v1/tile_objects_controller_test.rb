@@ -79,6 +79,16 @@ module Api
         assert_not a.reload.active
         assert_nil TileObject.current("flower-group"), "no active object of the kind remains"
       end
+
+      test "destroy removes the object, leaving its kind with no active object" do
+        a = TileObject.create!(name: "Oak", kind: "tree", image: "i", footprint_w: 2, footprint_h: 2, active: true)
+
+        delete "/api/v1/tile_objects/#{a.id}", headers: auth(@user)
+
+        assert_response :no_content
+        assert_not TileObject.exists?(a.id), "the object is gone"
+        assert_nil TileObject.current("tree"), "the kind falls back to the procedural default"
+      end
     end
   end
 end

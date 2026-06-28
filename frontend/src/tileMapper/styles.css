@@ -49,22 +49,31 @@ body { margin: 0; font-family: system-ui, sans-serif; background: #1b1b22; color
 }
 .save:disabled { background: #3a3a47; color: #6a6a7a; cursor: not-allowed; }
 
-/* Saved-objects roster (#27): which tile-objects exist + the active one per kind. */
-.saved-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+/* Saved-objects roster (#27, redesigned #35): a stacked card per object — name +
+   active badge, then kind · footprint, then the action row — so it reads clearly
+   and never overflows the 300px sidebar (#33). */
+.saved-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .saved-list li {
-  display: flex; align-items: center; gap: 8px; font-size: 12px;
-  padding: 5px 8px; background: #15151b; border: 1px solid #2a2a34; border-radius: 4px;
+  display: flex; flex-direction: column; gap: 6px; font-size: 12px;
+  padding: 8px; background: #15151b; border: 1px solid #2a2a34; border-radius: 6px;
 }
 .saved-list li.is-active { border-color: #2e7dff; }
-.saved-name { flex: 1; color: #e8e8ee; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.saved-head { display: flex; align-items: center; gap: 8px; }
+.saved-name { flex: 1; color: #e8e8ee; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.saved-meta { display: flex; gap: 8px; }
 .saved-kind { color: #9a9ab0; }
 .saved-fp { color: #6a6a7a; }
-.saved-badge { color: #2e7dff; font-weight: 600; }
+.saved-badge {
+  color: #2e7dff; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em;
+}
+.saved-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .saved-list button {
-  background: #2a2a34; color: #e8e8ee; border: 1px solid #3a3a47;
-  border-radius: 4px; padding: 3px 8px; font-size: 12px; cursor: pointer;
+  flex: 1; background: #2a2a34; color: #e8e8ee; border: 1px solid #3a3a47;
+  border-radius: 4px; padding: 4px 8px; font-size: 12px; cursor: pointer;
 }
 .saved-list button:hover { background: #34343f; }
+.saved-list button.danger { color: #ff7a7a; border-color: #5a2a2a; }
+.saved-list button.danger:hover { background: #3a2424; }
 
 /* Walk-mask paint mode toggle (#32): switch between painting walkable cells and
    placing the door on the building preview. */
