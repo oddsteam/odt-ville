@@ -30,6 +30,19 @@ describe('playerDepthAt', () => {
     expect(playerDepthAt([masked], 2, 6)).toBe(65)
   })
 
+  // #44: an overhang cell ('o') is walkable but the avatar stays UNDER the house
+  // art — its default row depth keeps it below the building sprite (79), the
+  // inverse of a '.' porch cell which lifts it on top.
+  const overhang = { ...building, mask: ['###', '###', '#o#', '#.#'] } // dy=2 'o', dy=3 '.'
+
+  it('keeps the avatar under the building on an overhang cell', () => {
+    expect(playerDepthAt([overhang], 3, 6)).toBe(65) // 'o' at dx1,dy2 → default, under 79
+  })
+
+  it('still lifts the avatar on a porch cell of the same building', () => {
+    expect(playerDepthAt([overhang], 3, 7)).toBe(80) // '.' at dx1,dy3 → over the house
+  })
+
   // #46: with a door north of the footprint's south edge, the avatar must stay
   // above the building sprite on every door-column tile from the door down to
   // the edge, or it vanishes mid-exit on the tile directly south of the door.

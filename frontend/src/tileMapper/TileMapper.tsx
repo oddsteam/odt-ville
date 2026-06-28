@@ -30,13 +30,32 @@ export function doorCellFromClick(
 // Turn the set of painted walkable cells ("dx,dy") into the row-major walk mask
 // the town stamps (issue #32): '.' = walkable (porch/path), '#' = solid. Cells
 // outside the cols×rows footprint are dropped.
-export function buildWalkMask(walk: ReadonlySet<string>, cols: number, rows: number): string[] {
+export function buildWalkMask(
+  walk: ReadonlySet<string>,
+  cols: number,
+  rows: number,
+  overhang: ReadonlySet<string> = new Set(),
+): string[] {
   const out: string[] = []
   for (let r = 0; r < rows; r++) {
     let row = ''
-    for (let c = 0; c < cols; c++) row += walk.has(`${c},${r}`) ? '.' : '#'
+    // 'o' overhang (#44, walkable + avatar under) wins over '.' porch; else '#'.
+    for (let c = 0; c < cols; c++) {
+      const k = `${c},${r}`
+      row += overhang.has(k) ? 'o' : walk.has(k) ? '.' : '#'
+    }
     out.push(row)
   }
+  return out
+}
+
+// The 'o' overhang cells of a stored mask (#44), as "dx,dy" keys — so a saved
+// building loads back into the editor with its overhang painting intact.
+export function overhangCellsFromMask(mask: readonly string[]): Set<string> {
+  const out = new Set<string>()
+  mask.forEach((row, r) => {
+    for (let c = 0; c < row.length; c++) if (row[c] === 'o') out.add(`${c},${r}`)
+  })
   return out
 }
 
@@ -124,11 +143,14 @@ export default function TileMapper() {
   // Authored walk mask for a 'building' (#32) — the set of "dx,dy" cells the
   // admin painted walkable (porch/path). Plus which the preview click edits.
   const [walk, setWalk] = useState<ReadonlySet<string>>(new Set())
+  // Overhang cells for a 'building' (#44) — "dx,dy" footprint cells the admin
+  // marked walk-under: walkable, but the avatar renders beneath the building art.
+  const [overhangCells, setOverhangCells] = useState<ReadonlySet<string>>(new Set())
   // Erased cells for the current atlas selection (#43) — "c,r" offsets within
   // the selection box; cleared to transparent in the saved crop so neighbour
   // sprites caught in the bounding box don't ship.
   const [erase, setErase] = useState<ReadonlySet<string>>(new Set())
-  const [paintMode, setPaintMode] = useState<'walk' | 'door' | 'erase' | 'fg'>('walk')
+  const [paintMode, setPaintMode] = useState<'walk' | 'door' | 'erase' | 'fg' | 'overhang'>('walk')
   // Foreground mask authoring (#36) — paint over the building art which pixels
   // render in front of the avatar. Held as two offscreen canvases: the building
   // art (source, for wand colour reads) and the mask (magenta where painted; its
@@ -202,6 +224,7 @@ export default function TileMapper() {
         setFpH(o.footprint_h)
         setDoor(o.door_dx != null && o.door_dy != null ? { dx: o.door_dx, dy: o.door_dy } : null)
         setWalk(o.walk_mask ? walkCellsFromMask(o.walk_mask) : new Set())
+        setOverhangCells(o.walk_mask ? overhangCellsFromMask(o.walk_mask) : new Set())
         setErase(new Set())
         setPaintMode('walk')
         setLoadedFg(o.fg_mask ?? null) // restore the foreground mask into the editor
@@ -341,6 +364,10 @@ export default function TileMapper() {
     for (let r = 0; r < doorRows; r++)
       for (let c = 0; c < doorCols; c++)
         if (walk.has(`${c},${r}`)) ctx.fillRect(c * cw, r * ch, cw, ch)
+    ctx.fillStyle = 'rgba(255,150,40,0.45)' // overhang cells (#44) — walk-under
+    for (let r = 0; r < doorRows; r++)
+      for (let c = 0; c < doorCols; c++)
+        if (overhangCells.has(`${c},${r}`)) ctx.fillRect(c * cw, r * ch, cw, ch)
     ctx.strokeStyle = 'rgba(0,0,0,0.4)'
     ctx.lineWidth = 1
     for (let c = 1; c < doorCols; c++) ctx.strokeRect(c * cw + 0.5, 0, 0, h)
@@ -349,7 +376,7 @@ export default function TileMapper() {
       ctx.fillStyle = 'rgba(46,200,90,0.45)'
       ctx.fillRect(door.dx * cw, door.dy * ch, cw, ch)
     }
-  }, [atlas, cell, selBox, editImg, fpW, fpH, isBuilding, doorCols, doorRows, door, walk, erase])
+  }, [atlas, cell, selBox, editImg, fpW, fpH, isBuilding, doorCols, doorRows, door, walk, overhangCells, erase])
 
   // Click the preview to either mark the entrance (door mode) or toggle a
   // walkable cell (walk mode) — issue #29/#32.
@@ -373,9 +400,18 @@ export default function TileMapper() {
       setDoor(cell)
       return
     }
+    // Overhang mode (#44) toggles walk-under cells; walk mode toggles porch cells.
+    const key = `${cell.dx},${cell.dy}`
+    if (paintMode === 'overhang') {
+      setOverhangCells((prev) => {
+        const next = new Set(prev)
+        next.has(key) ? next.delete(key) : next.add(key)
+        return next
+      })
+      return
+    }
     setWalk((prev) => {
       const next = new Set(prev)
-      const key = `${cell.dx},${cell.dy}`
       next.has(key) ? next.delete(key) : next.add(key)
       return next
     })
@@ -432,7 +468,7 @@ export default function TileMapper() {
     // A building must ship an authored, reachable interior walk mask (#32): a
     // door + at least one walkable tile + a path connecting them to a footprint
     // edge, so the avatar can actually enter. Block the save otherwise.
-    const mask = isBuilding ? buildWalkMask(walk, doorCols, doorRows) : undefined
+    const mask = isBuilding ? buildWalkMask(walk, doorCols, doorRows, overhangCells) : undefined
     if (isBuilding) {
       const v = validateWalkMask(mask, doorCols, doorRows, door)
       if (!v.ok) {
@@ -655,7 +691,7 @@ export default function TileMapper() {
           </label>
           <label>
             Kind
-            <select value={kind} onChange={(e) => { setKind(e.target.value); setDoor(null); setWalk(new Set()) }}>
+            <select value={kind} onChange={(e) => { setKind(e.target.value); setDoor(null); setWalk(new Set()); setOverhangCells(new Set()) }}>
               <option value="tree">tree</option>
               <option value="prop">prop</option>
               <option value="flower-group">flower-group</option>
@@ -696,6 +732,15 @@ export default function TileMapper() {
                 {isBuilding && (
                   <button
                     type="button"
+                    className={paintMode === 'overhang' ? 'is-on' : ''}
+                    onClick={() => setPaintMode('overhang')}
+                  >
+                    Overhang
+                  </button>
+                )}
+                {isBuilding && (
+                  <button
+                    type="button"
                     className={paintMode === 'door' ? 'is-on' : ''}
                     onClick={() => setPaintMode('door')}
                   >
@@ -724,6 +769,12 @@ export default function TileMapper() {
               {paintMode === 'erase' && (
                 <p className="hint">
                   Click cells inside the selection to drop them (toggle). {erase.size} erased — they save transparent.
+                </p>
+              )}
+              {isBuilding && paintMode === 'overhang' && (
+                <p className="hint">
+                  Click cells the avatar walks <strong>under</strong> the building art (overhang/foliage). Walkable,
+                  but drawn beneath the house. {overhangCells.size} marked.
                 </p>
               )}
               {isBuilding && (paintMode === 'walk' || paintMode === 'door') && (
