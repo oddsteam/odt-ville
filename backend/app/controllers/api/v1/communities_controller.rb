@@ -52,6 +52,24 @@ module Api
         render json: { id: community.id, title: community.title }, status: :created
       end
 
+      # PATCH /api/v1/communities/:id — admin: set or clear the entry gate
+      # (issue #38). A posture-login gate requires a posture_set_id; "No gate"
+      # (blank entry_gate) clears both columns.
+      def update
+        community = current_user.company.houses.find(params[:id])
+        gate = params[:entry_gate].presence
+
+        if gate
+          return render json: { error: "Unknown gate: #{gate}" }, status: :unprocessable_entity unless gate == PostureController::GATE
+          return render json: { error: "posture_set_id is required for a gate" }, status: :unprocessable_entity if params[:posture_set_id].blank?
+          community.update!(entry_gate: gate, posture_set_id: params[:posture_set_id])
+        else
+          community.update!(entry_gate: nil, posture_set_id: nil)
+        end
+
+        head :no_content
+      end
+
       # DELETE /api/v1/communities/:id — admin: remove a community (and its
       # boards, content and per-user state, via dependent: :destroy).
       def destroy

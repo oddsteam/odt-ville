@@ -7,10 +7,12 @@ import * as Schema from 'effect/Schema'
 
 import { DecodeError, Http } from '../lib/http.ts'
 import type { HttpError } from '../lib/http.ts'
-import { StartResponse, ConfirmResponse } from './schema.ts'
+import { StartResponse, ConfirmResponse, PostureSetsResponse } from './schema.ts'
+import type { PostureSet } from './schema.ts'
 
 const decodeStart = Schema.decodeUnknown(StartResponse)
 const decodeConfirm = Schema.decodeUnknown(ConfirmResponse)
+const decodeSets = Schema.decodeUnknown(PostureSetsResponse)
 
 const decode =
   <A>(path: string, decoder: (u: unknown) => Effect.Effect<A, unknown>) =>
@@ -44,4 +46,13 @@ export const confirm = (
     return yield* decode('/game/posture/confirm', decodeConfirm)(raw)
   })
 
-export const PostureService = { start, confirm } as const
+// GET /game/posture/sets — the gate picker's catalog (issue #38).
+export const listSets = (): Effect.Effect<readonly PostureSet[], HttpError, Http> =>
+  Effect.gen(function* () {
+    const http = yield* Http
+    const raw = yield* http.get('/game/posture/sets')
+    const payload = yield* decode('/game/posture/sets', decodeSets)(raw)
+    return payload.posture_sets
+  })
+
+export const PostureService = { start, confirm, listSets } as const

@@ -13,6 +13,7 @@ import {
   CommunitiesResponse,
   FeedResponse,
   type Community,
+  type CommunityGate,
   type FeedItem,
   type NewCommunity,
 } from './schema.ts'
@@ -53,6 +54,18 @@ export const create = (
     return yield* http.post('/communities', attrs)
   })
 
+// PATCH /communities/:id -> set/clear the entry gate (issue #38). Rails
+// `update` answers PUT too, so reuse http.put — no new verb on the Http layer.
+export const update = (
+  id: number,
+  gate: CommunityGate,
+): Effect.Effect<null, HttpError, Http> =>
+  Effect.gen(function* () {
+    const http = yield* Http
+    yield* http.put(`/communities/${id}`, gate)
+    return null
+  })
+
 // DELETE /communities/:id -> null
 export const remove = (id: number): Effect.Effect<null, HttpError, Http> =>
   Effect.gen(function* () {
@@ -70,4 +83,4 @@ export const getFeed = (): Effect.Effect<readonly FeedItem[], HttpError, Http> =
     return payload.items
   })
 
-export const CommunitiesService = { list, create, remove, getFeed } as const
+export const CommunitiesService = { list, create, update, remove, getFeed } as const

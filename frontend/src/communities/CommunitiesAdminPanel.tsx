@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { categoryEmoji } from './constants.js'
 import { CommunitiesService } from './service.ts'
 import type { Community } from './schema.ts'
+import { PostureService } from '../posture/service.ts'
+import type { PostureSet } from '../posture/schema.ts'
 import { runEdge } from '../lib/runEdge.ts'
 import '../tileMapper/styles.css'
 import './admin.css'
@@ -19,6 +21,85 @@ const COLOURS = [
   '#E67E22', '#16A085', '#D4AC0D', '#CB4335',
 ]
 
+const POSTURE_GATE = 'posture-login'
+
+// Per-house entry-gate editor (issue #38): pick "No gate" or "Posture-login +
+// <set>" and save. The posture set comes from the live catalog; the current
+// set isn't shown because posture_set_id is server-only (never in the index),
+// so editing a gated house re-picks the set.
+function HouseGate({
+  house,
+  sets,
+  onSaved,
+}: {
+  house: Community
+  sets: readonly PostureSet[]
+  onSaved?: () => void | Promise<void>
+}) {
+  const [gate, setGate] = useState(house.entry_gate === POSTURE_GATE ? POSTURE_GATE : '')
+  const [setId, setSetId] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function save() {
+    if (busy) return
+    if (gate === POSTURE_GATE && !setId) {
+      setError('Pick a posture set')
+      return
+    }
+    setBusy(true)
+    setError(null)
+    try {
+      await runEdge(
+        CommunitiesService.update(house.id, {
+          entry_gate: gate || null,
+          posture_set_id: gate === POSTURE_GATE ? setId : null,
+        }),
+      )
+      if (onSaved) await onSaved()
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="comm-gate">
+      <select
+        aria-label={`Entry gate for ${house.title}`}
+        value={gate}
+        onChange={(e) => setGate(e.target.value)}
+        disabled={busy}
+      >
+        <option value="">No gate</option>
+        <option value={POSTURE_GATE}>Posture-login</option>
+      </select>
+
+      {gate === POSTURE_GATE && (
+        <select
+          aria-label={`Posture set for ${house.title}`}
+          value={setId}
+          onChange={(e) => setSetId(e.target.value)}
+          disabled={busy}
+        >
+          <option value="">Choose a posture set…</option>
+          {sets.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
+            </option>
+          ))}
+        </select>
+      )}
+
+      <button type="button" className="comm-gate-save" onClick={save} disabled={busy}>
+        {busy ? 'Saving…' : 'Save'}
+      </button>
+      {error && <span className="comm-gate-err">{error}</span>}
+    </div>
+  )
+}
+
 // Community CRUD console — lives outside the village game so the game can stay
 // a true black box. Owns its own API calls and asks the shell to refetch via
 // `onChanged()` after each mutation so the village/feed reflect the new state.
@@ -35,6 +116,15 @@ export default function CommunitiesAdminPanel({
   const [logoUrl, setLogoUrl] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [sets, setSets] = useState<readonly PostureSet[]>([])
+
+  // The posture-set catalog for the gate picker. Empty if posture-login is
+  // unreachable — the picker just shows no sets and a gate can't be saved.
+  useEffect(() => {
+    runEdge(PostureService.listSets())
+      .then(setSets)
+      .catch(() => setSets([]))
+  }, [])
 
   const used = communities.length
 
@@ -93,18 +183,21 @@ export default function CommunitiesAdminPanel({
           <ul className="comm-list">
             {communities.map((c) => (
               <li key={c.id} className="comm-row">
-                <span className="comm-swatch" style={{ background: c.color }} />
-                <span className="comm-emoji">{categoryEmoji(c.category_key)}</span>
-                <span className="comm-name">{c.title}</span>
-                <button
-                  type="button"
-                  className="comm-del"
-                  title="Delete community"
-                  onClick={() => handleDelete(c.id)}
-                  disabled={busy}
-                >
-                  ×
-                </button>
+                <div className="comm-row-main">
+                  <span className="comm-swatch" style={{ background: c.color }} />
+                  <span className="comm-emoji">{categoryEmoji(c.category_key)}</span>
+                  <span className="comm-name">{c.title}</span>
+                  <button
+                    type="button"
+                    className="comm-del"
+                    title="Delete community"
+                    onClick={() => handleDelete(c.id)}
+                    disabled={busy}
+                  >
+                    ×
+                  </button>
+                </div>
+                <HouseGate house={c} sets={sets} onSaved={onChanged} />
               </li>
             ))}
             {used === 0 && <li className="hint">No communities yet.</li>}

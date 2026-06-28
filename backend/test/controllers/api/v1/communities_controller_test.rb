@@ -115,6 +115,55 @@ module Api
         assert_equal "#888888", community.color
       end
 
+      test "update sets a posture-login gate with its posture set" do
+        community = make_community(company: @company, title: "Gatable")
+
+        patch "/api/v1/communities/#{community.id}",
+              params: { entry_gate: "posture-login", posture_set_id: "set-9" },
+              as: :json, headers: auth(@user)
+
+        assert_response :success
+        community.reload
+        assert_equal "posture-login", community.entry_gate
+        assert_equal "set-9", community.posture_set_id
+      end
+
+      test "update with no gate clears both the gate and the posture set" do
+        community = make_community(company: @company, title: "WasGated")
+        community.update!(entry_gate: "posture-login", posture_set_id: "set-9")
+
+        patch "/api/v1/communities/#{community.id}",
+              params: { entry_gate: nil, posture_set_id: nil },
+              as: :json, headers: auth(@user)
+
+        assert_response :success
+        community.reload
+        assert_nil community.entry_gate
+        assert_nil community.posture_set_id
+      end
+
+      test "update 422s when a posture-login gate has no posture set" do
+        community = make_community(company: @company, title: "Halfset")
+
+        patch "/api/v1/communities/#{community.id}",
+              params: { entry_gate: "posture-login", posture_set_id: "" },
+              as: :json, headers: auth(@user)
+
+        assert_response :unprocessable_entity
+        assert_nil community.reload.entry_gate
+      end
+
+      test "update 404s across companies" do
+        other_company, _ = setup_company(name: "Other Co")
+        foreign = make_community(company: other_company, title: "Theirs")
+
+        patch "/api/v1/communities/#{foreign.id}",
+              params: { entry_gate: "posture-login", posture_set_id: "x" },
+              as: :json, headers: auth(@user)
+
+        assert_response :not_found
+      end
+
       test "destroy removes the community plus its boards and content cascade" do
         community = make_community(company: @company, title: "Gone")
         item = make_item(board: community.boards.find_by(board_type: "must_know"))

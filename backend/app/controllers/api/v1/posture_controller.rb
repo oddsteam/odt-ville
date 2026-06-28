@@ -29,6 +29,12 @@ module Api
         render json: session, status: :created
       end
 
+      # GET /api/v1/game/posture/sets — admin: the posture-set catalog for the
+      # gate picker, proxied from posture-login. client_secret stays server-side.
+      def sets
+        render json: { posture_sets: PostureLogin::Client.from_env.list_posture_sets }
+      end
+
       # POST /api/v1/game/posture/confirm — body { session_id }. Reads the
       # result server-to-server; the gate opens only on a confirmed pass.
       def confirm

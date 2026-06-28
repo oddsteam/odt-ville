@@ -14,9 +14,12 @@ module Api
       # service. Swapped in for PostureLogin::Client.from_env via stub.
       class FakeClient
         attr_reader :started
-        def initialize(result: nil)
+        def initialize(result: nil, sets: [])
           @result = result
+          @sets = sets
         end
+
+        def list_posture_sets = @sets
 
         def start_verification(posture_set_id:, callback_url:)
           @started = { posture_set_id:, callback_url: }
@@ -37,6 +40,17 @@ module Api
         yield
       ensure
         PostureLogin::Client.define_singleton_method(:from_env, original)
+      end
+
+      test "sets proxies the posture-login catalog of id+name pairs" do
+        client = FakeClient.new(sets: [ { id: "set-9", name: "Wave" }, { id: "set-3", name: "Peace" } ])
+        with_client(client) do
+          get "/api/v1/game/posture/sets", headers: auth(@user)
+        end
+
+        assert_response :success
+        assert_equal [ { id: "set-9", name: "Wave" }, { id: "set-3", name: "Peace" } ],
+                     json[:posture_sets].map { |s| { id: s[:id], name: s[:name] } }
       end
 
       test "start looks up the house's posture set and returns the hosted session" do
