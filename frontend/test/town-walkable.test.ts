@@ -37,4 +37,11 @@ describe('isWalkable', () => {
   it('allows plain ground', () => {
     expect(isWalkable(town, buildings, none, 2, 2)).toBe(true)
   })
+
+  // #44: an overhang cell ('o') is a walkable footprint cell — the avatar steps
+  // onto it (and renders under the building art there, see townDepth).
+  it('lets the player onto an overhang cell (walk-mask "o")', () => {
+    const overhung = [{ col: 0, row: 0, w: 2, h: 3, doorCol: 0, doorRow: 2, mask: ['##', 'o#', '##'] }]
+    expect(isWalkable(town, overhung, none, 0, 1)).toBe(true) // 'o' at dx0,dy1
+  })
 })

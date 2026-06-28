@@ -67,10 +67,18 @@ export function doorAnchorFor(
   return { dx: building.door_dx, dy: building.door_dy }
 }
 
+// A footprint cell the avatar may stand on: '.' = porch/path (drawn OVER the
+// house) or 'o' = overhang (#44 — walkable, but drawn UNDER the house art, so
+// the building overhangs the character). '#' / anything else is solid.
+function maskWalkableChar(ch: string | undefined): boolean {
+  return ch === '.' || ch === 'o'
+}
+
 // An authored interior walk mask (#32): a row-major grid the size of the
-// footprint, '#' = solid, '.' = walkable (the porch/path leading to the door).
-// The door cell (door_dx/door_dy, #29) is always walkable on top of this. Pull
-// it off the active building object, or undefined when none authored one.
+// footprint, '#' = solid, '.' = walkable porch (avatar over), 'o' = walkable
+// overhang (#44, avatar under). The door cell (door_dx/door_dy, #29) is always
+// walkable on top of this. Pull it off the active building object, or undefined
+// when none authored one.
 export function walkMaskFor(
   building: { walk_mask?: string[] | null } | null | undefined,
 ): string[] | undefined {
@@ -91,7 +99,7 @@ function maskCellWalkable(
 ): boolean {
   if (x < 0 || x >= w || y < 0 || y >= h) return false
   if (x === door.dx && y === door.dy) return true
-  return mask[y]?.[x] === '.'
+  return maskWalkableChar(mask[y]?.[x])
 }
 
 // Is the door reachable from outside the footprint? Flood-fill from the door
@@ -136,7 +144,7 @@ export function validateWalkMask(
   door: { dx: number; dy: number } | null | undefined,
 ): { ok: boolean; reason?: 'no-door' | 'no-walkable' | 'unreachable' } {
   if (door == null) return { ok: false, reason: 'no-door' }
-  if (mask == null || !mask.some((row) => row.includes('.'))) return { ok: false, reason: 'no-walkable' }
+  if (mask == null || !mask.some((row) => row.includes('.') || row.includes('o'))) return { ok: false, reason: 'no-walkable' }
   if (!walkMaskConnected(mask, w, h, door)) return { ok: false, reason: 'unreachable' }
   return { ok: true }
 }
@@ -409,7 +417,9 @@ export function planFlowers(town: TileGrid, w: number, h: number): FlowerLayout 
 // an authored walk-mask path cell (#32), beat that building's sprite depth
 // ((row+h)*10 - 1 in townRenderer) so the avatar reads as standing in the
 // doorway / walking out / on the porch instead of clipping under the house;
-// elsewhere, the row-banded default.
+// elsewhere, the row-banded default. An overhang cell ('o', #44) is deliberately
+// NOT lifted — its default depth stays below the house body sprite, so the
+// building art overhangs the avatar there.
 export function playerDepthAt(buildings: Building[], x: number, y: number): number {
   const on = buildings.find(
     (b) =>
@@ -449,9 +459,9 @@ export function isWalkable(
   if (buildings.some((b) => b.doorCol === x && b.doorRow === y)) return true
   const inside = buildings.find((b) => x >= b.col && x < b.col + b.w && y >= b.row && y < b.row + b.h)
   if (inside) {
-    // A footprint cell is walkable only where the authored mask marks it (#32);
-    // an unmasked building stays a solid box.
-    return inside.mask?.[y - inside.row]?.[x - inside.col] === '.'
+    // A footprint cell is walkable only where the authored mask marks it (#32):
+    // '.' porch or 'o' overhang (#44); an unmasked building stays a solid box.
+    return maskWalkableChar(inside.mask?.[y - inside.row]?.[x - inside.col])
   }
   return !blockers.has(`${x},${y}`)
 }
