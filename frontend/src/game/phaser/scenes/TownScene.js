@@ -506,13 +506,16 @@ export default class TownScene extends Phaser.Scene {
       this.exitedCommunityId ?? session?.spawn?.last_community_id ?? null
     const b = id != null ? this.buildings.find((x) => x.community.id === id) : null
     const spawn = b
-      ? { x: b.doorCol, y: b.doorRow + 1, facing: 'up' }
+      ? { x: b.doorCol, y: b.doorRow + 1, facing: 'down' }
       : { x: this.town.entrance.x, y: this.town.entrance.y, facing: 'up' }
 
     this.playerTile = { x: spawn.x, y: spawn.y }
     this.facing = spawn.facing
     const px = spawn.x * TILE + TILE / 2
-    const depth = spawn.y * 10 + 5
+    // Same depth rule as a normal step (#46): exiting a building spawns us on
+    // the tile south of the door, which may be a footprint cell under the house
+    // sprite — playerDepthAt lifts us above it so we don't respawn invisible.
+    const depth = playerDepthAt(this.buildings, spawn.x, spawn.y)
 
     if (this.usingManifest) {
       // Manifest sprite: a tightly-cropped sheet, so feet sit on the tile

@@ -404,14 +404,17 @@ export function planFlowers(town: TileGrid, w: number, h: number): FlowerLayout 
   return { groups, singles }
 }
 
-// Player render depth at a tile. On a building's door tile OR an authored
-// walk-mask path cell (#32), beat that building's sprite depth ((row+h)*10 - 1
-// in townRenderer) so the avatar reads as standing in the doorway / on the porch
-// instead of clipping under the house; elsewhere, the row-banded default.
+// Player render depth at a tile. On a building's door tile, its exit corridor
+// (the door's column from the door down to the footprint's south edge, #46), OR
+// an authored walk-mask path cell (#32), beat that building's sprite depth
+// ((row+h)*10 - 1 in townRenderer) so the avatar reads as standing in the
+// doorway / walking out / on the porch instead of clipping under the house;
+// elsewhere, the row-banded default.
 export function playerDepthAt(buildings: Building[], x: number, y: number): number {
   const on = buildings.find(
     (b) =>
       (b.doorCol === x && b.doorRow === y) ||
+      (b.doorCol === x && y >= b.doorRow && y < b.row + b.h) ||
       (x >= b.col &&
         x < b.col + b.w &&
         y >= b.row &&
