@@ -87,4 +87,12 @@ export const deactivate = (
     return yield* decodeSummary(path)(raw)
   })
 
-export const TileObjectsService = { getActive, get, save, list, activate, deactivate } as const
+// DELETE /tile_objects/:id -> remove a saved object for good (204, no body). If
+// it was the active one of its kind, the game falls back to its default (#35).
+export const del = (id: number): Effect.Effect<void, HttpError, Http> =>
+  Effect.gen(function* () {
+    const http = yield* Http
+    yield* http.del(`/tile_objects/${id}`)
+  })
+
+export const TileObjectsService = { getActive, get, save, list, activate, deactivate, del } as const

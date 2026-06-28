@@ -32,7 +32,7 @@ Rails.application.routes.draw do
 
       # Tile objects — trees/props cropped from an atlas in the tile-object
       # mapper, rendered on the town map. `active?kind=` is the live one.
-      resources :tile_objects, only: [:index, :create, :show] do
+      resources :tile_objects, only: [:index, :create, :show, :destroy] do
         get :active, on: :collection
         post :activate, on: :member
         post :deactivate, on: :member

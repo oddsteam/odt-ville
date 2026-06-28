@@ -45,3 +45,8 @@ export function activateTileObject(id) {
 export function deactivateTileObject(id) {
   return runEdge(TileObjectsService.deactivate(id))
 }
+
+// DELETE /tile_objects/:id -> delete a saved object for good (#35).
+export function deleteTileObject(id) {
+  return runEdge(TileObjectsService.del(id))
+}

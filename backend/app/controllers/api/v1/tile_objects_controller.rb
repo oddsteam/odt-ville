@@ -71,6 +71,14 @@ module Api
         obj.update!(active: false)
         render json: TileObjectSerializer.summary(obj.reload)
       end
+
+      # DELETE /api/v1/tile_objects/:id — drop a saved object for good. If it was
+      # the active one of its kind, that kind simply has no live object left and
+      # the game falls back to its procedural default (same as deactivate).
+      def destroy
+        TileObject.find(params[:id]).destroy!
+        head :no_content
+      end
     end
   end
 end
