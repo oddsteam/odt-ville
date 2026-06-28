@@ -41,6 +41,14 @@ services:
       RAILS_ENV: development
       PORT: "3190"
       DATABASE_URL: postgres://postgres:postgres@db:5432/one_rev_village_development
+      # Posture-login gate (issue #24). Creds come from the host's gitignored
+      # .env (dev fallbacks let `up` work without one). URLs default to the
+      # deployed posture-login service; compose.override.yaml swaps them for
+      # localhost in local dev.
+      POSTURE_SERVICE_URL: https://posture-login.p2d.uk
+      POSTURE_PUBLIC_URL: https://posture-login.p2d.uk
+      POSTURE_CLIENT_ID: ${POSTURE_CLIENT_ID:-dev-game-app}
+      POSTURE_CLIENT_SECRET: ${POSTURE_CLIENT_SECRET:-dev-secret-do-not-use-in-prod}
     command: bash -c "rm -f tmp/pids/server.pid && bundle install && bin/rails db:prepare && bin/rails server -b 0.0.0.0 -p 3190"
     volumes:
       - ./backend:/app
