@@ -47,6 +47,9 @@ module Api
           # Interior walk mask (#32) — a row-major array of strings from the
           # mapper, stored newline-joined. Only authored for buildings.
           walk_mask: params.key?(:walk_mask) ? Array(params[:walk_mask]).join("\n") : obj.walk_mask,
+          # Impassable cell borders (#53) — a row-major array of hex-digit rows
+          # from the mapper, stored newline-joined. Only authored for buildings.
+          edge_mask: params.key?(:edge_mask) ? Array(params[:edge_mask]).join("\n") : obj.edge_mask,
           # Foreground mask (#36) — a PNG data URL marking which house pixels
           # render over the avatar. Stored as-is; only authored for buildings.
           fg_mask: params.key?(:fg_mask) ? params[:fg_mask] : obj.fg_mask

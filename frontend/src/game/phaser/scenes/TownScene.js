@@ -1,6 +1,6 @@
 import Phaser from 'phaser'
 import { TILE, MOVE_MS, PLAYER_FEET_LIFT, buildTown } from '../../constants.js'
-import { isWalkable, playerDepthAt, doorAnchorFor, footprintFor, walkMaskFor } from '../../town.ts'
+import { isWalkable, edgeBlocked, playerDepthAt, doorAnchorFor, footprintFor, walkMaskFor, edgeMaskFor } from '../../town.ts'
 import { ensureTileTextures } from '../tileTextures.js'
 import {
   CHAR_SHEET_KEY,
@@ -115,6 +115,9 @@ export default class TownScene extends Phaser.Scene {
       // Authored interior walk mask (#32): which footprint cells the avatar may
       // stand on. Stamped onto every plot; absent → solid box (just the door).
       walkMaskFor(buildingObject),
+      // Authored impassable cell borders (#53): which footprint-cell sides the
+      // avatar cannot step across. Absent → today's free movement.
+      edgeMaskFor(buildingObject),
     )
 
     // With Scale.RESIZE in PhaserGame, the canvas display size matches
@@ -291,6 +294,9 @@ export default class TownScene extends Phaser.Scene {
       from: this.playerTile,
       dir,
       walkable: (x, y) => this.walkable(x, y),
+      // #53: refuse a step across an authored impassable cell border, even when
+      // both cells are walkable (a balcony-over-overhang ledge reads like a wall).
+      transitionBlocked: (from, to) => edgeBlocked(this.buildings, from.x, from.y, to.x, to.y),
       // Feet land at the destination tile's floor (matches setOrigin). The
       // bundled rpg-char-01 needs PLAYER_FEET_LIFT for its padded box; the
       // manifest sprite is tightly cropped, so its feet sit on the floor.

@@ -58,6 +58,20 @@ module Api
         assert_equal mask, json[:walk_mask]
       end
 
+      test "create persists impassable cell borders, round-tripped as rows" do
+        edges = ["000", "0c0", "000", "000"]
+        post "/api/v1/tile_objects",
+             params: { name: "Cottage", kind: "building", image: "data:img", footprint_w: 3, footprint_h: 4, door_dx: 1, door_dy: 3, walk_mask: ["###", "#.#", "#.#", "#.#"], edge_mask: edges },
+             headers: auth(@user)
+
+        assert_response :success
+        assert_equal edges, json[:edge_mask]
+
+        get "/api/v1/tile_objects/active", params: { kind: "building" }, headers: auth(@user)
+        assert_response :success
+        assert_equal edges, json[:edge_mask]
+      end
+
       test "create persists a foreground mask, round-tripped on the full object" do
         fg = "data:image/png;base64,maskblob"
         post "/api/v1/tile_objects",

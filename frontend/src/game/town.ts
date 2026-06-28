@@ -9,6 +9,7 @@ export interface Plot {
   doorCol: number
   doorRow: number
   mask?: string[]
+  edges?: string[]
 }
 
 // Just the tile grid — all the terrain/walkability reads need. A full `Town`
@@ -35,6 +36,10 @@ export interface Building {
   doorCol: number
   doorRow: number
   mask?: string[]
+  // Authored impassable cell borders (#53): a row-major grid sized to the
+  // footprint, one hex digit per cell whose bits mark which sides block the
+  // avatar (N=1 E=2 S=4 W=8). Undefined → no borders (today's free movement).
+  edges?: string[]
 }
 
 export const PER_ROW = 5 // buildings per street row
@@ -206,6 +211,7 @@ export function buildTown(
   door?: DoorAnchor,
   footprint?: Footprint,
   walkMask?: string[],
+  edgeMask?: string[],
 ): Town {
   const count = Math.max(plotCount, 1)
   const { w: W, h: H } = clampFootprint(footprint?.w ?? MIN_W, footprint?.h ?? MIN_H)
@@ -213,10 +219,12 @@ export function buildTown(
   // Stamp the authored walk mask onto every plot, but only when its dimensions
   // match the clamped footprint — a mismatched mask (e.g. authored before a
   // footprint edit) is ignored so the building falls back to a solid box.
-  const mask =
-    walkMask && walkMask.length === H && walkMask.every((row) => row.length === W)
-      ? walkMask
-      : undefined
+  const fits = (m: string[] | undefined) =>
+    m && m.length === H && m.every((row) => row.length === W) ? m : undefined
+  const mask = fits(walkMask)
+  // Impassable cell borders (#53), gated the same way — a stale edge mask is
+  // ignored so movement falls back to today's free transitions.
+  const edges = fits(edgeMask)
   const bandH = H + STREET_H + GRASS_GAP // building rows + 1 street + 2 grass
   const stride = W + COL_GAP // plot width + 1 grass column between plots
   const numRows = Math.ceil(count / PER_ROW)
@@ -252,7 +260,7 @@ export function buildTown(
     const r = Math.floor(i / PER_ROW)
     const col = 2 + slot * stride
     const row = 1 + TOP_MARGIN + (numRows - 1 - r) * bandH
-    plots.push({ col, row, w: W, h: H, doorCol: col + ddx, doorRow: row + ddy, mask })
+    plots.push({ col, row, w: W, h: H, doorCol: col + ddx, doorRow: row + ddy, mask, edges })
   }
 
   const streetPathRows = new Set<number>()
@@ -464,4 +472,40 @@ export function isWalkable(
     return maskWalkableChar(inside.mask?.[y - inside.row]?.[x - inside.col])
   }
   return !blockers.has(`${x},${y}`)
+}
+
+// Edge-blocking bits for a footprint cell's four sides (#53), packed one hex
+// digit per cell into a row-major edge mask the size of the footprint.
+export const EDGE_N = 1
+export const EDGE_E = 2
+export const EDGE_S = 4
+export const EDGE_W = 8
+
+// Pull the authored edge mask off the active "building" tile-object, or
+// undefined when none authored one (no impassable borders → free movement).
+export function edgeMaskFor(
+  building: { edge_mask?: string[] | null } | null | undefined,
+): string[] | undefined {
+  if (building == null || building.edge_mask == null || building.edge_mask.length === 0) return undefined
+  return building.edge_mask
+}
+
+// Does building `b` mark `bit` of its footprint cell (x,y) as an impassable
+// border? Out-of-footprint or unmasked cells mark nothing.
+function sideBlocked(b: Building, x: number, y: number, bit: number): boolean {
+  const ch = b.edges?.[y - b.row]?.[x - b.col]
+  return ch != null && (parseInt(ch, 16) & bit) !== 0
+}
+
+// Is the step from (fx,fy) to an orthogonally-adjacent (tx,ty) blocked by an
+// authored impassable border (#53)? Pure, transition-aware companion to
+// isWalkable (which only judges a single destination cell). Symmetric: the
+// border between two cells is blocked when EITHER cell's edge mask marks the
+// shared side. Buildings with no edge mask never block — backward compatible.
+export function edgeBlocked(buildings: Building[], fx: number, fy: number, tx: number, ty: number): boolean {
+  const dx = tx - fx
+  const dy = ty - fy
+  const fromSide = dx === 1 ? EDGE_E : dx === -1 ? EDGE_W : dy === 1 ? EDGE_S : EDGE_N
+  const toSide = dx === 1 ? EDGE_W : dx === -1 ? EDGE_E : dy === 1 ? EDGE_N : EDGE_S
+  return buildings.some((b) => sideBlocked(b, fx, fy, fromSide) || sideBlocked(b, tx, ty, toSide))
 }
