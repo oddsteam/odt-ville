@@ -60,6 +60,25 @@ module PostureLogin
       end
     end
 
+    test "list_posture_sets posts credentials and returns the catalog as id+name pairs" do
+      http, calls = stub_http(status: 200, json: { "posture_sets" => [
+        { "id" => "set-1", "name" => "Wave" }, { "id" => "set-2", "name" => "Peace" }
+      ] })
+
+      out = client(http).list_posture_sets
+
+      assert_equal [ { id: "set-1", name: "Wave" }, { id: "set-2", name: "Peace" } ], out
+      call = calls.sole
+      assert_equal :post, call[:method]
+      assert_equal "https://posture.example/api/posture-sets", call[:url]
+      assert_equal({ client_id: "dev-game-app", client_secret: "shh" }, call[:body])
+    end
+
+    test "list_posture_sets raises when the service does not return 200" do
+      http, = stub_http(status: 401, json: { "error" => "bad creds" })
+      assert_raises(Client::Error) { client(http).list_posture_sets }
+    end
+
     test "read_result authenticates server-to-server and returns http status + confirmed status" do
       http, calls = stub_http(status: 200, json: { "status" => "passed", "posture_set_id" => "set-9" })
 

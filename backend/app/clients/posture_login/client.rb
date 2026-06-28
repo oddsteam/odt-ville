@@ -58,6 +58,19 @@ module PostureLogin
       { session_id: json["session_id"], hosted_url: browser_url(json["hosted_url"]) }
     end
 
+    # List the posture sets this game app can gate against (issue #38), so the
+    # admin dropdown can show real sets. Server-to-server with our creds;
+    # returns [{ id:, name: }] (the client_secret never reaches the browser).
+    def list_posture_sets
+      status, json = @http.call(:post, url("/api/posture-sets"), {
+        client_id: @client_id,
+        client_secret: @client_secret
+      })
+      raise Error, "list-posture-sets failed: HTTP #{status}" unless status == 200
+
+      Array((json || {})["posture_sets"]).map { |s| { id: s["id"], name: s["name"] } }
+    end
+
     # Step 4 — confirm the outcome server-to-server with our credentials.
     # Returns the raw HTTP status + the confirmed status so the caller decides
     # the gate via granted?; we never trust the redirect's status param.

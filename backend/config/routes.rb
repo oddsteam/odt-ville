@@ -5,7 +5,7 @@ Rails.application.routes.draw do
   namespace :api do
     namespace :v1 do
       # Communities CRUD (reusable surface — no spatial / game concepts).
-      resources :communities, only: [:index, :show, :create, :destroy]
+      resources :communities, only: [:index, :show, :create, :update, :destroy]
 
       # Current viewer (user + company).
       get "me", to: "me#show"
@@ -23,6 +23,9 @@ Rails.application.routes.draw do
       # a gated house; confirm reads its result server-to-server to open the door.
       post "game/posture/start", to: "posture#start"
       post "game/posture/confirm", to: "posture#confirm"
+      # Admin proxy (issue #38): the live posture-set catalog for the gate picker.
+      # client_secret stays server-side; the browser only sees [{ id, name }].
+      get  "game/posture/sets", to: "posture#sets"
 
       # Character sprite manifests — saved by the sprite-mapper tool, read by
       # the game/preview. `active` is the single live character.
