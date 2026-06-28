@@ -69,6 +69,46 @@ export function walkCellsFromMask(mask: readonly string[]): Set<string> {
   return out
 }
 
+// Magic-wand select (#36): the 4-connected run of pixels whose colour is within
+// `tolerance` (max per-channel abs diff, alpha included) of the seed pixel.
+// Returns pixel indices (y*width + x). Pure over an RGBA buffer so it's unit-
+// testable without a canvas; the foreground editor feeds it getImageData().
+export function floodSelect(
+  data: Uint8ClampedArray, width: number, height: number, sx: number, sy: number, tolerance: number,
+): number[] {
+  const at = (x: number, y: number) => y * width + x
+  const s = at(sx, sy) * 4
+  const within = (p: number) =>
+    Math.abs(data[p] - data[s]) <= tolerance &&
+    Math.abs(data[p + 1] - data[s + 1]) <= tolerance &&
+    Math.abs(data[p + 2] - data[s + 2]) <= tolerance &&
+    Math.abs(data[p + 3] - data[s + 3]) <= tolerance
+  const seen = new Uint8Array(width * height)
+  const out: number[] = []
+  const stack: Array<[number, number]> = [[sx, sy]]
+  seen[at(sx, sy)] = 1
+  while (stack.length) {
+    const [x, y] = stack.pop()!
+    if (!within(at(x, y) * 4)) continue
+    out.push(at(x, y))
+    for (const [nx, ny] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]] as Array<[number, number]>) {
+      if (nx < 0 || ny < 0 || nx >= width || ny >= height || seen[at(nx, ny)]) continue
+      seen[at(nx, ny)] = 1
+      stack.push([nx, ny])
+    }
+  }
+  return out
+}
+
+// True if a mask canvas has any painted (non-transparent) pixel — so we only
+// ship a foreground mask (#36) when the admin actually authored one.
+function maskHasInk(c: HTMLCanvasElement | null): boolean {
+  if (!c) return false
+  const d = c.getContext('2d')!.getImageData(0, 0, c.width, c.height).data
+  for (let i = 3; i < d.length; i += 4) if (d[i] !== 0) return true
+  return false
+}
+
 export default function TileMapper() {
   const [atlas, setAtlas] = useState<Atlas | null>(null) // { img, src, width, height }
   const [cell, setCell] = useState(32)
@@ -88,7 +128,20 @@ export default function TileMapper() {
   // the selection box; cleared to transparent in the saved crop so neighbour
   // sprites caught in the bounding box don't ship.
   const [erase, setErase] = useState<ReadonlySet<string>>(new Set())
-  const [paintMode, setPaintMode] = useState<'walk' | 'door' | 'erase'>('walk')
+  const [paintMode, setPaintMode] = useState<'walk' | 'door' | 'erase' | 'fg'>('walk')
+  // Foreground mask authoring (#36) — paint over the building art which pixels
+  // render in front of the avatar. Held as two offscreen canvases: the building
+  // art (source, for wand colour reads) and the mask (magenta where painted; its
+  // alpha is what ships + drives the in-game BitmapMask). fgTick forces a redraw.
+  const [fgTool, setFgTool] = useState<'brush' | 'wand' | 'erase'>('wand')
+  const [fgSize, setFgSize] = useState(8) // brush/eraser radius, in source px
+  const [fgTol, setFgTol] = useState(24) // wand colour tolerance
+  const [fgTick, setFgTick] = useState(0)
+  const [loadedFg, setLoadedFg] = useState<string | null>(null) // saved mask to restore
+  const fgSrcRef = useRef<HTMLCanvasElement | null>(null)
+  const fgMaskRef = useRef<HTMLCanvasElement | null>(null)
+  const fgViewRef = useRef<HTMLCanvasElement>(null)
+  const fgDrawingRef = useRef(false)
   const [status, setStatus] = useState('Upload an atlas PNG to begin.')
   const [saved, setSaved] = useState<readonly TileObjectSummary[]>([]) // roster for the saved-objects list
   // When editing a saved object (#29/#32), its cropped art loads here and drives
@@ -151,6 +204,8 @@ export default function TileMapper() {
         setWalk(o.walk_mask ? walkCellsFromMask(o.walk_mask) : new Set())
         setErase(new Set())
         setPaintMode('walk')
+        setLoadedFg(o.fg_mask ?? null) // restore the foreground mask into the editor
+        fgMaskRef.current = null // force a rebuild against the loaded art
         setSel(null) // leave atlas-selection mode; the loaded art drives the preview
         const img = new Image()
         img.onload = () => {
@@ -192,6 +247,8 @@ export default function TileMapper() {
         setSel(null)
         setErase(new Set())
         setEditImg(null) // a fresh atlas leaves saved-object edit mode
+        setLoadedFg(null)
+        fgMaskRef.current = null // a fresh atlas starts with no foreground mask
         setStatus(`Loaded atlas (${img.naturalWidth}×${img.naturalHeight}). Drag to select an object.`)
       }
       img.onerror = () => setStatus('Could not read that image.')
@@ -354,6 +411,8 @@ export default function TileMapper() {
     dragRef.current = null
     setEditImg(null) // a new atlas selection leaves saved-object edit mode
     setErase(new Set()) // erased cells are per-selection — a new box starts clean
+    setLoadedFg(null)
+    fgMaskRef.current = null // a new selection starts with a clean foreground mask
     // Default the footprint to the selected cell span (1 cell ≈ 1 tile), which
     // the admin can then tune for how big it should read on the map.
     setFpW(Math.min(MAX_FP, selBox.w))
@@ -414,12 +473,133 @@ export default function TileMapper() {
         door_dy: isBuilding && door ? door.dy : undefined,
         // Authored interior walk mask (#32) — only for buildings, validated above.
         walk_mask: mask,
+        // Foreground mask (#36) — the painted overlay's alpha as a PNG, only
+        // when the admin actually painted some in-front pixels.
+        fg_mask: isBuilding && maskHasInk(fgMaskRef.current) ? fgMaskRef.current!.toDataURL('image/png') : undefined,
       })
       setStatus(`Saved "${obj.name}" as the active ${obj.kind}. It'll show on the map on reload.`)
       refreshSaved()
     } catch (err: unknown) {
       setStatus(`Save failed: ${err instanceof Error ? err.message : String(err)}`)
     }
+  }
+
+  // ---- foreground mask authoring (#36) ------------------------------
+  // The building art at native resolution — the surface the admin paints over
+  // and the wand reads colours from. Editing a saved object → its loaded crop;
+  // a fresh selection → the same crop that gets saved (erased cells included).
+  const buildFgSource = useCallback((): HTMLCanvasElement | null => {
+    const c = document.createElement('canvas')
+    if (editImg) {
+      c.width = editImg.naturalWidth
+      c.height = editImg.naturalHeight
+      c.getContext('2d')!.drawImage(editImg, 0, 0)
+      return c
+    }
+    if (atlas && selBox) {
+      c.width = selBox.w * cell
+      c.height = selBox.h * cell
+      cropSelection(c.getContext('2d')!, atlas.img, selBox, cell, erase)
+      return c
+    }
+    return null
+  }, [editImg, atlas, selBox, cell, erase])
+
+  // Build/refresh the source + mask canvases when foreground mode opens or the
+  // art changes; restore a loaded mask onto the (matching-size) mask canvas.
+  useEffect(() => {
+    if (paintMode !== 'fg' || !isBuilding) return
+    const src = buildFgSource()
+    if (!src) return
+    fgSrcRef.current = src
+    let mask = fgMaskRef.current
+    if (!mask || mask.width !== src.width || mask.height !== src.height) {
+      mask = document.createElement('canvas')
+      mask.width = src.width
+      mask.height = src.height
+      fgMaskRef.current = mask
+      if (loadedFg) {
+        const img = new Image()
+        img.onload = () => {
+          mask!.getContext('2d')!.drawImage(img, 0, 0, mask!.width, mask!.height)
+          setFgTick((t) => t + 1)
+        }
+        img.src = loadedFg
+      }
+    }
+    setFgTick((t) => t + 1)
+  }, [paintMode, isBuilding, buildFgSource, loadedFg])
+
+  // Redraw the scaled view: the building art with the painted mask tinted over it.
+  useEffect(() => {
+    const view = fgViewRef.current
+    const src = fgSrcRef.current
+    const mask = fgMaskRef.current
+    if (paintMode !== 'fg' || !view || !src || !mask) return
+    const zoom = Math.max(1, Math.min(6, Math.floor(480 / src.width)))
+    view.width = src.width * zoom
+    view.height = src.height * zoom
+    const ctx = view.getContext('2d')!
+    ctx.imageSmoothingEnabled = false
+    ctx.clearRect(0, 0, view.width, view.height)
+    ctx.drawImage(src, 0, 0, view.width, view.height)
+    ctx.globalAlpha = 0.5
+    ctx.drawImage(mask, 0, 0, view.width, view.height)
+    ctx.globalAlpha = 1
+  }, [paintMode, fgTick])
+
+  // Mouse → source-pixel coords on the foreground view canvas.
+  function fgPixel(e: React.MouseEvent<HTMLCanvasElement>) {
+    const view = fgViewRef.current!
+    const src = fgSrcRef.current!
+    const rect = view.getBoundingClientRect()
+    return {
+      x: Math.floor(((e.clientX - rect.left) / rect.width) * src.width),
+      y: Math.floor(((e.clientY - rect.top) / rect.height) * src.height),
+    }
+  }
+  // Brush/eraser: a filled disc on the mask (magenta, or punched out to erase).
+  function fgStamp(x: number, y: number) {
+    const ctx = fgMaskRef.current!.getContext('2d')!
+    ctx.globalCompositeOperation = fgTool === 'erase' ? 'destination-out' : 'source-over'
+    ctx.fillStyle = 'rgba(255,0,255,1)'
+    ctx.beginPath()
+    ctx.arc(x, y, fgSize, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.globalCompositeOperation = 'source-over'
+  }
+  // Magic wand: flood the source by colour, paint that run onto the mask.
+  function fgWand(x: number, y: number) {
+    const src = fgSrcRef.current!
+    const mask = fgMaskRef.current!
+    const sdata = src.getContext('2d')!.getImageData(0, 0, src.width, src.height).data
+    const region = floodSelect(sdata, src.width, src.height, x, y, fgTol)
+    const mctx = mask.getContext('2d')!
+    const md = mctx.getImageData(0, 0, mask.width, mask.height)
+    for (const i of region) {
+      const p = i * 4
+      md.data[p] = 255
+      md.data[p + 1] = 0
+      md.data[p + 2] = 255
+      md.data[p + 3] = 255
+    }
+    mctx.putImageData(md, 0, 0)
+  }
+  function onFgDown(e: React.MouseEvent<HTMLCanvasElement>) {
+    if (!fgSrcRef.current || !fgMaskRef.current) return
+    fgDrawingRef.current = true
+    const { x, y } = fgPixel(e)
+    fgTool === 'wand' ? fgWand(x, y) : fgStamp(x, y)
+    setFgTick((t) => t + 1)
+  }
+  function onFgMove(e: React.MouseEvent<HTMLCanvasElement>) {
+    if (!fgDrawingRef.current || fgTool === 'wand') return
+    const { x, y } = fgPixel(e)
+    fgStamp(x, y)
+    setFgTick((t) => t + 1)
+  }
+  function onFgUp() {
+    fgDrawingRef.current = false
   }
 
   return (
@@ -522,6 +702,15 @@ export default function TileMapper() {
                     Door
                   </button>
                 )}
+                {isBuilding && (
+                  <button
+                    type="button"
+                    className={paintMode === 'fg' ? 'is-on' : ''}
+                    onClick={() => setPaintMode('fg')}
+                  >
+                    Foreground
+                  </button>
+                )}
                 {selBox && (
                   <button
                     type="button"
@@ -532,20 +721,48 @@ export default function TileMapper() {
                   </button>
                 )}
               </div>
-              {paintMode === 'erase' ? (
+              {paintMode === 'erase' && (
                 <p className="hint">
                   Click cells inside the selection to drop them (toggle). {erase.size} erased — they save transparent.
                 </p>
-              ) : (
-                isBuilding && (
+              )}
+              {isBuilding && (paintMode === 'walk' || paintMode === 'door') && (
+                <p className="hint">
+                  {paintMode === 'walk'
+                    ? 'Click cells to paint the walkable porch/path (toggle).'
+                    : 'Click the entrance cell.'}{' '}
+                  {door ? `Door at ${door.dx},${door.dy}.` : 'No door yet.'} Save is blocked until the door
+                  is reachable from a footprint edge via walkable tiles.
+                </p>
+              )}
+              {isBuilding && paintMode === 'fg' && (
+                <div className="fg-editor">
                   <p className="hint">
-                    {paintMode === 'walk'
-                      ? 'Click cells to paint the walkable porch/path (toggle).'
-                      : 'Click the entrance cell.'}{' '}
-                    {door ? `Door at ${door.dx},${door.dy}.` : 'No door yet.'} Save is blocked until the door
-                    is reachable from a footprint edge via walkable tiles.
+                    Mark the house pixels that render <strong>in front of</strong> the avatar (foliage, eaves).
+                    Wand = flood-select by colour; Brush/Eraser = freehand.
                   </p>
-                )
+                  <div className="fg-tools">
+                    {(['wand', 'brush', 'erase'] as const).map((t) => (
+                      <button key={t} type="button" className={fgTool === t ? 'is-on' : ''} onClick={() => setFgTool(t)}>
+                        {t === 'wand' ? 'Wand' : t === 'brush' ? 'Brush' : 'Eraser'}
+                      </button>
+                    ))}
+                    {fgTool === 'wand' ? (
+                      <label>
+                        Tolerance
+                        <input type="number" min={0} max={255} value={fgTol}
+                          onChange={(e) => setFgTol(Math.max(0, Math.min(255, Number(e.target.value) || 0)))} style={{ width: 56 }} />
+                      </label>
+                    ) : (
+                      <label>
+                        Size
+                        <input type="number" min={1} max={64} value={fgSize}
+                          onChange={(e) => setFgSize(Math.max(1, Math.min(64, Number(e.target.value) || 1)))} style={{ width: 56 }} />
+                      </label>
+                    )}
+                  </div>
+                  <canvas ref={fgViewRef} className="fg-canvas" onMouseDown={onFgDown} onMouseMove={onFgMove} onMouseUp={onFgUp} onMouseLeave={onFgUp} />
+                </div>
               )}
             </>
           )}

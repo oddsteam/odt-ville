@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { playerDepthAt } from '../src/game/town.ts'
+import { buildingOverlayDepth, playerDepthAt } from '../src/game/town.ts'
 
 // Building sprite draws at (row+h)*10 - 1 (see townRenderer); the player on the
 // door tile must beat that so it reads as standing in the doorway, not under it.
@@ -38,5 +38,18 @@ describe('playerDepthAt', () => {
   it('elevates the player on the footprint tile south of the door (exit corridor)', () => {
     // (x=3,y=7): inside the footprint, directly south of the door, not the door tile.
     expect(playerDepthAt([midDoor], 3, 7)).toBeGreaterThan(79) // building is at 79; default would be 75
+  })
+})
+
+// #36: the foreground-mask overlay sits in a thin depth band just above the
+// building's south band, so it covers the avatar while the avatar is on the
+// building but the avatar (whose depth jumps to its own row south of the
+// footprint) covers it once outside. Boundary = the footprint's south edge.
+describe('buildingOverlayDepth', () => {
+  it('beats the avatar on the building and the house body, but loses to the avatar one row south', () => {
+    expect(buildingOverlayDepth(building)).toBe(82) // (row+h)*10 + 2
+    expect(buildingOverlayDepth(building)).toBeGreaterThan(playerDepthAt([building], 3, 7)) // over avatar on the door
+    expect(buildingOverlayDepth(building)).toBeGreaterThan((building.row + building.h) * 10 - 1) // over the house body sprite
+    expect(playerDepthAt([building], 0, building.row + building.h)).toBeGreaterThan(buildingOverlayDepth(building)) // avatar wins south of the footprint
   })
 })

@@ -11,7 +11,7 @@
 // helpers (buildGroundTileMap / buildEdgeMap) are exported for unit tests.
 
 import { TILE } from '../constants.js'
-import { planFlowers } from '../town.js'
+import { buildingOverlayDepth, planFlowers } from '../town.js'
 import { buildingKeyFor, DEFAULT_BUILDING } from '../buildings.js'
 import { ENABLED as TILESET_ENABLED, PROPS, tallPropsFor } from './townTileset.js'
 import { preloadCharacter } from './characterRig.js'
@@ -111,6 +111,9 @@ export function preloadAssets(scene: Scene) {
   // stack on every plot (addBuildingSprite); absent → the bundled art.
   scene._buildingObject = scene.registry.get('buildingObject') || null
   if (scene._buildingObject?.image) scene.load.image('building.mapped', scene._buildingObject.image)
+  // Foreground / in-front mask (#36): the alpha bitmap that clips the overlay
+  // copy of the house drawn above the avatar's on-building depth band.
+  if (scene._buildingObject?.fg_mask) scene.load.image('building.fgmask', scene._buildingObject.fg_mask)
 
   // Ground-tile catalog (ground-tile mapper). Each referenced tileset loads
   // once as a uniform spritesheet (frame = cell), so create() can stamp a
@@ -386,6 +389,29 @@ function addBuildingSprite(scene: Scene, community: any, plot: any) {
     const house = scene.add.image(cx, cy, 'building.mapped').setOrigin(0, 0).setDisplaySize(w, h).setDepth(depth)
     const nameplate = addPlate()
     if (DEV) scene.devLayers?.buildings?.push(house, nameplate)
+
+    // Foreground overlay (#36): a second copy of the house, clipped to the
+    // fg-mask alpha and drawn just above the building's south band so the masked
+    // foliage covers the avatar on the building — but the avatar's own depth
+    // beats it once south of the footprint (see buildingOverlayDepth). Phaser 4
+    // dropped BitmapMask, so we use an internal Mask filter, which multiplies the
+    // overlay's alpha by the mask texture's (matched to the overlay's bounds; the
+    // mask shares the house art's layout). Filters are WebGL-only — on the Canvas
+    // renderer we drop the overlay and fall back to today's single-depth house.
+    if (scene._buildingObject.fg_mask && scene.textures.exists('building.fgmask')) {
+      const overlay = scene.add
+        .image(cx, cy, 'building.mapped')
+        .setOrigin(0, 0)
+        .setDisplaySize(w, h)
+        .setDepth(buildingOverlayDepth(plot))
+      overlay.enableFilters()
+      if (overlay.filters) {
+        overlay.filters.internal.addMask('building.fgmask')
+        if (DEV) scene.devLayers?.buildings?.push(overlay)
+      } else {
+        overlay.destroy()
+      }
+    }
     return house
   }
 

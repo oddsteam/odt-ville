@@ -424,6 +424,16 @@ export function playerDepthAt(buildings: Building[], x: number, y: number): numb
   return on ? (on.row + on.h) * 10 : y * 10 + 5
 }
 
+// Depth for a building's foreground-mask overlay (#36). Sits two above the
+// building's south band ((row+h)*10): it beats the avatar while the avatar is
+// on the building's cells (playerDepthAt collapses to (row+h)*10 there, #937cc75)
+// and the house body sprite ((row+h)*10 - 1), but the avatar's own-row depth
+// (y*10+5, min (row+h)*10+5 at the south edge) beats it once south of the
+// footprint — so the foliage covers the avatar on the building, not off it.
+export function buildingOverlayDepth(b: { row: number; h: number }): number {
+  return (b.row + b.h) * 10 + 2
+}
+
 // Authoritative town walkability rule, pure and Node-runnable. Out-of-bounds
 // and blocked tile classes (tree/sign) block; doors are always walkable (the
 // way into a house); a building footprint blocks; `blockers` is the scene's

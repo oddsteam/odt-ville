@@ -25,8 +25,14 @@ export const TileObjectSummary = Schema.Struct({
 })
 export type TileObjectSummary = Schema.Schema.Type<typeof TileObjectSummary>
 
-// The full object the game draws — a summary plus the image data URL.
-export const TileObject = Schema.Struct({ ...TileObjectSummary.fields, image: Schema.String })
+// The full object the game draws — a summary plus the image data URL and the
+// optional foreground mask (#36): a PNG data URL marking which house pixels
+// render over the avatar. Null for non-buildings / buildings without foliage.
+export const TileObject = Schema.Struct({
+  ...TileObjectSummary.fields,
+  image: Schema.String,
+  fg_mask: Schema.NullOr(Schema.String),
+})
 export type TileObject = Schema.Schema.Type<typeof TileObject>
 
 // Body the mapper POSTs to save a tile object. Echoes the controller's permit
@@ -43,5 +49,7 @@ export const NewTileObject = Schema.Struct({
   door_dy: Schema.optional(Schema.Number),
   // Interior walk mask, only sent for 'building' objects (issue #32).
   walk_mask: Schema.optional(Schema.Array(Schema.String)),
+  // Foreground mask, only sent for 'building' objects (issue #36).
+  fg_mask: Schema.optional(Schema.String),
 })
 export type NewTileObject = Schema.Schema.Type<typeof NewTileObject>
