@@ -40,6 +40,24 @@ export function buildWalkMask(walk: ReadonlySet<string>, cols: number, rows: num
   return out
 }
 
+// Crop the atlas selection to a standalone PNG, clearing any erased cells to
+// transparent (#43). `erase` holds "c,r" cell offsets within the selection;
+// each gets wiped so neighbour-sprite bleed inside the bounding box doesn't
+// ship in the saved object. Empty erase set → a plain drawImage crop.
+export function cropSelection(
+  ctx: CanvasRenderingContext2D,
+  img: CanvasImageSource,
+  sel: { c: number; r: number; w: number; h: number },
+  cell: number,
+  erase: ReadonlySet<string>,
+): void {
+  ctx.imageSmoothingEnabled = false
+  ctx.drawImage(img, sel.c * cell, sel.r * cell, sel.w * cell, sel.h * cell, 0, 0, sel.w * cell, sel.h * cell)
+  for (let r = 0; r < sel.h; r++)
+    for (let c = 0; c < sel.w; c++)
+      if (erase.has(`${c},${r}`)) ctx.clearRect(c * cell, r * cell, cell, cell)
+}
+
 // Inverse of buildWalkMask — turn a stored row-major walk mask back into the set
 // of painted "dx,dy" walkable cells, so a saved building loads into the editor
 // with its porch/path already painted (#32).
@@ -66,7 +84,11 @@ export default function TileMapper() {
   // Authored walk mask for a 'building' (#32) — the set of "dx,dy" cells the
   // admin painted walkable (porch/path). Plus which the preview click edits.
   const [walk, setWalk] = useState<ReadonlySet<string>>(new Set())
-  const [paintMode, setPaintMode] = useState<'walk' | 'door'>('walk')
+  // Erased cells for the current atlas selection (#43) — "c,r" offsets within
+  // the selection box; cleared to transparent in the saved crop so neighbour
+  // sprites caught in the bounding box don't ship.
+  const [erase, setErase] = useState<ReadonlySet<string>>(new Set())
+  const [paintMode, setPaintMode] = useState<'walk' | 'door' | 'erase'>('walk')
   const [status, setStatus] = useState('Upload an atlas PNG to begin.')
   const [saved, setSaved] = useState<readonly TileObjectSummary[]>([]) // roster for the saved-objects list
   // When editing a saved object (#29/#32), its cropped art loads here and drives
@@ -127,6 +149,7 @@ export default function TileMapper() {
         setFpH(o.footprint_h)
         setDoor(o.door_dx != null && o.door_dy != null ? { dx: o.door_dx, dy: o.door_dy } : null)
         setWalk(o.walk_mask ? walkCellsFromMask(o.walk_mask) : new Set())
+        setErase(new Set())
         setPaintMode('walk')
         setSel(null) // leave atlas-selection mode; the loaded art drives the preview
         const img = new Image()
@@ -167,6 +190,7 @@ export default function TileMapper() {
       img.onload = () => {
         setAtlas({ img, src: reader.result as string, width: img.naturalWidth, height: img.naturalHeight })
         setSel(null)
+        setErase(new Set())
         setEditImg(null) // a fresh atlas leaves saved-object edit mode
         setStatus(`Loaded atlas (${img.naturalWidth}×${img.naturalHeight}). Drag to select an object.`)
       }
@@ -239,6 +263,17 @@ export default function TileMapper() {
       )
     }
 
+    // Erased cells (#43) overlay on the atlas-selection grid — red so the admin
+    // sees what won't ship. Independent of the footprint/door grid below.
+    if (selBox && erase.size) {
+      const ew = w / selBox.w
+      const eh = h / selBox.h
+      ctx.fillStyle = 'rgba(220,50,50,0.5)'
+      for (let r = 0; r < selBox.h; r++)
+        for (let c = 0; c < selBox.w; c++)
+          if (erase.has(`${c},${r}`)) ctx.fillRect(c * ew, r * eh, ew, eh)
+    }
+
     // For a building, overlay the footprint grid, the painted walkable cells
     // (#32), and the picked door cell so the admin sees the authored entry path
     // and where the entrance lands (issue #29).
@@ -257,13 +292,25 @@ export default function TileMapper() {
       ctx.fillStyle = 'rgba(46,200,90,0.45)'
       ctx.fillRect(door.dx * cw, door.dy * ch, cw, ch)
     }
-  }, [atlas, cell, selBox, editImg, fpW, fpH, isBuilding, doorCols, doorRows, door, walk])
+  }, [atlas, cell, selBox, editImg, fpW, fpH, isBuilding, doorCols, doorRows, door, walk, erase])
 
   // Click the preview to either mark the entrance (door mode) or toggle a
   // walkable cell (walk mode) — issue #29/#32.
   function onPreviewClick(e: React.MouseEvent<HTMLCanvasElement>) {
-    if (!isBuilding) return
     const rect = previewRef.current!.getBoundingClientRect()
+    // Erase toggles a cell on the atlas-selection grid (#43) — works for any
+    // kind, but only for a fresh selection (edit mode's art is already cropped).
+    if (paintMode === 'erase' && selBox) {
+      const cell = doorCellFromClick(e.clientX - rect.left, e.clientY - rect.top, rect.width, rect.height, selBox.w, selBox.h)
+      setErase((prev) => {
+        const next = new Set(prev)
+        const key = `${cell.dx},${cell.dy}`
+        next.has(key) ? next.delete(key) : next.add(key)
+        return next
+      })
+      return
+    }
+    if (!isBuilding) return
     const cell = doorCellFromClick(e.clientX - rect.left, e.clientY - rect.top, rect.width, rect.height, doorCols, doorRows)
     if (paintMode === 'door') {
       setDoor(cell)
@@ -306,6 +353,7 @@ export default function TileMapper() {
     }
     dragRef.current = null
     setEditImg(null) // a new atlas selection leaves saved-object edit mode
+    setErase(new Set()) // erased cells are per-selection — a new box starts clean
     // Default the footprint to the selected cell span (1 cell ≈ 1 tile), which
     // the admin can then tune for how big it should read on the map.
     setFpW(Math.min(MAX_FP, selBox.w))
@@ -348,13 +396,7 @@ export default function TileMapper() {
       const off = document.createElement('canvas')
       off.width = selBox!.w * cell
       off.height = selBox!.h * cell
-      const ctx = off.getContext('2d')!
-      ctx.imageSmoothingEnabled = false
-      ctx.drawImage(
-        atlas!.img,
-        selBox!.c * cell, selBox!.r * cell, off.width, off.height,
-        0, 0, off.width, off.height,
-      )
+      cropSelection(off.getContext('2d')!, atlas!.img, selBox!, cell, erase)
       image = off.toDataURL('image/png')
     }
 
@@ -458,32 +500,53 @@ export default function TileMapper() {
           <div className="preview-box">
             {selBox || editImg ? <canvas ref={previewRef} onClick={onPreviewClick} /> : <p className="hint">Drag a rectangle on the atlas, or Edit a saved object.</p>}
           </div>
-          {isBuilding && (selBox || editImg) && (
+          {(selBox || (isBuilding && editImg)) && (
             <>
               <div className="paint-mode">
                 <span>Paint:</span>
-                <button
-                  type="button"
-                  className={paintMode === 'walk' ? 'is-on' : ''}
-                  onClick={() => setPaintMode('walk')}
-                >
-                  Walkable
-                </button>
-                <button
-                  type="button"
-                  className={paintMode === 'door' ? 'is-on' : ''}
-                  onClick={() => setPaintMode('door')}
-                >
-                  Door
-                </button>
+                {isBuilding && (
+                  <button
+                    type="button"
+                    className={paintMode === 'walk' ? 'is-on' : ''}
+                    onClick={() => setPaintMode('walk')}
+                  >
+                    Walkable
+                  </button>
+                )}
+                {isBuilding && (
+                  <button
+                    type="button"
+                    className={paintMode === 'door' ? 'is-on' : ''}
+                    onClick={() => setPaintMode('door')}
+                  >
+                    Door
+                  </button>
+                )}
+                {selBox && (
+                  <button
+                    type="button"
+                    className={paintMode === 'erase' ? 'is-on' : ''}
+                    onClick={() => setPaintMode('erase')}
+                  >
+                    Erase
+                  </button>
+                )}
               </div>
-              <p className="hint">
-                {paintMode === 'walk'
-                  ? 'Click cells to paint the walkable porch/path (toggle).'
-                  : 'Click the entrance cell.'}{' '}
-                {door ? `Door at ${door.dx},${door.dy}.` : 'No door yet.'} Save is blocked until the door
-                is reachable from a footprint edge via walkable tiles.
-              </p>
+              {paintMode === 'erase' ? (
+                <p className="hint">
+                  Click cells inside the selection to drop them (toggle). {erase.size} erased — they save transparent.
+                </p>
+              ) : (
+                isBuilding && (
+                  <p className="hint">
+                    {paintMode === 'walk'
+                      ? 'Click cells to paint the walkable porch/path (toggle).'
+                      : 'Click the entrance cell.'}{' '}
+                    {door ? `Door at ${door.dx},${door.dy}.` : 'No door yet.'} Save is blocked until the door
+                    is reachable from a footprint edge via walkable tiles.
+                  </p>
+                )
+              )}
             </>
           )}
 
