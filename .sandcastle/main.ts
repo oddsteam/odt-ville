@@ -3,7 +3,7 @@ import { run, claudeCode } from "@ai-hero/sandcastle";
 import { docker } from "@ai-hero/sandcastle/sandboxes/docker";
 
 // Where the dev stack serves once it's up (compose.yaml maps frontend 5460:5460).
-const TEST_URL = "http://localhost:5460";
+const TEST_URL = "http://localhost:5460/admin/objects";
 
 // Simple loop: an agent that picks open issues one by one and closes them.
 // Run this with: npx tsx .sandcastle/main.ts

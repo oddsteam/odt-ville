@@ -52,7 +52,7 @@ export function walkCellsFromMask(mask: readonly string[]): Set<string> {
 
 export default function TileMapper() {
   const [atlas, setAtlas] = useState<Atlas | null>(null) // { img, src, width, height }
-  const [cell, setCell] = useState(16)
+  const [cell, setCell] = useState(32)
   const [zoom, setZoom] = useState(3)
   const [sel, setSel] = useState<Sel | null>(null) // { c0, r0, c1, r1 } inclusive cell range
   const [name, setName] = useState('tree')
