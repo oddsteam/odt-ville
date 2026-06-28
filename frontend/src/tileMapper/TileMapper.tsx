@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { activateTileObject, deactivateTileObject, deleteTileObject, getTileObject, listTileObjects, saveTileObject } from '../tileObjects/client.js'
 import type { TileObject, TileObjectSummary } from '../tileObjects/schema.ts'
-import { validateWalkMask } from '../game/town.ts'
+import { validateWalkMask, EDGE_N, EDGE_E, EDGE_S, EDGE_W } from '../game/town.ts'
 import './styles.css'
 
 type Atlas = { img: HTMLImageElement; src: string; width: number; height: number }
@@ -77,6 +77,56 @@ export function cropSelection(
       if (erase.has(`${c},${r}`)) ctx.clearRect(c * cell, r * cell, cell, cell)
 }
 
+// Impassable cell borders (#53): bit per side, matching town.ts's edge mask.
+const SIDE_BIT: Record<string, number> = { N: EDGE_N, E: EDGE_E, S: EDGE_S, W: EDGE_W }
+
+// Turn the painted set of "c,r,side" borders into the row-major hex edge mask
+// the town stamps (#53): one hex digit per cell whose bits mark blocked sides.
+// Marks outside the cols×rows footprint are dropped.
+export function buildEdgeMask(edges: ReadonlySet<string>, cols: number, rows: number): string[] {
+  const bits: number[][] = Array.from({ length: rows }, () => new Array(cols).fill(0))
+  for (const key of edges) {
+    const [c, r, side] = key.split(',')
+    const x = Number(c)
+    const y = Number(r)
+    if (x < 0 || x >= cols || y < 0 || y >= rows || !SIDE_BIT[side]) continue
+    bits[y][x] |= SIDE_BIT[side]
+  }
+  return bits.map((row) => row.map((b) => b.toString(16)).join(''))
+}
+
+// Inverse of buildEdgeMask — a stored hex edge mask back into the painted set of
+// "c,r,side" keys, so a saved building loads into the editor with its borders.
+export function edgeSetFromMask(mask: readonly string[]): Set<string> {
+  const out = new Set<string>()
+  mask.forEach((row, r) => {
+    for (let c = 0; c < row.length; c++) {
+      const bits = parseInt(row[c], 16)
+      for (const side of Object.keys(SIDE_BIT)) if (bits & SIDE_BIT[side]) out.add(`${c},${r},${side}`)
+    }
+  })
+  return out
+}
+
+// Map a click on the footprint preview to the nearest side of the clicked cell
+// (#53) — whichever of top/bottom/left/right edge the click lands closest to.
+export function edgeSideFromClick(
+  px: number, py: number, rectW: number, rectH: number, cols: number, rows: number,
+): { c: number; r: number; side: 'N' | 'E' | 'S' | 'W' } {
+  const clamp = (v: number, max: number) => Math.min(max - 1, Math.max(0, Math.floor(v)))
+  const fx = (px / rectW) * cols
+  const fy = (py / rectH) * rows
+  const c = clamp(fx, cols)
+  const r = clamp(fy, rows)
+  const dN = fy - r // distance to top edge
+  const dS = r + 1 - fy
+  const dW = fx - c
+  const dE = c + 1 - fx
+  const min = Math.min(dN, dS, dW, dE)
+  const side = min === dN ? 'N' : min === dS ? 'S' : min === dW ? 'W' : 'E'
+  return { c, r, side }
+}
+
 // Inverse of buildWalkMask — turn a stored row-major walk mask back into the set
 // of painted "dx,dy" walkable cells, so a saved building loads into the editor
 // with its porch/path already painted (#32).
@@ -146,11 +196,14 @@ export default function TileMapper() {
   // Overhang cells for a 'building' (#44) — "dx,dy" footprint cells the admin
   // marked walk-under: walkable, but the avatar renders beneath the building art.
   const [overhangCells, setOverhangCells] = useState<ReadonlySet<string>>(new Set())
+  // Impassable cell borders for a 'building' (#53) — "c,r,side" keys (side
+  // N/E/S/W) the admin marked as a ledge the avatar can't step across.
+  const [edgeCells, setEdgeCells] = useState<ReadonlySet<string>>(new Set())
   // Erased cells for the current atlas selection (#43) — "c,r" offsets within
   // the selection box; cleared to transparent in the saved crop so neighbour
   // sprites caught in the bounding box don't ship.
   const [erase, setErase] = useState<ReadonlySet<string>>(new Set())
-  const [paintMode, setPaintMode] = useState<'walk' | 'door' | 'erase' | 'fg' | 'overhang'>('walk')
+  const [paintMode, setPaintMode] = useState<'walk' | 'door' | 'erase' | 'fg' | 'overhang' | 'edge'>('walk')
   // Foreground mask authoring (#36) — paint over the building art which pixels
   // render in front of the avatar. Held as two offscreen canvases: the building
   // art (source, for wand colour reads) and the mask (magenta where painted; its
@@ -225,6 +278,7 @@ export default function TileMapper() {
         setDoor(o.door_dx != null && o.door_dy != null ? { dx: o.door_dx, dy: o.door_dy } : null)
         setWalk(o.walk_mask ? walkCellsFromMask(o.walk_mask) : new Set())
         setOverhangCells(o.walk_mask ? overhangCellsFromMask(o.walk_mask) : new Set())
+        setEdgeCells(o.edge_mask ? edgeSetFromMask(o.edge_mask) : new Set())
         setErase(new Set())
         setPaintMode('walk')
         setLoadedFg(o.fg_mask ?? null) // restore the foreground mask into the editor
@@ -376,7 +430,21 @@ export default function TileMapper() {
       ctx.fillStyle = 'rgba(46,200,90,0.45)'
       ctx.fillRect(door.dx * cw, door.dy * ch, cw, ch)
     }
-  }, [atlas, cell, selBox, editImg, fpW, fpH, isBuilding, doorCols, doorRows, door, walk, overhangCells, erase])
+    // Impassable cell borders (#53) — a thick red line on each marked side.
+    ctx.strokeStyle = '#e23232'
+    ctx.lineWidth = 4
+    for (const key of edgeCells) {
+      const [c, r, side] = key.split(',')
+      const x = Number(c) * cw
+      const y = Number(r) * ch
+      ctx.beginPath()
+      if (side === 'N') { ctx.moveTo(x, y); ctx.lineTo(x + cw, y) }
+      else if (side === 'S') { ctx.moveTo(x, y + ch); ctx.lineTo(x + cw, y + ch) }
+      else if (side === 'W') { ctx.moveTo(x, y); ctx.lineTo(x, y + ch) }
+      else { ctx.moveTo(x + cw, y); ctx.lineTo(x + cw, y + ch) }
+      ctx.stroke()
+    }
+  }, [atlas, cell, selBox, editImg, fpW, fpH, isBuilding, doorCols, doorRows, door, walk, overhangCells, edgeCells, erase])
 
   // Click the preview to either mark the entrance (door mode) or toggle a
   // walkable cell (walk mode) — issue #29/#32.
@@ -395,6 +463,17 @@ export default function TileMapper() {
       return
     }
     if (!isBuilding) return
+    // Edge mode (#53) toggles the nearest border of the clicked cell.
+    if (paintMode === 'edge') {
+      const e2 = edgeSideFromClick(e.clientX - rect.left, e.clientY - rect.top, rect.width, rect.height, doorCols, doorRows)
+      setEdgeCells((prev) => {
+        const next = new Set(prev)
+        const key = `${e2.c},${e2.r},${e2.side}`
+        next.has(key) ? next.delete(key) : next.add(key)
+        return next
+      })
+      return
+    }
     const cell = doorCellFromClick(e.clientX - rect.left, e.clientY - rect.top, rect.width, rect.height, doorCols, doorRows)
     if (paintMode === 'door') {
       setDoor(cell)
@@ -509,6 +588,9 @@ export default function TileMapper() {
         door_dy: isBuilding && door ? door.dy : undefined,
         // Authored interior walk mask (#32) — only for buildings, validated above.
         walk_mask: mask,
+        // Impassable cell borders (#53) — only when the admin marked some, so an
+        // unauthored building stays fully backward-compatible (free movement).
+        edge_mask: isBuilding && edgeCells.size ? buildEdgeMask(edgeCells, doorCols, doorRows) : undefined,
         // Foreground mask (#36) — the painted overlay's alpha as a PNG, only
         // when the admin actually painted some in-front pixels.
         fg_mask: isBuilding && maskHasInk(fgMaskRef.current) ? fgMaskRef.current!.toDataURL('image/png') : undefined,
@@ -691,7 +773,7 @@ export default function TileMapper() {
           </label>
           <label>
             Kind
-            <select value={kind} onChange={(e) => { setKind(e.target.value); setDoor(null); setWalk(new Set()); setOverhangCells(new Set()) }}>
+            <select value={kind} onChange={(e) => { setKind(e.target.value); setDoor(null); setWalk(new Set()); setOverhangCells(new Set()); setEdgeCells(new Set()) }}>
               <option value="tree">tree</option>
               <option value="prop">prop</option>
               <option value="flower-group">flower-group</option>
@@ -741,6 +823,15 @@ export default function TileMapper() {
                 {isBuilding && (
                   <button
                     type="button"
+                    className={paintMode === 'edge' ? 'is-on' : ''}
+                    onClick={() => setPaintMode('edge')}
+                  >
+                    Edge
+                  </button>
+                )}
+                {isBuilding && (
+                  <button
+                    type="button"
                     className={paintMode === 'door' ? 'is-on' : ''}
                     onClick={() => setPaintMode('door')}
                   >
@@ -775,6 +866,12 @@ export default function TileMapper() {
                 <p className="hint">
                   Click cells the avatar walks <strong>under</strong> the building art (overhang/foliage). Walkable,
                   but drawn beneath the house. {overhangCells.size} marked.
+                </p>
+              )}
+              {isBuilding && paintMode === 'edge' && (
+                <p className="hint">
+                  Click near a cell <strong>side</strong> to wall it off — the avatar can't step across that border
+                  (a ledge/balcony edge), even between two walkable cells. {edgeCells.size} marked.
                 </p>
               )}
               {isBuilding && (paintMode === 'walk' || paintMode === 'door') && (

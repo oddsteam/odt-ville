@@ -79,6 +79,10 @@ export interface StepConfig {
   // Walkability rule for the destination tile. Scenes inject their own — town
   // checks buildings + props + trainer; interior checks walls + boards.
   walkable: (x: number, y: number) => boolean
+  // Optional transition-aware rule (#53): block the from→to step across an
+  // authored impassable cell border even when both cells are walkable. Scenes
+  // without edge borders (interior) leave it undefined → no extra blocking.
+  transitionBlocked?: (from: Tile, to: Tile) => boolean
   // Tile → world-space (px) translation, so the module never has to know
   // about TILE size or the rpg-char-01 feet-lift quirk.
   toWorldXY: (tile: Tile) => { x: number; y: number }
@@ -102,7 +106,7 @@ export interface StepResult {
 export function stepTile(cfg: StepConfig): StepResult {
   const { dx, dy } = deltaFor(cfg.dir)
   const target: Tile = { x: cfg.from.x + dx, y: cfg.from.y + dy }
-  if (!cfg.walkable(target.x, target.y)) {
+  if (!cfg.walkable(target.x, target.y) || cfg.transitionBlocked?.(cfg.from, target)) {
     cfg.onBlocked?.()
     return { newTile: null, tween: null, blocked: true }
   }

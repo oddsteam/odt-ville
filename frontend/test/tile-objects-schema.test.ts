@@ -14,6 +14,7 @@ describe('TileObject schema', () => {
     door_dx: null,
     door_dy: null,
     walk_mask: null,
+    edge_mask: null,
     active: true,
     updated_at: '2026-06-22T00:00:00.000Z',
     image: 'data:image/png;base64,xxx',
@@ -28,6 +29,12 @@ describe('TileObject schema', () => {
     const mask = ['###', '#.#', '#.#', '#.#']
     const decoded = Schema.decodeUnknownSync(TileObject)({ ...valid, walk_mask: mask })
     expect(decoded.walk_mask).toEqual(mask)
+  })
+
+  it('decodes an authored edge mask as an array of hex-digit strings (#53)', () => {
+    const edges = ['000', '0c0', '000', '000']
+    const decoded = Schema.decodeUnknownSync(TileObject)({ ...valid, edge_mask: edges })
+    expect(decoded.edge_mask).toEqual(edges)
   })
 
   it('decodes a foreground mask data URL (#36)', () => {

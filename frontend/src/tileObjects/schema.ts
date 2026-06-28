@@ -20,6 +20,10 @@ export const TileObjectSummary = Schema.Struct({
   // Authored interior walk mask for a 'building' (issue #32): a row-major grid
   // the size of the footprint, '#' = solid, '.' = walkable. Null otherwise.
   walk_mask: Schema.NullOr(Schema.Array(Schema.String)),
+  // Authored impassable cell borders for a 'building' (issue #53): a row-major
+  // grid the size of the footprint, one hex digit per cell whose bits mark
+  // blocked sides (N=1 E=2 S=4 W=8). Null otherwise.
+  edge_mask: Schema.NullOr(Schema.Array(Schema.String)),
   active: Schema.Boolean,
   updated_at: Schema.String,
 })
@@ -49,6 +53,8 @@ export const NewTileObject = Schema.Struct({
   door_dy: Schema.optional(Schema.Number),
   // Interior walk mask, only sent for 'building' objects (issue #32).
   walk_mask: Schema.optional(Schema.Array(Schema.String)),
+  // Impassable cell borders, only sent for 'building' objects (issue #53).
+  edge_mask: Schema.optional(Schema.Array(Schema.String)),
   // Foreground mask, only sent for 'building' objects (issue #36).
   fg_mask: Schema.optional(Schema.String),
 })

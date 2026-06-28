@@ -143,6 +143,25 @@ describe('stepTile', () => {
     expect(onArrive).not.toHaveBeenCalled()
   })
 
+  it('does not move when transitionBlocked rejects the from→to edge, even if walkable', () => {
+    const { scene, added } = fakeScene()
+    const transitionBlocked = vi.fn(() => true)
+    const onBlocked = vi.fn()
+
+    const result = stepTile({
+      ...baseCfg(),
+      scene,
+      walkable: () => true,
+      transitionBlocked,
+      onBlocked,
+    })
+
+    expect(transitionBlocked).toHaveBeenCalledWith({ x: 5, y: 5 }, { x: 6, y: 5 })
+    expect(result.blocked).toBe(true)
+    expect(added).toHaveLength(0)
+    expect(onBlocked).toHaveBeenCalledOnce()
+  })
+
   it('invokes onArrive with the destination tile when the tween completes', () => {
     const { scene, added } = fakeScene()
     const onArrive = vi.fn()

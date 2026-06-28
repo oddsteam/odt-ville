@@ -23,6 +23,9 @@ module TileObjectSerializer
       # into a row-major array of strings ('#' solid, '.' walkable). Nil when
       # unmapped so the game falls back to a solid building box.
       walk_mask: obj.walk_mask&.split("\n"),
+      # Impassable cell borders (#53): newline-joined hex-digit rows in the
+      # column, split back into a row-major array. Nil when none authored.
+      edge_mask: obj.edge_mask&.split("\n"),
       active: obj.active,
       updated_at: obj.updated_at
     }
