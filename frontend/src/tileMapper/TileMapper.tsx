@@ -15,6 +15,7 @@ type DragAnchor = { c: number; r: number }
 // tile_objects API + TownScene's tall-prop overlay.
 
 const MAP_TILE = 48 // px per tile in the game — used to preview real map size.
+const MAX_FP = 15 // largest building footprint, in tiles (15×15 cap).
 
 // Map a click on the footprint preview (rectW×rectH px showing cols×rows tiles)
 // to a clamped door-cell offset. The town uses this single cell as the building
@@ -295,8 +296,8 @@ export default function TileMapper() {
     setEditImg(null) // a new atlas selection leaves saved-object edit mode
     // Default the footprint to the selected cell span (1 cell ≈ 1 tile), which
     // the admin can then tune for how big it should read on the map.
-    setFpW(selBox.w)
-    setFpH(selBox.h)
+    setFpW(Math.min(MAX_FP, selBox.w))
+    setFpH(Math.min(MAX_FP, selBox.h))
     setStatus(`Selected ${selBox.w}×${selBox.h} cells. Set a name + footprint, then save.`)
   }
 
@@ -351,8 +352,8 @@ export default function TileMapper() {
         name: name.trim(),
         kind,
         image,
-        footprint_w: Number(fpW) || selBox?.w || 1,
-        footprint_h: Number(fpH) || selBox?.h || 1,
+        footprint_w: Math.min(MAX_FP, Number(fpW) || selBox?.w || 1),
+        footprint_h: Math.min(MAX_FP, Number(fpH) || selBox?.h || 1),
         // Building entrance, when picked. Unsent → the town defaults to
         // bottom-centre (its existing hardcoded door).
         door_dx: isBuilding && door ? door.dx : undefined,
@@ -431,13 +432,13 @@ export default function TileMapper() {
           <div className="fp">
             <label>
               Width (tiles)
-              <input type="number" min={0.25} step={0.1} value={fpW}
-                onChange={(e) => setFpW(Number(e.target.value) || 1)} style={{ width: 64 }} />
+              <input type="number" min={0.25} max={MAX_FP} step={0.1} value={fpW}
+                onChange={(e) => setFpW(Math.min(MAX_FP, Number(e.target.value) || 1))} style={{ width: 64 }} />
             </label>
             <label>
               Height (tiles)
-              <input type="number" min={0.25} step={0.1} value={fpH}
-                onChange={(e) => setFpH(Number(e.target.value) || 1)} style={{ width: 64 }} />
+              <input type="number" min={0.25} max={MAX_FP} step={0.1} value={fpH}
+                onChange={(e) => setFpH(Math.min(MAX_FP, Number(e.target.value) || 1))} style={{ width: 64 }} />
             </label>
           </div>
 
