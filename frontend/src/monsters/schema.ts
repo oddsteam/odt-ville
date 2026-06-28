@@ -18,3 +18,23 @@ export const MonsterSummary = Schema.Struct({
   updated_at: Schema.String,
 })
 export type MonsterSummary = Schema.Schema.Type<typeof MonsterSummary>
+
+// The full record from POST /monsters (the `call` serializer): a roster row
+// plus the heavy image data URL the create endpoint echoes back.
+export const Monster = Schema.Struct({
+  ...MonsterSummary.fields,
+  image: Schema.String,
+})
+export type Monster = Schema.Schema.Type<typeof Monster>
+
+// Body the admin form POSTs to create a monster. Echoes the controller's
+// assignment list: name, image (PNG data URL), encounter dialog, encounter
+// rate, enabled. encounter_dialog may be empty; the others are required.
+export const NewMonster = Schema.Struct({
+  name: Schema.String,
+  image: Schema.String,
+  encounter_dialog: Schema.String,
+  encounter_rate: Schema.Number,
+  enabled: Schema.Boolean,
+})
+export type NewMonster = Schema.Schema.Type<typeof NewMonster>

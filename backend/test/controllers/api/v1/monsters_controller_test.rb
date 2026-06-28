@@ -43,6 +43,54 @@ module Api
         assert_response :success
         assert_equal [0.0, 0.0], json.map { _1[:probability] }
       end
+
+      test "create persists a monster and returns the full record incl. image" do
+        assert_difference -> { Monster.count }, 1 do
+          post "/api/v1/monsters",
+               params: { name: "Slime", image: "data:img", encounter_dialog: "A wild Slime appears!", encounter_rate: 5, enabled: true },
+               headers: auth(@user)
+        end
+
+        assert_response :created
+        assert_equal "Slime", json[:name]
+        assert_equal 5, json[:encounter_rate]
+        assert_equal "A wild Slime appears!", json[:encounter_dialog]
+        assert_equal true, json[:enabled]
+        assert_equal "data:img", json[:image], "create returns the full record incl. the image data URL"
+        assert_in_delta 1.0, json[:probability], 1e-9, "lone enabled monster is the whole pool"
+      end
+
+      test "create defaults a missing enabled flag to on" do
+        post "/api/v1/monsters",
+             params: { name: "Wolf", image: "data:img", encounter_rate: 3 },
+             headers: auth(@user)
+
+        assert_response :created
+        assert_equal true, json[:enabled]
+      end
+
+      test "create rejects a duplicate name" do
+        Monster.create!(name: "Slime", image: "data:img", encounter_rate: 1)
+
+        assert_no_difference -> { Monster.count } do
+          post "/api/v1/monsters",
+               params: { name: "Slime", image: "data:img", encounter_rate: 2 },
+               headers: auth(@user)
+        end
+
+        assert_response :unprocessable_entity
+        assert json[:error].present?, "validation message surfaces to the admin"
+      end
+
+      test "create rejects a negative encounter rate" do
+        assert_no_difference -> { Monster.count } do
+          post "/api/v1/monsters",
+               params: { name: "Bad", image: "data:img", encounter_rate: -1 },
+               headers: auth(@user)
+        end
+
+        assert_response :unprocessable_entity
+      end
     end
   end
 end

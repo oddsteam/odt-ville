@@ -167,3 +167,79 @@
 .admin-table .admin-row-off td {
   color: #6a6a80;
 }
+
+/* Add-monster form (issue #57). A simple stacked form on the same dark panel
+   aesthetic; sits above the roster on the monster admin page. */
+.admin-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 420px;
+  margin: 0 0 24px;
+  padding: 16px;
+  background: #20202a;
+  border: 1px solid #34343f;
+  border-radius: 8px;
+}
+
+.admin-form-title {
+  margin: 0;
+  font-size: 14px;
+  color: #d8d8e8;
+}
+
+.admin-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.admin-field-inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #9a9ab0;
+}
+
+.admin-field input[type='text'],
+.admin-field input:not([type]),
+.admin-field input[type='number'],
+.admin-field textarea {
+  padding: 6px 8px;
+  background: #16161d;
+  border: 1px solid #34343f;
+  border-radius: 6px;
+  color: #e8e8ee;
+  font: inherit;
+}
+
+.admin-field textarea {
+  min-height: 56px;
+  resize: vertical;
+}
+
+.admin-hint {
+  font-size: 11px;
+  color: #7a7a90;
+}
+
+.admin-preview {
+  margin-top: 6px;
+  width: 96px;
+  height: 96px;
+  object-fit: contain;
+  background: #0e0e14;
+  border: 1px solid #34343f;
+  border-radius: 6px;
+  image-rendering: pixelated;
+}
+
+.admin-actions {
+  display: flex;
+  gap: 8px;
+}

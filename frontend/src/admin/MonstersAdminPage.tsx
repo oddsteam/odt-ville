@@ -4,6 +4,12 @@ import type { MonsterSummary } from '../monsters/schema.ts'
 import { runEdge } from '../lib/runEdge.ts'
 import './admin.css'
 
+// Recommended uploaded-art dimensions, surfaced as guidance on the file input.
+// A square transparent PNG scales cleanly to both the roster thumbnail and a
+// future encounter dialog. Kept as a constant so the hint and any later
+// validation read the same number.
+const RECOMMENDED_IMAGE = '256×256 px transparent PNG'
+
 // Render a server-computed probability fraction ([0, 1]) as a percent. The
 // backend already excludes disabled monsters from the denominator, so disabled
 // rows arrive as 0 and the enabled rows sum to 100%.
@@ -11,12 +17,33 @@ function percent(fraction: number): string {
   return `${(fraction * 100).toFixed(1)}%`
 }
 
-// Read-only roster for the monster admin (issue #56): the weighted wild-
-// encounter pool with each monster's computed probability. Editing / adding /
-// toggling land in follow-up issues (#57–#60).
+// Read a picked image file into a PNG data URL — the same base64-in-a-text-
+// column storage TileObject uses (structure-ready for a later S3/MinIO move,
+// which would swap only this read for an upload + key).
+function readImageFile(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = () => reject(new Error('Could not read that image.'))
+    reader.readAsDataURL(file)
+  })
+}
+
+// Monster admin (issues #56–#57): the weighted wild-encounter pool with each
+// monster's computed probability, plus an "add monster" form. Editing,
+// deleting and the enable/disable toggle land in #58–#60.
 export default function MonstersAdminPage() {
   const [monsters, setMonsters] = useState<readonly MonsterSummary[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  // Add-monster form state.
+  const [name, setName] = useState('')
+  const [image, setImage] = useState<string | null>(null)
+  const [dialog, setDialog] = useState('')
+  const [rate, setRate] = useState('0')
+  const [enabled, setEnabled] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -31,12 +58,130 @@ export default function MonstersAdminPage() {
     load()
   }, [load])
 
+  const pickImage = useCallback(async (file: File | undefined) => {
+    if (!file) return
+    try {
+      setFormError(null)
+      setImage(await readImageFile(file))
+    } catch (e) {
+      setFormError((e as Error).message)
+    }
+  }, [])
+
+  const resetForm = useCallback(() => {
+    setName('')
+    setImage(null)
+    setDialog('')
+    setRate('0')
+    setEnabled(true)
+  }, [])
+
+  const submit = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault()
+      if (!name.trim()) {
+        setFormError('Give the monster a name.')
+        return
+      }
+      if (!image) {
+        setFormError('Upload an image for the monster.')
+        return
+      }
+
+      setBusy(true)
+      setFormError(null)
+      try {
+        await runEdge(
+          MonstersService.create({
+            name: name.trim(),
+            image,
+            encounter_dialog: dialog,
+            encounter_rate: Number(rate) || 0,
+            enabled,
+          }),
+        )
+        resetForm()
+        await load()
+      } catch (err) {
+        setFormError((err as Error).message)
+      } finally {
+        setBusy(false)
+      }
+    },
+    [name, image, dialog, rate, enabled, resetForm, load],
+  )
+
   if (error) return <p className="admin-msg admin-msg-error">{error}</p>
   if (!monsters) return <p className="admin-msg">Loading monsters…</p>
 
   return (
     <div className="admin-page">
       <h2 className="admin-page-title">Monsters</h2>
+
+      <form className="admin-form" onSubmit={submit}>
+        <h3 className="admin-form-title">Add a monster</h3>
+
+        <label className="admin-field">
+          <span className="admin-label">Name</span>
+          <input value={name} onChange={(e) => setName(e.target.value)} disabled={busy} />
+        </label>
+
+        <label className="admin-field">
+          <span className="admin-label">Image</span>
+          <input
+            type="file"
+            accept="image/png"
+            disabled={busy}
+            onChange={(e) => pickImage(e.target.files?.[0])}
+          />
+          <span className="admin-hint">Recommended: {RECOMMENDED_IMAGE}</span>
+          {image && <img className="admin-preview" src={image} alt="monster preview" />}
+        </label>
+
+        <label className="admin-field">
+          <span className="admin-label">Encounter dialog</span>
+          <textarea
+            value={dialog}
+            onChange={(e) => setDialog(e.target.value)}
+            disabled={busy}
+            placeholder="Shown when the avatar encounters this monster"
+          />
+        </label>
+
+        <label className="admin-field">
+          <span className="admin-label">Encounter rate</span>
+          <input
+            type="number"
+            min={0}
+            step={1}
+            value={rate}
+            onChange={(e) => setRate(e.target.value)}
+            disabled={busy}
+          />
+          <span className="admin-hint">
+            Higher = encountered more often, relative to the whole pool.
+          </span>
+        </label>
+
+        <label className="admin-field admin-field-inline">
+          <input
+            type="checkbox"
+            checked={enabled}
+            onChange={(e) => setEnabled(e.target.checked)}
+            disabled={busy}
+          />
+          <span className="admin-label">Enabled</span>
+        </label>
+
+        {formError && <p className="admin-msg admin-msg-error">{formError}</p>}
+
+        <div className="admin-actions">
+          <button type="submit" className="save" disabled={busy}>
+            {busy ? 'Saving…' : 'Add monster'}
+          </button>
+        </div>
+      </form>
+
       {monsters.length === 0 ? (
         <p className="admin-msg">No monsters yet.</p>
       ) : (

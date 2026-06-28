@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import * as Schema from 'effect/Schema'
 import { Either } from 'effect'
 
-import { MonsterSummary } from '../src/monsters/schema.ts'
+import { Monster, MonsterSummary, NewMonster } from '../src/monsters/schema.ts'
 
 describe('MonsterSummary schema', () => {
   const valid = {
@@ -32,6 +32,50 @@ describe('MonsterSummary schema', () => {
   it('rejects a roster row that leaks the heavy image blob shape via wrong types', () => {
     expect(
       Either.isLeft(Schema.decodeUnknownEither(MonsterSummary)({ ...valid, encounter_rate: '3' })),
+    ).toBe(true)
+  })
+})
+
+describe('Monster schema (full record from create/update)', () => {
+  const valid = {
+    id: 1,
+    name: 'Slime',
+    encounter_dialog: 'A wild Slime appears!',
+    encounter_rate: 3,
+    enabled: true,
+    probability: 0.75,
+    updated_at: '2026-06-28T00:00:00.000Z',
+    image: 'data:image/png;base64,abc',
+  }
+
+  it('decodes the full record incl. the image data URL', () => {
+    const decoded = Schema.decodeUnknownSync(Monster)(valid)
+    expect(decoded.image).toBe('data:image/png;base64,abc')
+  })
+
+  it('rejects a record missing the image blob', () => {
+    const { image, ...withoutImage } = valid
+    void image
+    expect(Either.isLeft(Schema.decodeUnknownEither(Monster)(withoutImage))).toBe(true)
+  })
+})
+
+describe('NewMonster schema (create body)', () => {
+  const body = {
+    name: 'Slime',
+    image: 'data:image/png;base64,abc',
+    encounter_dialog: 'A wild Slime appears!',
+    encounter_rate: 3,
+    enabled: true,
+  }
+
+  it('encodes a well-formed create body', () => {
+    expect(Either.isRight(Schema.encodeUnknownEither(NewMonster)(body))).toBe(true)
+  })
+
+  it('rejects a body with a non-numeric encounter rate', () => {
+    expect(
+      Either.isLeft(Schema.encodeUnknownEither(NewMonster)({ ...body, encounter_rate: '3' })),
     ).toBe(true)
   })
 })
