@@ -6,6 +6,7 @@ import CommunitiesAdminPage from './admin/CommunitiesAdminPage.tsx'
 import SpriteMapper from './spriteMapper/SpriteMapper.tsx'
 import TileMapper from './tileMapper/TileMapper.tsx'
 import GroundTileMapper from './groundTiles/GroundTileMapper.tsx'
+import MonstersAdminPage from './admin/MonstersAdminPage.tsx'
 import PostureCallbackPage from './posture/CallbackPage.tsx'
 
 // Route table. RootLayout is the persistent shell (brand header + Village/Admin
@@ -25,6 +26,7 @@ export default function App() {
         <Route path="sprites" element={<SpriteMapper />} />
         <Route path="objects" element={<TileMapper />} />
         <Route path="ground" element={<GroundTileMapper />} />
+        <Route path="monsters" element={<MonstersAdminPage />} />
       </Route>
       {/* posture-login popup return (issue #24) — bare page, no app chrome;
           it posts the result home to the opener and closes. */}

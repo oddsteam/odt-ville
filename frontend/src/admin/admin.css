@@ -131,3 +131,39 @@
 .admin-msg-error {
   color: #ff9a9a;
 }
+
+/* Read-only roster tables (monster admin, issue #56). Plain dark table that
+   sits on the console body's aesthetic. */
+.admin-page {
+  padding: 16px;
+  overflow: auto;
+}
+
+.admin-page-title {
+  margin: 0 0 12px;
+  font-size: 16px;
+  color: #d8d8e8;
+}
+
+.admin-table {
+  border-collapse: collapse;
+  font-size: 13px;
+  color: #c8c8d8;
+}
+
+.admin-table th,
+.admin-table td {
+  padding: 6px 14px 6px 0;
+  text-align: left;
+  border-bottom: 1px solid #2a2a3a;
+}
+
+.admin-table th {
+  color: #9a9ab0;
+  font-weight: 600;
+}
+
+/* Disabled monsters stay listed but read as muted. */
+.admin-table .admin-row-off td {
+  color: #6a6a80;
+}
