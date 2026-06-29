@@ -60,7 +60,11 @@ class KeycloakAuthenticator
       aud: @audience, verify_aud: true,
       verify_expiration: true)
     payload
-  rescue JWT::Error => e
+  rescue JWT::DecodeError => e
+    # JWT::DecodeError is the base of the whole verify/decode/JWKS error family
+    # in ruby-jwt 2.x (there is no `JWT::Error` constant). Catching it turns any
+    # bad token — malformed, wrong signature, unknown kid, expired, wrong
+    # iss/aud — into our Error so callers reject with 401 instead of 500.
     raise Error, e.message
   end
 

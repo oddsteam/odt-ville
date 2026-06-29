@@ -39,19 +39,19 @@ class KeycloakAuthenticatorTest < ActiveSupport::TestCase
 
   test "rejects an expired token" do
     assert_raises(KeycloakAuthenticator::Error) do
-      @auth.subject(token(exp: Time.now.to_i - 30))
+      @auth.subject(token({ exp: Time.now.to_i - 30 }))
     end
   end
 
   test "rejects a token from the wrong issuer" do
     assert_raises(KeycloakAuthenticator::Error) do
-      @auth.subject(token(iss: "https://evil.example/realms/odtville"))
+      @auth.subject(token({ iss: "https://evil.example/realms/odtville" }))
     end
   end
 
   test "rejects a token for the wrong audience" do
     assert_raises(KeycloakAuthenticator::Error) do
-      @auth.subject(token(aud: "some-other-client"))
+      @auth.subject(token({ aud: "some-other-client" }))
     end
   end
 
