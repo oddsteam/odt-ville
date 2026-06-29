@@ -11,10 +11,12 @@ import {
 } from '../src/monsters/schema.ts'
 
 describe('MonsterPoolEntry schema (wild-encounter pool row)', () => {
-  const valid = { id: 1, name: 'Slime', encounter_rate: 3, image: 'data:image/png;base64,abc' }
+  const valid = { id: 1, name: 'Slime', encounter_dialog: 'A wild Slime oozes toward you!', encounter_rate: 3, image: 'data:image/png;base64,abc' }
 
-  it('decodes a pool row: id, name, weight, and the sprite image', () => {
-    expect(Schema.decodeUnknownSync(MonsterPoolEntry)(valid).image).toBe('data:image/png;base64,abc')
+  it('decodes a pool row: id, name, authored dialog, weight, and the sprite image', () => {
+    const row = Schema.decodeUnknownSync(MonsterPoolEntry)(valid)
+    expect(row.image).toBe('data:image/png;base64,abc')
+    expect(row.encounter_dialog).toBe('A wild Slime oozes toward you!')
   })
 
   it('rejects a pool row missing the image (the game needs the sprite)', () => {

@@ -24,12 +24,13 @@ module MonsterSerializer
   end
 
   # The wild-encounter pool row: just what the game needs to roll and render an
-  # encounter — id, name, weight, and the sprite image. No probability/roster
-  # fields (the pool is already filtered to enabled monsters).
+  # encounter — id, name, authored dialog, weight, and the sprite image. No
+  # probability/roster fields (the pool is already filtered to enabled monsters).
   def pool_entry(monster)
     {
       id: monster.id,
       name: monster.name,
+      encounter_dialog: monster.encounter_dialog,
       encounter_rate: monster.encounter_rate,
       image: monster.image_data_url
     }

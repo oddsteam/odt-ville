@@ -28,11 +28,13 @@ export const Monster = Schema.Struct({
 export type Monster = Schema.Schema.Type<typeof Monster>
 
 // A wild-encounter pool row from GET /monsters/pool: just what the game needs
-// to roll and render an encounter — id, name, weight, and the sprite image
-// (enabled-only, so no probability/enabled fields).
+// to roll and render an encounter — id, name, authored dialog, weight, and the
+// sprite image (enabled-only, so no probability/enabled fields).
 export const MonsterPoolEntry = Schema.Struct({
   id: Schema.Number,
   name: Schema.String,
+  // The line the monster speaks on a wild encounter; null when unset.
+  encounter_dialog: Schema.NullOr(Schema.String),
   encounter_rate: Schema.Number,
   image: Schema.String,
 })

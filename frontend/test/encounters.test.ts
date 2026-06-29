@@ -3,14 +3,20 @@ import { pickFromPool, pickWild } from '../src/game/encounters.js'
 
 // Authored pool rows mirror GET /api/v1/monsters/pool: { id, name, encounter_rate, image }.
 const POOL = [
-  { id: 1, name: 'Slime', encounter_rate: 1, image: 'data:slime' },
-  { id: 2, name: 'Wolf', encounter_rate: 3, image: 'data:wolf' },
+  { id: 1, name: 'Slime', encounter_rate: 1, image: 'data:slime', encounter_dialog: 'A wild Slime oozes toward you!' },
+  { id: 2, name: 'Wolf', encounter_rate: 3, image: 'data:wolf', encounter_dialog: null },
 ]
 
 describe('pickFromPool (pure weighted pick, injected RNG)', () => {
-  it('maps a pool row to a wild opponent with the image as its sprite and no level', () => {
+  it('maps a pool row to a wild opponent carrying its sprite and authored dialog, no level', () => {
     const pick = pickFromPool(POOL, () => 0)
-    expect(pick).toEqual({ id: 1, name: 'Slime', sprite: 'data:slime', kind: 'wild' })
+    expect(pick).toEqual({
+      id: 1,
+      name: 'Slime',
+      sprite: 'data:slime',
+      kind: 'wild',
+      encounter_dialog: 'A wild Slime oozes toward you!',
+    })
     expect('level' in pick).toBe(false)
   })
 

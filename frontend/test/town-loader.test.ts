@@ -39,7 +39,7 @@ function fakeHttp(routes: Record<string, unknown>) {
   return Layer.succeed(Http, client as never)
 }
 
-const POOL = [{ id: 1, name: 'Slime', encounter_rate: 3, image: 'data:slime' }]
+const POOL = [{ id: 1, name: 'Slime', encounter_dialog: 'A wild Slime appears!', encounter_rate: 3, image: 'data:slime' }]
 
 const OK_ROUTES = {
   '/communities': { communities: [] },
