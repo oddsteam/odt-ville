@@ -5,7 +5,7 @@
 // from Phaser); `preloadBakedMap` / `renderBakedMap` load and stamp them.
 
 import { TILE } from '../constants.js'
-import type { BakedMap } from '../../maps/schema.ts'
+import type { BakedGround, BakedMap } from '../../maps/schema.ts'
 
 // The Phaser scene, structurally — we touch only a handful of fields, so the
 // scene stays loose (same convention as townRenderer).
@@ -43,6 +43,22 @@ export function bakedDrawList(map: BakedMap): { tiles: BakedDraw[]; entities: Ba
   }))
 
   return { tiles, entities }
+}
+
+// Flatten a baked *ground* (the Map Baker's autotiled output) into draw
+// instructions carrying their resolved depth. Like bakedDrawList this is a 1:1
+// walk with no neighbour inspection — every layer the producer stacked in a cell
+// becomes one stamp. The runtime applies no autotile logic (ADR-0003).
+export function groundDrawList(ground: BakedGround): Array<BakedDraw & { depth: number }> {
+  const out: Array<BakedDraw & { depth: number }> = []
+  ground.cells.forEach((row, y) => {
+    row.forEach((layers, x) => {
+      for (const layer of layers) {
+        out.push({ x, y, key: bakedTextureKey(layer.tileset), frame: layer.frame, depth: layer.depth })
+      }
+    })
+  })
+  return out
 }
 
 // Load every tileset the baked map references, once each, as a uniform

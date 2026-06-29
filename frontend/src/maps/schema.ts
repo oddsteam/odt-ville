@@ -34,6 +34,30 @@ export const BakedEntity = Schema.Struct({
 })
 export type BakedEntity = Schema.Schema.Type<typeof BakedEntity>
 
+// One resolved layer within a baked ground cell: a concrete (tileset, frame)
+// reference plus the depth it draws at. A cell can stack several — a coverage
+// fill beneath a transparent edge — because the producer resolved the autotile
+// here and the runtime only blits (ADR-0003). `depth` carries the terrain's
+// layered-priority order so the renderer never re-derives it.
+export const BakedLayer = Schema.Struct({
+  tileset: Schema.String,
+  frame: Schema.Number,
+  depth: Schema.Number,
+})
+export type BakedLayer = Schema.Schema.Type<typeof BakedLayer>
+
+// The baked ground grid produced by the Map Baker: a per-cell *stack* of
+// resolved layers (autotiling already applied), row-major. An empty stack paints
+// nothing. This is the autotiled counterpart to BakedMap.tiles (single flat
+// cells); the runtime flattens it 1:1 with no neighbour inspection.
+export const BakedGround = Schema.Struct({
+  cols: Schema.Number,
+  rows: Schema.Number,
+  tilesets: Schema.Array(BakedTileset),
+  cells: Schema.Array(Schema.Array(Schema.Array(BakedLayer))),
+})
+export type BakedGround = Schema.Schema.Type<typeof BakedGround>
+
 export const BakedMap = Schema.Struct({
   slug: Schema.String,
   title: Schema.String,

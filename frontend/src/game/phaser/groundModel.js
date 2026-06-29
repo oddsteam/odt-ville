@@ -1,11 +1,22 @@
 import { tileChar, typeForTileChar } from '../town.ts'
+import { HOMETOWN_CATALOG } from './tileCatalog.ts'
 export { typeForTileChar } from '../town.ts'
 
-export const GROUND_STACK = ['road', 'dirt', 'grass']
-export const AUTOTILED_TERRAINS = new Set(['grass', 'dirt'])
+// The autotile rules are now Tile Catalog *data* (tileCatalog.ts), not constants
+// baked into this engine (ADR-0003/0004). Every resolver takes a `catalog`
+// argument that defaults to the generated hometown's catalog, so the existing
+// hometown render path (townRenderer, which calls these without a catalog) is
+// byte-identical, while a second producer can pass a catalog that introduces a
+// new terrain with no engine change.
+export { HOMETOWN_CATALOG } from './tileCatalog.ts'
 
-export function terrainDepth(terrain) {
-  return GROUND_STACK.indexOf(terrain) * 0.1
+// Back-compat aliases for the old module constants — still the hometown's stack
+// and autotiled set, but now sourced from the catalog data.
+export const GROUND_STACK = HOMETOWN_CATALOG.stack
+export const AUTOTILED_TERRAINS = HOMETOWN_CATALOG.autotiled
+
+export function terrainDepth(terrain, catalog = HOMETOWN_CATALOG) {
+  return catalog.stack.indexOf(terrain) * 0.1
 }
 
 export const ORTHOGONAL_DIRS = [
@@ -22,19 +33,25 @@ export const EDGE_CORNERS = [
   { c: 'SW', a: 'S', b: 'W' },
 ]
 
-function terrainForCell(town, x, y) {
-  return typeForTileChar(tileChar(town, x, y))
+// Resolve a cell's terrain from a *field*. A field is either a town tile grid
+// (resolved through its map chars) or any producer-supplied source exposing a
+// `terrainAt(x, y)` accessor (the baker passes the latter). Out-of-bounds is the
+// field's own concern: the town treats it as grass (border 'T'), an authored
+// source returns null.
+function terrainForCell(field, x, y) {
+  if (typeof field.terrainAt === 'function') return field.terrainAt(x, y)
+  return typeForTileChar(tileChar(field, x, y))
 }
 
 // Only the higher-ranked terrain owns a seam. A dirt cell therefore edges
 // toward road, but remains fill toward grass; the adjacent grass cell draws the
 // dirt/grass transition and reveals dirt coverage at dirt's normal depth.
-export function terrainBorders(town, x, y, terrain) {
+export function terrainBorders(field, x, y, terrain, catalog = HOMETOWN_CATALOG) {
   const borders = {}
-  const rank = GROUND_STACK.indexOf(terrain)
+  const rank = catalog.stack.indexOf(terrain)
   for (const { d, dx, dy } of ORTHOGONAL_DIRS) {
-    const neighbour = terrainForCell(town, x + dx, y + dy)
-    const neighbourRank = GROUND_STACK.indexOf(neighbour)
+    const neighbour = terrainForCell(field, x + dx, y + dy)
+    const neighbourRank = catalog.stack.indexOf(neighbour)
     borders[d] = neighbourRank >= 0 && neighbourRank < rank
   }
   return borders
@@ -44,22 +61,22 @@ export function terrainBorders(town, x, y, terrain) {
 // different neighbours meet there, the highest terrain in GROUND_STACK wins.
 // The painter stamps this choice at the backing terrain's canonical depth;
 // sub-tile, per-side backing is out of scope.
-export function coverageTerrainForCell(town, x, y, terrain, borders = null) {
+export function coverageTerrainForCell(field, x, y, terrain, borders = null, catalog = HOMETOWN_CATALOG) {
   const neighbours = new Set()
-  const rank = GROUND_STACK.indexOf(terrain)
+  const rank = catalog.stack.indexOf(terrain)
   for (const { d, dx, dy } of ORTHOGONAL_DIRS) {
     if (borders && !borders[d]) continue
-    const neighbour = terrainForCell(town, x + dx, y + dy)
-    const neighbourRank = GROUND_STACK.indexOf(neighbour)
+    const neighbour = terrainForCell(field, x + dx, y + dy)
+    const neighbourRank = catalog.stack.indexOf(neighbour)
     if (neighbourRank >= 0 && neighbourRank < rank) neighbours.add(neighbour)
   }
-  return GROUND_STACK.findLast((candidate) => neighbours.has(candidate)) || null
+  return catalog.stack.findLast((candidate) => neighbours.has(candidate)) || null
 }
 
-export function groundPaintStackForCell(town, x, y, edgeSets = null) {
-  const terrain = terrainForCell(town, x, y)
+export function groundPaintStackForCell(field, x, y, edgeSets = null, catalog = HOMETOWN_CATALOG) {
+  const terrain = terrainForCell(field, x, y)
   if (!terrain) return []
-  const borders = terrainBorders(town, x, y, terrain)
+  const borders = terrainBorders(field, x, y, terrain, catalog)
   const edgeSet = edgeSets?.[terrain]
   const hasCatalogEdge =
     edgeSet &&
@@ -67,17 +84,17 @@ export function groundPaintStackForCell(town, x, y, edgeSets = null) {
       ORTHOGONAL_DIRS.some(({ d }) => borders[d] && edgeSet[d]))
   const isTransparentEdge = edgeSets
     ? Boolean(hasCatalogEdge)
-    : AUTOTILED_TERRAINS.has(terrain) && Object.values(borders).some(Boolean)
+    : catalog.autotiled.has(terrain) && Object.values(borders).some(Boolean)
 
   if (!isTransparentEdge) {
-    return [{ terrain, role: 'fill', opaque: true, depth: terrainDepth(terrain) }]
+    return [{ terrain, role: 'fill', opaque: true, depth: terrainDepth(terrain, catalog) }]
   }
-  const backing = coverageTerrainForCell(town, x, y, terrain, borders)
+  const backing = coverageTerrainForCell(field, x, y, terrain, borders, catalog)
   return [
     ...(backing
-      ? [{ terrain: backing, role: 'coverage', opaque: true, depth: terrainDepth(backing) }]
+      ? [{ terrain: backing, role: 'coverage', opaque: true, depth: terrainDepth(backing, catalog) }]
       : []),
-    { terrain, role: 'edge', opaque: false, depth: terrainDepth(terrain) },
+    { terrain, role: 'edge', opaque: false, depth: terrainDepth(terrain, catalog) },
   ]
 }
 
