@@ -36,14 +36,15 @@ export function buildWalkMask(
   cols: number,
   rows: number,
   overhang: ReadonlySet<string> = new Set(),
+  ladder: ReadonlySet<string> = new Set(),
 ): string[] {
   const out: string[] = []
   for (let r = 0; r < rows; r++) {
     let row = ''
-    // 'o' overhang (#44, walkable + avatar under) wins over '.' porch; else '#'.
+    // 'o' overhang (#44, avatar under) > 'L' ladder (#54, climb) > '.' porch; else '#'.
     for (let c = 0; c < cols; c++) {
       const k = `${c},${r}`
-      row += overhang.has(k) ? 'o' : walk.has(k) ? '.' : '#'
+      row += overhang.has(k) ? 'o' : ladder.has(k) ? 'L' : walk.has(k) ? '.' : '#'
     }
     out.push(row)
   }
@@ -56,6 +57,16 @@ export function overhangCellsFromMask(mask: readonly string[]): Set<string> {
   const out = new Set<string>()
   mask.forEach((row, r) => {
     for (let c = 0; c < row.length; c++) if (row[c] === 'o') out.add(`${c},${r}`)
+  })
+  return out
+}
+
+// The 'L' ladder cells of a stored mask (#54), as "dx,dy" keys — so a saved
+// building loads back into the editor with its ladder painting intact.
+export function ladderCellsFromMask(mask: readonly string[]): Set<string> {
+  const out = new Set<string>()
+  mask.forEach((row, r) => {
+    for (let c = 0; c < row.length; c++) if (row[c] === 'L') out.add(`${c},${r}`)
   })
   return out
 }
@@ -216,6 +227,9 @@ export default function TileMapper() {
   // Overhang cells for a 'building' (#44) — "dx,dy" footprint cells the admin
   // marked walk-under: walkable, but the avatar renders beneath the building art.
   const [overhangCells, setOverhangCells] = useState<ReadonlySet<string>>(new Set())
+  // Ladder cells for a 'building' (#54) — "dx,dy" footprint cells the admin
+  // marked as a ladder: walkable like a path, but the avatar climbs while on them.
+  const [ladderCells, setLadderCells] = useState<ReadonlySet<string>>(new Set())
   // Impassable cell borders for a 'building' (#53) — "c,r,side" keys (side
   // N/E/S/W) the admin marked as a ledge the avatar can't step across.
   const [edgeCells, setEdgeCells] = useState<ReadonlySet<string>>(new Set())
@@ -223,7 +237,7 @@ export default function TileMapper() {
   // the selection box; cleared to transparent in the saved crop so neighbour
   // sprites caught in the bounding box don't ship.
   const [erase, setErase] = useState<ReadonlySet<string>>(new Set())
-  const [paintMode, setPaintMode] = useState<'walk' | 'door' | 'erase' | 'fg' | 'overhang' | 'edge'>('walk')
+  const [paintMode, setPaintMode] = useState<'walk' | 'door' | 'erase' | 'fg' | 'overhang' | 'ladder' | 'edge'>('walk')
   // Foreground mask authoring (#36) — paint over the building art which pixels
   // render in front of the avatar. Held as two offscreen canvases: the building
   // art (source, for wand colour reads) and the mask (magenta where painted; its
@@ -301,6 +315,7 @@ export default function TileMapper() {
         setDoor(o.door_dx != null && o.door_dy != null ? { dx: o.door_dx, dy: o.door_dy } : null)
         setWalk(o.walk_mask ? walkCellsFromMask(o.walk_mask) : new Set())
         setOverhangCells(o.walk_mask ? overhangCellsFromMask(o.walk_mask) : new Set())
+        setLadderCells(o.walk_mask ? ladderCellsFromMask(o.walk_mask) : new Set())
         setEdgeCells(o.edge_mask ? edgeSetFromMask(o.edge_mask) : new Set())
         setErase(new Set())
         setPaintMode('walk')
@@ -445,6 +460,10 @@ export default function TileMapper() {
     for (let r = 0; r < doorRows; r++)
       for (let c = 0; c < doorCols; c++)
         if (overhangCells.has(`${c},${r}`)) ctx.fillRect(c * cw, r * ch, cw, ch)
+    ctx.fillStyle = 'rgba(150,90,255,0.5)' // ladder cells (#54) — climb-while-on
+    for (let r = 0; r < doorRows; r++)
+      for (let c = 0; c < doorCols; c++)
+        if (ladderCells.has(`${c},${r}`)) ctx.fillRect(c * cw, r * ch, cw, ch)
     ctx.strokeStyle = 'rgba(0,0,0,0.4)'
     ctx.lineWidth = 1
     for (let c = 1; c < doorCols; c++) ctx.strokeRect(c * cw + 0.5, 0, 0, h)
@@ -467,7 +486,7 @@ export default function TileMapper() {
       else { ctx.moveTo(x + cw, y); ctx.lineTo(x + cw, y + ch) }
       ctx.stroke()
     }
-  }, [atlas, cell, selBox, editImg, fpW, fpH, isBuilding, doorCols, doorRows, door, walk, overhangCells, edgeCells, erase])
+  }, [atlas, cell, selBox, editImg, fpW, fpH, isBuilding, doorCols, doorRows, door, walk, overhangCells, ladderCells, edgeCells, erase])
 
   // Click the preview to either mark the entrance (door mode) or toggle a
   // walkable cell (walk mode) — issue #29/#32.
@@ -506,6 +525,15 @@ export default function TileMapper() {
     const key = `${cell.dx},${cell.dy}`
     if (paintMode === 'overhang') {
       setOverhangCells((prev) => {
+        const next = new Set(prev)
+        next.has(key) ? next.delete(key) : next.add(key)
+        return next
+      })
+      return
+    }
+    // Ladder mode (#54) toggles climb cells; mutually exclusive with porch/overhang.
+    if (paintMode === 'ladder') {
+      setLadderCells((prev) => {
         const next = new Set(prev)
         next.has(key) ? next.delete(key) : next.add(key)
         return next
@@ -570,7 +598,7 @@ export default function TileMapper() {
     // A building must ship an authored, reachable interior walk mask (#32): a
     // door + at least one walkable tile + a path connecting them to a footprint
     // edge, so the avatar can actually enter. Block the save otherwise.
-    const mask = isBuilding ? buildWalkMask(walk, doorCols, doorRows, overhangCells) : undefined
+    const mask = isBuilding ? buildWalkMask(walk, doorCols, doorRows, overhangCells, ladderCells) : undefined
     if (isBuilding) {
       const v = validateWalkMask(mask, doorCols, doorRows, door)
       if (!v.ok) {
@@ -847,7 +875,7 @@ export default function TileMapper() {
           </label>
           <label>
             Kind
-            <select value={kind} onChange={(e) => { setKind(e.target.value); setDoor(null); setWalk(new Set()); setOverhangCells(new Set()); setEdgeCells(new Set()) }}>
+            <select value={kind} onChange={(e) => { setKind(e.target.value); setDoor(null); setWalk(new Set()); setOverhangCells(new Set()); setLadderCells(new Set()); setEdgeCells(new Set()) }}>
               <option value="tree">tree</option>
               <option value="prop">prop</option>
               <option value="flower-group">flower-group</option>
@@ -897,6 +925,15 @@ export default function TileMapper() {
                 {isBuilding && (
                   <button
                     type="button"
+                    className={paintMode === 'ladder' ? 'is-on' : ''}
+                    onClick={() => setPaintMode('ladder')}
+                  >
+                    Ladder
+                  </button>
+                )}
+                {isBuilding && (
+                  <button
+                    type="button"
                     className={paintMode === 'edge' ? 'is-on' : ''}
                     onClick={() => setPaintMode('edge')}
                   >
@@ -940,6 +977,13 @@ export default function TileMapper() {
                 <p className="hint">
                   Click cells the avatar walks <strong>under</strong> the building art (overhang/foliage). Walkable,
                   but drawn beneath the house. {overhangCells.size} marked.
+                </p>
+              )}
+              {isBuilding && paintMode === 'ladder' && (
+                <p className="hint">
+                  Click cells to mark a <strong>ladder</strong> — walkable like a path, but the avatar plays its
+                  climb animation while on it (falls back to walking if the character has no climb frames).
+                  {' '}{ladderCells.size} marked.
                 </p>
               )}
               {isBuilding && paintMode === 'edge' && (

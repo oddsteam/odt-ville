@@ -1,6 +1,6 @@
 import Phaser from 'phaser'
 import { TILE, MOVE_MS, PLAYER_FEET_LIFT, buildTown } from '../../constants.js'
-import { isWalkable, edgeBlocked, playerDepthAt, doorAnchorFor, footprintFor, walkMaskFor, edgeMaskFor } from '../../town.ts'
+import { isWalkable, edgeBlocked, playerDepthAt, isLadderCell, doorAnchorFor, footprintFor, walkMaskFor, edgeMaskFor } from '../../town.ts'
 import { ensureTileTextures } from '../tileTextures.js'
 import {
   CHAR_SHEET_KEY,
@@ -502,7 +502,12 @@ export default class TownScene extends Phaser.Scene {
   }
 
   applyFacing(dir, walking) {
-    if (this.usingManifest) applyFacing(this.player, this.charDir, dir, walking)
+    if (!this.usingManifest) return
+    // Climb on a ladder cell (#54): the avatar's current tile decides whether
+    // the walk loop is swapped for the climb posture (walk fallback in the rig).
+    const t = this.playerTile
+    const climbing = isLadderCell(this.buildings, t.x, t.y)
+    applyFacing(this.player, this.charDir, dir, walking, climbing)
   }
 
   spawnPlayer(session) {

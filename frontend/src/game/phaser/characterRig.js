@@ -51,6 +51,9 @@ export function buildCharacterRig(scene, manifest) {
         idleAnimKey: null,
         idleFrame: null,
         idleFlip: false,
+        climbAnimKey: null,
+        climbFrame: null,
+        climbFlip: false,
       }
     }
     return { usingManifest, charDir }
@@ -85,6 +88,10 @@ export function buildCharacterRig(scene, manifest) {
   for (const d of Object.keys(charDir)) {
     const walk = framesForFacing(manifest, d, 'walk')
     const idle = framesForFacing(manifest, d, 'idle')
+    const climb = framesForFacing(manifest, d, 'climb')
+
+    const walkAnimKey = walk.frames.length > 1 ? `char.anim.${walk.slot}` : null
+    const walkFrame = walk.frames.length ? `${walk.slot}.0` : null
 
     // Idle: loop when the posture has 2+ frames, else a static frame. With no
     // idle art, fall back to the walk posture's first frame.
@@ -99,13 +106,19 @@ export function buildCharacterRig(scene, manifest) {
       idleFlip = walk.flipX
     }
 
+    // Climb (#54): play authored climb frames on a ladder cell; with none,
+    // borrow the walk anim/frame/flip so a non-climbing character just walks.
+    const climbHas = climb.frames.length > 0
     charDir[d] = {
-      walkAnimKey: walk.frames.length > 1 ? `char.anim.${walk.slot}` : null,
-      walkFrame: walk.frames.length ? `${walk.slot}.0` : null,
+      walkAnimKey,
+      walkFrame,
       walkFlip: walk.flipX,
       idleAnimKey,
       idleFrame,
       idleFlip,
+      climbAnimKey: climbHas ? (climb.frames.length > 1 ? `char.anim.${climb.slot}` : null) : walkAnimKey,
+      climbFrame: climbHas ? `${climb.slot}.0` : walkFrame,
+      climbFlip: climbHas ? climb.flipX : walk.flipX,
     }
   }
   return { usingManifest, charDir }
@@ -117,17 +130,21 @@ export function characterScale(manifest) {
   return (render.scale || 1) * (TILE / CHAR_TILE_BASIS)
 }
 
-// Point the manifest sprite the right way. `walking` plays the walk loop; when
-// standing we play the idle loop (multi-frame idle) or snap to its idle frame.
+// Point the manifest sprite the right way. `walking` plays the walk loop —
+// swapped for the climb loop when `climbing` (on a ladder, #54); when standing
+// we play the idle loop (multi-frame idle) or snap to its idle frame.
 // Single-frame postures fall back to a static frame. Directions with no own
 // frames were resolved to the down posture (flipped, for left) in the rig.
-export function applyFacing(player, charDir, dir, walking) {
+export function applyFacing(player, charDir, dir, walking, climbing) {
   if (!player?.anims || !charDir) return
   const cfg = charDir[dir]
   if (!cfg) return
-  const animKey = walking ? cfg.walkAnimKey : cfg.idleAnimKey
-  const flip = walking ? cfg.walkFlip : cfg.idleFlip
-  const frame = walking ? cfg.walkFrame : cfg.idleFrame
+  // On a ladder (#54) the walk loop becomes the climb loop; standing still is
+  // always idle (climbing only replaces the moving pose).
+  const useClimb = walking && climbing
+  const animKey = useClimb ? cfg.climbAnimKey : walking ? cfg.walkAnimKey : cfg.idleAnimKey
+  const flip = useClimb ? cfg.climbFlip : walking ? cfg.walkFlip : cfg.idleFlip
+  const frame = useClimb ? cfg.climbFrame : walking ? cfg.walkFrame : cfg.idleFrame
   player.setFlipX(flip)
   if (animKey) {
     player.anims.play(animKey, true)
