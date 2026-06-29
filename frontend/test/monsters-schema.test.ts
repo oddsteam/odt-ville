@@ -2,7 +2,27 @@ import { describe, expect, it } from 'vitest'
 import * as Schema from 'effect/Schema'
 import { Either } from 'effect'
 
-import { Monster, MonsterSummary, NewMonster, UpdateMonster } from '../src/monsters/schema.ts'
+import {
+  Monster,
+  MonsterPoolEntry,
+  MonsterSummary,
+  NewMonster,
+  UpdateMonster,
+} from '../src/monsters/schema.ts'
+
+describe('MonsterPoolEntry schema (wild-encounter pool row)', () => {
+  const valid = { id: 1, name: 'Slime', encounter_rate: 3, image: 'data:image/png;base64,abc' }
+
+  it('decodes a pool row: id, name, weight, and the sprite image', () => {
+    expect(Schema.decodeUnknownSync(MonsterPoolEntry)(valid).image).toBe('data:image/png;base64,abc')
+  })
+
+  it('rejects a pool row missing the image (the game needs the sprite)', () => {
+    const { image, ...withoutImage } = valid
+    void image
+    expect(Either.isLeft(Schema.decodeUnknownEither(MonsterPoolEntry)(withoutImage))).toBe(true)
+  })
+})
 
 describe('MonsterSummary schema', () => {
   const valid = {

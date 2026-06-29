@@ -18,7 +18,7 @@ import {
   resolveTrainerStart,
   trainerSightCells,
   rollEncounter,
-  pickWildPokemon,
+  pickWild,
   GRACE_STEPS,
 } from '../../encounters.js'
 
@@ -387,7 +387,9 @@ export default class TownScene extends Phaser.Scene {
       this.graceSteps -= 1
       return
     }
-    if (rollEncounter()) this.launchEncounter(pickWildPokemon())
+    // Roll a wild monster from the admin-authored pool (#69), weighted by
+    // encounter_rate; an empty/absent pool falls back to the built-in table.
+    if (rollEncounter()) this.launchEncounter(pickWild(this.registry.get('monsterPool') || []))
   }
 
   launchEncounter(opponent) {

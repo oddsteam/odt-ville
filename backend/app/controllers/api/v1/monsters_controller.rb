@@ -10,6 +10,14 @@ module Api
         render json: monsters.map { |m| MonsterSerializer.summary(m, total) }
       end
 
+      # GET /api/v1/monsters/pool — the live wild-encounter pool: enabled
+      # monsters only, each with its sprite image, for the in-game grass roll.
+      # Disabled monsters never spawn, so they're excluded here.
+      def pool
+        monsters = Monster.where(enabled: true).order(:name)
+        render json: monsters.map { |m| MonsterSerializer.pool_entry(m) }
+      end
+
       # POST /api/v1/monsters — author a new monster from the admin form.
       # Explicit assignment (TileObjectsController#create style); the image data
       # URL goes through the model's read/write seam. RecordInvalid (duplicate

@@ -43,6 +43,29 @@ export function rollEncounter(rate = ENCOUNTER_RATE) {
   return Math.random() * 255 < rate
 }
 
+// Cumulative-weight pick from an authored pool (GET /api/v1/monsters/pool rows:
+// { id, name, encounter_rate, image }) -> a wild opponent { id, name, sprite,
+// kind }. Pure: pass `rng` (defaults to Math.random) for a deterministic pick.
+// Authored monsters have no level, so none is set — EncounterScene omits the
+// "Lv." line for them. Assumes a positive total weight; pickWild guards that.
+export function pickFromPool(pool, rng = Math.random) {
+  const total = pool.reduce((sum, m) => sum + m.encounter_rate, 0)
+  let roll = rng() * total
+  for (const m of pool) {
+    roll -= m.encounter_rate
+    if (roll < 0) return { id: m.id, name: m.name, sprite: m.image, kind: 'wild' }
+  }
+  const last = pool[pool.length - 1] // float-rounding fallback
+  return { id: last.id, name: last.name, sprite: last.image, kind: 'wild' }
+}
+
+// The grass roll's source of truth: the authored pool when it has weight, else
+// the built-in table so the grass is never dead (issue #69 fallback).
+export function pickWild(pool, rng = Math.random) {
+  const hasWeight = pool && pool.some((m) => m.encounter_rate > 0)
+  return hasWeight ? pickFromPool(pool, rng) : pickWildPokemon()
+}
+
 // Cumulative-weight pick from the table -> { id, name, level, sprite }.
 export function pickWildPokemon() {
   const total = ENCOUNTER_TABLE.reduce((sum, e) => sum + e.weight, 0)

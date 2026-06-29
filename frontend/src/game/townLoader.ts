@@ -10,6 +10,7 @@ import { CommunitiesService } from '../communities/service.ts'
 import { GameSessionService } from '../game-session/service.ts'
 import { TileObjectsService } from '../tileObjects/service.ts'
 import { GroundTilesService } from '../groundTiles/service.ts'
+import { MonstersService } from '../monsters/service.ts'
 import { loadActiveManifest } from '../character/manifest.js'
 
 export const loadTown = () =>
@@ -37,6 +38,10 @@ export const loadTown = () =>
       // plot and supplies the door anchor. Absent → bundled buildings.
       building: Effect.orElseSucceed(TileObjectsService.getActive('building'), () => null),
       groundTiles: Effect.orElseSucceed(GroundTilesService.list(), () => []),
+      // Authored wild-encounter pool (#69). Best-effort: a missing/erroring
+      // endpoint falls back to [] and TownScene rolls the built-in table, so
+      // the grass is never dead.
+      monsterPool: Effect.orElseSucceed(MonstersService.pool(), () => []),
       // loadActiveManifest owns its own fallback chain and never throws; mirror
       // today's `.catch(() => null)` for parity.
       characterManifest: Effect.promise(() => loadActiveManifest().catch(() => null)),
