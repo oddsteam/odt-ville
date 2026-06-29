@@ -103,6 +103,27 @@ export default function MonstersAdminPage() {
     }
   }, [])
 
+  // Delete a monster, guarded by a confirm so a stray click can't drop it. The
+  // pool shrinks server-side, so re-fetch the roster to pick up the recomputed
+  // %s; if we were editing the deleted monster, abandon the edit.
+  const removeMonster = useCallback(
+    async (m: MonsterSummary) => {
+      if (!window.confirm(`Delete "${m.name}"? This can't be undone.`)) return
+      setBusy(true)
+      setFormError(null)
+      try {
+        await runEdge(MonstersService.del(m.id))
+        if (editingId === m.id) resetForm()
+        await load()
+      } catch (err) {
+        setFormError((err as Error).message)
+      } finally {
+        setBusy(false)
+      }
+    },
+    [editingId, resetForm, load],
+  )
+
   const submit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault()
@@ -254,6 +275,14 @@ export default function MonstersAdminPage() {
                 <td>
                   <button type="button" onClick={() => startEdit(m.id)} disabled={busy}>
                     Edit
+                  </button>
+                  <button
+                    type="button"
+                    className="admin-delete"
+                    onClick={() => removeMonster(m)}
+                    disabled={busy}
+                  >
+                    Delete
                   </button>
                 </td>
               </tr>
