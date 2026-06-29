@@ -73,10 +73,26 @@ export function doorAnchorFor(
 }
 
 // A footprint cell the avatar may stand on: '.' = porch/path (drawn OVER the
-// house) or 'o' = overhang (#44 — walkable, but drawn UNDER the house art, so
-// the building overhangs the character). '#' / anything else is solid.
+// house), 'o' = overhang (#44 — walkable, but drawn UNDER the house art, so
+// the building overhangs the character), or 'L' = ladder (#54 — walkable like
+// '.', but the avatar plays its climb posture while on it). '#' / anything
+// else is solid.
 function maskWalkableChar(ch: string | undefined): boolean {
-  return ch === '.' || ch === 'o'
+  return ch === '.' || ch === 'o' || ch === 'L'
+}
+
+// Is footprint cell (x,y) an authored ladder ('L', #54)? Walkable like a path,
+// but the avatar climbs while standing on it (with a walk fallback). Out-of-
+// footprint or unmasked cells are never ladders — buildings opt in per cell.
+export function isLadderCell(buildings: Building[], x: number, y: number): boolean {
+  return buildings.some(
+    (b) =>
+      x >= b.col &&
+      x < b.col + b.w &&
+      y >= b.row &&
+      y < b.row + b.h &&
+      b.mask?.[y - b.row]?.[x - b.col] === 'L',
+  )
 }
 
 // An authored interior walk mask (#32): a row-major grid the size of the
@@ -149,7 +165,7 @@ export function validateWalkMask(
   door: { dx: number; dy: number } | null | undefined,
 ): { ok: boolean; reason?: 'no-door' | 'no-walkable' | 'unreachable' } {
   if (door == null) return { ok: false, reason: 'no-door' }
-  if (mask == null || !mask.some((row) => row.includes('.') || row.includes('o'))) return { ok: false, reason: 'no-walkable' }
+  if (mask == null || !mask.some((row) => row.includes('.') || row.includes('o') || row.includes('L'))) return { ok: false, reason: 'no-walkable' }
   if (!walkMaskConnected(mask, w, h, door)) return { ok: false, reason: 'unreachable' }
   return { ok: true }
 }
@@ -437,7 +453,9 @@ export function playerDepthAt(buildings: Building[], x: number, y: number): numb
         x < b.col + b.w &&
         y >= b.row &&
         y < b.row + b.h &&
-        b.mask?.[y - b.row]?.[x - b.col] === '.'),
+        // A porch '.' or ladder 'L' cell lifts the avatar over the house; an
+        // overhang 'o' deliberately stays below (the building overhangs it).
+        (b.mask?.[y - b.row]?.[x - b.col] === '.' || b.mask?.[y - b.row]?.[x - b.col] === 'L')),
   )
   return on ? (on.row + on.h) * 10 : y * 10 + 5
 }
