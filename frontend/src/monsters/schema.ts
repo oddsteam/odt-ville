@@ -38,3 +38,10 @@ export const NewMonster = Schema.Struct({
   enabled: Schema.Boolean,
 })
 export type NewMonster = Schema.Schema.Type<typeof NewMonster>
+
+// Body the admin form PATCHes to edit a monster. Every field is optional: the
+// form sends only what it's setting, so leaving the image unchanged simply
+// omits `image` and the server keeps the stored blob. Present fields keep their
+// types (a string rate is still rejected).
+export const UpdateMonster = Schema.partial(NewMonster)
+export type UpdateMonster = Schema.Schema.Type<typeof UpdateMonster>

@@ -54,6 +54,10 @@ export interface HttpClient {
     path: string,
     body?: unknown,
   ) => Effect.Effect<A, HttpError>
+  readonly patch: <A = unknown>(
+    path: string,
+    body?: unknown,
+  ) => Effect.Effect<A, HttpError>
   readonly del: <A = unknown>(path: string) => Effect.Effect<A, HttpError>
 }
 
@@ -110,6 +114,12 @@ const live: HttpClient = {
   put: (path, body) =>
     send(path, {
       method: 'PUT',
+      headers: JSON_HEADERS,
+      body: body === undefined ? undefined : JSON.stringify(body),
+    }),
+  patch: (path, body) =>
+    send(path, {
+      method: 'PATCH',
       headers: JSON_HEADERS,
       body: body === undefined ? undefined : JSON.stringify(body),
     }),
