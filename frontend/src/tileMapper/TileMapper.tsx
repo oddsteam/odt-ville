@@ -16,6 +16,7 @@ type DragAnchor = { c: number; r: number }
 
 const MAP_TILE = 48 // px per tile in the game — used to preview real map size.
 const MAX_FP = 15 // largest building footprint, in tiles (15×15 cap).
+const FG_HISTORY_CAP = 30 // foreground-mask undo depth (#50). ponytail: cap, raise if authors hit it.
 
 // Map a click on the footprint preview (rectW×rectH px showing cols×rows tiles)
 // to a clamped door-cell offset. The town uses this single cell as the building
@@ -169,6 +170,25 @@ export function floodSelect(
   return out
 }
 
+// Mouse → source-pixel on the foreground view canvas (#51). getBoundingClientRect
+// is the *border* box, so shift past the border and scale by the *content* box,
+// not the border box — otherwise the brush lands offset from the cursor when the
+// canvas is CSS-scaled to fit and carries a 1px border. Clamped to the source.
+export function viewToSourcePixel(
+  clientX: number, clientY: number,
+  rect: { left: number; top: number },
+  border: { left: number; top: number },
+  content: { width: number; height: number },
+  srcW: number, srcH: number,
+): { x: number; y: number } {
+  const x = Math.floor(((clientX - rect.left - border.left) / content.width) * srcW)
+  const y = Math.floor(((clientY - rect.top - border.top) / content.height) * srcH)
+  return {
+    x: Math.max(0, Math.min(srcW - 1, x)),
+    y: Math.max(0, Math.min(srcH - 1, y)),
+  }
+}
+
 // True if a mask canvas has any painted (non-transparent) pixel — so we only
 // ship a foreground mask (#36) when the admin actually authored one.
 function maskHasInk(c: HTMLCanvasElement | null): boolean {
@@ -212,6 +232,9 @@ export default function TileMapper() {
   const [fgSize, setFgSize] = useState(8) // brush/eraser radius, in source px
   const [fgTol, setFgTol] = useState(24) // wand colour tolerance
   const [fgTick, setFgTick] = useState(0)
+  // Live cursor pixel (#51) and per-action undo history (#50) for the fg editor.
+  const [fgCursor, setFgCursor] = useState<{ x: number; y: number } | null>(null)
+  const [fgHistory, setFgHistory] = useState<ImageData[]>([])
   const [loadedFg, setLoadedFg] = useState<string | null>(null) // saved mask to restore
   const fgSrcRef = useRef<HTMLCanvasElement | null>(null)
   const fgMaskRef = useRef<HTMLCanvasElement | null>(null)
@@ -636,6 +659,7 @@ export default function TileMapper() {
       mask.width = src.width
       mask.height = src.height
       fgMaskRef.current = mask
+      setFgHistory([]) // art changed → can't undo past this baseline (#50)
       if (loadedFg) {
         const img = new Image()
         img.onload = () => {
@@ -664,17 +688,35 @@ export default function TileMapper() {
     ctx.globalAlpha = 0.5
     ctx.drawImage(mask, 0, 0, view.width, view.height)
     ctx.globalAlpha = 1
-  }, [paintMode, fgTick])
+    // Live cursor (#51): the disc the brush/eraser will paint (centred on the
+    // same source pixel fgStamp uses), or a crosshair for the wand's seed pixel.
+    if (fgCursor) {
+      const cx = fgCursor.x * zoom
+      const cy = fgCursor.y * zoom
+      ctx.strokeStyle = '#00e5ff'
+      ctx.lineWidth = 1
+      ctx.beginPath()
+      if (fgTool === 'wand') {
+        ctx.moveTo(cx - 6, cy); ctx.lineTo(cx + 6, cy)
+        ctx.moveTo(cx, cy - 6); ctx.lineTo(cx, cy + 6)
+      } else {
+        ctx.arc(cx, cy, fgSize * zoom, 0, Math.PI * 2)
+      }
+      ctx.stroke()
+    }
+  }, [paintMode, fgTick, fgCursor, fgTool, fgSize])
 
   // Mouse → source-pixel coords on the foreground view canvas.
   function fgPixel(e: React.MouseEvent<HTMLCanvasElement>) {
     const view = fgViewRef.current!
     const src = fgSrcRef.current!
     const rect = view.getBoundingClientRect()
-    return {
-      x: Math.floor(((e.clientX - rect.left) / rect.width) * src.width),
-      y: Math.floor(((e.clientY - rect.top) / rect.height) * src.height),
-    }
+    return viewToSourcePixel(
+      e.clientX, e.clientY, rect,
+      { left: view.clientLeft, top: view.clientTop },
+      { width: view.clientWidth, height: view.clientHeight },
+      src.width, src.height,
+    )
   }
   // Brush/eraser: a filled disc on the mask (magenta, or punched out to erase).
   function fgStamp(x: number, y: number) {
@@ -703,22 +745,54 @@ export default function TileMapper() {
     }
     mctx.putImageData(md, 0, 0)
   }
+  // Snapshot the mask before an action so undo can restore it (#50). One push per
+  // action — onFgDown only — makes a brush/eraser stroke or a wand fill one step.
+  function pushFgHistory() {
+    const mask = fgMaskRef.current!
+    const snap = mask.getContext('2d')!.getImageData(0, 0, mask.width, mask.height)
+    setFgHistory((h) => [...h, snap].slice(-FG_HISTORY_CAP))
+  }
+  const onFgUndo = useCallback(() => {
+    setFgHistory((h) => {
+      if (!h.length) return h
+      const mask = fgMaskRef.current
+      if (mask) mask.getContext('2d')!.putImageData(h[h.length - 1], 0, 0)
+      return h.slice(0, -1)
+    })
+    setFgTick((t) => t + 1)
+  }, [])
   function onFgDown(e: React.MouseEvent<HTMLCanvasElement>) {
     if (!fgSrcRef.current || !fgMaskRef.current) return
+    pushFgHistory()
     fgDrawingRef.current = true
     const { x, y } = fgPixel(e)
     fgTool === 'wand' ? fgWand(x, y) : fgStamp(x, y)
     setFgTick((t) => t + 1)
   }
   function onFgMove(e: React.MouseEvent<HTMLCanvasElement>) {
-    if (!fgDrawingRef.current || fgTool === 'wand') return
+    if (!fgSrcRef.current) return
     const { x, y } = fgPixel(e)
+    setFgCursor({ x, y })
+    if (!fgDrawingRef.current || fgTool === 'wand') return
     fgStamp(x, y)
     setFgTick((t) => t + 1)
   }
   function onFgUp() {
     fgDrawingRef.current = false
   }
+
+  // Cmd/Ctrl+Z undoes while the foreground editor is open (#50).
+  useEffect(() => {
+    if (paintMode !== 'fg' || !isBuilding) return
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
+        e.preventDefault()
+        onFgUndo()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [paintMode, isBuilding, onFgUndo])
 
   return (
     <div className="tilemapper">
@@ -908,8 +982,11 @@ export default function TileMapper() {
                           onChange={(e) => setFgSize(Math.max(1, Math.min(64, Number(e.target.value) || 1)))} style={{ width: 56 }} />
                       </label>
                     )}
+                    <button type="button" onClick={onFgUndo} disabled={fgHistory.length === 0} title="Undo (⌘/Ctrl+Z)">
+                      Undo
+                    </button>
                   </div>
-                  <canvas ref={fgViewRef} className="fg-canvas" onMouseDown={onFgDown} onMouseMove={onFgMove} onMouseUp={onFgUp} onMouseLeave={onFgUp} />
+                  <canvas ref={fgViewRef} className="fg-canvas" onMouseDown={onFgDown} onMouseMove={onFgMove} onMouseUp={onFgUp} onMouseLeave={() => { onFgUp(); setFgCursor(null) }} />
                 </div>
               )}
             </>
