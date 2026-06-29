@@ -11,6 +11,11 @@ do not start until earlier ones are paying off.
 If you are wondering *why* any of this matters, read CONTEXT.md first.
 This document is **what** and **when**; CONTEXT.md is **why**.
 
+> **Phases 3–5 are now designed (2026-06-29).** The multi-map model, access,
+> multiplayer, the map editor, and travel are decided in `CONTEXT.md` →
+> *Multi-map model* and `docs/adr/0003`–`0004`. The phase summaries below are
+> the sequencing; those docs are the design — defer to them on any conflict.
+
 ## Phase 0 — Community module: all communities in one map
 
 **This is where we are today.** It is a real product, not a stepping
@@ -141,10 +146,11 @@ justify it.
 
 Not its own phase; lands alongside the phases that need it.
 
-- **Map authoring** (Phase 3+, when curated maps appear): use **Tiled** or
-  **LDtk** for designer-painted maps. Replace runtime `buildTown()` with
-  a JSON loader that produces the same `town` shape. The game module is
-  unchanged.
+- **Map authoring** (Phase 3+, when curated maps appear): an **in-app map
+  editor** (a code-split `/editor` route) authors the **Authored Map Document**
+  — superseding Tiled for new maps (decided 2026-06-29; see `CONTEXT.md` →
+  *Multi-map model* and ADR-0003/0004). `buildTown()` becomes one *producer* of
+  the runtime map shape; the editor is another. The game module is unchanged.
 - **House interior layout editing** (Phase 6, for team houses): use
   **react-grid-layout** (or **dnd-kit** + a custom grid) for the team
   admin's "edit layout" view. Widgets register themselves; the layout +

@@ -1,8 +1,9 @@
 # Discussion: Domain Boundaries & Game Team Workflow
 
-> Status: **Parking lot / to revisit.** This is a scratchpad to capture the
-> things we noticed are worth a deeper conversation. Nothing here is a
-> decision yet — it's the agenda for that conversation.
+> Status: **Topic 1 resolved (2026-06-29); Topic 2 still parking-lot.**
+> Topic 1's decisions now live in `CONTEXT.md` → *Multi-map model* and in
+> `docs/adr/0003`–`0004`; the summary below points there. Topic 2 (game-team
+> workflow) is still an open agenda, not a decision.
 
 ---
 
@@ -32,73 +33,32 @@ This doc is the placeholder for thinking that through properly.
 
 ## Topic 1 — Domain decoupling
 
-The hunch: there are at least three domains here that should have clean
-seams between them, ideally communicating through **data contracts**
-(manifests / registries) rather than direct code references.
+> **Resolved (2026-06-29).** The seams this topic hunted for are decided.
+> Canonical: `CONTEXT.md` → *Multi-map model* (language) and
+> `docs/adr/0003`–`0004` (rationale). In brief:
+>
+> - **Three contexts confirmed**, with the **Tile Catalog / Autotile Engine**
+>   as a pure shared kernel beneath a **Map Authoring** (editor) context and
+>   the **Game Runtime** black box.
+> - **The hard boundary is a data contract, not packaging**: the runtime *map
+>   shape* / the editor's *Authored Map Document* (source + baked). Editor and
+>   runtime meet only there and at the kernel; neither imports the other.
+> - **Autotiling bakes in the producer** (ADR-0003), so the runtime ships no
+>   autotile logic.
+> - **Authoring stays in-repo** — same SPA, a code-split `/editor` route, with
+>   import rules enforcing the boundary. This answers the old "in-app vs
+>   `pipeline/`" question as "in-app." For *new* maps the in-app editor
+>   supersedes Tiled, so the 2026-06-18 "Tiled stays self-contained" note now
+>   applies only to the legacy Tiled map.
+>
+> The original open questions (hard boundary, contract format, authoring vs
+> runtime, keying, testing, ownership) are answered above or deferred to the
+> multi-map PRD — they are no longer open. The empirical code-graph evidence
+> that backed the hunch is retained below as data.
 
-### Candidate domains
-
-| Domain | Responsibility | Lives near today |
-|---|---|---|
-| **Sprite / Art Service** | Ingest raw art → normalize → slice → register. Buildings, characters, signs. | `buildings.js`, `scripts/prep-building.mjs`, sprite mapper |
-| **Map / Tile Service** | Author & publish maps. Tilesets, Tiled projects, map manifests, collision/object layers. | `public/maps/`, `tileTextures.js` |
-| **Game Runtime** | Consume the above as data and *play* the game. Scenes, movement, encounters, multiplayer session. | `phaser/`, `VillageGame.jsx`, `game-session/` |
-
-### The seam we want
-
-The runtime should depend on **published artifacts + a manifest**, not on
-the pipeline that produced them. e.g.:
-
-- Art service emits `buildings/<key>-{roof,body}.png` + a manifest entry.
-  Runtime reads the manifest. (We're partway there — `buildings.js`
-  auto-discovers via Vite glob, which is a soft contract.)
-- Map service emits a published map (tiles, layers, objects, spawn points)
-  + a manifest. Runtime loads the map by id, knows nothing about Tiled.
-
-### Questions to settle later
-
-1. **How hard is the boundary?** Separate folders/packages? A real
-   build-time pipeline that outputs to a `public/` artifact dir the
-   runtime treats as read-only? A separate repo/service eventually?
-2. **What's the contract format?** A versioned JSON manifest per domain
-   (sprite manifest, map manifest) the runtime validates against?
-3. **Authoring tools vs runtime.** `scripts/` and Tiled are *authoring*
-   tools — should they be excluded from the app bundle entirely and live
-   in a `tools/` or `pipeline/` area?
-   **Resolved (2026-06-18):** The Tiled project stays self-contained under
-   `public/maps` — Tiled needs source `.tmx` + tilesets together with
-   working relative paths, and the runtime shares the same tilesets, so a
-   split would force duplication or a publish step for little gain (the
-   authoring-only files are ~130K vs ~3.5M of genuinely-shipped art). The
-   build now strips the authoring-only files (`maps.tiled-project`, `*.tmx`,
-   `palette/`) from `dist/` via a small Vite plugin
-   (`stripMapAuthoringFiles` in `frontend/vite.config.js`). Revisit the hard
-   `pipeline/` boundary only if a dedicated content team needs it.
-4. **Naming/keying conventions** as the contract — right now keys are
-   derived from filenames (`<name>-roof.png` → `name`). Is filename
-   convention robust enough, or do we want explicit manifests?
-5. **Testing.** Each domain testable in isolation: art pipeline has
-   fixture images, map service validates map schemas, runtime mocks the
-   manifests. What does that look like?
-6. **Ownership.** If a person/team owns "art" and another owns "maps",
-   the seam above is also the org boundary. Does the boundary match how
-   we want to split work? (→ Topic 2.)
-
-### Possible shape (sketch, not a proposal)
-
-```
-frontend/
-  pipeline/              # authoring tools, NOT shipped to runtime
-    sprites/             # prep-building.mjs, character/sprite mapper
-    maps/                # Tiled project, tileset prep, map publisher
-  public/
-    manifests/
-      sprites.json       # the contract
-      maps.json          # the contract
-    maps/ ...            # published artifacts (read-only to runtime)
-    sprites/ ...
-  src/game/              # runtime ONLY — consumes manifests, plays game
-```
+The Sprite/Art service split is the one piece **not** yet decided here — it
+remains a candidate context (`buildings.js`, `prep-building.mjs`, the sprite
+mapper) and is in scope for a later pass, not this multi-map design.
 
 ---
 

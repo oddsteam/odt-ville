@@ -127,6 +127,84 @@ solid. Authored in the admin tool and validated so the door is reachable before
 save (#32). Until #32 lands, a footprint is solid except its door, and an
 unreachable authored door snaps to bottom-centre at runtime (#30).
 
+## Multi-map model (resolving — 2026-06-29)
+
+The roadmap's Phase 3+ multi-map work is being designed. This section is
+**language + a decision index** — the *rationale* for the load-bearing choices
+lives in the ADRs, and the *spec* (schema, endpoints) will live in the
+multi-map PRD, so this stays the glossary and does not duplicate either.
+
+### Language
+
+**Map (runtime shape)** — what the game black box renders: tiles + walk mask +
+placed entities + spawn points + travel portals. Two **producers** emit the
+same shape: a **generated map** (`buildTown` from memberships + seed — today's
+per-user hometown) and an **authored map** (a persisted document from the
+in-app editor — fixed, shared). _Avoid_ calling the authored map a different
+*kind* of thing: same shape, human placement instead of generation. (ADR-0004.)
+
+**Placed Entity** — anything a producer drops on a map. Three kinds:
+- **Prop** — decorative art, no trigger. May be **animated**: an ambient
+  billboard/video is an animated prop — a *rendering* concern, **not** an
+  interaction.
+- **House** — an enterable building (footprint, walk-mask, door, content
+  behind it). *Owns* an entry Zone; is not itself one. Authored maps may mix
+  props and houses.
+- **Zone** — a triggerable region (`trigger` + `payload`); the game detects
+  the trigger and emits a semantic event, the **shell decides behaviour**
+  (same pattern as `onEnterCommunity` / `house.type → detail component`).
+
+**Trigger** — the axis that unifies every interaction: `on_enter` (door,
+encounter patch, portal), `on_sight` (trainer duel cone), `on_proximity`,
+`on_interact`. Door-entry, encounter, trainer challenge, and travel are one
+primitive differing only by trigger + payload — not four mechanics. (ADR-0004.)
+
+**Bounded contexts** — the **Tile Catalog / Autotile Engine** (a pure,
+map-agnostic *shared kernel*: tile types, autotile rules, the
+prop/house/monster catalog) sits beneath both producers and the renderer;
+**Map Authoring** (the editor) and **Game Runtime** (the black box) each depend
+on the kernel and meet only at the document — neither imports the other.
+(ADR-0004.)
+
+**Authored Map Document = source + baked** — *source layout* (editable: painted
+terrain, placements, zones; read by the editor) plus *baked tiles* (the
+resolved grid; read by the game). Editing = load source → edit → re-bake →
+save; bake validates playability (cf. ADR-0002). (ADR-0003.)
+
+**Terrain / `GROUND_STACK` / edge set** — the autotile vocabulary already in
+`groundModel.js`: a **terrain** is a paintable ground type; **`GROUND_STACK`**
+is the priority order (higher rank **owns the seam**); each terrain has one
+**edge set** (4 edges + 4 corners) with a **coverage** fill under transparent
+edges.
+
+### Decisions (2026-06-29)
+
+Index, not rationale — the load-bearing ones have ADRs; the rest are settled
+and get specced in the multi-map PRD.
+
+- **Tiles bake in the producer, never at runtime** — ADR-0003.
+- **One map shape, two producers; entities are Prop/House/Zone** — ADR-0004.
+  `town.ts` shrinks to the generated producer; `GROUND_STACK` /
+  `AUTOTILED_TERRAINS` move from hardcoded constants to Tile Catalog **data**.
+- **Identity = Keycloak (OIDC)** authN + coarse role/group claims; fine-grained
+  game membership stays in our DB. `Map.access_policy` ∈ `public` ·
+  `claim{role|group}` · `members` (`invite{userIds}` deferred), enforced
+  server-side at list + load/join. Distinct from the ADR-0001 in-game entry gate.
+- **Multiplayer is a `Map` property** — MVP = presence only (per-map
+  ActionCable broadcasting `{userId,x,y,facing}`, stable Keycloak id); proximity
+  voice is a later *separate* SFU/WebRTC service over the same position stream.
+  Generated hometowns stay solo; authoritative shared world-state is out.
+- **Editor = same SPA `/editor` route**, code-split; the document is the seam;
+  editor and Game Runtime never import each other. Preview = shared WYSIWYG
+  renderer (factor `townRenderer` into the kernel) + a "Preview in game" launch
+  against the draft document.
+- **Maps connect via directional edge portals** (`on_enter` Zone →
+  `{targetMapSlug, entrySpawnId}`), one map loaded at a time, no seamless
+  adjacency. Gated targets are **visible-but-refused-with-a-reason**.
+- **Layout-to-autotiling = semantic terrain painting** with region tools; the
+  in-app editor supersedes Tiled for authored maps; boundaries resolve by the
+  existing layered-priority engine, so adding a terrain is O(N) art.
+
 ## Where the model is heading
 
 The current code calls everything "community," but the conceptual model is
