@@ -7,7 +7,8 @@ import bus from '../bus.js'
 // encounter runs; RUN AWAY closes this scene and resumes the world.
 //
 // Init data:
-//   { opponent: { kind: 'wild'|'trainer', name, level, sprite (URL) } }
+//   { opponent: { kind: 'wild'|'trainer', name, level, sprite (URL),
+//                 encounter_dialog? } }
 //
 // Bus events emitted:
 //   'trainerDefeated' — when RUN AWAY closes a trainer duel (so the
@@ -149,9 +150,11 @@ export default class EncounterScene extends Phaser.Scene {
       .setOrigin(0, 0)
       .setDepth(5)
 
-    const text = isTrainer
-      ? `${o.name} wants to duel!`
-      : `A wild ${o.name} appeared!`
+    // Authored monsters (#70) carry their own encounter line; fall back to the
+    // generic greeting for trainers and built-in cameos with no dialog.
+    const text =
+      o.encounter_dialog ||
+      (isTrainer ? `${o.name} wants to duel!` : `A wild ${o.name} appeared!`)
     this.add
       .text(36, boxY + 28, text, {
         fontFamily: 'monospace',

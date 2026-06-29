@@ -44,19 +44,28 @@ export function rollEncounter(rate = ENCOUNTER_RATE) {
 }
 
 // Cumulative-weight pick from an authored pool (GET /api/v1/monsters/pool rows:
-// { id, name, encounter_rate, image }) -> a wild opponent { id, name, sprite,
-// kind }. Pure: pass `rng` (defaults to Math.random) for a deterministic pick.
-// Authored monsters have no level, so none is set — EncounterScene omits the
-// "Lv." line for them. Assumes a positive total weight; pickWild guards that.
+// { id, name, encounter_rate, image, encounter_dialog }) -> a wild opponent
+// { id, name, sprite, kind, encounter_dialog }. Pure: pass `rng` (defaults to
+// Math.random) for a deterministic pick. Authored monsters have no level, so
+// none is set — EncounterScene omits the "Lv." line for them. The dialog is the
+// authored line EncounterScene shows in-world. Assumes a positive total weight;
+// pickWild guards that.
+const toWild = (m) => ({
+  id: m.id,
+  name: m.name,
+  sprite: m.image,
+  kind: 'wild',
+  encounter_dialog: m.encounter_dialog,
+})
+
 export function pickFromPool(pool, rng = Math.random) {
   const total = pool.reduce((sum, m) => sum + m.encounter_rate, 0)
   let roll = rng() * total
   for (const m of pool) {
     roll -= m.encounter_rate
-    if (roll < 0) return { id: m.id, name: m.name, sprite: m.image, kind: 'wild' }
+    if (roll < 0) return toWild(m)
   }
-  const last = pool[pool.length - 1] // float-rounding fallback
-  return { id: last.id, name: last.name, sprite: last.image, kind: 'wild' }
+  return toWild(pool[pool.length - 1]) // float-rounding fallback
 }
 
 // The grass roll's source of truth: the authored pool when it has weight, else
