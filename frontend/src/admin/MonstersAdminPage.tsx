@@ -124,6 +124,26 @@ export default function MonstersAdminPage() {
     [editingId, resetForm, load],
   )
 
+  // Flip a monster's enabled flag via the shared update endpoint — an
+  // enabled-only PATCH, which the controller's conditional assignment applies
+  // without touching the other fields. Disabling drops it from the probability
+  // denominator, so re-fetch the roster to show the recomputed %s.
+  const toggleEnabled = useCallback(
+    async (m: MonsterSummary) => {
+      setBusy(true)
+      setFormError(null)
+      try {
+        await runEdge(MonstersService.update(m.id, { enabled: !m.enabled }))
+        await load()
+      } catch (err) {
+        setFormError((err as Error).message)
+      } finally {
+        setBusy(false)
+      }
+    },
+    [load],
+  )
+
   const submit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault()
@@ -273,6 +293,9 @@ export default function MonstersAdminPage() {
                 <td>{m.encounter_rate}</td>
                 <td>{percent(m.probability)}</td>
                 <td>
+                  <button type="button" onClick={() => toggleEnabled(m)} disabled={busy}>
+                    {m.enabled ? 'Disable' : 'Enable'}
+                  </button>
                   <button type="button" onClick={() => startEdit(m.id)} disabled={busy}>
                     Edit
                   </button>
