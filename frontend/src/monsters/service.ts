@@ -8,7 +8,7 @@ import * as Schema from 'effect/Schema'
 
 import { DecodeError, Http } from '../lib/http.ts'
 import type { HttpError } from '../lib/http.ts'
-import { Monster, MonsterSummary, type NewMonster } from './schema.ts'
+import { Monster, MonsterSummary, type NewMonster, type UpdateMonster } from './schema.ts'
 
 const decodeWith =
   <A>(schema: Schema.Schema<A>) =>
@@ -45,4 +45,30 @@ export const create = (
     return yield* decodeMonster(path)(raw)
   })
 
-export const MonstersService = { list, create } as const
+// GET /monsters/:id -> the full record incl. image, so the admin edit form can
+// pre-fill its fields and preview the monster's current art (the roster summary
+// omits the heavy blob).
+export const get = (id: number): Effect.Effect<Monster, HttpError, Http> =>
+  Effect.gen(function* () {
+    const http = yield* Http
+    const path = `/monsters/${id}`
+    const raw = yield* http.get(path)
+    return yield* decodeMonster(path)(raw)
+  })
+
+// PATCH /monsters/:id -> the updated monster (full record). Only the fields in
+// `body` are sent; omitting `image` leaves the stored blob untouched. Saving
+// recomputes the pool, so the caller re-fetches the roster. Validation failures
+// (duplicate name) come back as a RequestError the caller surfaces.
+export const update = (
+  id: number,
+  body: UpdateMonster,
+): Effect.Effect<Monster, HttpError, Http> =>
+  Effect.gen(function* () {
+    const http = yield* Http
+    const path = `/monsters/${id}`
+    const raw = yield* http.patch(path, body)
+    return yield* decodeMonster(path)(raw)
+  })
+
+export const MonstersService = { list, get, create, update } as const

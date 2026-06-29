@@ -91,6 +91,77 @@ module Api
 
         assert_response :unprocessable_entity
       end
+
+      test "show returns the full record incl. the image data URL" do
+        monster = Monster.create!(name: "Slime", image: "data:img", encounter_rate: 5)
+
+        get "/api/v1/monsters/#{monster.id}", headers: auth(@user)
+
+        assert_response :success
+        assert_equal "Slime", json[:name]
+        assert_equal "data:img", json[:image], "show returns the image so the edit form can pre-fill it"
+      end
+
+      test "update edits the record and returns the full updated record" do
+        monster = Monster.create!(name: "Slime", image: "data:old", encounter_rate: 1, encounter_dialog: "Hi", enabled: true)
+
+        patch "/api/v1/monsters/#{monster.id}",
+              params: { name: "Slime King", image: "data:new", encounter_dialog: "Bow!", encounter_rate: 4, enabled: false },
+              headers: auth(@user)
+
+        assert_response :success
+        assert_equal "Slime King", json[:name]
+        assert_equal "data:new", json[:image]
+        assert_equal "Bow!", json[:encounter_dialog]
+        assert_equal 4, json[:encounter_rate]
+        assert_equal false, json[:enabled]
+
+        monster.reload
+        assert_equal "Slime King", monster.name
+        assert_equal "data:new", monster.image
+      end
+
+      test "update leaves the image unchanged when none is supplied" do
+        monster = Monster.create!(name: "Slime", image: "data:keep", encounter_rate: 1)
+
+        patch "/api/v1/monsters/#{monster.id}",
+              params: { encounter_rate: 9 },
+              headers: auth(@user)
+
+        assert_response :success
+        assert_equal 9, json[:encounter_rate]
+        assert_equal "data:keep", json[:image], "omitting image leaves the stored blob untouched"
+      end
+
+      test "saving an edited rate recomputes probabilities across the pool" do
+        slime = Monster.create!(name: "Slime", image: "data:img", encounter_rate: 1)
+        Monster.create!(name: "Wolf", image: "data:img", encounter_rate: 1)
+
+        patch "/api/v1/monsters/#{slime.id}",
+              params: { encounter_rate: 3 },
+              headers: auth(@user)
+
+        assert_response :success
+        assert_in_delta 0.75, json[:probability], 1e-9, "the edited monster's % reflects the new pool"
+
+        get "/api/v1/monsters", headers: auth(@user)
+        by_name = json.index_by { _1[:name] }
+        assert_in_delta 0.75, by_name["Slime"][:probability], 1e-9
+        assert_in_delta 0.25, by_name["Wolf"][:probability], 1e-9
+      end
+
+      test "update rejects a duplicate name" do
+        Monster.create!(name: "Slime", image: "data:img", encounter_rate: 1)
+        wolf = Monster.create!(name: "Wolf", image: "data:img", encounter_rate: 1)
+
+        patch "/api/v1/monsters/#{wolf.id}",
+              params: { name: "Slime" },
+              headers: auth(@user)
+
+        assert_response :unprocessable_entity
+        assert json[:error].present?, "validation message surfaces to the admin"
+        assert_equal "Wolf", wolf.reload.name
+      end
     end
   end
 end

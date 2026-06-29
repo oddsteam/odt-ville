@@ -195,4 +195,26 @@ describe('Http client', () => {
     const firstCall = f.mock.calls[0]!
     expect(String(firstCall[0])).toBe('/api/v1/communities')
   })
+
+  it('sends a PATCH with a JSON body to the prefixed path', async () => {
+    const f = mockFetch(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+    globalThis.fetch = f as unknown as typeof fetch
+
+    const program = Effect.gen(function* () {
+      const http = yield* Http
+      return yield* http.patch('/monsters/1', { encounter_rate: 4 })
+    })
+    const exit = await runExit(provided(program))
+    expect(Exit.isSuccess(exit)).toBe(true)
+
+    const [url, init] = f.mock.calls[0]!
+    expect(String(url)).toBe('/api/v1/monsters/1')
+    expect(init?.method).toBe('PATCH')
+    expect(init?.body).toBe(JSON.stringify({ encounter_rate: 4 }))
+  })
 })

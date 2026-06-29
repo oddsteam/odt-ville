@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { MonstersService } from '../monsters/service.ts'
-import type { MonsterSummary } from '../monsters/schema.ts'
+import type { MonsterSummary, UpdateMonster } from '../monsters/schema.ts'
 import { runEdge } from '../lib/runEdge.ts'
 import './admin.css'
 
@@ -29,16 +29,21 @@ function readImageFile(file: File): Promise<string> {
   })
 }
 
-// Monster admin (issues #56–#57): the weighted wild-encounter pool with each
-// monster's computed probability, plus an "add monster" form. Editing,
-// deleting and the enable/disable toggle land in #58–#60.
+// Monster admin (issues #56–#58): the weighted wild-encounter pool with each
+// monster's computed probability, plus an add/edit form. The same form authors
+// a new monster and edits an existing one (pre-filled via the show endpoint).
+// The enable/disable toggle lands in #60.
 export default function MonstersAdminPage() {
   const [monsters, setMonsters] = useState<readonly MonsterSummary[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  // Add-monster form state.
+  // Add/edit form state. `editingId` is null when authoring a new monster and
+  // the id under edit otherwise; `imageReplaced` tracks whether the admin
+  // picked a new file so an unchanged edit keeps (and never resends) the blob.
+  const [editingId, setEditingId] = useState<number | null>(null)
   const [name, setName] = useState('')
   const [image, setImage] = useState<string | null>(null)
+  const [imageReplaced, setImageReplaced] = useState(false)
   const [dialog, setDialog] = useState('')
   const [rate, setRate] = useState('0')
   const [enabled, setEnabled] = useState(true)
@@ -63,43 +68,79 @@ export default function MonstersAdminPage() {
     try {
       setFormError(null)
       setImage(await readImageFile(file))
+      setImageReplaced(true)
     } catch (e) {
       setFormError((e as Error).message)
     }
   }, [])
 
   const resetForm = useCallback(() => {
+    setEditingId(null)
     setName('')
     setImage(null)
+    setImageReplaced(false)
     setDialog('')
     setRate('0')
     setEnabled(true)
+    setFormError(null)
+  }, [])
+
+  // Pre-fill the form from the full record (the roster summary omits the image,
+  // so this fetches the monster to preview its current art).
+  const startEdit = useCallback(async (id: number) => {
+    setFormError(null)
+    try {
+      const m = await runEdge(MonstersService.get(id))
+      setEditingId(m.id)
+      setName(m.name)
+      setImage(m.image)
+      setImageReplaced(false)
+      setDialog(m.encounter_dialog ?? '')
+      setRate(String(m.encounter_rate))
+      setEnabled(m.enabled)
+    } catch (e) {
+      setFormError((e as Error).message)
+    }
   }, [])
 
   const submit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault()
-      if (!name.trim()) {
+      const trimmed = name.trim()
+      if (!trimmed) {
         setFormError('Give the monster a name.')
-        return
-      }
-      if (!image) {
-        setFormError('Upload an image for the monster.')
         return
       }
 
       setBusy(true)
       setFormError(null)
       try {
-        await runEdge(
-          MonstersService.create({
-            name: name.trim(),
-            image,
+        if (editingId === null) {
+          if (!image) {
+            setFormError('Upload an image for the monster.')
+            return
+          }
+          await runEdge(
+            MonstersService.create({
+              name: trimmed,
+              image,
+              encounter_dialog: dialog,
+              encounter_rate: Number(rate) || 0,
+              enabled,
+            }),
+          )
+        } else {
+          // Send the image only when the admin actually replaced it, so leaving
+          // it unchanged keeps the stored blob server-side.
+          const body: UpdateMonster = {
+            name: trimmed,
             encounter_dialog: dialog,
             encounter_rate: Number(rate) || 0,
             enabled,
-          }),
-        )
+            ...(imageReplaced && image ? { image } : {}),
+          }
+          await runEdge(MonstersService.update(editingId, body))
+        }
         resetForm()
         await load()
       } catch (err) {
@@ -108,18 +149,20 @@ export default function MonstersAdminPage() {
         setBusy(false)
       }
     },
-    [name, image, dialog, rate, enabled, resetForm, load],
+    [name, image, imageReplaced, dialog, rate, enabled, editingId, resetForm, load],
   )
 
   if (error) return <p className="admin-msg admin-msg-error">{error}</p>
   if (!monsters) return <p className="admin-msg">Loading monsters…</p>
+
+  const editing = editingId !== null
 
   return (
     <div className="admin-page">
       <h2 className="admin-page-title">Monsters</h2>
 
       <form className="admin-form" onSubmit={submit}>
-        <h3 className="admin-form-title">Add a monster</h3>
+        <h3 className="admin-form-title">{editing ? 'Edit monster' : 'Add a monster'}</h3>
 
         <label className="admin-field">
           <span className="admin-label">Name</span>
@@ -134,7 +177,10 @@ export default function MonstersAdminPage() {
             disabled={busy}
             onChange={(e) => pickImage(e.target.files?.[0])}
           />
-          <span className="admin-hint">Recommended: {RECOMMENDED_IMAGE}</span>
+          <span className="admin-hint">
+            Recommended: {RECOMMENDED_IMAGE}
+            {editing && ' — leave empty to keep the current image'}
+          </span>
           {image && <img className="admin-preview" src={image} alt="monster preview" />}
         </label>
 
@@ -177,8 +223,13 @@ export default function MonstersAdminPage() {
 
         <div className="admin-actions">
           <button type="submit" className="save" disabled={busy}>
-            {busy ? 'Saving…' : 'Add monster'}
+            {busy ? 'Saving…' : editing ? 'Save changes' : 'Add monster'}
           </button>
+          {editing && (
+            <button type="button" onClick={resetForm} disabled={busy}>
+              Cancel
+            </button>
+          )}
         </div>
       </form>
 
@@ -191,6 +242,7 @@ export default function MonstersAdminPage() {
               <th>Name</th>
               <th>Encounter rate</th>
               <th>Probability</th>
+              <th />
             </tr>
           </thead>
           <tbody>
@@ -199,6 +251,11 @@ export default function MonstersAdminPage() {
                 <td>{m.name}</td>
                 <td>{m.encounter_rate}</td>
                 <td>{percent(m.probability)}</td>
+                <td>
+                  <button type="button" onClick={() => startEdit(m.id)} disabled={busy}>
+                    Edit
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>

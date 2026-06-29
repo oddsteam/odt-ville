@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import * as Schema from 'effect/Schema'
 import { Either } from 'effect'
 
-import { Monster, MonsterSummary, NewMonster } from '../src/monsters/schema.ts'
+import { Monster, MonsterSummary, NewMonster, UpdateMonster } from '../src/monsters/schema.ts'
 
 describe('MonsterSummary schema', () => {
   const valid = {
@@ -76,6 +76,35 @@ describe('NewMonster schema (create body)', () => {
   it('rejects a body with a non-numeric encounter rate', () => {
     expect(
       Either.isLeft(Schema.encodeUnknownEither(NewMonster)({ ...body, encounter_rate: '3' })),
+    ).toBe(true)
+  })
+})
+
+describe('UpdateMonster schema (edit body — every field optional)', () => {
+  it('encodes a full edit body', () => {
+    const body = {
+      name: 'Slime King',
+      image: 'data:image/png;base64,abc',
+      encounter_dialog: 'Bow!',
+      encounter_rate: 4,
+      enabled: false,
+    }
+    expect(Either.isRight(Schema.encodeUnknownEither(UpdateMonster)(body))).toBe(true)
+  })
+
+  it('encodes a partial body that omits the unchanged image', () => {
+    expect(
+      Either.isRight(Schema.encodeUnknownEither(UpdateMonster)({ encounter_rate: 9 })),
+    ).toBe(true)
+  })
+
+  it('encodes an empty body', () => {
+    expect(Either.isRight(Schema.encodeUnknownEither(UpdateMonster)({}))).toBe(true)
+  })
+
+  it('still rejects a present-but-wrongly-typed field', () => {
+    expect(
+      Either.isLeft(Schema.encodeUnknownEither(UpdateMonster)({ encounter_rate: '9' })),
     ).toBe(true)
   })
 })
