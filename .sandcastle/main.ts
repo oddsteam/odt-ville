@@ -1,137 +1,77 @@
-import { execFileSync } from "node:child_process";
+import { execSync } from "node:child_process";
 import { run, claudeCode } from "@ai-hero/sandcastle";
 import { docker } from "@ai-hero/sandcastle/sandboxes/docker";
 
-// Autonomous issue loop. Each invocation lands ONE Sandcastle-labelled issue as
-// a pull request for human review — it never pushes to `main` directly.
-//
-//   pnpm sandcastle      (-> npx tsx .sandcastle/main.ts)
-//
-// Why this shape (see the loop post-mortem / the closed-but-unmerged incident):
-//   * The agent works on a fresh branch cut from origin/main (baseBranch below),
-//     so it always sees the real tip — no stale-base diffs that revert newer
-//     work, no migration-number collisions from branching off an outdated main.
-//   * Work lands on a dedicated `sandcastle/issue-*` branch, NOT merged into
-//     whatever branch the host happens to have checked out (the old
-//     `merge-to-head` strategy did that, and the work never reached origin).
-//   * Landing is a PR with `Closes #N`, opened here on the host after the run.
-//     The library has no push/PR support, and we want a human to review before
-//     anything reaches `main` (the repo gates `main` behind PR review).
+// Where the dev stack serves once it's up (compose.yaml maps frontend 5460:5460).
+const TEST_URL = "http://localhost:5460/admin/objects";
 
-const git = (args: string[], inherit = false): string => {
-  // With stdio:"inherit" execFileSync returns null (stdout isn't piped), so only
-  // stringify when we actually captured output.
-  const out = execFileSync("git", args, inherit ? { stdio: "inherit" } : {});
-  return out ? out.toString() : "";
-};
-
-// A unique work branch per run, timestamped so it never reuses a stale branch.
-const stamp = new Date()
-  .toISOString()
-  .replace(/[:.]/g, "-")
-  .replace("T", "_")
-  .slice(0, 19);
-const workBranch = `sandcastle/issue-${stamp}`;
-
-// Make origin/main current on the host BEFORE the run, so the sandbox can cut the
-// work branch from the real tip. NamedBranchStrategy.baseBranch trusts the caller
-// to have fetched.
-git(["fetch", "origin"], true);
+// Simple loop: an agent that picks open issues one by one and closes them.
+// Run this with: npx tsx .sandcastle/main.ts
+// Or add to package.json scripts: "sandcastle": "npx tsx .sandcastle/main.ts"
 
 const result = await run({
+  // A name for this run, shown as a prefix in log output.
   name: "worker",
+
+  // Sandbox provider — runs the agent inside an isolated container.
   sandbox: docker(),
+
+  // The agent provider. Pass a model string to claudeCode() — sonnet balances
+  // capability and speed for most tasks. Switch to claude-opus-4-7 for harder
+  // problems, or claude-haiku-4-5-20251001 for speed.
   agent: claudeCode("claude-opus-4-8"),
+
+  // Path to the prompt file. Shell expressions inside are evaluated inside the
+  // sandbox at the start of each iteration, so the agent always sees fresh data.
   promptFile: "./.sandcastle/prompt.md",
 
-  // One issue per invocation -> one clean PR. Re-run to pick the next issue (a
-  // blocked issue only becomes eligible once its blocker's PR has merged).
-  maxIterations: 1,
+  // Maximum number of iterations (agent invocations) to run in a session.
+  // Each iteration works on a single issue. Increase this to process more issues
+  // per run, or set it to 1 for a single-shot mode.
+  maxIterations: 3,
 
-  // Raise the idle timeout: a long, quiet agent turn (deep RGR work) shouldn't be
-  // killed at the 600s default mid-task. 30 minutes.
-  idleTimeoutSeconds: 1800,
+  // Branch strategy — merge-to-head creates a temporary branch for the agent
+  // to work on, then merges the result back to HEAD when the run completes.
+  // This is required when using copyToWorktree, since head mode bind-mounts
+  // the host directory directly (no worktree to copy into).
+  branchStrategy: { type: "merge-to-head" },
 
-  // Work on a fresh branch cut from origin/main — NOT merge-to-head, which would
-  // silently merge into the host's current branch and never reach origin.
-  branchStrategy: { type: "branch", branch: workBranch, baseBranch: "origin/main" },
+  // NOTE: we deliberately do NOT copyToWorktree node_modules here. pnpm's
+  // node_modules is a tree of symlinks into a global content-addressable store,
+  // so copying it into the sandbox worktree would break those links. Instead we
+  // rely on `pnpm install` in onSandboxReady, which is fast with a warm store.
 
-  // pnpm's node_modules is a tree of symlinks into a global store, so we don't
-  // copyToWorktree it; a warm `pnpm install` in the sandbox is fast.
+  // Lifecycle hooks — commands grouped by where they run (host or sandbox).
   hooks: {
     sandbox: {
+      // onSandboxReady runs once after the sandbox is initialised and the repo is
+      // synced in, before the agent starts. Use it to install dependencies or run
+      // any other setup steps your project needs.
       onSandboxReady: [{ command: "pnpm install" }],
     },
   },
 });
 
-// Nothing committed -> empty or fully-blocked issue list. Nothing to land.
-if (result.commits.length === 0) {
+// After the run merges to main: if the agent actually landed work, spin up the
+// dev stack on the host (detached) so the merged change is testable, and print
+// where to look. The agent itself runs in a throwaway sandbox whose ports never
+// reach the host — so this has to happen here, after run() returns. Skip when no
+// commits were made (empty issue list / blocked), since there's nothing to test.
+if (result.commits.length > 0) {
   console.log(
-    "\nNo commits this run — nothing to land (empty or fully-blocked issue list).",
+    `\n${result.commits.length} commit(s) merged to main. Starting the dev stack…`,
   );
-  process.exit(0);
-}
-
-// Which issue did the agent work? Parse the first #N from the run's commit
-// messages (RALPH commits reference the issue, e.g. "… (issue #57)").
-const messages = result.commits
-  .map((c) => git(["show", "-s", "--format=%B", c.sha]))
-  .join("\n");
-const issueNumber = messages.match(/#(\d+)/)?.[1];
-
-// Ensure a local branch ref exists pointing at the work, then push and open a PR.
-// We do NOT auto-merge — a human reviews and merges, which closes the issue via
-// the "Closes #N" body.
-try {
   try {
-    git(["rev-parse", "--verify", workBranch]);
+    execSync("docker compose up -d", { stdio: "inherit" });
+    console.log(`\n✅ Ready to test:`);
+    console.log(`   App:        ${TEST_URL}`);
+    console.log(`   Tile-mapper: ${TEST_URL}/tile-mapper.html`);
   } catch {
-    git(["branch", workBranch, result.commits[result.commits.length - 1].sha]);
+    console.log(
+      `\n⚠️  Couldn't start the stack (is Docker running?). Start it with: docker compose up -d`,
+    );
+    console.log(`   Then test at ${TEST_URL}`);
   }
-  git(["push", "-u", "origin", workBranch], true);
-
-  const title = issueNumber
-    ? execFileSync("gh", ["issue", "view", issueNumber, "--json", "title", "-q", ".title"])
-        .toString()
-        .trim()
-    : `Sandcastle: ${workBranch}`;
-  const ref = issueNumber ? `#${issueNumber}` : "";
-
-  const body = [
-    issueNumber ? `Closes ${ref}.` : "",
-    "",
-    "Autonomous Sandcastle run — review before merging.",
-    `${result.commits.length} commit(s) on \`${workBranch}\`, branched from origin/main.`,
-    "",
-    "🤖 Generated with [Claude Code](https://claude.com/claude-code)",
-  ].join("\n");
-
-  const prUrl = execFileSync("gh", [
-    "pr",
-    "create",
-    "--base",
-    "main",
-    "--head",
-    workBranch,
-    "--title",
-    issueNumber ? `${title} (${ref})` : title,
-    "--body",
-    body,
-  ])
-    .toString()
-    .trim();
-
-  console.log(`\n✅ Opened PR for review: ${prUrl}`);
-  console.log(
-    `   ${ref ? `Closes ${ref} on merge. ` : ""}Review, then merge to land it on main.`,
-  );
-} catch (err) {
-  console.log(
-    `\n⚠️  Work is committed on ${workBranch} but the push/PR step failed.`,
-  );
-  console.log(
-    `   Land it manually:  git push -u origin ${workBranch} && gh pr create --base main --head ${workBranch}`,
-  );
-  console.log(String(err));
+} else {
+  console.log("\nNo commits this run — nothing to test, skipping the dev stack.");
 }
