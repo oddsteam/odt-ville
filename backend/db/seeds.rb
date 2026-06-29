@@ -326,8 +326,20 @@ ActiveRecord::Base.transaction do
   Map.delete_all
 
   company = Company.create!(name: "ODT")
-  user = User.create!(company: company, name: "Alex Rivera", role: "branch_employee")
-  UserLocationState.create!(user: user, company: company, last_area: "town")
+
+  # Seeded users mirror the Keycloak realm (keycloak/realm-export.json): their
+  # external_id pins to the realm's seeded subject UUIDs so a verified token for
+  # alice/bob/carol resolves to the matching local user (issue #92).
+  SEED_USERS = [
+    { name: "Alice Rivera", external_id: "11111111-1111-1111-1111-111111111111", role: "branch_employee" },
+    { name: "Bob Chen",     external_id: "22222222-2222-2222-2222-222222222222", role: "branch_employee" },
+    { name: "Carol Diaz",   external_id: "33333333-3333-3333-3333-333333333333", role: "branch_manager" }
+  ].freeze
+
+  SEED_USERS.each do |attrs|
+    u = User.create!(company: company, name: attrs[:name], role: attrs[:role], external_id: attrs[:external_id])
+    UserLocationState.create!(user: u, company: company, last_area: "town")
+  end
 
   HOUSES.each_with_index do |house_data, index|
     house = company.houses.create!(
@@ -347,7 +359,7 @@ ActiveRecord::Base.transaction do
 
   Map.create!(MAP_FIXTURE)
 
-  puts "Seeded: #{Company.count} company, #{User.count} user, " \
+  puts "Seeded: #{Company.count} company, #{User.count} users, " \
        "#{House.count} houses, #{Board.count} boards, #{ContentItem.count} content items, " \
        "#{Map.count} authored map."
 end

@@ -49,6 +49,13 @@ services:
       POSTURE_PUBLIC_URL: https://posture-login.p2d.uk
       POSTURE_CLIENT_ID: ${POSTURE_CLIENT_ID:-dev-game-app}
       POSTURE_CLIENT_SECRET: ${POSTURE_CLIENT_SECRET:-dev-secret-do-not-use-in-prod}
+      # Keycloak auth (issue #92). The token's `iss` reflects the browser/host
+      # origin (localhost:8080), so we validate `iss` against that, but fetch the
+      # JWKS over the private compose network (keycloak:8080) — same keys, no
+      # public round-trip.
+      KEYCLOAK_ISSUER: http://localhost:8080/realms/odtville
+      KEYCLOAK_AUDIENCE: odt-ville-web
+      KEYCLOAK_JWKS_URI: http://keycloak:8080/realms/odtville/protocol/openid-connect/certs
     command: bash -c "rm -f tmp/pids/server.pid && bundle install && bin/rails db:prepare && bin/rails server -b 0.0.0.0 -p 3190"
     volumes:
       - ./backend:/app
@@ -77,6 +84,23 @@ services:
       - "5460:5460"
     depends_on:
       - backend
+
+  # Keycloak with a committed dev realm (issue #92). `start-dev --import-realm`
+  # re-imports realm-export.json on every boot, so the realm (the web client
+  # with Direct Access Grants, the seeded alice/bob/carol with pinned UUIDs +
+  # password `dev`) is source-controlled and reproducible. Storage is the
+  # default embedded H2 (ephemeral) — fine because the realm re-imports on boot.
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    restart: unless-stopped
+    command: start-dev --import-realm
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+    volumes:
+      - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
+    ports:
+      - "8080:8080"
 
 volumes:
   pgdata:

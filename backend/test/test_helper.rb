@@ -2,14 +2,20 @@ ENV["RAILS_ENV"] ||= "test"
 require_relative "../config/environment"
 require "rails/test_help"
 
+# The suite has no running Keycloak, so we stub the bearer-token resolver
+# instead of minting real JWTs: the token *is* the user's external_id (#92).
+# KeycloakAuthenticator itself is exercised directly in its own unit test.
+ApplicationController.subject_resolver = ->(token) { token }
+
 module ApiTestHelpers
   BOARD_TYPES = %w[must_know should_know nice_to_know].freeze
 
   # A fresh company + user pair — gives every test isolated data and makes
-  # cross-company scoping trivial to verify.
+  # cross-company scoping trivial to verify. Each user gets a unique external_id
+  # so the stubbed resolver can authenticate it via `auth(user)`.
   def setup_company(name: "Co", user_name: "Test User", role: "branch_employee")
     company = Company.create!(name: name)
-    user = company.users.create!(name: user_name, role: role)
+    user = company.users.create!(name: user_name, role: role, external_id: SecureRandom.uuid)
     [company, user]
   end
 
@@ -48,10 +54,11 @@ module ApiTestHelpers
     )
   end
 
-  # Auth: the API resolves current_user from X-User-Id, falling back to
-  # User.first. Always pass an explicit user so tests are deterministic.
+  # Auth: the API resolves current_user from a `Authorization: Bearer <jwt>`
+  # header. With the stubbed resolver the token is the user's external_id, so
+  # this presents a token that authenticates as `user`.
   def auth(user)
-    { "X-User-Id" => user.id.to_s }
+    { "Authorization" => "Bearer #{user.external_id}" }
   end
 
   def json
