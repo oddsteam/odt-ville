@@ -71,4 +71,12 @@ export const update = (
     return yield* decodeMonster(path)(raw)
   })
 
-export const MonstersService = { list, get, create, update } as const
+// DELETE /monsters/:id -> 204. The pool shrinks, so the caller re-fetches the
+// roster to pick up the recomputed probabilities.
+export const del = (id: number): Effect.Effect<void, HttpError, Http> =>
+  Effect.gen(function* () {
+    const http = yield* Http
+    yield* http.del(`/monsters/${id}`)
+  })
+
+export const MonstersService = { list, get, create, update, del } as const

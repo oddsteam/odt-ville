@@ -243,3 +243,14 @@
   display: flex;
   gap: 8px;
 }
+
+/* Row actions (Edit / Delete) sit together in the last table cell. */
+.admin-table td button + button {
+  margin-left: 8px;
+}
+
+/* Delete is destructive — tint it so it reads apart from Edit. */
+.admin-console button.admin-delete {
+  color: #ff9a9a;
+  border-color: #5a2a2a;
+}

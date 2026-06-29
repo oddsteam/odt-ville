@@ -48,6 +48,13 @@ module Api
         monster.save!
         render json: MonsterSerializer.call(monster)
       end
+
+      # DELETE /api/v1/monsters/:id — drop a monster from the roster. The pool
+      # shrinks, so every remaining monster's % recomputes on the next index.
+      def destroy
+        Monster.find(params[:id]).destroy!
+        head :no_content
+      end
     end
   end
 end

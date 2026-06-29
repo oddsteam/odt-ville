@@ -150,6 +150,23 @@ module Api
         assert_in_delta 0.25, by_name["Wolf"][:probability], 1e-9
       end
 
+      test "destroy removes the monster and recomputes the remaining pool" do
+        slime = Monster.create!(name: "Slime", image: "data:img", encounter_rate: 1)
+        Monster.create!(name: "Wolf", image: "data:img", encounter_rate: 1)
+
+        assert_difference -> { Monster.count }, -1 do
+          delete "/api/v1/monsters/#{slime.id}", headers: auth(@user)
+        end
+
+        assert_response :no_content
+        assert_not Monster.exists?(slime.id)
+
+        get "/api/v1/monsters", headers: auth(@user)
+        by_name = json.index_by { _1[:name] }
+        assert_nil by_name["Slime"], "deleted monster is gone from the roster"
+        assert_in_delta 1.0, by_name["Wolf"][:probability], 1e-9, "the survivor is now the whole pool"
+      end
+
       test "update rejects a duplicate name" do
         Monster.create!(name: "Slime", image: "data:img", encounter_rate: 1)
         wolf = Monster.create!(name: "Wolf", image: "data:img", encounter_rate: 1)
