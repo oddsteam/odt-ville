@@ -25,6 +25,26 @@ that, but fetches the JWKS over the private compose network
 (`http://keycloak:8080/...`) — same keys, no public round-trip
 (`KEYCLOAK_ISSUER` / `KEYCLOAK_JWKS_URI` in `compose.yaml`).
 
+## Frontend bearer + dev user switcher (issue #93)
+
+The frontend attaches the access token to every API request and lets a developer
+become any seeded user in one click:
+
+- **`src/lib/authToken.ts`** — a tiny in-memory token store (`get`/`set`/
+  `subscribe`). `src/lib/http.ts` reads it at send time and adds
+  `Authorization: Bearer <token>` to each `/api/v1/*` request.
+- **`src/auth/UserSwitcher.tsx`** — a **dev-only** control (rendered behind an
+  `import.meta.env.DEV` gate in `RootLayout`) that runs a password grant against
+  the realm (`src/auth/keycloak.ts`) and swaps the stored token. `RootLayout`
+  subscribes to the store and re-fetches `/api/v1/me` on every swap, so the whole
+  app re-renders as the chosen user. The gate tree-shakes the switcher and its
+  keycloak client out of production builds.
+- The realm origin defaults to `http://localhost:8080`; override with
+  `VITE_KEYCLOAK_URL` when Keycloak lives elsewhere (e.g. a tunnel host).
+
+Two browser windows on different seeded users now operate independently — the
+substrate for presence/multiplayer testing.
+
 ## Manual verification
 
 Bring the stack up locally (`docker compose up --build`; the override publishes

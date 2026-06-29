@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Outlet } from 'react-router-dom'
 
 import { runEdge } from './lib/runEdge.ts'
+import { subscribeAuthToken } from './lib/authToken.ts'
+import UserSwitcher from './auth/UserSwitcher.tsx'
 import { ViewerService } from './viewer/service.ts'
 import type { Viewer } from './viewer/schema.ts'
 
@@ -12,15 +14,21 @@ import type { Viewer } from './viewer/schema.ts'
 export default function RootLayout() {
   const [me, setMe] = useState<Viewer | null>(null)
 
-  useEffect(() => {
+  const refetchMe = useCallback(() => {
     let active = true
     runEdge(ViewerService.get())
       .then((m) => active && setMe(m))
-      .catch(() => {})
+      .catch(() => active && setMe(null))
     return () => {
       active = false
     }
   }, [])
+
+  useEffect(() => refetchMe(), [refetchMe])
+
+  // Re-fetch app state whenever the active user is swapped (dev switcher). The
+  // store is a no-op in production where nothing writes a token.
+  useEffect(() => subscribeAuthToken(refetchMe), [refetchMe])
 
   return (
     <div className="app-shell">
@@ -32,12 +40,15 @@ export default function RootLayout() {
             {me && <p className="app-company">{me.company.name}</p>}
           </div>
         </div>
-        {me && (
-          <div className="app-user">
-            <span className="app-user-name">{me.user.name}</span>
-            <span className="app-user-role">{me.user.role}</span>
-          </div>
-        )}
+        <div className="app-header-right">
+          {import.meta.env.DEV && <UserSwitcher />}
+          {me && (
+            <div className="app-user">
+              <span className="app-user-name">{me.user.name}</span>
+              <span className="app-user-role">{me.user.role}</span>
+            </div>
+          )}
+        </div>
       </header>
 
       <main className="app-main">

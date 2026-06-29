@@ -5,6 +5,7 @@ import * as Cause from 'effect/Cause'
 
 import { HttpClientLive } from '../src/lib/http.ts'
 import { Http, HttpError } from '../src/lib/http.ts'
+import { setAuthToken } from '../src/lib/authToken.ts'
 
 // Drain an Effect down to its Exit so we can inspect typed errors directly,
 // regardless of which channel the failure lands in.
@@ -37,6 +38,49 @@ describe('Http client', () => {
   })
   afterEach(() => {
     globalThis.fetch = realFetch
+    setAuthToken(null)
+  })
+
+  it('attaches a Bearer token from the auth store when one is set', async () => {
+    setAuthToken('jwt-abc')
+    const f = mockFetch(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+    globalThis.fetch = f as unknown as typeof fetch
+
+    const program = Effect.gen(function* () {
+      const http = yield* Http
+      return yield* http.get('/me')
+    })
+    await runExit(provided(program))
+
+    const [, init] = f.mock.calls[0]!
+    const headers = new Headers(init?.headers)
+    expect(headers.get('Authorization')).toBe('Bearer jwt-abc')
+  })
+
+  it('omits the Authorization header when no token is set', async () => {
+    setAuthToken(null)
+    const f = mockFetch(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+    globalThis.fetch = f as unknown as typeof fetch
+
+    const program = Effect.gen(function* () {
+      const http = yield* Http
+      return yield* http.get('/communities')
+    })
+    await runExit(provided(program))
+
+    const [, init] = f.mock.calls[0]!
+    const headers = new Headers(init?.headers)
+    expect(headers.has('Authorization')).toBe(false)
   })
 
   it('decodes a 2xx JSON body and returns it', async () => {

@@ -151,6 +151,60 @@ button:disabled {
   color: #a9b6d0;
 }
 
+.app-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* ---- Dev-only user switcher (issue #93) --------------------- */
+
+.dev-switcher {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px;
+  border: 1px dashed #6c7a99;
+  border-radius: 4px;
+}
+
+.dev-switcher-label {
+  font-size: 7px;
+  letter-spacing: 1px;
+  color: #ffd23f;
+}
+
+.dev-switcher-user {
+  font: inherit;
+  font-size: 8px;
+  padding: 3px 6px;
+  color: var(--paper);
+  background: var(--screen-edge);
+  border: 1px solid #6c7a99;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.dev-switcher-user:hover:not(:disabled) {
+  background: #3a4a6b;
+}
+
+.dev-switcher-user.is-active {
+  background: #ffd23f;
+  color: #1a1f2e;
+  border-color: #ffd23f;
+}
+
+.dev-switcher-user:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.dev-switcher-error {
+  font-size: 7px;
+  color: #ff6b6b;
+}
+
 /* ---- Top-level navigation (tabs) ---------------------------- */
 
 .app-tabs {

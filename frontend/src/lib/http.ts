@@ -21,6 +21,8 @@ import * as Effect from 'effect/Effect'
 import * as Layer from 'effect/Layer'
 import * as Data from 'effect/Data'
 
+import { getAuthToken } from './authToken.ts'
+
 const BASE = '/api/v1'
 
 // Typed errors. Tagged Data classes give us `_tag` discrimination at no cost
@@ -65,6 +67,17 @@ export class Http extends Context.Tag('Http')<Http, HttpClient>() {}
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' } as const
 
+// Merge the current access token (if any) into a request's headers. Read at
+// send time, not layer-construction time, so a mid-session user swap takes
+// effect on the very next request.
+function withAuth(headers: HeadersInit | undefined): HeadersInit {
+  const token = getAuthToken()
+  if (!token) return headers ?? {}
+  const merged = new Headers(headers)
+  merged.set('Authorization', `Bearer ${token}`)
+  return merged
+}
+
 function readJson<A>(path: string, res: Response): Effect.Effect<A, HttpError> {
   return Effect.tryPromise({
     try: async () => {
@@ -83,7 +96,7 @@ function send<A>(
 ): Effect.Effect<A, HttpError> {
   const url = `${BASE}${path}`
   return Effect.tryPromise({
-    try: (signal) => fetch(url, { ...init, signal }),
+    try: (signal) => fetch(url, { ...init, headers: withAuth(init.headers), signal }),
     catch: (e) =>
       new NetworkError({ path, reason: e instanceof Error ? e.message : String(e) }),
   }).pipe(
