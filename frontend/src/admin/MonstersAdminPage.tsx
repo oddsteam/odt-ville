@@ -2,7 +2,14 @@ import { useCallback, useEffect, useState } from 'react'
 import { MonstersService } from '../monsters/service.ts'
 import type { MonsterSummary, UpdateMonster } from '../monsters/schema.ts'
 import { runEdge } from '../lib/runEdge.ts'
+import { pngHasAlpha } from '../monsters/pngAlpha.ts'
 import './admin.css'
+
+// Soft warning shown when a picked PNG has no alpha channel — it bakes a
+// transparency checkerboard into the saved art. Advisory only: saving is still
+// allowed (an admin may intend opaque art).
+const NO_ALPHA_WARNING =
+  'This PNG has no transparency — it may show a checkerboard background. Use a transparent PNG.'
 
 // Recommended uploaded-art dimensions, surfaced as guidance on the file input.
 // A square transparent PNG scales cleanly to both the roster thumbnail and a
@@ -49,6 +56,7 @@ export default function MonstersAdminPage() {
   const [enabled, setEnabled] = useState(true)
   const [busy, setBusy] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+  const [imageWarning, setImageWarning] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -67,8 +75,10 @@ export default function MonstersAdminPage() {
     if (!file) return
     try {
       setFormError(null)
-      setImage(await readImageFile(file))
+      const dataUrl = await readImageFile(file)
+      setImage(dataUrl)
       setImageReplaced(true)
+      setImageWarning(pngHasAlpha(dataUrl) ? null : NO_ALPHA_WARNING)
     } catch (e) {
       setFormError((e as Error).message)
     }
@@ -83,12 +93,14 @@ export default function MonstersAdminPage() {
     setRate('0')
     setEnabled(true)
     setFormError(null)
+    setImageWarning(null)
   }, [])
 
   // Pre-fill the form from the full record (the roster summary omits the image,
   // so this fetches the monster to preview its current art).
   const startEdit = useCallback(async (id: number) => {
     setFormError(null)
+    setImageWarning(null)
     try {
       const m = await runEdge(MonstersService.get(id))
       setEditingId(m.id)
@@ -222,6 +234,7 @@ export default function MonstersAdminPage() {
             Recommended: {RECOMMENDED_IMAGE}
             {editing && ' — leave empty to keep the current image'}
           </span>
+          {imageWarning && <span className="admin-msg admin-msg-warn">{imageWarning}</span>}
           {image && <img className="admin-preview" src={image} alt="monster preview" />}
         </label>
 

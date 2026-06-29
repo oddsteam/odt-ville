@@ -132,6 +132,16 @@
   color: #ff9a9a;
 }
 
+/* Also scoped under .admin-console: this warning is a span inside .admin-field,
+   so the leaked `.admin-field > span` 7px rule would otherwise shrink it. */
+.admin-console .admin-msg-warn {
+  display: block;
+  padding: 8px 0 0;
+  font-size: 13px;
+  color: #ff5a5a;
+  font-weight: 600;
+}
+
 /* Read-only roster tables (monster admin, issue #56). Plain dark table that
    sits on the console body's aesthetic. */
 .admin-page {
@@ -200,8 +210,11 @@
   gap: 8px;
 }
 
-.admin-label {
-  font-size: 12px;
+/* Scoped under .admin-console to outrank the global game theme's leaked
+   `.admin-field > span { font-size: 7px }` (styles.css), which is more specific
+   than a bare `.admin-label` and was shrinking every form label/hint to 7px. */
+.admin-console .admin-label {
+  font-size: 14px;
   font-weight: 600;
   color: #9a9ab0;
 }
@@ -223,8 +236,8 @@
   resize: vertical;
 }
 
-.admin-hint {
-  font-size: 11px;
+.admin-console .admin-hint {
+  font-size: 12px;
   color: #7a7a90;
 }
 
