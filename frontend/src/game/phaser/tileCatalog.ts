@@ -72,13 +72,37 @@ export function makeCatalog(terrains: TerrainDef[], opts: CatalogOptions = {}): 
 
 // The generated hometown's catalog — the data equivalent of the old hardcoded
 // constants. road (opaque base) < dirt < grass (top); grass + dirt autotile.
-// Carries no art: the hometown still renders through townRenderer, which reads
-// the live ground-tile registry. (Converging it onto the baker is #81.)
-export const HOMETOWN_CATALOG: TileCatalog = makeCatalog([
-  { type: 'road' },
-  { type: 'dirt', autotiled: true },
-  { type: 'grass', autotiled: true },
-])
+//
+// It now carries art (#81): the bundled terrain sheet's road/dirt/grass fills
+// plus grass's edge/corner transitions, so the hometown producer (townMap.ts)
+// bakes its ground through the SAME shared engine the authored map uses
+// (ADR-0003/0004) — autotiling resolved once, in the producer, never at runtime.
+// grass owns every seam in the town (it ranks highest and the field is grass-
+// margined), so dirt/road need only a flat fill. Atlas coordinates mirror the
+// meadow fixture's illustrative cells on the bundled 1_Terrains_and_Fences_32x32
+// sheet (32 columns); the live townRenderer still reads the registry catalog and
+// is untouched.
+const HOMETOWN_SHEET = '1_Terrains_and_Fences_32x32'
+export const HOMETOWN_CATALOG: TileCatalog = makeCatalog(
+  [{ type: 'road' }, { type: 'dirt', autotiled: true }, { type: 'grass', autotiled: true }],
+  {
+    tilesets: [{ name: HOMETOWN_SHEET, cell: 32, cols: 32 }],
+    tiles: [
+      { tile_type: 'road', tileset: HOMETOWN_SHEET, col: 0, row: 0, role: 'fill', side: null },
+      { tile_type: 'dirt', tileset: HOMETOWN_SHEET, col: 1, row: 0, role: 'fill', side: null },
+      { tile_type: 'grass', tileset: HOMETOWN_SHEET, col: 2, row: 0, role: 'fill', side: null },
+      // grass transitions onto lower terrain — the four sides + four corners.
+      { tile_type: 'grass', tileset: HOMETOWN_SHEET, col: 1, row: 1, role: 'edge', side: 'N' },
+      { tile_type: 'grass', tileset: HOMETOWN_SHEET, col: 2, row: 1, role: 'edge', side: 'S' },
+      { tile_type: 'grass', tileset: HOMETOWN_SHEET, col: 0, row: 2, role: 'edge', side: 'W' },
+      { tile_type: 'grass', tileset: HOMETOWN_SHEET, col: 2, row: 2, role: 'edge', side: 'E' },
+      { tile_type: 'grass', tileset: HOMETOWN_SHEET, col: 0, row: 1, role: 'corner', side: 'NW' },
+      { tile_type: 'grass', tileset: HOMETOWN_SHEET, col: 3, row: 1, role: 'corner', side: 'NE' },
+      { tile_type: 'grass', tileset: HOMETOWN_SHEET, col: 3, row: 2, role: 'corner', side: 'SE' },
+      { tile_type: 'grass', tileset: HOMETOWN_SHEET, col: 0, row: 3, role: 'corner', side: 'SW' },
+    ],
+  },
+)
 
 // Edge-set lookup the engine consumes: `{ terrain: { side: true } }` for every
 // terrain that has edge/corner art, derived purely from catalog data. A terrain
