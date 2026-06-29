@@ -12,6 +12,7 @@ import type { Community, FeedItem } from './communities/schema.ts'
 import type { GameSession } from './game-session/schema.ts'
 import type { TileObject } from './tileObjects/schema.ts'
 import type { GroundTile } from './groundTiles/schema.ts'
+import type { MonsterPoolEntry } from './monsters/schema.ts'
 
 // Demo target for every board's "open content list" action. Replaced in a
 // follow-up by per-board content-list views (see issue #15 follow-ups).
@@ -53,6 +54,9 @@ export default function VillagePage() {
   // The active character sprite (sprite-mapper manifest). Drives the town
   // player; loadActiveManifest always resolves (remote → committed default).
   const [characterManifest, setCharacterManifest] = useState<object | null>(null)
+  // Admin-authored wild-encounter pool (#69) — enabled monsters with sprites.
+  // Best-effort: empty array falls back to the built-in encounter table.
+  const [monsterPool, setMonsterPool] = useState<readonly MonsterPoolEntry[]>([])
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -70,6 +74,7 @@ export default function VillagePage() {
     setBuilding(town.building)
     setGroundTiles(town.groundTiles)
     setCharacterManifest(town.characterManifest)
+    setMonsterPool(town.monsterPool)
   }, [])
 
   useEffect(() => {
@@ -202,6 +207,7 @@ export default function VillagePage() {
         building={building}
         groundTiles={groundTiles}
         characterManifest={characterManifest}
+        monsterPool={monsterPool}
         dailyBrief={
           <DailyBriefShortcut items={feed} onClose={handleDailyBriefClose} />
         }

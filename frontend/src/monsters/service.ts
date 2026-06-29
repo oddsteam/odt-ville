@@ -8,7 +8,13 @@ import * as Schema from 'effect/Schema'
 
 import { DecodeError, Http } from '../lib/http.ts'
 import type { HttpError } from '../lib/http.ts'
-import { Monster, MonsterSummary, type NewMonster, type UpdateMonster } from './schema.ts'
+import {
+  Monster,
+  MonsterPoolEntry,
+  MonsterSummary,
+  type NewMonster,
+  type UpdateMonster,
+} from './schema.ts'
 
 const decodeWith =
   <A>(schema: Schema.Schema<A>) =>
@@ -21,6 +27,17 @@ const decodeWith =
 
 const decodeSummaries = decodeWith(Schema.Array(MonsterSummary))
 const decodeMonster = decodeWith(Monster)
+const decodePool = decodeWith(Schema.Array(MonsterPoolEntry))
+
+// GET /monsters/pool -> the live wild-encounter pool (enabled monsters with
+// their sprite image), for the in-game grass roll.
+export const pool = (): Effect.Effect<readonly MonsterPoolEntry[], HttpError, Http> =>
+  Effect.gen(function* () {
+    const http = yield* Http
+    const path = '/monsters/pool'
+    const raw = yield* http.get(path)
+    return yield* decodePool(path)(raw)
+  })
 
 // GET /monsters -> roster summaries (no image), each carrying its server-
 // computed encounter probability.
@@ -79,4 +96,4 @@ export const del = (id: number): Effect.Effect<void, HttpError, Http> =>
     yield* http.del(`/monsters/${id}`)
   })
 
-export const MonstersService = { list, get, create, update, del } as const
+export const MonstersService = { list, pool, get, create, update, del } as const

@@ -160,14 +160,18 @@ export default class EncounterScene extends Phaser.Scene {
         fontStyle: 'bold',
       })
       .setDepth(6)
-    this.add
-      .text(36, boxY + 64, `Lv. ${o.level}`, {
-        fontFamily: 'monospace',
-        fontSize: '18px',
-        color: '#3f9c33',
-        fontStyle: 'bold',
-      })
-      .setDepth(6)
+    // Built-in cameos carry a level; authored monsters (#69) don't — omit the
+    // line rather than render "Lv. undefined".
+    if (o.level != null) {
+      this.add
+        .text(36, boxY + 64, `Lv. ${o.level}`, {
+          fontFamily: 'monospace',
+          fontSize: '18px',
+          color: '#3f9c33',
+          fontStyle: 'bold',
+        })
+        .setDepth(6)
+    }
 
     // RUN button — bottom right. Phaser doesn't ship HTML buttons; we
     // make a rectangle + label and wire pointer + keyboard.

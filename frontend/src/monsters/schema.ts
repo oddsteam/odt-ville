@@ -27,6 +27,17 @@ export const Monster = Schema.Struct({
 })
 export type Monster = Schema.Schema.Type<typeof Monster>
 
+// A wild-encounter pool row from GET /monsters/pool: just what the game needs
+// to roll and render an encounter — id, name, weight, and the sprite image
+// (enabled-only, so no probability/enabled fields).
+export const MonsterPoolEntry = Schema.Struct({
+  id: Schema.Number,
+  name: Schema.String,
+  encounter_rate: Schema.Number,
+  image: Schema.String,
+})
+export type MonsterPoolEntry = Schema.Schema.Type<typeof MonsterPoolEntry>
+
 // Body the admin form POSTs to create a monster. Echoes the controller's
 // assignment list: name, image (PNG data URL), encounter dialog, encounter
 // rate, enabled. encounter_dialog may be empty; the others are required.

@@ -39,12 +39,15 @@ function fakeHttp(routes: Record<string, unknown>) {
   return Layer.succeed(Http, client as never)
 }
 
+const POOL = [{ id: 1, name: 'Slime', encounter_rate: 3, image: 'data:slime' }]
+
 const OK_ROUTES = {
   '/communities': { communities: [] },
   '/game/session': SESSION,
   '/content_items/feed': { items: [] },
   '/tile_objects/active': 'fail',
   '/ground_tiles': 'fail',
+  '/monsters/pool': POOL,
 }
 
 const run = (routes: Record<string, unknown>) =>
@@ -61,7 +64,14 @@ describe('loadTown orchestration', () => {
       expect(exit.value.treeObject).toBeNull()
       expect(exit.value.groundTiles).toEqual([])
       expect(exit.value.characterManifest).toEqual({ name: 'scout' })
+      expect(exit.value.monsterPool).toEqual(POOL)
     }
+  })
+
+  it('falls the monster pool back to [] when its endpoint errors', async () => {
+    const exit = await run({ ...OK_ROUTES, '/monsters/pool': 'fail' })
+    expect(Exit.isSuccess(exit)).toBe(true)
+    if (Exit.isSuccess(exit)) expect(exit.value.monsterPool).toEqual([])
   })
 
   it('surfaces a required-resource failure as an error', async () => {

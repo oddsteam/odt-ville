@@ -22,4 +22,16 @@ module MonsterSerializer
   def call(monster, pool_total = Monster.enabled_rate_total)
     summary(monster, pool_total).merge(image: monster.image_data_url)
   end
+
+  # The wild-encounter pool row: just what the game needs to roll and render an
+  # encounter — id, name, weight, and the sprite image. No probability/roster
+  # fields (the pool is already filtered to enabled monsters).
+  def pool_entry(monster)
+    {
+      id: monster.id,
+      name: monster.name,
+      encounter_rate: monster.encounter_rate,
+      image: monster.image_data_url
+    }
+  end
 end

@@ -10,6 +10,7 @@ import type { Community } from '../../communities/schema.ts'
 import type { GameSession } from '../../game-session/schema.ts'
 import type { TileObject } from '../../tileObjects/schema.ts'
 import type { GroundTile } from '../../groundTiles/schema.ts'
+import type { MonsterPoolEntry } from '../../monsters/schema.ts'
 
 // Player walks — rpg-char-01 sprite sheet from the pokemon-js external
 // assets. 32×32 PNGs, rows = direction (r0 down, r1 left, r2 right,
@@ -63,6 +64,7 @@ export type PhaserGameProps = {
   building: TileObject | null
   groundTiles: readonly GroundTile[]
   characterManifest: object | null
+  monsterPool: readonly MonsterPoolEntry[]
   dailyBrief: ReactNode
   activeCommunityId: number | null
   onEnterCommunity: (id: number) => void
@@ -85,6 +87,7 @@ export default function PhaserGame({
   building,
   groundTiles,
   characterManifest,
+  monsterPool,
   dailyBrief,
   activeCommunityId,
   onEnterCommunity,
@@ -150,6 +153,8 @@ export default function PhaserGame({
     // construction — Phaser defers boot, so this lands before TownScene's
     // preload() reads it (same timing the treeObject relies on).
     game.registry.set('characterManifest', characterManifest || null)
+    // Authored wild-encounter pool (#69) — read at roll time in TownScene.
+    game.registry.set('monsterPool', monsterPool || [])
     game.registry.set('trainerDefeated', Boolean(trainerDefeated))
 
     gameRef.current = game
@@ -244,6 +249,14 @@ export default function PhaserGame({
     if (!game) return
     game.registry.set('characterManifest', characterManifest || null)
   }, [characterManifest])
+
+  // Authored wild-encounter pool — refreshed when the admin edits it and the
+  // town reloads; TownScene reads it live at each grass roll.
+  useEffect(() => {
+    const game = gameRef.current
+    if (!game) return
+    game.registry.set('monsterPool', monsterPool || [])
+  }, [monsterPool])
 
   useEffect(() => {
     const game = gameRef.current

@@ -44,6 +44,20 @@ module Api
         assert_equal [0.0, 0.0], json.map { _1[:probability] }
       end
 
+      test "pool returns only enabled monsters with their image for the wild encounter table" do
+        Monster.create!(name: "On", image: "data:on", encounter_rate: 2)
+        Monster.create!(name: "Off", image: "data:off", encounter_rate: 8, enabled: false)
+
+        get "/api/v1/monsters/pool", headers: auth(@user)
+
+        assert_response :success
+        assert_equal %w[On], json.map { _1[:name] }, "disabled monsters never spawn"
+        entry = json.first
+        assert_equal "data:on", entry[:image], "the pool carries the sprite image"
+        assert_equal 2, entry[:encounter_rate]
+        assert entry.key?(:id) && entry.key?(:name)
+      end
+
       test "create persists a monster and returns the full record incl. image" do
         assert_difference -> { Monster.count }, 1 do
           post "/api/v1/monsters",
