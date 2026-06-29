@@ -8,6 +8,7 @@ import TileMapper from './tileMapper/TileMapper.tsx'
 import GroundTileMapper from './groundTiles/GroundTileMapper.tsx'
 import MonstersAdminPage from './admin/MonstersAdminPage.tsx'
 import PostureCallbackPage from './posture/CallbackPage.tsx'
+import MapPage from './maps/MapPage.tsx'
 
 // Route table. RootLayout is the persistent shell (brand header + Village/Admin
 // nav); the village game lives at "/" and the admin console — the four former
@@ -31,6 +32,10 @@ export default function App() {
       {/* posture-login popup return (issue #24) — bare page, no app chrome;
           it posts the result home to the opener and closes. */}
       <Route path="posture/callback" element={<PostureCallbackPage />} />
+      {/* Authored map (ADR-0004) — loads a baked map by slug and renders it
+          through the map-agnostic runtime. The editor that authors these lands
+          in later slices (#80+); this route proves load-and-render end-to-end. */}
+      <Route path="maps/:slug" element={<MapPage />} />
       {/* Unknown paths fall back to the village. */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

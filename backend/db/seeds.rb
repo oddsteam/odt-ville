@@ -285,6 +285,35 @@ HOUSES = [
   }
 ].freeze
 
+# A trivial authored map fixture (issue #78) — a fixed grass grid plus a couple
+# of props, baked (ADR-0003) so the runtime blits it with no autotiling. This is
+# the second producer of the runtime map shape (ADR-0004); it is fetched at
+# GET /api/v1/maps/atrium and rendered at /maps/atrium in the app. The grass
+# cell and prop frames reference the bundled `1_Terrains_and_Fences_32x32`
+# tileset served from public/maps/tilesets.
+MAP_TILESET = "1_Terrains_and_Fences_32x32".freeze
+MAP_GRASS_FRAME = 0 # top-left grass cell of the terrain tileset
+MAP_COLS = 8
+MAP_ROWS = 6
+MAP_FIXTURE = {
+  slug: "atrium",
+  title: "The Atrium",
+  cols: MAP_COLS,
+  rows: MAP_ROWS,
+  baked: {
+    "tilesets" => [{ "name" => MAP_TILESET, "cell" => 32 }],
+    # Row-major grid, every cell the same baked grass tile.
+    "tiles" => Array.new(MAP_ROWS) {
+      Array.new(MAP_COLS) { { "tileset" => MAP_TILESET, "frame" => MAP_GRASS_FRAME } }
+    },
+    # A couple of hand-placed props to prove placement renders over the ground.
+    "entities" => [
+      { "kind" => "prop", "tileset" => MAP_TILESET, "frame" => 41, "x" => 2, "y" => 2 },
+      { "kind" => "prop", "tileset" => MAP_TILESET, "frame" => 41, "x" => 5, "y" => 3 }
+    ]
+  }
+}.freeze
+
 ActiveRecord::Base.transaction do
   puts "Clearing existing village data..."
   UserContentState.delete_all
@@ -294,6 +323,7 @@ ActiveRecord::Base.transaction do
   House.delete_all
   User.delete_all
   Company.delete_all
+  Map.delete_all
 
   company = Company.create!(name: "ODT")
   user = User.create!(company: company, name: "Alex Rivera", role: "branch_employee")
@@ -315,6 +345,9 @@ ActiveRecord::Base.transaction do
     end
   end
 
+  Map.create!(MAP_FIXTURE)
+
   puts "Seeded: #{Company.count} company, #{User.count} user, " \
-       "#{House.count} houses, #{Board.count} boards, #{ContentItem.count} content items."
+       "#{House.count} houses, #{Board.count} boards, #{ContentItem.count} content items, " \
+       "#{Map.count} authored map."
 end

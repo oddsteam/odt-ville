@@ -53,6 +53,10 @@ Rails.application.routes.draw do
       # their atlas coordinate, drawn via the tilemap renderer. A flat catalog
       # (no single-active); edge/corner autotiling comes later.
       resources :ground_tiles, only: [:index, :create, :destroy]
+
+      # Maps — the authored-map contract (ADR-0004). `:slug` loads a baked map
+      # for play; author CRUD + access policy land with the editor (#80+).
+      get "maps/:slug", to: "maps#show"
     end
   end
 end

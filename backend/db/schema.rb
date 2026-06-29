@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_29_000001) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_29_000002) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -83,6 +83,18 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_29_000001) do
     t.datetime "updated_at", null: false
     t.index ["company_id", "position_order"], name: "index_houses_on_company_id_and_position_order"
     t.index ["company_id"], name: "index_houses_on_company_id"
+  end
+
+  create_table "maps", force: :cascade do |t|
+    t.jsonb "baked", default: {}, null: false
+    t.integer "cols", null: false
+    t.datetime "created_at", null: false
+    t.integer "rows", null: false
+    t.string "slug", null: false
+    t.jsonb "source", default: {}, null: false
+    t.string "title", default: "", null: false
+    t.datetime "updated_at", null: false
+    t.index ["slug"], name: "index_maps_on_slug", unique: true
   end
 
   create_table "monsters", force: :cascade do |t|
