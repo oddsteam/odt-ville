@@ -24,6 +24,20 @@ export interface UserClaims {
   email?: string
 }
 
+// Whether init has run with a real key. Capture is a no-op until then so
+// dev/CI/tests (no VITE_POSTHOG_KEY) never reach PostHog or log SDK warnings.
+let enabled = false
+
+// Fire a custom event. Properties merge with the registered super properties
+// (e.g. `email` from #101), so callers only pass event-specific fields.
+export function captureEvent(
+  event: string,
+  props?: Record<string, unknown>,
+): void {
+  if (!enabled) return
+  posthog.capture(event, props)
+}
+
 // Decode the `sub` + `email` claims from a bearer JWT (base64url payload).
 // Returns null for a missing/malformed/sub-less token — "no identified user".
 export function decodeUserClaims(token: string | null): UserClaims | null {
@@ -60,6 +74,7 @@ export function initAnalytics(): void {
   posthog.init(key, {
     api_host: import.meta.env.VITE_POSTHOG_HOST || DEFAULT_HOST,
   })
+  enabled = true
   identifyFromToken(posthog, getAuthToken())
   subscribeAuthToken(() => identifyFromToken(posthog, getAuthToken()))
 }

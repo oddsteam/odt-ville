@@ -9,6 +9,7 @@ import { CALLBACK_PATH } from './posture/callback.ts'
 import { loadTown as loadTownData } from './game/townLoader.ts'
 import { runEdge } from './lib/runEdge.ts'
 import { subscribeAuthToken } from './lib/authToken.ts'
+import { trackEnterDoor, trackInteractBoard } from './analytics/events.ts'
 import type { Community, FeedItem } from './communities/schema.ts'
 import type { GameSession } from './game-session/schema.ts'
 import type { TileObject } from './tileObjects/schema.ts'
@@ -107,14 +108,18 @@ export default function VillagePage() {
 
   // ---- game events --------------------------------------------------
 
-  const handleEnterCommunity = useCallback((id: number) => {
-    // Save session + track the active community. Phaser's InteriorScene
-    // handles the visual transition inside the canvas; the React page
-    // just records the id (for the activeCommunityId prop that PhaserGame
-    // forwards back into its registry).
-    setActiveCommunityId(id)
-    saveGameSession({ last_area: 'house', last_community_id: id }).catch(() => {})
-  }, [])
+  const handleEnterCommunity = useCallback(
+    (id: number) => {
+      // Save session + track the active community. Phaser's InteriorScene
+      // handles the visual transition inside the canvas; the React page
+      // just records the id (for the activeCommunityId prop that PhaserGame
+      // forwards back into its registry).
+      setActiveCommunityId(id)
+      trackEnterDoor(communities, id)
+      saveGameSession({ last_area: 'house', last_community_id: id }).catch(() => {})
+    },
+    [communities],
+  )
 
   // Houses unlocked this session — a posture pass lasts once per session
   // (the grant lives here, not the DB), so re-entering skips the gate.
@@ -149,9 +154,13 @@ export default function VillagePage() {
   // Each board's "open content list" action — for the demo every board
   // points at the same external URL. The game module knows nothing about
   // this; it just emits the board id and the page decides.
-  const handleOpenBoard = useCallback(() => {
-    window.open(DEMO_BOARD_URL, '_blank', 'noopener,noreferrer')
-  }, [])
+  const handleOpenBoard = useCallback(
+    (boardType?: string) => {
+      trackInteractBoard(communities, activeCommunityId, boardType)
+      window.open(DEMO_BOARD_URL, '_blank', 'noopener,noreferrer')
+    },
+    [communities, activeCommunityId],
+  )
 
   const handleExitCommunity = useCallback(
     (idFromCaller?: number | null) => {
