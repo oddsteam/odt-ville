@@ -1,0 +1,3 @@
+allowBuilds:
+  # posthog-js pulls core-js; its build script is only a funding banner — skip it.
+  core-js: false
