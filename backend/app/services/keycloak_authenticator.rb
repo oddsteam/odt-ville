@@ -15,6 +15,10 @@ require "json"
 class KeycloakAuthenticator
   Error = Class.new(StandardError)
 
+  # The slice of a verified token the app authorizes on: who they are plus the
+  # realm/client roles and groups Keycloak stamped into the token (#94).
+  Claims = Struct.new(:subject, :roles, :groups, keyword_init: true)
+
   # The app-wide verifier, configured from the environment and memoised so the
   # JWKS cache is shared across requests.
   def self.instance
@@ -46,6 +50,21 @@ class KeycloakAuthenticator
   # The verified `sub` claim, or raises Error if the token is missing/invalid.
   def subject(token)
     verify(token)["sub"] or raise Error, "token has no subject claim"
+  end
+
+  # The verified subject + roles + groups (#94). Realm roles
+  # (`realm_access.roles`) and this client's roles (`resource_access[aud].roles`)
+  # are flattened into one `roles` list; `groups` mirrors the optional group
+  # claim. Raises Error on an invalid token, same as `verify`.
+  def claims(token)
+    payload = verify(token)
+    realm = payload.dig("realm_access", "roles") || []
+    client = payload.dig("resource_access", @audience, "roles") || []
+    Claims.new(
+      subject: payload["sub"],
+      roles: (realm + client).uniq,
+      groups: Array(payload["groups"])
+    )
   end
 
   # Returns the verified claims hash, or raises Error. Pinning `algorithms` to

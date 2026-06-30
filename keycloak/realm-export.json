@@ -6,6 +6,11 @@
   "loginWithEmailAllowed": true,
   "duplicateEmailsAllowed": false,
   "accessTokenLifespan": 3600,
+  "roles": {
+    "realm": [
+      { "name": "editor", "description": "May author map content (ground tiles, etc.) — #94" }
+    ]
+  },
   "clients": [
     {
       "clientId": "odt-ville-web",
@@ -41,6 +46,7 @@
       "lastName": "Rivera",
       "enabled": true,
       "emailVerified": true,
+      "realmRoles": ["editor"],
       "credentials": [
         { "type": "password", "value": "dev", "temporary": false }
       ]

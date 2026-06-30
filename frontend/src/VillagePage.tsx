@@ -8,6 +8,7 @@ import { openGatePopup, awaitGateResult } from './posture/popup.ts'
 import { CALLBACK_PATH } from './posture/callback.ts'
 import { loadTown as loadTownData } from './game/townLoader.ts'
 import { runEdge } from './lib/runEdge.ts'
+import { subscribeAuthToken } from './lib/authToken.ts'
 import type { Community, FeedItem } from './communities/schema.ts'
 import type { GameSession } from './game-session/schema.ts'
 import type { TileObject } from './tileObjects/schema.ts'
@@ -87,6 +88,22 @@ export default function VillagePage() {
       active = false
     }
   }, [loadTown])
+
+  // Re-run the town load whenever the active user changes (dev switcher). The
+  // first paint happens before a user is picked, so its fetches 401 and stick
+  // on "CAN'T REACH THE VILLAGE"; switching users must recover, not just the
+  // header. No-op in prod where the token is set once before render.
+  useEffect(
+    () =>
+      subscribeAuthToken(() => {
+        setError(null)
+        setLoading(true)
+        loadTown()
+          .catch((e) => setError(e.message))
+          .finally(() => setLoading(false))
+      }),
+    [loadTown],
+  )
 
   // ---- game events --------------------------------------------------
 

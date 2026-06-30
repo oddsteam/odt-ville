@@ -69,4 +69,24 @@ class KeycloakAuthenticatorTest < ActiveSupport::TestCase
     @auth.subject(token)
     assert_equal 1, @load_count, "JWKS should be fetched once and reused"
   end
+
+  test "claims expose subject, realm + client roles, and groups" do
+    t = token({
+      realm_access: { roles: %w[editor offline_access] },
+      resource_access: { AUD => { roles: %w[uma_authorization] } },
+      groups: %w[/staff]
+    })
+    claims = @auth.claims(t)
+
+    assert_equal "subject-123", claims.subject
+    assert_equal %w[editor offline_access uma_authorization], claims.roles
+    assert_equal %w[/staff], claims.groups
+  end
+
+  test "claims default roles and groups to empty when the token carries none" do
+    claims = @auth.claims(token)
+
+    assert_equal [], claims.roles
+    assert_equal [], claims.groups
+  end
 end

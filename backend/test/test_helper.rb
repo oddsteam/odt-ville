@@ -2,10 +2,18 @@ ENV["RAILS_ENV"] ||= "test"
 require_relative "../config/environment"
 require "rails/test_help"
 
-# The suite has no running Keycloak, so we stub the bearer-token resolver
-# instead of minting real JWTs: the token *is* the user's external_id (#92).
+# The suite has no running Keycloak, so we stub the claims resolver instead of
+# minting real JWTs. The token is "<external_id>|role,role" — the part before
+# the pipe is the subject, the rest are realm roles (#92, #94).
 # KeycloakAuthenticator itself is exercised directly in its own unit test.
-ApplicationController.subject_resolver = ->(token) { token }
+ApplicationController.claims_resolver = lambda do |token|
+  sub, roles = token.split("|", 2)
+  KeycloakAuthenticator::Claims.new(
+    subject: sub,
+    roles: (roles || "").split(",").reject(&:empty?),
+    groups: []
+  )
+end
 
 module ApiTestHelpers
   BOARD_TYPES = %w[must_know should_know nice_to_know].freeze
@@ -55,10 +63,12 @@ module ApiTestHelpers
   end
 
   # Auth: the API resolves current_user from a `Authorization: Bearer <jwt>`
-  # header. With the stubbed resolver the token is the user's external_id, so
-  # this presents a token that authenticates as `user`.
-  def auth(user)
-    { "Authorization" => "Bearer #{user.external_id}" }
+  # header. With the stubbed resolver the token encodes the user's external_id
+  # and optional realm roles (see above), so this authenticates as `user` with
+  # the given roles.
+  def auth(user, roles: [])
+    token = roles.empty? ? user.external_id : "#{user.external_id}|#{roles.join(',')}"
+    { "Authorization" => "Bearer #{token}" }
   end
 
   def json
