@@ -4,6 +4,7 @@ import { Outlet } from 'react-router-dom'
 import { runEdge } from './lib/runEdge.ts'
 import { subscribeAuthToken } from './lib/authToken.ts'
 import UserSwitcher from './auth/UserSwitcher.tsx'
+import LogoutButton from './auth/LogoutButton.tsx'
 import { ViewerService } from './viewer/service.ts'
 import type { Viewer } from './viewer/schema.ts'
 
@@ -48,6 +49,7 @@ export default function RootLayout() {
               <span className="app-user-role">{me.user.role}</span>
             </div>
           )}
+          {me && <LogoutButton className="app-logout" />}
         </div>
       </header>
 

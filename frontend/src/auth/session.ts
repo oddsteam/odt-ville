@@ -26,12 +26,28 @@ export function startKeycloakSession(kc: KeycloakSession): void {
       .catch(() => setAuthToken(null))
 }
 
+// The live Keycloak instance in PROD (null in DEV, where the switcher owns the
+// token) — kept so logout() can end the session it started.
+let keycloak: Keycloak | null = null
+
 // Sign the user in before the app renders. DEV: skip — the switcher owns tokens.
 // PROD: force a redirect login, then start the refresh loop.
 export async function bootstrapAuth(): Promise<void> {
   if (import.meta.env.DEV) return
 
-  const kc = new Keycloak({ url: KEYCLOAK_URL, realm: REALM, clientId: CLIENT_ID })
-  await kc.init({ onLoad: 'login-required', checkLoginIframe: false })
-  startKeycloakSession(kc)
+  keycloak = new Keycloak({ url: KEYCLOAK_URL, realm: REALM, clientId: CLIENT_ID })
+  await keycloak.init({ onLoad: 'login-required', checkLoginIframe: false })
+  startKeycloakSession(keycloak)
+}
+
+// Sign out from both paths. Always drop the bearer (clears the persisted dev
+// token too). PROD: end the Keycloak session and bounce back to the village via
+// its login. DEV: reload home — the switcher logs back in.
+export function logout(): void {
+  setAuthToken(null)
+  if (keycloak) {
+    keycloak.logout({ redirectUri: window.location.origin })
+  } else if (typeof window !== 'undefined') {
+    window.location.assign('/')
+  }
 }

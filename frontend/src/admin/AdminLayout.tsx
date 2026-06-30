@@ -1,4 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom'
+import LogoutButton from '../auth/LogoutButton.tsx'
 import './admin.css'
 
 // The admin console groups what used to be four separate standalone pages
@@ -27,6 +28,7 @@ export default function AdminLayout() {
             {t.label}
           </NavLink>
         ))}
+        <LogoutButton className="admin-logout" />
       </nav>
       <div className="admin-console-body">
         <Outlet />
