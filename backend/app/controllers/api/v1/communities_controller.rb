@@ -1,6 +1,9 @@
 module Api
   module V1
     class CommunitiesController < BaseController
+      # Authoring writes require the `admin` realm role (#100); reads stay open.
+      before_action -> { require_role!("admin") }, only: %i[create update destroy]
+
       BOARD_TYPES = %w[must_know should_know nice_to_know].freeze
 
       # GET /api/v1/communities

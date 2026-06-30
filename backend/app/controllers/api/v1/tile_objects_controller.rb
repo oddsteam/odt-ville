@@ -1,6 +1,10 @@
 module Api
   module V1
     class TileObjectsController < BaseController
+      # Authoring writes require the `admin` realm role (#100); reads stay open.
+      before_action -> { require_role!("admin") },
+        only: %i[create activate deactivate destroy]
+
       # GET /api/v1/tile_objects — roster (no image blobs). Optional ?kind=.
       def index
         scope = TileObject.order(:kind, :name)

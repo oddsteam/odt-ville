@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import RootLayout from './RootLayout.tsx'
 import VillagePage from './VillagePage.tsx'
 import AdminLayout from './admin/AdminLayout.tsx'
+import RequireAdmin from './auth/RequireAdmin.tsx'
 import CommunitiesAdminPage from './admin/CommunitiesAdminPage.tsx'
 import SpriteMapper from './spriteMapper/SpriteMapper.tsx'
 import TileMapper from './tileMapper/TileMapper.tsx'
@@ -20,14 +21,17 @@ export default function App() {
         <Route index element={<VillagePage />} />
       </Route>
       {/* The admin console is its own standalone shell (mapper-styled, dark) and
-          is reachable by URL only — no link from the game UI. */}
-      <Route path="admin" element={<AdminLayout />}>
-        <Route index element={<Navigate to="communities" replace />} />
-        <Route path="communities" element={<CommunitiesAdminPage />} />
-        <Route path="sprites" element={<SpriteMapper />} />
-        <Route path="objects" element={<TileMapper />} />
-        <Route path="ground" element={<GroundTileMapper />} />
-        <Route path="monsters" element={<MonstersAdminPage />} />
+          is reachable by URL only — no link from the game UI. RequireAdmin gates
+          the whole subtree on the `admin` realm role (#100). */}
+      <Route element={<RequireAdmin />}>
+        <Route path="admin" element={<AdminLayout />}>
+          <Route index element={<Navigate to="communities" replace />} />
+          <Route path="communities" element={<CommunitiesAdminPage />} />
+          <Route path="sprites" element={<SpriteMapper />} />
+          <Route path="objects" element={<TileMapper />} />
+          <Route path="ground" element={<GroundTileMapper />} />
+          <Route path="monsters" element={<MonstersAdminPage />} />
+        </Route>
       </Route>
       {/* posture-login popup return (issue #24) — bare page, no app chrome;
           it posts the result home to the opener and closes. */}

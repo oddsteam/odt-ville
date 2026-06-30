@@ -1,13 +1,20 @@
-// In-memory auth-token store (issue #93). The HTTP layer reads the current
-// access token from here and attaches it as `Authorization: Bearer <token>` to
-// every API request; the dev user-switcher writes to it to "become" a seeded
-// user without a login round-trip.
+// Auth-token store (issue #93). The HTTP layer reads the current access token
+// from here and attaches it as `Authorization: Bearer <token>` to every API
+// request; the dev user-switcher writes to it to "become" a seeded user without
+// a login round-trip.
 //
-// Deliberately in-memory (not localStorage): a real OIDC flow (#79 follow-ups)
-// will own token persistence/refresh. Keeping the store tiny and synchronous
-// means callers — and the switcher — can subscribe and re-fetch on change.
+// In prod a real OIDC flow (keycloak-js) owns token persistence/refresh, so the
+// store stays in-memory there. In DEV the switcher's token would otherwise die
+// on every full page reload — including typing a URL like /admin — leaving the
+// app unauthenticated and unable to reach the gated routes. So DEV-only we
+// mirror it to sessionStorage and restore on load, keeping the switcher's
+// "logged in" state across reloads.
+// ponytail: DEV-only sessionStorage; the node test env has no sessionStorage, so
+// `persist` is false there and the store stays purely in-memory for tests.
+const persist = import.meta.env.DEV && typeof sessionStorage !== 'undefined'
+const KEY = 'odtville.devToken'
 
-let current: string | null = null
+let current: string | null = persist ? sessionStorage.getItem(KEY) : null
 const listeners = new Set<() => void>()
 
 export function getAuthToken(): string | null {
@@ -16,6 +23,10 @@ export function getAuthToken(): string | null {
 
 export function setAuthToken(token: string | null): void {
   current = token
+  if (persist) {
+    if (token) sessionStorage.setItem(KEY, token)
+    else sessionStorage.removeItem(KEY)
+  }
   for (const listener of listeners) listener()
 }
 

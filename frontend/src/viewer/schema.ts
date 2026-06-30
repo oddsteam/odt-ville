@@ -14,5 +14,7 @@ export const Viewer = Schema.Struct({
     id: Schema.Number,
     name: Schema.String,
   }),
+  // Realm roles from the token (#100) — drives the /admin route guard.
+  roles: Schema.Array(Schema.String),
 })
 export type Viewer = Schema.Schema.Type<typeof Viewer>

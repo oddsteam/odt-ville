@@ -86,10 +86,17 @@ module Api
         assert_response :not_found
       end
 
+      test "a non-admin is forbidden from creating a community" do
+        assert_no_difference "House.count" do
+          post "/api/v1/communities", params: { title: "Nope" }, headers: auth(@user)
+        end
+        assert_response :forbidden
+      end
+
       test "create makes a community with three boards plus a welcome must-know item" do
         post "/api/v1/communities",
              params: { title: "New Hub", color: "#abcdef", category_key: "learning" },
-             as: :json, headers: auth(@user)
+             as: :json, headers: auth(@user, roles: ["admin"])
 
         assert_response :created
         body = json
@@ -106,7 +113,7 @@ module Api
       end
 
       test "create supplies defaults when fields are blank" do
-        post "/api/v1/communities", params: {}, as: :json, headers: auth(@user)
+        post "/api/v1/communities", params: {}, as: :json, headers: auth(@user, roles: ["admin"])
 
         assert_response :created
         community = House.find(json[:id])
@@ -120,7 +127,7 @@ module Api
 
         patch "/api/v1/communities/#{community.id}",
               params: { entry_gate: "posture-login", posture_set_id: "set-9" },
-              as: :json, headers: auth(@user)
+              as: :json, headers: auth(@user, roles: ["admin"])
 
         assert_response :success
         community.reload
@@ -134,7 +141,7 @@ module Api
 
         patch "/api/v1/communities/#{community.id}",
               params: { entry_gate: nil, posture_set_id: nil },
-              as: :json, headers: auth(@user)
+              as: :json, headers: auth(@user, roles: ["admin"])
 
         assert_response :success
         community.reload
@@ -147,7 +154,7 @@ module Api
 
         patch "/api/v1/communities/#{community.id}",
               params: { entry_gate: "posture-login", posture_set_id: "" },
-              as: :json, headers: auth(@user)
+              as: :json, headers: auth(@user, roles: ["admin"])
 
         assert_response :unprocessable_entity
         assert_nil community.reload.entry_gate
@@ -159,7 +166,7 @@ module Api
 
         patch "/api/v1/communities/#{foreign.id}",
               params: { entry_gate: "posture-login", posture_set_id: "x" },
-              as: :json, headers: auth(@user)
+              as: :json, headers: auth(@user, roles: ["admin"])
 
         assert_response :not_found
       end
@@ -171,7 +178,7 @@ module Api
         assert_difference -> { House.count } => -1,
                           -> { Board.count } => -3,
                           -> { ContentItem.count } => -1 do
-          delete "/api/v1/communities/#{community.id}", headers: auth(@user)
+          delete "/api/v1/communities/#{community.id}", headers: auth(@user, roles: ["admin"])
         end
 
         assert_response :no_content
@@ -183,7 +190,7 @@ module Api
         other_company, _ = setup_company(name: "Other Co")
         foreign = make_community(company: other_company, title: "Theirs")
 
-        delete "/api/v1/communities/#{foreign.id}", headers: auth(@user)
+        delete "/api/v1/communities/#{foreign.id}", headers: auth(@user, roles: ["admin"])
 
         assert_response :not_found
         assert House.exists?(foreign.id)

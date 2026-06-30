@@ -59,11 +59,20 @@ module Api
         assert entry.key?(:id) && entry.key?(:name)
       end
 
+      test "a non-admin is forbidden from creating a monster" do
+        assert_no_difference -> { Monster.count } do
+          post "/api/v1/monsters",
+               params: { name: "Nope", image: "data:img", encounter_rate: 1 },
+               headers: auth(@user)
+        end
+        assert_response :forbidden
+      end
+
       test "create persists a monster and returns the full record incl. image" do
         assert_difference -> { Monster.count }, 1 do
           post "/api/v1/monsters",
                params: { name: "Slime", image: "data:img", encounter_dialog: "A wild Slime appears!", encounter_rate: 5, enabled: true },
-               headers: auth(@user)
+               headers: auth(@user, roles: ["admin"])
         end
 
         assert_response :created
@@ -78,7 +87,7 @@ module Api
       test "create defaults a missing enabled flag to on" do
         post "/api/v1/monsters",
              params: { name: "Wolf", image: "data:img", encounter_rate: 3 },
-             headers: auth(@user)
+             headers: auth(@user, roles: ["admin"])
 
         assert_response :created
         assert_equal true, json[:enabled]
@@ -90,7 +99,7 @@ module Api
         assert_no_difference -> { Monster.count } do
           post "/api/v1/monsters",
                params: { name: "Slime", image: "data:img", encounter_rate: 2 },
-               headers: auth(@user)
+               headers: auth(@user, roles: ["admin"])
         end
 
         assert_response :unprocessable_entity
@@ -101,7 +110,7 @@ module Api
         assert_no_difference -> { Monster.count } do
           post "/api/v1/monsters",
                params: { name: "Bad", image: "data:img", encounter_rate: -1 },
-               headers: auth(@user)
+               headers: auth(@user, roles: ["admin"])
         end
 
         assert_response :unprocessable_entity
@@ -122,7 +131,7 @@ module Api
 
         patch "/api/v1/monsters/#{monster.id}",
               params: { name: "Slime King", image: "data:new", encounter_dialog: "Bow!", encounter_rate: 4, enabled: false },
-              headers: auth(@user)
+              headers: auth(@user, roles: ["admin"])
 
         assert_response :success
         assert_equal "Slime King", json[:name]
@@ -141,7 +150,7 @@ module Api
 
         patch "/api/v1/monsters/#{monster.id}",
               params: { encounter_rate: 9 },
-              headers: auth(@user)
+              headers: auth(@user, roles: ["admin"])
 
         assert_response :success
         assert_equal 9, json[:encounter_rate]
@@ -154,7 +163,7 @@ module Api
 
         patch "/api/v1/monsters/#{slime.id}",
               params: { encounter_rate: 3 },
-              headers: auth(@user)
+              headers: auth(@user, roles: ["admin"])
 
         assert_response :success
         assert_in_delta 0.75, json[:probability], 1e-9, "the edited monster's % reflects the new pool"
@@ -170,7 +179,7 @@ module Api
         Monster.create!(name: "Wolf", image: "data:img", encounter_rate: 1)
 
         assert_difference -> { Monster.count }, -1 do
-          delete "/api/v1/monsters/#{slime.id}", headers: auth(@user)
+          delete "/api/v1/monsters/#{slime.id}", headers: auth(@user, roles: ["admin"])
         end
 
         assert_response :no_content
@@ -188,7 +197,7 @@ module Api
 
         patch "/api/v1/monsters/#{wolf.id}",
               params: { name: "Slime" },
-              headers: auth(@user)
+              headers: auth(@user, roles: ["admin"])
 
         assert_response :unprocessable_entity
         assert json[:error].present?, "validation message surfaces to the admin"

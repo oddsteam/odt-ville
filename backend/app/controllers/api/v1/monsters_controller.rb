@@ -1,6 +1,9 @@
 module Api
   module V1
     class MonstersController < BaseController
+      # Roster management requires the `admin` realm role (#100); reads stay open.
+      before_action -> { require_role!("admin") }, only: %i[create update destroy]
+
       # GET /api/v1/monsters — the roster (no image blobs). Probability for each
       # monster is computed server-side against one shared enabled-rate
       # denominator, so disabled monsters show 0% and the rest sum to 100%.

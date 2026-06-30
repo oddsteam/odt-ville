@@ -15,6 +15,20 @@ module Api
         assert_equal @company.id, json[:company][:id]
       end
 
+      test "the response carries the caller's realm roles" do
+        get "/api/v1/me", headers: auth(@user, roles: ["admin"])
+
+        assert_response :success
+        assert_equal ["admin"], json[:roles]
+      end
+
+      test "roles default to an empty list when the token carries none" do
+        get "/api/v1/me", headers: auth(@user)
+
+        assert_response :success
+        assert_equal [], json[:roles]
+      end
+
       test "a request with no bearer token is rejected with 401" do
         get "/api/v1/me"
 

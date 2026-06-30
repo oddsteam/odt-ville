@@ -72,14 +72,14 @@ class KeycloakAuthenticatorTest < ActiveSupport::TestCase
 
   test "claims expose subject, realm + client roles, and groups" do
     t = token({
-      realm_access: { roles: %w[editor offline_access] },
+      realm_access: { roles: %w[admin offline_access] },
       resource_access: { AUD => { roles: %w[uma_authorization] } },
       groups: %w[/staff]
     })
     claims = @auth.claims(t)
 
     assert_equal "subject-123", claims.subject
-    assert_equal %w[editor offline_access uma_authorization], claims.roles
+    assert_equal %w[admin offline_access uma_authorization], claims.roles
     assert_equal %w[/staff], claims.groups
   end
 
