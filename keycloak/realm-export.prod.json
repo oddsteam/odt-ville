@@ -1,0 +1,41 @@
+{
+  "realm": "odtville",
+  "enabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": true,
+  "registrationEmailAsUsername": true,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "accessTokenLifespan": 3600,
+  "roles": {
+    "realm": [
+      { "name": "editor", "description": "May author map content (ground tiles, etc.) — #94" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "odt-ville-web",
+      "name": "ODT Ville web app",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": ["https://odt-ville.p2d.uk/*"],
+      "webOrigins": ["https://odt-ville.p2d.uk"],
+      "protocol": "openid-connect",
+      "protocolMappers": [
+        {
+          "name": "odt-ville-web-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "odt-ville-web",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ]
+}

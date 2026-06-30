@@ -1,14 +1,16 @@
-# Dev stack: Postgres + Rails API + Vite dev server. Runs in development mode
-# (hot reload) both locally and on the homeserver.
+# Dev stack: Postgres + Rails API + Vite dev server. This file is the DEV base
+# (hot reload); the homeserver layers compose.prod.yaml on top to harden it.
 #
 #   Local dev:   docker compose up --build
 #                (auto-loads compose.override.yaml, which also publishes the
 #                 backend + database to localhost for convenient curling)
 #
-#   Homeserver:  docker compose -f compose.yaml up -d --build
-#                (explicit -f skips the override, so ONLY the frontend port is
-#                 published; the Cloudflare tunnel forwards odt-ville.p2d.uk to
-#                 it. backend + db stay private on the compose network.)
+#   Homeserver:  docker compose -f compose.yaml -f compose.prod.yaml up -d --build
+#                (explicit -f skips the local override; compose.prod.yaml runs
+#                 Keycloak in prod mode on Postgres and serves a frontend prod
+#                 build. The Cloudflare tunnels forward odt-ville.p2d.uk and
+#                 odt-ville-auth.p2d.uk to the published frontend/Keycloak ports;
+#                 backend + db stay private. See compose.prod.yaml — issue #96.)
 #
 # Named volumes hold the dependencies (bundle, node_modules) so platform-specific
 # native binaries are built inside the Linux containers and never shadowed by the
