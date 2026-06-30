@@ -4,6 +4,7 @@ import Phaser from 'phaser'
 import MapScene from '../game/phaser/scenes/MapScene.js'
 import { MapsService } from './service.ts'
 import { runEdge } from '../lib/runEdge.ts'
+import { subscribeAuthToken } from '../lib/authToken.ts'
 import type { BakedMap } from './schema.ts'
 
 // Play surface for an authored map (ADR-0004). It loads a baked map by slug and
@@ -15,6 +16,9 @@ export default function MapPage() {
   const hostRef = useRef<HTMLDivElement>(null)
   const [map, setMap] = useState<BakedMap | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Bumped by the dev switcher so the load re-runs after the active user
+  // changes — the first paint fetches before a user is picked and 401s.
+  const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
     if (!slug) return
@@ -25,7 +29,15 @@ export default function MapPage() {
     return () => {
       active = false
     }
-  }, [slug])
+  }, [slug, reloadKey])
+
+  useEffect(
+    () => subscribeAuthToken(() => {
+      setError(null)
+      setReloadKey((k) => k + 1)
+    }),
+    [],
+  )
 
   // Boot Phaser once the baked map is loaded. The map goes into the registry as
   // `bakedMap` so MapScene reads it in preload(), the same boot-input timing the

@@ -7,15 +7,7 @@
 // browser-redirect OIDC flow replaces this for production in a later slice.
 
 import { setAuthToken } from '../lib/authToken.ts'
-
-const CLIENT_ID = 'odt-ville-web'
-const REALM = 'odtville'
-
-// Keycloak's public origin. Defaults to the compose-published port; override
-// with VITE_KEYCLOAK_URL when the realm lives elsewhere (e.g. a tunnel host).
-const KEYCLOAK_URL = (
-  import.meta.env.VITE_KEYCLOAK_URL || 'http://localhost:8080'
-).replace(/\/$/, '')
+import { REALM, CLIENT_ID, KEYCLOAK_URL } from './config.ts'
 
 const TOKEN_ENDPOINT = `${KEYCLOAK_URL}/realms/${REALM}/protocol/openid-connect/token`
 
