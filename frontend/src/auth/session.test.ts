@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 
-import { startKeycloakSession } from './session.ts'
+import { startKeycloakSession, logout } from './session.ts'
 import { getAuthToken, setAuthToken } from '../lib/authToken.ts'
 
 function fakeKeycloak(token: string) {
@@ -28,5 +28,13 @@ describe('startKeycloakSession', () => {
     startKeycloakSession(kc)
     await kc.onTokenExpired!()
     expect(getAuthToken()).toBe('refreshed-token')
+  })
+})
+
+describe('logout', () => {
+  it('clears the stored bearer token', () => {
+    setAuthToken('a-token')
+    logout()
+    expect(getAuthToken()).toBe(null)
   })
 })

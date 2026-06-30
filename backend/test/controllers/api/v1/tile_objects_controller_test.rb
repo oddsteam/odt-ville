@@ -18,11 +18,20 @@ module Api
         assert_not json.first.key?(:image), "summary must omit the heavy image blob"
       end
 
+      test "a non-admin is forbidden from creating a tile object" do
+        assert_no_difference -> { TileObject.count } do
+          post "/api/v1/tile_objects",
+               params: { name: "Nope", kind: "tree", image: "data:img" },
+               headers: auth(@user)
+        end
+        assert_response :forbidden
+      end
+
       test "activate makes the object the only active one of its kind" do
         a = TileObject.create!(name: "A", kind: "flower-group", image: "i", footprint_w: 2, footprint_h: 2, active: true)
         b = TileObject.create!(name: "B", kind: "flower-group", image: "i", footprint_w: 2, footprint_h: 2, active: false)
 
-        post "/api/v1/tile_objects/#{b.id}/activate", headers: auth(@user)
+        post "/api/v1/tile_objects/#{b.id}/activate", headers: auth(@user, roles: ["admin"])
 
         assert_response :success
         assert_equal b.id, json[:id]
@@ -33,7 +42,7 @@ module Api
       test "create persists a building door anchor and active returns it" do
         post "/api/v1/tile_objects",
              params: { name: "Cottage", kind: "building", image: "data:img", footprint_w: 3, footprint_h: 4, door_dx: 0, door_dy: 1 },
-             headers: auth(@user)
+             headers: auth(@user, roles: ["admin"])
 
         assert_response :success
         assert_equal 0, json[:door_dx]
@@ -48,7 +57,7 @@ module Api
         mask = ["###", "#.#", "#.#", "#.#"]
         post "/api/v1/tile_objects",
              params: { name: "Cottage", kind: "building", image: "data:img", footprint_w: 3, footprint_h: 4, door_dx: 1, door_dy: 3, walk_mask: mask },
-             headers: auth(@user)
+             headers: auth(@user, roles: ["admin"])
 
         assert_response :success
         assert_equal mask, json[:walk_mask]
@@ -62,7 +71,7 @@ module Api
         edges = ["000", "0c0", "000", "000"]
         post "/api/v1/tile_objects",
              params: { name: "Cottage", kind: "building", image: "data:img", footprint_w: 3, footprint_h: 4, door_dx: 1, door_dy: 3, walk_mask: ["###", "#.#", "#.#", "#.#"], edge_mask: edges },
-             headers: auth(@user)
+             headers: auth(@user, roles: ["admin"])
 
         assert_response :success
         assert_equal edges, json[:edge_mask]
@@ -76,7 +85,7 @@ module Api
         fg = "data:image/png;base64,maskblob"
         post "/api/v1/tile_objects",
              params: { name: "Cottage", kind: "building", image: "data:img", footprint_w: 3, footprint_h: 4, door_dx: 1, door_dy: 3, walk_mask: ["###", "#.#", "#.#", "#.#"], fg_mask: fg },
-             headers: auth(@user)
+             headers: auth(@user, roles: ["admin"])
 
         assert_response :success
         assert_equal fg, json[:fg_mask]
@@ -101,7 +110,7 @@ module Api
       test "deactivate turns the object off so its kind has no active object" do
         a = TileObject.create!(name: "A", kind: "flower-group", image: "i", footprint_w: 2, footprint_h: 2, active: true)
 
-        post "/api/v1/tile_objects/#{a.id}/deactivate", headers: auth(@user)
+        post "/api/v1/tile_objects/#{a.id}/deactivate", headers: auth(@user, roles: ["admin"])
 
         assert_response :success
         assert_not a.reload.active
@@ -111,7 +120,7 @@ module Api
       test "destroy removes the object, leaving its kind with no active object" do
         a = TileObject.create!(name: "Oak", kind: "tree", image: "i", footprint_w: 2, footprint_h: 2, active: true)
 
-        delete "/api/v1/tile_objects/#{a.id}", headers: auth(@user)
+        delete "/api/v1/tile_objects/#{a.id}", headers: auth(@user, roles: ["admin"])
 
         assert_response :no_content
         assert_not TileObject.exists?(a.id), "the object is gone"

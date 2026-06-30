@@ -9,7 +9,7 @@
   "accessTokenLifespan": 3600,
   "roles": {
     "realm": [
-      { "name": "editor", "description": "May author map content (ground tiles, etc.) — #94" }
+      { "name": "admin", "description": "Full access to the admin console and its APIs — #100" }
     ]
   },
   "clients": [

@@ -8,6 +8,7 @@ describe('Viewer schema', () => {
   const valid = {
     user: { id: 1, name: 'Pat', role: 'admin' },
     company: { id: 42, name: 'ODT' },
+    roles: ['admin'],
   }
 
   it('decodes the payload from /api/v1/me', () => {

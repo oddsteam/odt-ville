@@ -69,6 +69,22 @@
   border-color: #2e7dff;
 }
 
+.admin-logout {
+  margin-left: auto;
+  font: inherit;
+  font-size: 13px;
+  padding: 5px 12px;
+  border-radius: 6px;
+  color: #cfcfe0;
+  background: #24242e;
+  border: 1px solid #34343f;
+  cursor: pointer;
+}
+
+.admin-logout:hover {
+  color: #fff;
+}
+
 .admin-console-body {
   flex: 1;
   min-height: 0;

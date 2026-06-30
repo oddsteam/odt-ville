@@ -1,8 +1,9 @@
 module Api
   module V1
     class GroundTilesController < BaseController
-      # Authoring writes require the `editor` realm role (#94); reads stay open.
-      before_action -> { require_role!("editor") }, only: %i[create destroy]
+      # Authoring writes require the `admin` realm role (#100, formerly `editor`
+      # in #94 — folded into the single admin role); reads stay open.
+      before_action -> { require_role!("admin") }, only: %i[create destroy]
 
       # GET /api/v1/ground_tiles — the ground-tile catalog. Optional ?type=.
       def index

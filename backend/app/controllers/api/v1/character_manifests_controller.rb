@@ -1,6 +1,9 @@
 module Api
   module V1
     class CharacterManifestsController < BaseController
+      # Saving a manifest requires the `admin` realm role (#100); reads stay open.
+      before_action -> { require_role!("admin") }, only: %i[create]
+
       # GET /api/v1/character_manifests — roster for pickers (no data blobs).
       def index
         manifests = CharacterManifest.order(:name)
