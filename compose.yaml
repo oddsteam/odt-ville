@@ -76,6 +76,10 @@ services:
     environment:
       # Vite proxies /api here (see frontend/vite.config.js).
       VITE_PROXY_TARGET: http://backend:3190
+      # PostHog analytics (issue #101). Set the project key to enable; absent =
+      # no-op. Keep the secret out of git — supply via the host env, e.g.
+      # `VITE_POSTHOG_KEY=phc_xxx docker compose up`. Host defaults to US cloud.
+      VITE_POSTHOG_KEY: ${VITE_POSTHOG_KEY:-}
     command: bash -c "pnpm install && pnpm run dev --host 0.0.0.0"
     volumes:
       - ./frontend:/app
