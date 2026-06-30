@@ -21,14 +21,44 @@ class ApplicationController < ActionController::API
     @token_claims = nil
   end
 
-  # The authenticated user, resolved from the token's subject against the local
-  # users. Returns nil when unauthenticated or the subject matches no user —
-  # callers gate on it via require_user!.
+  # Email domains we auto-enroll on first login (#96). Temporary, while the org's
+  # real Keycloak integration is pending — see #97 for what to discard then.
+  ALLOWED_SIGNUP_DOMAINS = %w[odds.team odt.co.th].freeze
+
+  # The authenticated user, resolved from the token. A known subject maps
+  # straight to its user; an unknown subject from an allowed email domain is
+  # JIT-provisioned (#96). Returns nil otherwise, and callers gate via
+  # require_user!.
   def current_user
-    @current_user ||= begin
-      sub = token_claims&.subject
-      sub.present? ? User.find_by(external_id: sub) : nil
+    @current_user ||= find_or_provision_user
+  end
+
+  def find_or_provision_user
+    claims = token_claims
+    sub = claims&.subject
+    return nil if sub.blank?
+
+    user = User.find_by(external_id: sub)
+    return user if user
+
+    # First login: provision (or re-link) by email so a later IdP swap — which
+    # changes `sub` — reuses the same user instead of duplicating (#97).
+    # ponytail: find_or_initialize races under concurrent first-logins; the
+    # unique email index makes the loser raise rather than double-create.
+    email = claims.email.to_s.downcase
+    return nil unless ALLOWED_SIGNUP_DOMAINS.include?(email.split("@").last)
+
+    user = User.find_or_initialize_by(email: email)
+    user.external_id = sub
+    if user.new_record?
+      user.company = Company.first
+      user.name = email.split("@").first
+      user.role = "branch_employee"
     end
+    return nil unless user.company
+
+    user.save!
+    user
   end
 
   # Realm + client roles / groups stamped into the token (#94).

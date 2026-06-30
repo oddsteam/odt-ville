@@ -7,11 +7,12 @@ require "rails/test_help"
 # the pipe is the subject, the rest are realm roles (#92, #94).
 # KeycloakAuthenticator itself is exercised directly in its own unit test.
 ApplicationController.claims_resolver = lambda do |token|
-  sub, roles = token.split("|", 2)
+  sub, roles, email = token.split("|", 3)
   KeycloakAuthenticator::Claims.new(
     subject: sub,
     roles: (roles || "").split(",").reject(&:empty?),
-    groups: []
+    groups: [],
+    email: email
   )
 end
 

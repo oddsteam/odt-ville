@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_29_000003) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_30_000001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -120,6 +120,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_29_000003) do
     t.text "image", null: false
     t.string "kind", default: "prop", null: false
     t.string "name", null: false
+    t.integer "overhang", default: 0, null: false
     t.datetime "updated_at", null: false
     t.text "walk_mask"
     t.index ["kind"], name: "index_tile_objects_one_active_per_kind", unique: true, where: "active"
@@ -154,11 +155,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_29_000003) do
   create_table "users", force: :cascade do |t|
     t.bigint "company_id", null: false
     t.datetime "created_at", null: false
+    t.string "email"
     t.string "external_id"
     t.string "name", null: false
     t.string "role", default: "employee", null: false
     t.datetime "updated_at", null: false
     t.index ["company_id"], name: "index_users_on_company_id"
+    t.index ["email"], name: "index_users_on_email", unique: true
     t.index ["external_id"], name: "index_users_on_external_id", unique: true
   end
 
