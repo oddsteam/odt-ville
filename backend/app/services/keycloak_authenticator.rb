@@ -16,8 +16,9 @@ class KeycloakAuthenticator
   Error = Class.new(StandardError)
 
   # The slice of a verified token the app authorizes on: who they are plus the
-  # realm/client roles and groups Keycloak stamped into the token (#94).
-  Claims = Struct.new(:subject, :roles, :groups, keyword_init: true)
+  # realm/client roles and groups Keycloak stamped into the token (#94), and the
+  # email used to JIT-provision/relink a local user on first login (#96).
+  Claims = Struct.new(:subject, :roles, :groups, :email, keyword_init: true)
 
   # The app-wide verifier, configured from the environment and memoised so the
   # JWKS cache is shared across requests.
@@ -63,7 +64,8 @@ class KeycloakAuthenticator
     Claims.new(
       subject: payload["sub"],
       roles: (realm + client).uniq,
-      groups: Array(payload["groups"])
+      groups: Array(payload["groups"]),
+      email: payload["email"]
     )
   end
 
