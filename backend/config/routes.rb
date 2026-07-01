@@ -55,8 +55,9 @@ Rails.application.routes.draw do
       resources :ground_tiles, only: [:index, :create, :destroy]
 
       # Maps — the authored-map contract (ADR-0004). `:slug` loads a baked map
-      # for play; author CRUD + access policy land with the editor (#80+).
+      # for play; `create` is the editor's write half (#105), admin-gated.
       get "maps/:slug", to: "maps#show"
+      post "maps", to: "maps#create"
     end
   end
 end
