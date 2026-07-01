@@ -30,12 +30,15 @@ let enabled = false
 
 // Fire a custom event. Properties merge with the registered super properties
 // (e.g. `email` from #101), so callers only pass event-specific fields.
+// `options` is the SDK's capture options — e.g. { transport: 'sendBeacon' }
+// for reliable delivery on unload (see session_active_time, #104).
 export function captureEvent(
   event: string,
   props?: Record<string, unknown>,
+  options?: Parameters<typeof posthog.capture>[2],
 ): void {
   if (!enabled) return
-  posthog.capture(event, props)
+  posthog.capture(event, props, options)
 }
 
 // Decode the `sub` + `email` claims from a bearer JWT (base64url payload).

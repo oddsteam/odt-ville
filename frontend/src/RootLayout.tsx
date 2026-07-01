@@ -6,6 +6,7 @@ import { subscribeAuthToken } from './lib/authToken.ts'
 import UserSwitcher from './auth/UserSwitcher.tsx'
 import LogoutButton from './auth/LogoutButton.tsx'
 import { ViewerService } from './viewer/service.ts'
+import { trackSessionActiveTime } from './analytics/sessionTime.ts'
 import type { Viewer } from './viewer/schema.ts'
 
 // The game shell: brand header + the village game via <Outlet>. The admin
@@ -30,6 +31,10 @@ export default function RootLayout() {
   // Re-fetch app state whenever the active user is swapped (dev switcher). The
   // store is a no-op in production where nothing writes a token.
   useEffect(() => subscribeAuthToken(refetchMe), [refetchMe])
+
+  // Track foreground game-tab time for the whole session (#104). Mounted once
+  // at the shell so it spans every route; emits session_active_time on unload.
+  useEffect(() => trackSessionActiveTime(), [])
 
   return (
     <div className="app-shell">
