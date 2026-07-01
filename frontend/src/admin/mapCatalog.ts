@@ -5,21 +5,14 @@
 // exactly the cells the author tagged, which is what /maps/<slug> will render.
 //
 // ADR-0004: the Tile Catalog is the shared kernel. Terrain priority (`stack`)
-// isn't persisted yet, so it's hardcoded here to mirror the town's order — a
-// follow-up moves it to data.
+// is now persisted data (#120) served from /api/v1/terrains; the caller passes
+// it in as `priority` and the stack (palette order + seam ownership) is derived
+// from it — no hardcoded order here.
 
 import { tilesetUrl } from '../groundTiles/tilesets.js'
 import type { GroundTile } from '../groundTiles/schema.ts'
+import { catalogFromArt } from '../game/phaser/tileCatalog.ts'
 import type { CatalogArtTile, CatalogTileset, TileCatalog } from '../game/phaser/tileCatalog.ts'
-
-// Hardcoded terrain priority, low → high (higher owns the seam). Mirrors the
-// town's road < dirt < grass, with water as a base below road. Unknown terrains
-// sort after these, keeping their first-seen order.
-const TERRAIN_PRIORITY = ['water', 'road', 'sand', 'dirt', 'grass']
-const rank = (t: string) => {
-  const i = TERRAIN_PRIORITY.indexOf(t)
-  return i === -1 ? TERRAIN_PRIORITY.length : i
-}
 
 // Unique preserving first-seen order.
 const uniq = <T>(xs: T[]) => [...new Set(xs)]
@@ -27,16 +20,8 @@ const uniq = <T>(xs: T[]) => [...new Set(xs)]
 export function catalogFromGroundTiles(
   tiles: readonly GroundTile[],
   colsByTileset: Record<string, number>,
+  priority: readonly string[],
 ): TileCatalog {
-  const types = uniq(tiles.map((t) => t.tile_type))
-  const stack = [...types].sort((a, b) => rank(a) - rank(b))
-
-  const autotiled = new Set(
-    tiles
-      .filter((t) => t.role === 'edge' || t.role === 'corner' || t.role === 'inner')
-      .map((t) => t.tile_type),
-  )
-
   const cellByTileset = new Map(tiles.map((t) => [t.tileset, t.cell]))
   const tilesets: CatalogTileset[] = uniq(tiles.map((t) => t.tileset)).map((name) => ({
     name,
@@ -53,7 +38,7 @@ export function catalogFromGroundTiles(
     side: t.side,
   }))
 
-  return { stack, autotiled, tilesets, tiles: artTiles }
+  return catalogFromArt(artTiles, tilesets, priority)
 }
 
 // The image column count a sheet needs for `frame = row*cols + col`, read from

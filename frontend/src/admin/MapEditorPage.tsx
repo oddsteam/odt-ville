@@ -5,6 +5,9 @@ import type { SourceMap } from '../maps/baker.ts'
 import type { BakedMap } from '../maps/schema.ts'
 import type { TileCatalog } from '../game/phaser/tileCatalog.ts'
 import { GroundTilesService } from '../groundTiles/service.ts'
+import type { GroundTile } from '../groundTiles/schema.ts'
+import { TerrainsService } from '../terrains/service.ts'
+import { priorityOrder } from '../terrains/schema.ts'
 import { catalogFromGroundTiles, colsForGroundTiles } from './mapCatalog.ts'
 import { makeTerrain, paintCell, paintRect, resizeTerrain, type Terrain } from './mapPaint.ts'
 import MapPreview from './MapPreview.tsx'
@@ -43,10 +46,18 @@ export default function MapEditorPage() {
   const [selected, setSelected] = useState('')
   const [tool, setTool] = useState<'brush' | 'rect'>('brush')
 
-  // The real Tile Catalog, built from the ground tiles mapped in the Ground
-  // Tiles tool — baking against this makes the preview blit the actual tagged
-  // cells (not a fixture's placeholder art). Null until loaded.
-  const [catalog, setCatalog] = useState<TileCatalog | null>(null)
+  // The real Tile Catalog is derived from the ground tiles mapped in the Ground
+  // Tiles tool + the persisted terrain priority (#120). Baking against it makes
+  // the preview blit the actual tagged cells, and the priority *data* — not a
+  // hardcoded stack — decides palette order + seam ownership, so reordering
+  // flips ownership live. Null until the ground tiles have loaded.
+  const [tiles, setTiles] = useState<readonly GroundTile[] | null>(null)
+  const [colsByTileset, setColsByTileset] = useState<Record<string, number>>({})
+  const [priority, setPriority] = useState<string[]>([])
+  const catalog = useMemo<TileCatalog | null>(
+    () => (tiles ? catalogFromGroundTiles(tiles, colsByTileset, priority) : null),
+    [tiles, colsByTileset, priority],
+  )
   const palette = catalog?.stack ?? []
   const defaultTerrain = palette[palette.length - 1] ?? null
 
@@ -57,21 +68,22 @@ export default function MapEditorPage() {
   const painting = useRef(false)
   const rectStart = useRef<{ x: number; y: number } | null>(null)
 
-  // Load the catalog once: fetch the mapped ground tiles, read each sheet's
-  // column count from its image, then seed the grid + palette with the
-  // top-priority terrain so there's something paintable immediately.
+  // Load once: the mapped ground tiles + each sheet's column count, and the
+  // persisted terrain priority (#120). The catalog is derived from all three, so
+  // a later reorder just updates `priority` and the preview re-bakes.
   useEffect(() => {
     let live = true
     ;(async () => {
       try {
-        const tiles = await runEdge(GroundTilesService.list())
-        const colsByTileset = await colsForGroundTiles(tiles)
+        const [loadedTiles, terrains] = await Promise.all([
+          runEdge(GroundTilesService.list()),
+          runEdge(TerrainsService.list()),
+        ])
+        const cols = await colsForGroundTiles(loadedTiles)
         if (!live) return
-        const cat = catalogFromGroundTiles(tiles, colsByTileset)
-        setCatalog(cat)
-        const top = cat.stack[cat.stack.length - 1] ?? null
-        setSelected(top ?? '')
-        setTerrain((t) => t.map((row) => row.map((c) => c ?? top)))
+        setColsByTileset(cols)
+        setPriority(priorityOrder(terrains))
+        setTiles(loadedTiles)
       } catch (e) {
         if (live) setError((e as Error).message)
       }
@@ -80,6 +92,34 @@ export default function MapEditorPage() {
       live = false
     }
   }, [])
+
+  // Seed the grid + palette selection with the top-priority terrain once the
+  // catalog is available, so there's something paintable immediately.
+  useEffect(() => {
+    if (!catalog || selected) return
+    const top = catalog.stack[catalog.stack.length - 1] ?? null
+    setSelected(top ?? '')
+    setTerrain((t) => t.map((row) => row.map((c) => c ?? top)))
+  }, [catalog, selected])
+
+  // Reorder terrain priority through the tool: swap a terrain with its neighbour
+  // in the persisted stack and save it. `dir` +1 raises priority (owns more
+  // seams), -1 lowers it. Optimistic — the preview re-bakes at once — reverting
+  // if the write fails.
+  const movePriority = async (name: string, dir: 1 | -1) => {
+    const i = priority.indexOf(name)
+    const j = i + dir
+    if (i < 0 || j < 0 || j >= priority.length) return
+    const next = [...priority]
+    ;[next[i], next[j]] = [next[j], next[i]]
+    setPriority(next)
+    try {
+      await runEdge(TerrainsService.setOrder(next))
+    } catch (e) {
+      setPriority(priority)
+      setError((e as Error).message)
+    }
+  }
 
   // Release the drag / cancel a rectangle if the mouse comes up off the grid.
   useEffect(() => {
@@ -175,11 +215,18 @@ export default function MapEditorPage() {
       )}
 
       <div className="admin-field-inline">
+        {/* Palette in stack order (low→high priority). The ▲/▼ reorder priority —
+            the higher terrain owns the seam — persisting it so the preview and
+            /maps/<slug> flip ownership together. */}
         {palette.map((t) => (
-          <button key={t} onClick={() => setSelected(t)}
-            style={{ outline: selected === t ? '2px solid #fff' : 'none', background: swatch(t), color: '#000' }}>
-            {t}
-          </button>
+          <span key={t} style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+            <button onClick={() => setSelected(t)}
+              style={{ outline: selected === t ? '2px solid #fff' : 'none', background: swatch(t), color: '#000' }}>
+              {t}
+            </button>
+            <button aria-label={`raise ${t} priority`} title="raise priority" onClick={() => movePriority(t, 1)}>▲</button>
+            <button aria-label={`lower ${t} priority`} title="lower priority" onClick={() => movePriority(t, -1)}>▼</button>
+          </span>
         ))}
         <span> · </span>
         <button onClick={() => setTool('brush')} disabled={tool === 'brush'}>Brush</button>

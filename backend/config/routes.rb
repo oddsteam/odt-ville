@@ -54,6 +54,11 @@ Rails.application.routes.draw do
       # (no single-active); edge/corner autotiling comes later.
       resources :ground_tiles, only: [:index, :create, :destroy]
 
+      # Terrains — per-terrain stack priority (#120). Read the seam-ownership
+      # order both ground producers resolve against; `order` reorders it (admin).
+      get "terrains", to: "terrains#index"
+      put "terrains/order", to: "terrains#reorder"
+
       # Maps — the authored-map contract (ADR-0004). `:slug` loads a baked map
       # for play; `create` is the editor's write half (#105), admin-gated.
       get "maps/:slug", to: "maps#show"

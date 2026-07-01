@@ -359,6 +359,15 @@ ActiveRecord::Base.transaction do
 
   Map.create!(MAP_FIXTURE)
 
+  # Terrain stack priority (#120), low→high: the higher-priority terrain owns a
+  # shared seam. This is the order both ground producers (the generated town and
+  # the authored-map editor) resolve their Tile Catalog against — data now, not a
+  # hardcoded stack. Upserted so a re-seed keeps any author reorder intact for
+  # already-present names while filling in the canonical defaults.
+  %w[water road sand dirt grass].each_with_index do |name, priority|
+    Terrain.find_or_create_by!(name: name) { |t| t.priority = priority }
+  end
+
   puts "Seeded: #{Company.count} company, #{User.count} users, " \
        "#{House.count} houses, #{Board.count} boards, #{ContentItem.count} content items, " \
        "#{Map.count} authored map."

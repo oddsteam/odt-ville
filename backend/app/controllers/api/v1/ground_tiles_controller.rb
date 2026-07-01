@@ -35,6 +35,10 @@ module Api
           side: role == "fill" ? nil : params[:side].presence
         )
         tile.save!
+        # Introducing a surface type in the mapper registers it as a terrain
+        # (#120), so its stack priority becomes reorderable data — no code change
+        # to add a terrain. Idempotent for an already-known type.
+        Terrain.register!(type)
 
         render json: GroundTileSerializer.call(tile)
       end
