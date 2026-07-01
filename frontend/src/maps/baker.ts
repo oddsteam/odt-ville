@@ -15,7 +15,7 @@ import {
   groundPaintStackForCell,
   terrainBorders,
 } from '../game/phaser/groundModel.js'
-import { edgeSetsFromCatalog } from '../game/phaser/tileCatalog.ts'
+import { edgeSetsFromCatalog, innerSetsFromCatalog } from '../game/phaser/tileCatalog.ts'
 import type { CatalogArtTile, TileCatalog } from '../game/phaser/tileCatalog.ts'
 import type { BakedGround, BakedLayer, BakedTileset } from './schema.ts'
 
@@ -68,6 +68,7 @@ function bakeCell(
   y: number,
   catalog: TileCatalog,
   edgeSets: Record<string, Record<string, boolean>>,
+  innerSets: Record<string, Record<string, boolean>>,
   artIndex: Map<string, CatalogArtTile>,
   colsByTileset: Record<string, number>,
 ): BakedLayer[] {
@@ -80,12 +81,19 @@ function bakeCell(
 
   // groundModel.js is untyped; its `= null` defaults make TS infer null-only
   // params, so the engine boundary takes loose casts (as townRenderer does).
-  const plan = groundPaintStackForCell(field, x, y, edgeSets as never, catalog) as Array<{
+  const plan = groundPaintStackForCell(field, x, y, edgeSets as never, catalog, innerSets as never) as Array<{
     terrain: string
     role: string
+    side?: string
     depth: number
   }>
   for (const entry of plan) {
+    if (entry.role === 'inner') {
+      // Concave corner: the transparent-notched inner-corner tile. Its coverage
+      // (the diagonal terrain) is a separate 'coverage' entry drawn below.
+      push(artIndex.get(`${entry.terrain}|inner|${entry.side}`), entry.depth)
+      continue
+    }
     if (entry.role !== 'edge') {
       // fill / coverage — the flat terrain tile at its canonical depth.
       push(artIndex.get(`${entry.terrain}|fill|`), entry.depth)
@@ -130,6 +138,7 @@ function referencedTilesets(catalog: TileCatalog, cells: BakedLayer[][][]): Bake
 export function bakeGround(source: SourceMap, catalog: TileCatalog): BakedGround {
   const field = fieldFor(source)
   const edgeSets = edgeSetsFromCatalog(catalog)
+  const innerSets = innerSetsFromCatalog(catalog)
   const artIndex = artIndexFor(catalog)
   const colsByTileset: Record<string, number> = {}
   for (const ts of catalog.tilesets) colsByTileset[ts.name] = ts.cols
@@ -138,7 +147,7 @@ export function bakeGround(source: SourceMap, catalog: TileCatalog): BakedGround
   for (let y = 0; y < source.rows; y++) {
     const row: BakedLayer[][] = []
     for (let x = 0; x < source.cols; x++) {
-      row.push(bakeCell(field, x, y, catalog, edgeSets, artIndex, colsByTileset))
+      row.push(bakeCell(field, x, y, catalog, edgeSets, innerSets, artIndex, colsByTileset))
     }
     cells.push(row)
   }

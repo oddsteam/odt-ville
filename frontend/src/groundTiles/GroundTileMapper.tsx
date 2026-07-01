@@ -15,7 +15,10 @@ import './styles.css'
 
 const PRESETS = ['grass', 'road', 'dirt', 'water', 'sand']
 const EDGE_SIDES = ['N', 'E', 'S', 'W'] // orthogonal — for edge tiles
-const CORNER_SIDES = ['NE', 'NW', 'SE', 'SW'] // diagonal — for corner tiles
+const CORNER_SIDES = ['NE', 'NW', 'SE', 'SW'] // diagonal — for corner + inner tiles
+const ROLES = ['fill', 'edge', 'corner', 'inner']
+// Roles whose side is a diagonal (outer corners + inner/concave corners).
+const DIAGONAL_ROLES = ['corner', 'inner']
 
 // Module-level cache of loaded tileset images. The roster can span several
 // tilesets, so thumbnails load each on demand without re-fetching.
@@ -263,7 +266,7 @@ export default function GroundTileMapper() {
           <div className="role-block">
             <span className="role-label">Role</span>
             <div className="presets">
-              {['fill', 'edge', 'corner'].map((r) => (
+              {ROLES.map((r) => (
                 <button
                   key={r}
                   type="button"
@@ -271,9 +274,9 @@ export default function GroundTileMapper() {
                   onClick={() => {
                     setRole(r)
                     // Keep the side valid for the role: orthogonal for edges,
-                    // diagonal for corners.
+                    // diagonal for outer + inner corners.
                     if (r === 'edge' && !EDGE_SIDES.includes(side)) setSide('N')
-                    if (r === 'corner' && !CORNER_SIDES.includes(side)) setSide('NE')
+                    if (DIAGONAL_ROLES.includes(r) && !CORNER_SIDES.includes(side)) setSide('NE')
                   }}
                 >
                   {r}
@@ -282,7 +285,7 @@ export default function GroundTileMapper() {
             </div>
             {role !== 'fill' && (
               <div className="presets sides">
-                {(role === 'corner' ? CORNER_SIDES : EDGE_SIDES).map((s) => (
+                {(DIAGONAL_ROLES.includes(role) ? CORNER_SIDES : EDGE_SIDES).map((s) => (
                   <button
                     key={s}
                     type="button"

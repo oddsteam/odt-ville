@@ -33,6 +33,15 @@ export const EDGE_CORNERS = [
   { c: 'SW', a: 'S', b: 'W' },
 ]
 
+// The four diagonal neighbours, for inner (concave) corners. `dx/dy` is the
+// diagonal cell; the two orthogonal components are (dx,0) and (0,dy).
+export const DIAGONAL_CORNERS = [
+  { c: 'NE', dx: 1, dy: -1 },
+  { c: 'NW', dx: -1, dy: -1 },
+  { c: 'SE', dx: 1, dy: 1 },
+  { c: 'SW', dx: -1, dy: 1 },
+]
+
 // Resolve a cell's terrain from a *field*. A field is either a town tile grid
 // (resolved through its map chars) or any producer-supplied source exposing a
 // `terrainAt(x, y)` accessor (the baker passes the latter). Out-of-bounds is the
@@ -73,7 +82,36 @@ export function coverageTerrainForCell(field, x, y, terrain, borders = null, cat
   return catalog.stack.findLast((candidate) => neighbours.has(candidate)) || null
 }
 
-export function groundPaintStackForCell(field, x, y, edgeSets = null, catalog = HOMETOWN_CATALOG) {
+// Inner (concave) corners this terrain wraps: a diagonal neighbour is lower
+// priority while *neither* orthogonal side facing it is (both are the same or a
+// higher terrain), so the terrain bends around the lower cell's convex corner.
+// Returns one `{ side, terrain }` per such diagonal — `terrain` is the diagonal
+// neighbour that shows through the concave notch. This is the counterpart to
+// `terrainBorders`' straight/outer-corner ownership (see #119).
+export function terrainInnerCorners(field, x, y, terrain, catalog = HOMETOWN_CATALOG) {
+  const rank = catalog.stack.indexOf(terrain)
+  if (rank < 0) return []
+  const lower = (nx, ny) => {
+    const r = catalog.stack.indexOf(terrainForCell(field, nx, ny))
+    return r >= 0 && r < rank
+  }
+  const out = []
+  for (const { c, dx, dy } of DIAGONAL_CORNERS) {
+    if (lower(x + dx, y + dy) && !lower(x + dx, y) && !lower(x, y + dy)) {
+      out.push({ side: c, terrain: terrainForCell(field, x + dx, y + dy) })
+    }
+  }
+  return out
+}
+
+export function groundPaintStackForCell(
+  field,
+  x,
+  y,
+  edgeSets = null,
+  catalog = HOMETOWN_CATALOG,
+  innerSets = null,
+) {
   const terrain = terrainForCell(field, x, y)
   if (!terrain) return []
   const borders = terrainBorders(field, x, y, terrain, catalog)
@@ -86,16 +124,34 @@ export function groundPaintStackForCell(field, x, y, edgeSets = null, catalog = 
     ? Boolean(hasCatalogEdge)
     : catalog.autotiled.has(terrain) && Object.values(borders).some(Boolean)
 
-  if (!isTransparentEdge) {
-    return [{ terrain, role: 'fill', opaque: true, depth: terrainDepth(terrain, catalog) }]
+  // Concave corners only autotile where the catalog carries inner-corner art for
+  // this terrain + side (data-gated exactly like edges); other terrains bake as
+  // today with no inner tile — the graceful fallback.
+  const innerSet = innerSets?.[terrain]
+  const inners = innerSet
+    ? terrainInnerCorners(field, x, y, terrain, catalog).filter((ic) => innerSet[ic.side])
+    : []
+
+  const depth = terrainDepth(terrain, catalog)
+  const layers = []
+  if (isTransparentEdge) {
+    const backing = coverageTerrainForCell(field, x, y, terrain, borders, catalog)
+    if (backing) {
+      layers.push({ terrain: backing, role: 'coverage', opaque: true, depth: terrainDepth(backing, catalog) })
+    }
+    layers.push({ terrain, role: 'edge', opaque: false, depth })
+  } else if (inners.length === 0) {
+    // A pure fill cell with a concave corner is NOT a flat fill — the fill would
+    // paint over the notch. Its coverage + inner tiles below carry the cell.
+    layers.push({ terrain, role: 'fill', opaque: true, depth })
   }
-  const backing = coverageTerrainForCell(field, x, y, terrain, borders, catalog)
-  return [
-    ...(backing
-      ? [{ terrain: backing, role: 'coverage', opaque: true, depth: terrainDepth(backing, catalog) }]
-      : []),
-    { terrain, role: 'edge', opaque: false, depth: terrainDepth(terrain, catalog) },
-  ]
+  // Each inner corner: the diagonal terrain as opaque coverage beneath a
+  // transparent-notched inner-corner tile, so the concave seam reveals it.
+  for (const ic of inners) {
+    layers.push({ terrain: ic.terrain, role: 'coverage', opaque: true, depth: terrainDepth(ic.terrain, catalog) })
+    layers.push({ terrain, role: 'inner', side: ic.side, opaque: false, depth })
+  }
+  return layers
 }
 
 // Road is the bottom layer, so its base extends one cell in every direction
