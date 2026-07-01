@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { bakedDrawList, bakedTextureKey } from '../src/game/phaser/mapRenderer.ts'
-import type { BakedMap } from '../src/maps/schema.ts'
+import { bakedDraws, bakedDrawList, bakedTextureKey } from '../src/game/phaser/mapRenderer.ts'
+import type { BakedGround, BakedMap } from '../src/maps/schema.ts'
 
 const map: BakedMap = {
   slug: 'atrium',
@@ -52,5 +52,34 @@ describe('bakedDrawList', () => {
     }
     const { tiles } = bakedDrawList(uniform)
     expect(tiles.map((t) => t.frame)).toEqual([9, 9])
+  })
+})
+
+describe('bakedDraws', () => {
+  it('draws flat tiles at depth 0 and entities above at depth 1', () => {
+    expect(bakedDraws(map)).toEqual([
+      { x: 0, y: 0, key: bakedTextureKey('Terra'), frame: 0, depth: 0 },
+      { x: 1, y: 0, key: bakedTextureKey('Terra'), frame: 3, depth: 0 },
+      { x: 1, y: 1, key: bakedTextureKey('Terra'), frame: 7, depth: 0 },
+      { x: 1, y: 0, key: bakedTextureKey('Terra'), frame: 12, depth: 1 },
+    ])
+  })
+
+  it('prefers the autotiled ground stacks (with their depths) over flat tiles', () => {
+    const ground: BakedGround = {
+      cols: 1,
+      rows: 1,
+      tilesets: [{ name: 'Terra', cell: 32 }],
+      // one cell, two stacked layers — a coverage fill beneath an edge tile.
+      cells: [[[
+        { tileset: 'Terra', frame: 1, depth: 0.1 },
+        { tileset: 'Terra', frame: 2, depth: 0.2 },
+      ]]],
+    }
+    const painted: BakedMap = { ...map, ground, entities: [] }
+    expect(bakedDraws(painted)).toEqual([
+      { x: 0, y: 0, key: bakedTextureKey('Terra'), frame: 1, depth: 0.1 },
+      { x: 0, y: 0, key: bakedTextureKey('Terra'), frame: 2, depth: 0.2 },
+    ])
   })
 })

@@ -9,6 +9,9 @@ import * as Schema from 'effect/Schema'
 import { DecodeError, Http } from '../lib/http.ts'
 import type { HttpError } from '../lib/http.ts'
 import { BakedMap } from './schema.ts'
+import { bakeSourceMap } from './baker.ts'
+import type { SourceMap } from './baker.ts'
+import type { TileCatalog } from '../game/phaser/tileCatalog.ts'
 
 const decodeOne = Schema.decodeUnknown(BakedMap)
 
@@ -33,4 +36,23 @@ export const get = (slug: string): Effect.Effect<BakedMap, HttpError, Http> =>
     return yield* decode(path, decodeOne)(raw)
   })
 
-export const MapsService = { get } as const
+// Bake the painted source once (ADR-0003 save path) and assemble the POST body:
+// the Rails columns (slug/title/cols/rows) plus the editable source and its
+// baked artifact. The editor calls this, then posts the result via `create`.
+export function mapCreateBody(source: SourceMap, catalog: TileCatalog) {
+  const { baked } = bakeSourceMap(source, catalog)
+  return { slug: source.slug, title: source.title, cols: source.cols, rows: source.rows, source, baked }
+}
+
+// POST /maps -> the created baked map. A rejected write (422 dup slug, etc.)
+// surfaces as a RequestError the editor shows to the author.
+export const create = (
+  body: ReturnType<typeof mapCreateBody>,
+): Effect.Effect<BakedMap, HttpError, Http> =>
+  Effect.gen(function* () {
+    const http = yield* Http
+    const raw = yield* http.post('/maps', body)
+    return yield* decode('/maps', decodeOne)(raw)
+  })
+
+export const MapsService = { get, create } as const
