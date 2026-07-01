@@ -1,7 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 import type { Community } from '../communities/schema.ts'
-import { buildingName, trackEnterDoor, trackInteractBoard } from './events.ts'
+import {
+  buildingName,
+  trackEnterDoor,
+  trackInteractBoard,
+  trackEncounter,
+} from './events.ts'
 import { captureEvent } from './posthog.ts'
 
 vi.mock('./posthog.ts', () => ({ captureEvent: vi.fn() }))
@@ -52,6 +57,26 @@ describe('trackInteractBoard', () => {
     expect(capture).toHaveBeenCalledWith('interact_board', {
       building: 'Design Lab',
       board_type: 'must_know',
+    })
+  })
+})
+
+describe('trackEncounter', () => {
+  it('captures one wild encounter with kind + name', () => {
+    trackEncounter({ kind: 'wild', name: 'VAYU PHOENIX' })
+    expect(capture).toHaveBeenCalledTimes(1)
+    expect(capture).toHaveBeenCalledWith('encounter', {
+      kind: 'wild',
+      name: 'VAYU PHOENIX',
+    })
+  })
+
+  it('captures one trainer encounter with kind + name', () => {
+    trackEncounter({ kind: 'trainer', name: 'THE BOSS' })
+    expect(capture).toHaveBeenCalledTimes(1)
+    expect(capture).toHaveBeenCalledWith('encounter', {
+      kind: 'trainer',
+      name: 'THE BOSS',
     })
   })
 })

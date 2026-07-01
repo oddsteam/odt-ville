@@ -36,3 +36,10 @@ export function trackInteractBoard(
     board_type: boardType,
   })
 }
+
+// One encounter started — a wild grass monster or the gate-trainer duel (#103).
+// The game black box supplies the kind + name via the onEncounter callback, so
+// no analytics code leaks into the Phaser scenes. One event per encounter.
+export function trackEncounter(payload: { kind: 'wild' | 'trainer'; name: string }): void {
+  captureEvent('encounter', { kind: payload.kind, name: payload.name })
+}

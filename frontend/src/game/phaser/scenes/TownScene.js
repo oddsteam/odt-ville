@@ -393,6 +393,10 @@ export default class TownScene extends Phaser.Scene {
   }
 
   launchEncounter(opponent) {
+    // Announce the encounter to the shell (issue #103) — one event per start,
+    // for both the wild-grass roll and the gate-trainer duel. Pure data only:
+    // the scene stays analytics-free, the shell decides what to do with it.
+    bus.emit('encounter', { kind: opponent.kind, name: opponent.name })
     // Pause this scene so its update() loop (and the world) freeze
     // while the duel runs; EncounterScene resumes us on close.
     this.scene.pause()

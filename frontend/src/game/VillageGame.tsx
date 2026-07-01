@@ -18,6 +18,8 @@ import PhaserGame, { type PhaserGameProps } from './phaser/PhaserGame.tsx'
 //   onEnterCommunity(id) — player walked onto a community doorway
 //   onExitCommunity(id)  — player stepped south off the interior doormat
 //   onOpenBoard(boardType) — player pressed A on an interior board
+//   onEncounter(payload) — an encounter started (wild grass or gate
+//                          trainer): { kind: 'wild' | 'trainer', name }
 //   onTrainerDefeated()  — player ran from the gate trainer's duel
 //
 // PR-E retired the DOM engine; this component is now a thin wrapper
@@ -40,6 +42,7 @@ export default function VillageGame({
   onEnterCommunity,
   onExitCommunity,
   onOpenBoard,
+  onEncounter,
   onRequestEntry,
   trainerDefeated,
   onTrainerDefeated,
@@ -60,6 +63,7 @@ export default function VillageGame({
       onEnterCommunity={onEnterCommunity}
       onExitCommunity={onExitCommunity}
       onOpenBoard={onOpenBoard}
+      onEncounter={onEncounter}
       onRequestEntry={onRequestEntry}
       trainerDefeated={trainerDefeated}
       onTrainerDefeated={onTrainerDefeated}

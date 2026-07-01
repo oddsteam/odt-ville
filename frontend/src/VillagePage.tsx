@@ -9,7 +9,7 @@ import { CALLBACK_PATH } from './posture/callback.ts'
 import { loadTown as loadTownData } from './game/townLoader.ts'
 import { runEdge } from './lib/runEdge.ts'
 import { subscribeAuthToken } from './lib/authToken.ts'
-import { trackEnterDoor, trackInteractBoard } from './analytics/events.ts'
+import { trackEnterDoor, trackInteractBoard, trackEncounter } from './analytics/events.ts'
 import type { Community, FeedItem } from './communities/schema.ts'
 import type { GameSession } from './game-session/schema.ts'
 import type { TileObject } from './tileObjects/schema.ts'
@@ -162,6 +162,16 @@ export default function VillagePage() {
     [communities, activeCommunityId],
   )
 
+  // An encounter started in the game (wild grass or the gate trainer). The
+  // game supplies kind + name; the page turns it into one PostHog event so no
+  // analytics leaks into the black box (issue #103).
+  const handleEncounter = useCallback(
+    (payload: { kind: 'wild' | 'trainer'; name: string }) => {
+      trackEncounter(payload)
+    },
+    [],
+  )
+
   const handleExitCommunity = useCallback(
     (idFromCaller?: number | null) => {
       // Phaser passes the exited community id via the bus event; fall
@@ -241,6 +251,7 @@ export default function VillagePage() {
         onEnterCommunity={handleEnterCommunity}
         onExitCommunity={handleExitCommunity}
         onOpenBoard={handleOpenBoard}
+        onEncounter={handleEncounter}
         onRequestEntry={handleRequestEntry}
         trainerDefeated={trainerDefeated}
         onTrainerDefeated={() => setTrainerDefeated(true)}

@@ -15,6 +15,8 @@ import Phaser from 'phaser'
 //                                               or releases (issue #24)
 //   'exitCommunity'   (communityId: number) — interior doormat → town
 //   'openBoard'       (boardType)            — interior A on a board
+//   'encounter'       ({ kind, name })       — a wild-grass or gate-trainer
+//                                              encounter started (issue #103)
 //   'trainerDefeated' ()                     — encounter RUN AWAY (trainer)
 //   'perfStall'       ()                     — repeated long frames detected
 //                                              (likely a throttling extension)
