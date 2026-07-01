@@ -32,7 +32,9 @@ export function catalogFromGroundTiles(
   const stack = [...types].sort((a, b) => rank(a) - rank(b))
 
   const autotiled = new Set(
-    tiles.filter((t) => t.role === 'edge' || t.role === 'corner').map((t) => t.tile_type),
+    tiles
+      .filter((t) => t.role === 'edge' || t.role === 'corner' || t.role === 'inner')
+      .map((t) => t.tile_type),
   )
 
   const cellByTileset = new Map(tiles.map((t) => [t.tileset, t.cell]))

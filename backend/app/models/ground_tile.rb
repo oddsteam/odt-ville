@@ -1,7 +1,8 @@
 class GroundTile < ApplicationRecord
-  ROLES = %w[fill edge corner].freeze
+  ROLES = %w[fill edge corner inner].freeze
+  DIAGONAL_ROLES = %w[corner inner].freeze # outer + inner (concave) corners
   EDGE_SIDES = %w[N E S W].freeze          # orthogonal — for edge tiles
-  CORNER_SIDES = %w[NE NW SE SW].freeze    # diagonal — for corner tiles
+  CORNER_SIDES = %w[NE NW SE SW].freeze    # diagonal — for corner + inner tiles
 
   validates :tile_type, presence: true
   validates :tileset, presence: true
@@ -14,11 +15,12 @@ class GroundTile < ApplicationRecord
 
   private
 
-  # Side is null for fill tiles, orthogonal for edges, diagonal for corners.
+  # Side is null for fill tiles, orthogonal for edges, diagonal for outer and
+  # inner corners.
   def side_matches_role
     return if side.blank?
 
-    allowed = role == "corner" ? CORNER_SIDES : EDGE_SIDES
+    allowed = DIAGONAL_ROLES.include?(role) ? CORNER_SIDES : EDGE_SIDES
     return if allowed.include?(side)
 
     errors.add(:side, "#{side} is not valid for a #{role} tile")

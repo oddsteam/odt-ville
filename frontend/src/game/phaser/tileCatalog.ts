@@ -34,8 +34,9 @@ export interface CatalogTileset {
 }
 
 // One piece of terrain art: an atlas coordinate plus the surface role it fills.
-// `role` is 'fill' | 'edge' | 'corner'; `side` is null for fill and a direction
-// (N/E/S/W or NE/NW/SE/SW) for edges/corners. Mirrors the GroundTile record.
+// `role` is 'fill' | 'edge' | 'corner' | 'inner'; `side` is null for fill, an
+// orthogonal direction (N/E/S/W) for edges, and a diagonal (NE/NW/SE/SW) for
+// outer corners and inner (concave) corners. Mirrors the GroundTile record.
 export interface CatalogArtTile {
   tile_type: string
   tileset: string
@@ -112,6 +113,19 @@ export function edgeSetsFromCatalog(catalog: TileCatalog): Record<string, Record
   for (const t of catalog.tiles) {
     if (t.role !== 'edge' && t.role !== 'corner') continue
     if (!t.side) continue
+    ;(out[t.tile_type] ||= {})[t.side] = true
+  }
+  return out
+}
+
+// The inner-corner counterpart of `edgeSetsFromCatalog`: `{ terrain: { side } }`
+// for every terrain carrying `inner` (concave) art. Kept separate from edgeSets
+// because inner + outer corners share diagonal side names (NE/NW/SE/SW) but are
+// different tiles. A terrain only autotiles a concave corner for which art exists.
+export function innerSetsFromCatalog(catalog: TileCatalog): Record<string, Record<string, boolean>> {
+  const out: Record<string, Record<string, boolean>> = {}
+  for (const t of catalog.tiles) {
+    if (t.role !== 'inner' || !t.side) continue
     ;(out[t.tile_type] ||= {})[t.side] = true
   }
   return out
