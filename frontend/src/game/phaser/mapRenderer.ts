@@ -61,6 +61,18 @@ export function groundDrawList(ground: BakedGround): Array<BakedDraw & { depth: 
   return out
 }
 
+// Every stamp for a baked map, ground beneath entities. A painted map carries
+// autotiled `ground` (layer stacks with resolved depths); a flat map carries
+// single-cell `tiles` (drawn at depth 0). Entities always sit above at depth 1.
+// The runtime blits whichever the producer supplied — no autotiling either way.
+export function bakedDraws(map: BakedMap): Array<BakedDraw & { depth: number }> {
+  const { tiles, entities } = bakedDrawList(map)
+  const ground = map.ground
+    ? groundDrawList(map.ground)
+    : tiles.map((t) => ({ ...t, depth: 0 }))
+  return [...ground, ...entities.map((e) => ({ ...e, depth: 1 }))]
+}
+
 // Load every tileset the baked map references, once each, as a uniform
 // spritesheet keyed by `bake.<name>`. The scene stashes the map on itself so
 // render() can read it back (mirrors townRenderer's preload→create handoff).
@@ -86,7 +98,6 @@ export function preloadBakedMap(scene: Scene) {
 export function renderBakedMap(scene: Scene) {
   const map: BakedMap | null = scene._bakedMap
   if (!map) return
-  const { tiles, entities } = bakedDrawList(map)
 
   const stamp = (d: BakedDraw, depth: number) => {
     if (!scene.textures.exists(d.key)) return
@@ -97,8 +108,7 @@ export function renderBakedMap(scene: Scene) {
       .setDisplaySize(TILE, TILE)
   }
 
-  for (const t of tiles) stamp(t, 0)
-  for (const e of entities) stamp(e, 1)
+  for (const d of bakedDraws(map)) stamp(d, d.depth)
 
   // Size the world to the authored grid so the camera can frame it.
   const worldW = map.cols * TILE

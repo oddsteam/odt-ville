@@ -58,6 +58,152 @@ module Api
         assert_response :not_found
         assert json[:error].present?
       end
+
+      # A painted authored map (#106/#107) bakes to a `ground` — per-cell layer
+      # stacks — instead of the seed's flat `tiles`. The serializer must publish
+      # that ground and lift its tilesets to the top-level list the runtime
+      # preloads (the runtime blits whichever shape the producer supplied).
+      def make_painted_map(slug: "grove")
+        Map.create!(
+          slug: slug,
+          title: "The Grove",
+          cols: 1,
+          rows: 1,
+          baked: {
+            "ground" => {
+              "cols" => 1,
+              "rows" => 1,
+              "tilesets" => [{ "name" => "1_Terrains_and_Fences_32x32", "cell" => 32 }],
+              "cells" => [[[{ "tileset" => "1_Terrains_and_Fences_32x32", "frame" => 2, "depth" => 0.2 }]]]
+            }
+          }
+        )
+      end
+
+      test "show publishes the baked ground for a painted map" do
+        make_painted_map
+
+        get "/api/v1/maps/grove", headers: auth(@user)
+
+        assert_response :success
+        body = json
+        assert_equal 1, body[:ground][:cols]
+        assert_equal(
+          [[[{ tileset: "1_Terrains_and_Fences_32x32", frame: 2, depth: 0.2 }]]],
+          body[:ground][:cells]
+        )
+      end
+
+      test "show lifts a painted map's ground tilesets to the top-level list" do
+        make_painted_map
+
+        get "/api/v1/maps/grove", headers: auth(@user)
+
+        assert_response :success
+        # No flat `tiles`, so the runtime learns which sheets to load from ground.
+        assert_equal [{ name: "1_Terrains_and_Fences_32x32", cell: 32 }], json[:tilesets]
+      end
+
+      # A create payload mirroring what the editor POSTs (#105): identity, size,
+      # the editable `source` and its baked artifact. The baked shape is opaque
+      # jsonb the server persists verbatim, so nested arrays must survive strong
+      # params intact.
+      def create_params(slug: "atrium", title: "The Atrium", cols: 1, rows: 1)
+        {
+          slug: slug,
+          title: title,
+          cols: cols,
+          rows: rows,
+          source: { "terrain" => [["grass"]] },
+          baked: {
+            "tilesets" => [{ "name" => "1_Terrains_and_Fences_32x32", "cell" => 32 }],
+            "tiles" => [[{ "tileset" => "1_Terrains_and_Fences_32x32", "frame" => 0 }]],
+            "entities" => []
+          }
+        }
+      end
+
+      test "an admin creates a map and gets it back serialized (201)" do
+        assert_difference "Map.count", 1 do
+          post "/api/v1/maps", params: create_params, headers: auth(@user, roles: ["admin"]), as: :json
+        end
+
+        assert_response :created
+        body = json
+        assert_equal "atrium", body[:slug]
+        assert_equal "The Atrium", body[:title]
+        # The opaque baked jsonb survived strong params and round-trips through
+        # the serializer — nested arrays and all.
+        assert_equal [[{ tileset: "1_Terrains_and_Fences_32x32", frame: 0 }]], body[:tiles]
+      end
+
+      test "the created map is immediately readable at its slug" do
+        post "/api/v1/maps", params: create_params, headers: auth(@user, roles: ["admin"]), as: :json
+        assert_response :created
+
+        get "/api/v1/maps/atrium", headers: auth(@user)
+        assert_response :success
+        assert_equal "atrium", json[:slug]
+      end
+
+      test "a non-admin is forbidden from creating a map" do
+        assert_no_difference "Map.count" do
+          post "/api/v1/maps", params: create_params, headers: auth(@user), as: :json
+        end
+        assert_response :forbidden
+      end
+
+      test "a duplicate slug is rejected with 422" do
+        make_map(slug: "atrium")
+
+        assert_no_difference "Map.count" do
+          post "/api/v1/maps", params: create_params(slug: "atrium"), headers: auth(@user, roles: ["admin"]), as: :json
+        end
+        assert_response :unprocessable_entity
+        assert json[:error].present?
+      end
+
+      test "non-positive dimensions are rejected with 422" do
+        assert_no_difference "Map.count" do
+          post "/api/v1/maps", params: create_params(cols: 0, rows: -1), headers: auth(@user, roles: ["admin"]), as: :json
+        end
+        assert_response :unprocessable_entity
+        assert json[:error].present?
+      end
+
+      test "a blank title is rejected with 422" do
+        assert_no_difference "Map.count" do
+          post "/api/v1/maps", params: create_params(title: ""), headers: auth(@user, roles: ["admin"]), as: :json
+        end
+        assert_response :unprocessable_entity
+      end
+
+      test "a posted painted map round-trips its deep ground.cells through strong params" do
+        painted = create_params(slug: "grove", title: "The Grove").merge(
+          baked: {
+            "ground" => {
+              "cols" => 1, "rows" => 1,
+              "tilesets" => [{ "name" => "1_Terrains_and_Fences_32x32", "cell" => 32 }],
+              "cells" => [[[{ "tileset" => "1_Terrains_and_Fences_32x32", "frame" => 2, "depth" => 0.2 }]]]
+            }
+          }
+        )
+        post "/api/v1/maps", params: painted, headers: auth(@user, roles: ["admin"]), as: :json
+        assert_response :created
+
+        get "/api/v1/maps/grove", headers: auth(@user)
+        assert_equal(
+          [[[{ tileset: "1_Terrains_and_Fences_32x32", frame: 2, depth: 0.2 }]]],
+          json[:ground][:cells]
+        )
+      end
+
+      test "a malformed slug is rejected with 422" do
+        assert_no_difference "Map.count" do
+          post "/api/v1/maps", params: create_params(slug: "Not A Slug"), headers: auth(@user, roles: ["admin"]), as: :json
+        end
+        assert_response :unprocessable_entity
+      end
     end
   end
 end

@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import RootLayout from './RootLayout.tsx'
 import VillagePage from './VillagePage.tsx'
@@ -10,6 +11,10 @@ import GroundTileMapper from './groundTiles/GroundTileMapper.tsx'
 import MonstersAdminPage from './admin/MonstersAdminPage.tsx'
 import PostureCallbackPage from './posture/CallbackPage.tsx'
 import MapPage from './maps/MapPage.tsx'
+
+// The map editor bakes (and later renders a Phaser preview, #107), so it is
+// code-split into its own chunk — it never ships in the player bundle (#106).
+const MapEditorPage = lazy(() => import('./admin/MapEditorPage.tsx'))
 
 // Route table. RootLayout is the persistent shell (brand header + Village/Admin
 // nav); the village game lives at "/" and the admin console — the four former
@@ -31,6 +36,14 @@ export default function App() {
           <Route path="objects" element={<TileMapper />} />
           <Route path="ground" element={<GroundTileMapper />} />
           <Route path="monsters" element={<MonstersAdminPage />} />
+          <Route
+            path="maps/new"
+            element={
+              <Suspense fallback={<p className="admin-hint">Loading editor…</p>}>
+                <MapEditorPage />
+              </Suspense>
+            }
+          />
         </Route>
       </Route>
       {/* posture-login popup return (issue #24) — bare page, no app chrome;

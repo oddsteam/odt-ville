@@ -5,7 +5,8 @@ import * as Cause from 'effect/Cause'
 import * as Layer from 'effect/Layer'
 
 import { Http, RequestError, type HttpError } from '../src/lib/http.ts'
-import { MapsService } from '../src/maps/service.ts'
+import { MapsService, mapCreateBody } from '../src/maps/service.ts'
+import { MEADOW_CATALOG, MEADOW_SOURCE } from '../src/maps/fixtures/meadow.ts'
 
 const BAKED = {
   slug: 'atrium',
@@ -52,5 +53,37 @@ describe('MapsService.get', () => {
       expect(fail._tag).toBe('Some')
       if (fail._tag === 'Some') expect(fail.value._tag).toBe('RequestError')
     }
+  })
+})
+
+describe('mapCreateBody', () => {
+  it('bakes the source and assembles the POST body (identity + source + baked)', () => {
+    const body = mapCreateBody(MEADOW_SOURCE, MEADOW_CATALOG)
+    expect(body.slug).toBe('meadow')
+    expect(body.title).toBe('The Meadow')
+    expect(body.cols).toBe(5)
+    expect(body.rows).toBe(4)
+    expect(body.source).toBe(MEADOW_SOURCE)
+    // The baked artifact carries the autotiled ground the runtime will blit.
+    expect(body.baked.ground.cells).toHaveLength(4)
+  })
+})
+
+describe('MapsService.create', () => {
+  it('posts the body and decodes the created map', async () => {
+    const body = mapCreateBody(MEADOW_SOURCE, MEADOW_CATALOG)
+    const exit = await Effect.runPromiseExit(
+      Effect.provide(MapsService.create(body), fakeHttp({ '/maps': BAKED })),
+    )
+    expect(Exit.isSuccess(exit)).toBe(true)
+    if (Exit.isSuccess(exit)) expect(exit.value.slug).toBe('atrium')
+  })
+
+  it('surfaces the API 422 (e.g. duplicate slug) as a RequestError', async () => {
+    const body = mapCreateBody(MEADOW_SOURCE, MEADOW_CATALOG)
+    const exit = await Effect.runPromiseExit(
+      Effect.provide(MapsService.create(body), fakeHttp({ '/maps': 'fail' })),
+    )
+    expect(Exit.isFailure(exit)).toBe(true)
   })
 })

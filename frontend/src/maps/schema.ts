@@ -67,5 +67,10 @@ export const BakedMap = Schema.Struct({
   // Row-major grid: tiles[row][col]. A null cell paints nothing.
   tiles: Schema.Array(Schema.Array(Schema.NullOr(BakedTile))),
   entities: Schema.Array(BakedEntity),
+  // An authored *painted* map carries its autotiled ground (layer stacks) here
+  // instead of flat `tiles`; the runtime blits whichever the producer supplied
+  // (ADR-0004 — still one shape, no per-map branching). Absent on the seed's
+  // flat maps, so optional.
+  ground: Schema.optional(BakedGround),
 })
 export type BakedMap = Schema.Schema.Type<typeof BakedMap>

@@ -7,5 +7,6 @@ class Map < ApplicationRecord
                    uniqueness: true,
                    format: { with: /\A[a-z0-9][a-z0-9-]*\z/,
                              message: "must be lowercase letters, digits and hyphens" }
+  validates :title, presence: true
   validates :cols, :rows, numericality: { only_integer: true, greater_than: 0 }
 end
