@@ -215,25 +215,29 @@ export default function MapEditorPage() {
       )}
 
       <div className="admin-field-inline">
-        {/* Palette in stack order (low→high priority). The ▲/▼ reorder priority —
-            the higher terrain owns the seam — persisting it so the preview and
-            /maps/<slug> flip ownership together. */}
-        {palette.map((t) => (
-          <span key={t} style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
-            <button onClick={() => setSelected(t)}
-              style={{ outline: selected === t ? '2px solid #fff' : 'none', background: swatch(t), color: '#000' }}>
-              {t}
-            </button>
-            <button aria-label={`raise ${t} priority`} title="raise priority" onClick={() => movePriority(t, 1)}>▲</button>
-            <button aria-label={`lower ${t} priority`} title="lower priority" onClick={() => movePriority(t, -1)}>▼</button>
-          </span>
-        ))}
-        <span> · </span>
         <button onClick={() => setTool('brush')} disabled={tool === 'brush'}>Brush</button>
         <button onClick={() => setTool('rect')} disabled={tool === 'rect'}>Rectangle</button>
       </div>
 
       <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+        {/* Terrain palette — a vertical column off to the side so it doesn't crowd the
+            paint grid + preview. Rendered high→low priority, top→bottom (like a layers
+            panel: the top terrain is drawn on top and owns the seam), so ▲ = move up =
+            raise priority reads intuitively. The reorder persists, flipping ownership in
+            the preview and at /maps/<slug> together. */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <p className="admin-hint">Terrain</p>
+          {[...palette].reverse().map((t) => (
+            <span key={t} style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+              <button onClick={() => setSelected(t)}
+                style={{ minWidth: 72, textAlign: 'left', outline: selected === t ? '2px solid #fff' : 'none', background: swatch(t), color: '#000' }}>
+                {t}
+              </button>
+              <button aria-label={`raise ${t} priority`} title="raise priority" onClick={() => movePriority(t, 1)}>▲</button>
+              <button aria-label={`lower ${t} priority`} title="lower priority" onClick={() => movePriority(t, -1)}>▼</button>
+            </span>
+          ))}
+        </div>
         <div>
           <p className="admin-hint">Paint</p>
           <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 22px)` }}
