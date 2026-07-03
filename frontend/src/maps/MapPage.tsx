@@ -5,6 +5,7 @@ import MapScene from '../game/phaser/scenes/MapScene.js'
 import { MapsService } from './service.ts'
 import { runEdge } from '../lib/runEdge.ts'
 import { subscribeAuthToken } from '../lib/authToken.ts'
+import { loadActiveManifest } from '../character/manifest.js'
 import type { BakedMap } from './schema.ts'
 
 // Play surface for an authored map (ADR-0004). It loads a baked map by slug and
@@ -20,11 +21,23 @@ export default function MapPage() {
   // changes — the first paint fetches before a user is picked and 401s.
   const [reloadKey, setReloadKey] = useState(0)
 
+  // The active character manifest rides along with the map load so it is
+  // already in hand when Phaser boots (loadActiveManifest owns its own
+  // fallback chain and never throws — null means the bundled fallback frames).
+  const manifestRef = useRef<unknown>(null)
+
   useEffect(() => {
     if (!slug) return
     let active = true
-    runEdge(MapsService.get(slug))
-      .then((m) => active && setMap(m))
+    Promise.all([
+      runEdge(MapsService.get(slug)),
+      loadActiveManifest().catch(() => null),
+    ])
+      .then(([m, manifest]) => {
+        if (!active) return
+        manifestRef.current = manifest
+        setMap(m)
+      })
       .catch((e) => active && setError(e instanceof Error ? e.message : String(e)))
     return () => {
       active = false
@@ -56,6 +69,7 @@ export default function MapPage() {
       scene: [MapScene],
     })
     game.registry.set('bakedMap', map)
+    game.registry.set('characterManifest', manifestRef.current)
     return () => {
       game.destroy(true)
     }
