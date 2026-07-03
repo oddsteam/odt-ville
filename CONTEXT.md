@@ -154,6 +154,14 @@ in-app editor — fixed, shared). _Avoid_ calling the authored map a different
   the trigger and emits a semantic event, the **shell decides behaviour**
   (same pattern as `onEnterCommunity` / `house.type → detail component`).
 
+**Collision mask** (2026-07-03) — a per-cell "blocked" grid on a
+map, painted directly in the in-app editor. It is **not** a Placed Entity: it
+has no art and no trigger — it only vetoes walkability. It exists because a
+Tiled-imported map's blockers (building bases, water) are baked into terrain
+*art*, so there is nothing to "place"; painting the mask is how that art
+gains collision. Placed entities still contribute their own walk-mask
+collision on top. _Avoid_: modelling blocked cells as invisible Props.
+
 **Trigger** — the axis that unifies every interaction: `on_enter` (door,
 encounter patch, portal), `on_sight` (trainer duel cone), `on_proximity`,
 `on_interact`. Door-entry, encounter, trainer challenge, and travel are one
@@ -176,6 +184,18 @@ save; bake validates playability (cf. ADR-0002). (ADR-0003.)
 is the priority order (higher rank **owns the seam**); each terrain has one
 **edge set** (4 edges + 4 corners) with a **coverage** fill under transparent
 edges.
+
+**Pattern** (resolving — 2026-07-01) — a **visual variant of one terrain**:
+plain grass vs. tall grass vs. flowery grass are all still *grass*. A pattern
+is purely an art/rendering concern — it shares the terrain's identity,
+walkability, and its single **priority** rank, so two patterns of the same
+terrain abut with **no seam** between them. It does **not** re-slice the stack
+(that would be terrain (B), rejected). Today's single edge set per terrain is
+the *default* pattern; "more than one pattern per type" adds sibling patterns
+under the same terrain. _Avoid_: calling a pattern a terrain, or giving it its
+own priority. (Open: whether each pattern carries its own edge set, how a
+pattern is selected at bake, and the exact-match pattern-to-pattern transition
+tile — being resolved.)
 
 ### Decisions (2026-06-29)
 
@@ -201,9 +221,38 @@ and get specced in the multi-map PRD.
 - **Maps connect via directional edge portals** (`on_enter` Zone →
   `{targetMapSlug, entrySpawnId}`), one map loaded at a time, no seamless
   adjacency. Gated targets are **visible-but-refused-with-a-reason**.
-- **Layout-to-autotiling = semantic terrain painting** with region tools; the
-  in-app editor supersedes Tiled for authored maps; boundaries resolve by the
-  existing layered-priority engine, so adding a terrain is O(N) art.
+- **Layout-to-autotiling = semantic terrain painting** with region tools;
+  boundaries resolve by the existing layered-priority engine, so adding a
+  terrain is O(N) art. ~~The in-app editor supersedes Tiled for authored
+  maps~~ — **amended 2026-07-03**: Tiled is re-admitted as a *terrain*
+  producer (defining an edge/corner set per terrain proved expensive; Tiled
+  lets an author freely mix art across asset packs). A Tiled import converts
+  tile layers into the existing `BakedGround` shape (gid → tileset+frame,
+  layer order → depth) — the human in Tiled *is* the autotile resolution, so
+  ADR-0003 ("bake in the producer") still holds and the runtime gains no
+  second render path. The in-app editor remains the tool for objects
+  (collision) and zones. The imported Tiled JSON is stored *inside* `source`
+  (self-contained document: anyone can pull the terrain down to edit in
+  Tiled; baked stays re-derivable). Re-import, matched by slug, replaces the
+  terrain half only — in-app objects/zones always survive; a resize keeps
+  them, flagging any now out-of-bounds instead of dropping. No reverse
+  export of objects/zones into the Tiled file. **Collision never comes from
+  Tiled** — the importer ignores Tiled object layers (incl. `collisions`);
+  an imported map starts fully walkable and collision is authored in-app
+  only, by painting a per-cell **collision mask** or by placing objects
+  (whose `walk_mask`/footprints block as usual). **A map's terrain producer
+  is exclusive** — `painted` or `tiled`, never mixed: Tiled-sourced maps
+  lock the in-app paint tools, and every terrain edit is edit-in-Tiled +
+  re-import, keeping re-import a wholesale terrain replace. (A painted
+  overlay atop a tiled base is a possible later additive, not part of this.)
+  Asset contract: tileset PNGs are repo-committed under
+  `frontend/public/maps/tilesets/` named exactly as in Tiled (the existing
+  runtime convention); export as JSON with **embedded tilesets**; the
+  importer runs client-side in the editor and validates at import time
+  (uniform 32px tiles, no margin/spacing, every PNG resolvable) — imported
+  tilesets need **no Tile Catalog entry** because the baked document
+  self-carries `{name, cell}`. (ADR-0007 — 0005/0006 are claimed by the
+  world-graph and Basecamp ADRs on `docs/adr-0005-world-graph`.)
 
 ## Where the model is heading
 
