@@ -198,6 +198,34 @@ module Api
         )
       end
 
+      test "a Tiled-imported map records producer 'tiled' and round-trips it" do
+        # The editor stores the terrain producer inside baked (ADR-0007) so the
+        # play endpoint and editor both know the terrain came from Tiled.
+        tiled = create_params(slug: "downtown", title: "Downtown").merge(
+          source: { "type" => "map", "tilesets" => [] },
+          baked: {
+            "producer" => "tiled",
+            "ground" => {
+              "cols" => 1, "rows" => 1,
+              "tilesets" => [{ "name" => "1_Terrains_and_Fences_32x32", "cell" => 32 }],
+              "cells" => [[[{ "tileset" => "1_Terrains_and_Fences_32x32", "frame" => 2, "depth" => 0 }]]]
+            }
+          }
+        )
+        post "/api/v1/maps", params: tiled, headers: auth(@user, roles: ["admin"]), as: :json
+        assert_response :created
+
+        get "/api/v1/maps/downtown", headers: auth(@user)
+        assert_equal "tiled", json[:producer]
+      end
+
+      test "a painted map omits the producer key entirely" do
+        make_painted_map
+
+        get "/api/v1/maps/grove", headers: auth(@user)
+        assert_not_includes json.keys, :producer
+      end
+
       test "a malformed slug is rejected with 422" do
         assert_no_difference "Map.count" do
           post "/api/v1/maps", params: create_params(slug: "Not A Slug"), headers: auth(@user, roles: ["admin"]), as: :json
