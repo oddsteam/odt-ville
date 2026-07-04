@@ -23,6 +23,9 @@ module MapSerializer
     # Painted maps carry autotiled `ground` (layer stacks) the runtime blits
     # instead of flat tiles; flat/seed maps omit it entirely (ADR-0003/0004).
     payload[:ground] = ground if ground
+    # Terrain producer (`painted`/`tiled`, ADR-0007). The runtime ignores it; the
+    # editor reads it to lock the paint tools for an imported map.
+    payload[:producer] = baked[:producer] if baked[:producer]
     payload
   end
 end

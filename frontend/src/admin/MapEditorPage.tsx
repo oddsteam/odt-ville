@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { MapsService, mapCreateBody } from '../maps/service.ts'
+import { MapsService, mapCreateBody, tiledMapCreateBody } from '../maps/service.ts'
 import { bakeSourceMap } from '../maps/baker.ts'
 import type { SourceMap } from '../maps/baker.ts'
-import type { BakedMap } from '../maps/schema.ts'
+import { importTiledMap, TiledImportError } from '../maps/tiledImport.ts'
+import type { BakedGround, BakedMap } from '../maps/schema.ts'
 import type { TileCatalog } from '../game/phaser/tileCatalog.ts'
 import { GroundTilesService } from '../groundTiles/service.ts'
 import type { GroundTile } from '../groundTiles/schema.ts'
@@ -64,6 +65,11 @@ export default function MapEditorPage() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [savedSlug, setSavedSlug] = useState<string | null>(null)
+
+  // A Tiled import (ADR-0007). When set, the terrain producer is `tiled`: the
+  // paint tools lock and the preview/save use this baked ground instead of the
+  // painted source. Null = the normal painted producer.
+  const [imported, setImported] = useState<{ source: unknown; ground: BakedGround } | null>(null)
 
   const painting = useRef(false)
   const rectStart = useRef<{ x: number; y: number } | null>(null)
@@ -156,26 +162,55 @@ export default function MapEditorPage() {
     }
   }
 
-  // The WYSIWYG preview map: bake the painted source, then present it in the
-  // runtime BakedMap shape (ground carries the autotiled stacks) — the same
-  // document POST /maps returns, so preview and play render identically.
-  // Only the painted terrain + dimensions affect what renders, so slug/title
-  // keystrokes don't rebuild the preview.
+  // Import a Tiled JSON export (ADR-0007): parse, convert to the baked ground, and
+  // check every referenced PNG resolves under the repo convention. A bad export
+  // fails loudly here with every reason listed; on success the map switches to the
+  // `tiled` producer (paint tools lock). `pngExists` is a real HEAD probe.
+  const onImport = async (file: File) => {
+    setBusy(true)
+    setError(null)
+    setSavedSlug(null)
+    try {
+      const json = JSON.parse(await file.text())
+      const pngExists = async (name: string) =>
+        (await fetch(`/maps/tilesets/${name}.png`, { method: 'HEAD' })).ok
+      const ground = await importTiledMap(json, pngExists)
+      setImported({ source: json, ground })
+      setCols(ground.cols)
+      setRows(ground.rows)
+    } catch (e) {
+      setImported(null)
+      setError(e instanceof TiledImportError ? e.reasons.join('\n') : (e as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // The WYSIWYG preview map: a Tiled import previews its imported ground directly;
+  // otherwise bake the painted source. Both present the runtime BakedMap shape —
+  // the same document POST /maps returns, so preview and play render identically.
+  // Only the terrain + dimensions affect what renders, so slug/title keystrokes
+  // don't rebuild the preview.
   const previewMap = useMemo<BakedMap>(() => {
+    if (imported) {
+      const g = imported.ground
+      return { slug: 'preview', title: '', cols: g.cols, rows: g.rows, tilesets: g.tilesets, tiles: [], entities: [], ground: g, producer: 'tiled' }
+    }
     const empty = { slug: 'preview', title: '', cols, rows, tilesets: [], tiles: [], entities: [] }
     if (!catalog) return empty
     const { baked } = bakeSourceMap({ slug: 'preview', title: '', cols, rows, terrain }, catalog)
     return { ...empty, tilesets: baked.ground.tilesets, ground: baked.ground }
-  }, [cols, rows, terrain, catalog])
+  }, [cols, rows, terrain, catalog, imported])
 
   const save = async () => {
-    if (!catalog) return
     setBusy(true)
     setError(null)
     setSavedSlug(null)
-    const source: SourceMap = { slug, title, cols, rows, terrain }
     try {
-      const map = await runEdge(MapsService.create(mapCreateBody(source, catalog)))
+      const body = imported
+        ? tiledMapCreateBody({ slug, title }, imported.source, imported.ground)
+        : mapCreateBody({ slug, title, cols, rows, terrain } as SourceMap, catalog!)
+      const map = await runEdge(MapsService.create(body))
       setSavedSlug(map.slug)
     } catch (e) {
       setError((e as Error).message)
@@ -199,32 +234,51 @@ export default function MapEditorPage() {
         </label>
         <label className="admin-field">
           Cols
-          <input type="number" min={1} max={40} value={cols}
+          <input type="number" min={1} max={40} value={cols} disabled={!!imported}
             onChange={(e) => resize(clampDim(e.target.valueAsNumber), rows)} />
         </label>
         <label className="admin-field">
           Rows
-          <input type="number" min={1} max={40} value={rows}
+          <input type="number" min={1} max={40} value={rows} disabled={!!imported}
             onChange={(e) => resize(cols, clampDim(e.target.valueAsNumber))} />
         </label>
       </div>
 
-      {!catalog && <p className="admin-hint">Loading terrain catalog…</p>}
-      {catalog && palette.length === 0 && (
+      {/* Tiled import (ADR-0007). Picking an export converts it to the baked ground
+          and switches the map to the `tiled` producer, locking the paint tools below.
+          Clearing it returns to painting. */}
+      <div className="admin-field-inline">
+        <label className="admin-field">
+          Import Tiled JSON
+          {/* .tmj is Tiled's own JSON map extension (same content as .json). */}
+          <input type="file" accept=".json,.tmj,application/json"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) onImport(f); e.target.value = '' }} />
+        </label>
+        {imported && (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            <span className="admin-hint">Terrain imported from Tiled — paint tools locked.</span>
+            <button onClick={() => setImported(null)}>Clear import</button>
+          </span>
+        )}
+      </div>
+
+      {!imported && !catalog && <p className="admin-hint">Loading terrain catalog…</p>}
+      {!imported && catalog && palette.length === 0 && (
         <p className="admin-msg admin-msg-error">No ground tiles mapped yet — tag some in the Ground Tiles tool first.</p>
       )}
 
-      <div className="admin-field-inline">
-        <button onClick={() => setTool('brush')} disabled={tool === 'brush'}>Brush</button>
-        <button onClick={() => setTool('rect')} disabled={tool === 'rect'}>Rectangle</button>
-      </div>
+      {!imported && (
+        <div className="admin-field-inline">
+          <button onClick={() => setTool('brush')} disabled={tool === 'brush'}>Brush</button>
+          <button onClick={() => setTool('rect')} disabled={tool === 'rect'}>Rectangle</button>
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-        {/* Terrain palette — a vertical column off to the side so it doesn't crowd the
-            paint grid + preview. Rendered high→low priority, top→bottom (like a layers
-            panel: the top terrain is drawn on top and owns the seam), so ▲ = move up =
-            raise priority reads intuitively. The reorder persists, flipping ownership in
-            the preview and at /maps/<slug> together. */}
+        {/* Terrain palette + paint grid — the `painted` producer's tools. A Tiled
+            import (ADR-0007) resolves terrain in Tiled, so these lock; only the
+            preview stays. */}
+        {!imported && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <p className="admin-hint">Terrain</p>
           {[...palette].reverse().map((t) => (
@@ -238,6 +292,8 @@ export default function MapEditorPage() {
             </span>
           ))}
         </div>
+        )}
+        {!imported && (
         <div>
           <p className="admin-hint">Paint</p>
           <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 22px)` }}
@@ -257,13 +313,14 @@ export default function MapEditorPage() {
             )}
           </div>
         </div>
+        )}
         <div>
           <p className="admin-hint">Preview (baked)</p>
           <MapPreview baked={previewMap} />
         </div>
       </div>
 
-      <button onClick={save} disabled={busy || !slug || !title || !catalog}>
+      <button onClick={save} disabled={busy || !slug || !title || (!imported && !catalog)}>
         {busy ? 'Saving…' : 'Save'}
       </button>
 

@@ -72,5 +72,10 @@ export const BakedMap = Schema.Struct({
   // (ADR-0004 — still one shape, no per-map branching). Absent on the seed's
   // flat maps, so optional.
   ground: Schema.optional(BakedGround),
+  // Which producer resolved the terrain — `painted` (autotile engine) or
+  // `tiled` (imported from Tiled, ADR-0007). The runtime ignores it (one render
+  // path); the editor reads it to lock the paint tools for a tiled map. Absent
+  // on seed/legacy maps, so optional.
+  producer: Schema.optional(Schema.String),
 })
 export type BakedMap = Schema.Schema.Type<typeof BakedMap>
