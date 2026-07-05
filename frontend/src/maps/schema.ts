@@ -31,6 +31,12 @@ export const BakedEntity = Schema.Struct({
   frame: Schema.Number,
   x: Schema.Number,
   y: Schema.Number,
+  // Optional per-entity collision footprint (ADR-0004 walk-mask): a row-major
+  // char grid anchored at (x,y), '#' = solid, anything else walkable. A prop has
+  // none; a house/blocker contributes its solid cells to walkability *on top of*
+  // the collision mask (neither overrides the other, #131). Absent on today's
+  // prop-only authored maps, so optional.
+  walk_mask: Schema.optional(Schema.Array(Schema.String)),
 })
 export type BakedEntity = Schema.Schema.Type<typeof BakedEntity>
 
@@ -72,6 +78,12 @@ export const BakedMap = Schema.Struct({
   // (ADR-0004 — still one shape, no per-map branching). Absent on the seed's
   // flat maps, so optional.
   ground: Schema.optional(BakedGround),
+  // The collision mask (#131, CONTEXT 2026-07-03): a per-cell "blocked" grid
+  // painted in the editor, row-major `collision[row][col]` sized cols×rows. It is
+  // not a Placed Entity — no art, no trigger — it only vetoes walkability. The
+  // runtime ANDs it into the walk rule; the editor reads it to re-paint. Absent
+  // on maps with nothing masked, so optional.
+  collision: Schema.optional(Schema.Array(Schema.Array(Schema.Boolean))),
   // Which producer resolved the terrain — `painted` (autotile engine) or
   // `tiled` (imported from Tiled, ADR-0007). The runtime ignores it (one render
   // path); the editor reads it to lock the paint tools for a tiled map. Absent

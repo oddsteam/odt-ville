@@ -53,17 +53,24 @@ export function tiledMapCreateBody(
   identity: { slug: string; title: string },
   tiledSource: unknown,
   ground: BakedGround,
+  collision?: ReadonlyArray<ReadonlyArray<boolean>>,
 ) {
   const { slug, title } = identity
   const { cols, rows } = ground
-  return {
-    slug,
-    title,
-    cols,
-    rows,
-    source: tiledSource,
-    baked: { slug, title, cols, rows, producer: 'tiled', ground },
-  }
+  // Collision is authored in-app even on a Tiled map (the importer never reads
+  // Tiled object layers, ADR-0007) — so a tiled map carries the painted mask on
+  // the baked artifact just like a painted one (#131).
+  const baked: {
+    slug: string
+    title: string
+    cols: number
+    rows: number
+    producer: string
+    ground: BakedGround
+    collision?: ReadonlyArray<ReadonlyArray<boolean>>
+  } = { slug, title, cols, rows, producer: 'tiled', ground }
+  if (collision) baked.collision = collision
+  return { slug, title, cols, rows, source: tiledSource, baked }
 }
 
 // POST /maps -> the created baked map. A rejected write (422 dup slug, etc.)

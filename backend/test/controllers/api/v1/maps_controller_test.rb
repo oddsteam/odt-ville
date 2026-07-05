@@ -226,6 +226,35 @@ module Api
         assert_not_includes json.keys, :producer
       end
 
+      test "a posted collision mask round-trips through strong params and the serializer" do
+        # The collision mask (#131) is authored data on the baked document — a
+        # per-cell blocked grid the runtime ANDs into walkability. It must survive
+        # strong params (nested boolean arrays) and be republished on the play
+        # endpoint so the avatar is blocked at its masked cells.
+        masked = create_params(slug: "grove", title: "The Grove", cols: 2, rows: 1).merge(
+          baked: {
+            "ground" => {
+              "cols" => 2, "rows" => 1,
+              "tilesets" => [{ "name" => "1_Terrains_and_Fences_32x32", "cell" => 32 }],
+              "cells" => [[[], []]]
+            },
+            "collision" => [[true, false]]
+          }
+        )
+        post "/api/v1/maps", params: masked, headers: auth(@user, roles: ["admin"]), as: :json
+        assert_response :created
+
+        get "/api/v1/maps/grove", headers: auth(@user)
+        assert_equal [[true, false]], json[:collision]
+      end
+
+      test "a map with nothing masked omits the collision key entirely" do
+        make_painted_map
+
+        get "/api/v1/maps/grove", headers: auth(@user)
+        assert_not_includes json.keys, :collision
+      end
+
       test "a malformed slug is rejected with 422" do
         assert_no_difference "Map.count" do
           post "/api/v1/maps", params: create_params(slug: "Not A Slug"), headers: auth(@user, roles: ["admin"]), as: :json
