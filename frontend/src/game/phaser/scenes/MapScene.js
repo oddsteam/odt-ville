@@ -1,7 +1,7 @@
 import Phaser from 'phaser'
 import { preloadBakedMap, renderBakedMap } from '../mapRenderer.ts'
 import { MOVE_MS } from '../../constants.js'
-import { spawnTile, inBoundsWalkable, feetWorldXY } from '../mapWalk.ts'
+import { spawnTile, mapWalkable, entityBlockedFor, feetWorldXY } from '../mapWalk.ts'
 import {
   CHAR_SHEET_KEY,
   preloadCharacter,
@@ -24,8 +24,9 @@ const STILL_URLS = { down: downStill, left: leftStill, right: rightStill, up: up
 // It renders "the current map" (read from the registry as a baked document)
 // with no knowledge of which map it is: load the tilesets it names, blit the
 // baked cells, and walk the shared character rig over it. Walkability is the
-// tracer rule — any cell inside the authored grid; terrain-aware collision,
-// zones, and presence arrive in later slices (#82, #85, #91).
+// composed rule (mapWalk.mapWalkable): in bounds ∧ not in the painted collision
+// mask (#131) ∧ not blocked by a placed entity's walk-mask; zones and presence
+// arrive in later slices (#85).
 export default class MapScene extends Phaser.Scene {
   constructor() {
     super('Map')
@@ -53,7 +54,10 @@ export default class MapScene extends Phaser.Scene {
     this.charDir = rig.charDir
 
     this.playerTile = spawnTile(map)
-    this.walkable = inBoundsWalkable(map)
+    // Walkability = in bounds ∧ not in the collision mask ∧ not blocked by a
+    // placed entity's walk-mask (#131). Legacy maps carry no `collision` and only
+    // props (no walk_mask), so this reduces to the in-bounds tracer rule for them.
+    this.walkable = mapWalkable(map, map.collision, entityBlockedFor(map.entities))
     const feet = feetWorldXY(this.playerTile, this.usingManifest)
     if (this.usingManifest) {
       const render = this._charManifest.render || { originX: 0.5, originY: 1, scale: 1 }

@@ -28,6 +28,11 @@ export interface SourceMap {
   cols: number
   rows: number
   terrain: ReadonlyArray<ReadonlyArray<string | null>>
+  // The painted collision mask (#131): a per-cell blocked grid, row-major
+  // `collision[row][col]` sized rows×cols. Independent of terrain — it only
+  // vetoes walkability — so it rides through unchanged by the bake. Absent when
+  // nothing is masked (or a legacy source), so optional.
+  collision?: ReadonlyArray<ReadonlyArray<boolean>>
 }
 
 // A terrain field over a source grid: the generic accessor the engine resolves
@@ -170,6 +175,7 @@ export interface BakedDocument {
   cols: number
   rows: number
   ground: BakedGround
+  collision?: ReadonlyArray<ReadonlyArray<boolean>>
 }
 
 export function bakeSourceMap(
@@ -177,8 +183,15 @@ export function bakeSourceMap(
   catalog: TileCatalog,
 ): { source: SourceMap; baked: BakedDocument } {
   const ground = bakeGround(source, catalog)
-  return {
-    source,
-    baked: { slug: source.slug, title: source.title, cols: source.cols, rows: source.rows, ground },
+  const baked: BakedDocument = {
+    slug: source.slug,
+    title: source.title,
+    cols: source.cols,
+    rows: source.rows,
+    ground,
   }
+  // The collision mask is authored data, not derived by the bake — carry it onto
+  // the baked artifact the runtime reads, when the author painted any (#131).
+  if (source.collision) baked.collision = source.collision
+  return { source, baked }
 }

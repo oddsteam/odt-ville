@@ -7,7 +7,15 @@ module Api
     class MapsController < BaseController
       # Authoring writes require the `admin` realm role (#100), as the other
       # mapper endpoints do; the play `show` stays open to any authenticated user.
-      before_action -> { require_role!("admin") }, only: :create
+      before_action -> { require_role!("admin") }, only: %i[index create update]
+
+      # GET /api/v1/maps — identity-only list for the admin map picker (the author
+      # picks a saved map to paint collision on). Deliberately omits the heavy
+      # baked/source jsonb; the editor loads those per-map via `show`.
+      def index
+        maps = Map.order(:title).pluck(:slug, :title, :cols, :rows)
+        render json: maps.map { |slug, title, cols, rows| { slug:, title:, cols:, rows: } }
+      end
 
       # GET /api/v1/maps/:slug — the baked map for play. Unknown slug → 404,
       # surfaced by ApplicationController#render_not_found.
@@ -26,12 +34,30 @@ module Api
         render json: MapSerializer.call(map), status: :created
       end
 
+      # PATCH /api/v1/maps/:slug — re-save an authored map's collision mask from
+      # the standalone collision editor (decoupled from create). The editor sends
+      # the mask under `baked` (the same opaque jsonb create stores); we merge it
+      # over the persisted baked so the ground/producer are untouched. A blank
+      # mask drops the key so an unmasked map's document stays clean (#131).
+      def update
+        map = Map.find_by!(slug: params[:slug])
+        baked = (map.baked.is_a?(Hash) ? map.baked : {}).merge(update_params["baked"] || {})
+        baked.delete("collision") if baked["collision"].blank?
+        map.update!(baked: baked)
+        render json: MapSerializer.call(map)
+      end
+
       private
 
       # Whitelist only the map's own columns; `source`/`baked` are opaque author
       # documents stored as jsonb, so permit their nested structure wholesale.
       def map_params
         params.permit(:slug, :title, :cols, :rows, source: {}, baked: {})
+      end
+
+      # The update path carries only the baked document (the re-painted mask).
+      def update_params
+        params.permit(baked: {}).to_h
       end
     end
   end

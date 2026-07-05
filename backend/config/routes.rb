@@ -60,9 +60,13 @@ Rails.application.routes.draw do
       put "terrains/order", to: "terrains#reorder"
 
       # Maps — the authored-map contract (ADR-0004). `:slug` loads a baked map
-      # for play; `create` is the editor's write half (#105), admin-gated.
+      # for play; `index`/`create`/`update` are the editor's write half (#105),
+      # admin-gated. `index` powers the map picker that decouples collision
+      # painting from create; `update` saves a re-painted collision mask.
+      get "maps", to: "maps#index"
       get "maps/:slug", to: "maps#show"
       post "maps", to: "maps#create"
+      patch "maps/:slug", to: "maps#update"
     end
   end
 end

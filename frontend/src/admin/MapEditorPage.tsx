@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { MapsService, mapCreateBody, tiledMapCreateBody } from '../maps/service.ts'
 import { bakeSourceMap } from '../maps/baker.ts'
 import type { SourceMap } from '../maps/baker.ts'
@@ -46,6 +47,9 @@ export default function MapEditorPage() {
   const [terrain, setTerrain] = useState<Terrain>(() => makeTerrain(8, 6, null))
   const [selected, setSelected] = useState('')
   const [tool, setTool] = useState<'brush' | 'rect'>('brush')
+
+  // Collision is no longer painted here — it's a separate step on a saved map
+  // (/admin/maps/:slug/collision), so create/import stays focused on terrain.
 
   // The real Tile Catalog is derived from the ground tiles mapped in the Ground
   // Tiles tool + the persisted terrain priority (#120). Baking against it makes
@@ -207,6 +211,8 @@ export default function MapEditorPage() {
     setError(null)
     setSavedSlug(null)
     try {
+      // Collision is painted after saving, on the map picker → collision editor
+      // (#131 follow-up); create/import persists terrain only.
       const body = imported
         ? tiledMapCreateBody({ slug, title }, imported.source, imported.ground)
         : mapCreateBody({ slug, title, cols, rows, terrain } as SourceMap, catalog!)
@@ -327,7 +333,9 @@ export default function MapEditorPage() {
       {error && <p className="admin-msg admin-msg-error">{error}</p>}
       {savedSlug && (
         <p className="admin-msg">
-          Saved. <a href={`/maps/${savedSlug}`}>Open /maps/{savedSlug}</a>
+          Saved. <Link to={`/admin/maps/${savedSlug}/collision`}>Paint collision</Link>
+          {' · '}
+          <a href={`/maps/${savedSlug}`}>Open /maps/{savedSlug}</a>
         </p>
       )}
     </div>
