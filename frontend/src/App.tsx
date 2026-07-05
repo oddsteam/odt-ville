@@ -14,7 +14,11 @@ import MapPage from './maps/MapPage.tsx'
 
 // The map editor bakes (and later renders a Phaser preview, #107), so it is
 // code-split into its own chunk — it never ships in the player bundle (#106).
+// The map list + standalone collision editor (which also boots a Phaser
+// preview) ride the same admin-only split.
+const MapsListPage = lazy(() => import('./admin/MapsListPage.tsx'))
 const MapEditorPage = lazy(() => import('./admin/MapEditorPage.tsx'))
+const MapCollisionPage = lazy(() => import('./admin/MapCollisionPage.tsx'))
 
 // Route table. RootLayout is the persistent shell (brand header + Village/Admin
 // nav); the village game lives at "/" and the admin console — the four former
@@ -37,10 +41,26 @@ export default function App() {
           <Route path="ground" element={<GroundTileMapper />} />
           <Route path="monsters" element={<MonstersAdminPage />} />
           <Route
+            path="maps"
+            element={
+              <Suspense fallback={<p className="admin-hint">Loading maps…</p>}>
+                <MapsListPage />
+              </Suspense>
+            }
+          />
+          <Route
             path="maps/new"
             element={
               <Suspense fallback={<p className="admin-hint">Loading editor…</p>}>
                 <MapEditorPage />
+              </Suspense>
+            }
+          />
+          <Route
+            path="maps/:slug/collision"
+            element={
+              <Suspense fallback={<p className="admin-hint">Loading editor…</p>}>
+                <MapCollisionPage />
               </Suspense>
             }
           />

@@ -59,6 +59,39 @@ module Api
         assert json[:error].present?
       end
 
+      # Index (map picker, decoupling collision from create): the admin console
+      # lists saved maps by identity only — never the heavy baked/source jsonb —
+      # so the author can pick one to paint collision on.
+      test "index lists saved maps for an admin" do
+        make_map(slug: "atrium", title: "The Atrium")
+        make_painted_map(slug: "grove")
+
+        get "/api/v1/maps", headers: auth(@user, roles: ["admin"])
+
+        assert_response :success
+        atrium = json.find { |m| m[:slug] == "atrium" }
+        assert_equal "The Atrium", atrium[:title]
+        assert_equal 1, atrium[:cols]
+        assert_equal 1, atrium[:rows]
+        assert_includes json.map { |m| m[:slug] }, "grove"
+      end
+
+      test "index omits the heavy baked and source documents" do
+        make_map
+
+        get "/api/v1/maps", headers: auth(@user, roles: ["admin"])
+
+        assert_response :success
+        assert_not_includes json.first.keys, :baked
+        assert_not_includes json.first.keys, :source
+      end
+
+      test "a non-admin is forbidden from listing maps" do
+        make_map
+        get "/api/v1/maps", headers: auth(@user)
+        assert_response :forbidden
+      end
+
       # A painted authored map (#106/#107) bakes to a `ground` — per-cell layer
       # stacks — instead of the seed's flat `tiles`. The serializer must publish
       # that ground and lift its tilesets to the top-level list the runtime
@@ -253,6 +286,65 @@ module Api
 
         get "/api/v1/maps/grove", headers: auth(@user)
         assert_not_includes json.keys, :collision
+      end
+
+      # Update (decoupling collision from create): re-paint a saved map's collision
+      # mask without recreating it. The editor loads a map by slug, paints, then
+      # PATCHes the mask under `baked` — the same opaque jsonb create stores.
+      test "an admin updates a saved map's collision mask" do
+        make_painted_map(slug: "grove")
+
+        patch "/api/v1/maps/grove",
+          params: { baked: { collision: [[true, false]] } },
+          headers: auth(@user, roles: ["admin"]), as: :json
+
+        assert_response :success
+        assert_equal [[true, false]], json[:collision]
+
+        get "/api/v1/maps/grove", headers: auth(@user)
+        assert_equal [[true, false]], json[:collision]
+      end
+
+      test "updating collision preserves the existing baked ground" do
+        make_painted_map(slug: "grove")
+
+        patch "/api/v1/maps/grove",
+          params: { baked: { collision: [[true]] } },
+          headers: auth(@user, roles: ["admin"]), as: :json
+
+        assert_response :success
+        # Only collision changed — the ground the map was created with survives.
+        assert_equal 1, json[:ground][:cols]
+      end
+
+      test "a cleared collision mask drops the key entirely" do
+        map = make_painted_map(slug: "grove")
+        map.update!(baked: map.baked.merge("collision" => [[true]]))
+
+        patch "/api/v1/maps/grove",
+          params: { baked: { collision: nil } },
+          headers: auth(@user, roles: ["admin"]), as: :json
+
+        assert_response :success
+        assert_not_includes json.keys, :collision
+      end
+
+      test "a non-admin is forbidden from updating a map" do
+        make_painted_map(slug: "grove")
+
+        patch "/api/v1/maps/grove",
+          params: { baked: { collision: [[true]] } },
+          headers: auth(@user), as: :json
+
+        assert_response :forbidden
+      end
+
+      test "updating an unknown slug returns 404" do
+        patch "/api/v1/maps/does-not-exist",
+          params: { baked: { collision: [[true]] } },
+          headers: auth(@user, roles: ["admin"]), as: :json
+
+        assert_response :not_found
       end
 
       test "a malformed slug is rejected with 422" do

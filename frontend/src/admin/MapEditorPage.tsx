@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { MapsService, mapCreateBody, tiledMapCreateBody } from '../maps/service.ts'
 import { bakeSourceMap } from '../maps/baker.ts'
 import type { SourceMap } from '../maps/baker.ts'
@@ -11,7 +12,6 @@ import { TerrainsService } from '../terrains/service.ts'
 import { priorityOrder } from '../terrains/schema.ts'
 import { catalogFromGroundTiles, colsForGroundTiles } from './mapCatalog.ts'
 import { makeTerrain, paintCell, paintRect, resizeTerrain, type Terrain } from './mapPaint.ts'
-import { makeMask, setMaskCell, resizeMask, isMaskEmpty, type Mask } from './maskPaint.ts'
 import MapPreview from './MapPreview.tsx'
 import { runEdge } from '../lib/runEdge.ts'
 import './admin.css'
@@ -48,15 +48,8 @@ export default function MapEditorPage() {
   const [selected, setSelected] = useState('')
   const [tool, setTool] = useState<'brush' | 'rect'>('brush')
 
-  // The collision mask (#131): a per-cell blocked grid painted on its own grid,
-  // independent of terrain — so it works for both painted and Tiled maps. `paint`
-  // blocks a cell, `erase` clears it; the overlay marks masked cells and can be
-  // toggled off. It rides into the saved document (source + baked) so the runtime
-  // vetoes walkability on masked cells.
-  const [collision, setCollision] = useState<Mask>(() => makeMask(8, 6))
-  const [collideTool, setCollideTool] = useState<'paint' | 'erase'>('paint')
-  const [showMask, setShowMask] = useState(true)
-  const collidePainting = useRef(false)
+  // Collision is no longer painted here — it's a separate step on a saved map
+  // (/admin/maps/:slug/collision), so create/import stays focused on terrain.
 
   // The real Tile Catalog is derived from the ground tiles mapped in the Ground
   // Tiles tool + the persisted terrain priority (#120). Baking against it makes
@@ -142,7 +135,6 @@ export default function MapEditorPage() {
   useEffect(() => {
     const end = () => {
       painting.current = false
-      collidePainting.current = false
       rectStart.current = null
     }
     window.addEventListener('mouseup', end)
@@ -153,20 +145,6 @@ export default function MapEditorPage() {
     setCols(c)
     setRows(r)
     setTerrain((t) => resizeTerrain(t, c, r, defaultTerrain))
-    setCollision((m) => resizeMask(m, c, r))
-  }
-
-  // Collision brush: paint or erase blocked cells with click + drag. Separate
-  // from the terrain brush so it stays available even when the paint tools lock
-  // (a Tiled map still authors collision in-app, ADR-0007).
-  const paintCollide = (x: number, y: number) =>
-    setCollision((m) => setMaskCell(m, x, y, collideTool === 'paint'))
-  const collideDown = (x: number, y: number) => {
-    collidePainting.current = true
-    paintCollide(x, y)
-  }
-  const collideEnter = (x: number, y: number) => {
-    if (collidePainting.current) paintCollide(x, y)
   }
 
   const down = (x: number, y: number) => {
@@ -204,9 +182,6 @@ export default function MapEditorPage() {
       setImported({ source: json, ground })
       setCols(ground.cols)
       setRows(ground.rows)
-      // The collision mask is authored in-app on top of a Tiled import, so size
-      // it to the imported grid (keeping any cells already painted that fit).
-      setCollision((m) => resizeMask(m, ground.cols, ground.rows))
     } catch (e) {
       setImported(null)
       setError(e instanceof TiledImportError ? e.reasons.join('\n') : (e as Error).message)
@@ -236,12 +211,11 @@ export default function MapEditorPage() {
     setError(null)
     setSavedSlug(null)
     try {
-      // Only persist the mask when the author painted something — an all-clear
-      // mask is omitted so an unmasked map's document stays clean (#131).
-      const mask = isMaskEmpty(collision) ? undefined : collision
+      // Collision is painted after saving, on the map picker → collision editor
+      // (#131 follow-up); create/import persists terrain only.
       const body = imported
-        ? tiledMapCreateBody({ slug, title }, imported.source, imported.ground, mask)
-        : mapCreateBody({ slug, title, cols, rows, terrain, collision: mask } as SourceMap, catalog!)
+        ? tiledMapCreateBody({ slug, title }, imported.source, imported.ground)
+        : mapCreateBody({ slug, title, cols, rows, terrain } as SourceMap, catalog!)
       const map = await runEdge(MapsService.create(body))
       setSavedSlug(map.slug)
     } catch (e) {
@@ -346,47 +320,6 @@ export default function MapEditorPage() {
           </div>
         </div>
         )}
-        {/* Collision mask (#131). Its own grid, independent of terrain, so it works
-            for both painted and Tiled maps: paint blocks a cell, erase clears it,
-            and the overlay (red) marks masked cells and can be toggled off. Cells
-            tint to the painted terrain for context; an imported map shows neutral. */}
-        <div>
-          <p className="admin-hint">Collision mask</p>
-          <div className="admin-field-inline" style={{ marginBottom: 4 }}>
-            <button onClick={() => setCollideTool('paint')} disabled={collideTool === 'paint'}>Paint</button>
-            <button onClick={() => setCollideTool('erase')} disabled={collideTool === 'erase'}>Erase</button>
-            <button onClick={() => setShowMask((s) => !s)}>
-              {showMask ? 'Hide overlay' : 'Show overlay'}
-            </button>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 22px)` }}
-            onMouseLeave={() => (collidePainting.current = false)}>
-            {Array.from({ length: rows }, (_, y) =>
-              Array.from({ length: cols }, (_, x) => {
-                const blocked = !!collision[y]?.[x]
-                const base = imported ? '#3a3a3a' : swatch(terrain[y]?.[x] ?? null)
-                return (
-                  <div
-                    key={`c${x},${y}`}
-                    role="button"
-                    aria-label={`collision ${x},${y}`}
-                    aria-pressed={blocked}
-                    onMouseDown={() => collideDown(x, y)}
-                    onMouseEnter={() => collideEnter(x, y)}
-                    onMouseUp={() => (collidePainting.current = false)}
-                    style={{
-                      width: 22,
-                      height: 22,
-                      background: showMask && blocked ? '#dd3333' : base,
-                      border: '1px solid #0004',
-                      boxSizing: 'border-box',
-                    }}
-                  />
-                )
-              }),
-            )}
-          </div>
-        </div>
         <div>
           <p className="admin-hint">Preview (baked)</p>
           <MapPreview baked={previewMap} />
@@ -400,7 +333,9 @@ export default function MapEditorPage() {
       {error && <p className="admin-msg admin-msg-error">{error}</p>}
       {savedSlug && (
         <p className="admin-msg">
-          Saved. <a href={`/maps/${savedSlug}`}>Open /maps/{savedSlug}</a>
+          Saved. <Link to={`/admin/maps/${savedSlug}/collision`}>Paint collision</Link>
+          {' · '}
+          <a href={`/maps/${savedSlug}`}>Open /maps/{savedSlug}</a>
         </p>
       )}
     </div>

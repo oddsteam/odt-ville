@@ -13,7 +13,7 @@ const TOOLS = [
   { to: 'objects', label: 'Map Objects' },
   { to: 'ground', label: 'Ground Tiles' },
   { to: 'monsters', label: 'Monsters' },
-  { to: 'maps/new', label: 'Maps' },
+  { to: 'maps', label: 'Maps' },
 ]
 
 export default function AdminLayout() {
