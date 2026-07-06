@@ -29,10 +29,8 @@ export const POSTURE_SLOTS = [
 
 export const POSTURE_KEYS = POSTURE_SLOTS.map((s) => s.key)
 
-// localStorage key holding the single "active" manifest the preview reads.
-export const ACTIVE_KEY = 'odt.character.activeManifest'
-
-// Path the preview falls back to when localStorage is empty (committed default).
+// Path the preview falls back to when no remote manifest is active (committed
+// default).
 export const DEFAULT_MANIFEST_URL = '/maps/characters/scout.json'
 
 export function emptyPostures() {
@@ -69,8 +67,8 @@ export function normalizeManifest(m) {
 }
 
 // The image src the preview/mapper should load: an uploaded sheet is stored
-// inline as a data URL (so it survives across pages via localStorage); a
-// bundled sheet is referenced by repo path.
+// inline as a data URL (embedded in the saved manifest); a bundled sheet is
+// referenced by repo path.
 export function resolveSheetSrc(m) {
   return m?.sheet?.dataUrl || m?.sheet?.path || ''
 }
@@ -99,17 +97,6 @@ function cap(s) {
 
 // --- persistence -------------------------------------------------------
 
-export function saveActiveManifest(m) {
-  try {
-    localStorage.setItem(ACTIVE_KEY, JSON.stringify(m))
-    return true
-  } catch (err) {
-    // Most likely the quota was exceeded by an embedded data-URL sheet.
-    console.warn('saveActiveManifest failed:', err)
-    return false
-  }
-}
-
 // Fetch the active manifest from the backend via the typed Effect service.
 // Returns a normalized manifest, or null when nothing is saved (204) or the
 // backend is unreachable (any data-layer error -> swallowed to null, so the
@@ -122,18 +109,13 @@ async function fetchRemoteActive() {
   return data ? normalizeManifest(data) : null
 }
 
-// Resolve the active manifest, preferring shared backend state, then this
-// browser's localStorage, then the committed default. Always returns a
-// normalized manifest (never throws).
+// Resolve the active manifest deterministically from shared server state:
+// remote active, then the committed default. No per-browser override, so every
+// client renders the same character (#153). Always returns a normalized
+// manifest (never throws).
 export async function loadActiveManifest() {
   const remote = await fetchRemoteActive()
   if (remote) return remote
-  try {
-    const raw = localStorage.getItem(ACTIVE_KEY)
-    if (raw) return normalizeManifest(JSON.parse(raw))
-  } catch (err) {
-    console.warn('reading active manifest failed, using default:', err)
-  }
   try {
     const res = await fetch(DEFAULT_MANIFEST_URL)
     if (res.ok) return normalizeManifest(await res.json())

@@ -6,8 +6,8 @@ import * as Layer from 'effect/Layer'
 
 import { Http, RequestError, type HttpError } from '../src/lib/http.ts'
 
-// The character branch keeps loadActiveManifest's own fallback chain (remote ->
-// localStorage -> committed default), which bypasses the injected Http layer.
+// The character branch keeps loadActiveManifest's own resolution chain (remote
+// -> committed default), which bypasses the injected Http layer.
 // Stub it so these tests exercise only the Effect.all orchestration.
 vi.mock('../src/character/manifest.js', () => ({
   loadActiveManifest: vi.fn(async () => ({ name: 'scout' })),

@@ -5,7 +5,7 @@ import manifest from '../public/maps/characters/scout.json'
 import { POSTURE_KEYS } from '../src/character/manifest.js'
 
 // Regression guard for the committed default character (#151). This file is the
-// fallback the game loads for a fresh user with no server-side/localStorage
+// fallback the game loads for a fresh user with no server-side active
 // manifest, so a bad frame here ships a broken avatar to every new player.
 //
 // The original bug: idleUp/walkUp pointed at the sheet's decorative "sleep"
