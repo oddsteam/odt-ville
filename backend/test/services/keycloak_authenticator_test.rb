@@ -49,10 +49,18 @@ class KeycloakAuthenticatorTest < ActiveSupport::TestCase
     end
   end
 
-  test "rejects a token for the wrong audience" do
+  test "rejects a token for the wrong audience and party" do
     assert_raises(KeycloakAuthenticator::Error) do
-      @auth.subject(token({ aud: "some-other-client" }))
+      @auth.subject(token({ aud: "some-other-client", azp: "some-other-client" }))
     end
+  end
+
+  test "accepts a token whose aud omits the client when azp is the client" do
+    # The org Keycloak ships public-SPA tokens as aud: [other resource servers],
+    # azp: odt-ville-web — accept on azp so login works before/without the
+    # Audience mapper. Mirrors a real sso.odd.works token.
+    t = token({ aud: %w[butler account], azp: AUD })
+    assert_equal "subject-123", @auth.subject(t)
   end
 
   test "rejects a blank or nil token" do
