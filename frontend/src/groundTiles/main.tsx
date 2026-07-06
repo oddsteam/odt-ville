@@ -1,6 +1,8 @@
-import { createRoot } from 'react-dom/client'
-import GroundTileMapper from './GroundTileMapper.tsx'
+import { redirectToAdminMapper } from './adminRedirect.ts'
 
-// Standalone entry for the ground-tile mapper (see ground-mapper.html). Like
-// the sprite- and tile-object mappers, it's a self-contained authoring tool.
-createRoot(document.getElementById('root')!).render(<GroundTileMapper />)
+// Retired standalone entry (#162). Ground-tile authoring used to be a
+// self-contained page here with no auth wiring — anyone could open it. It now
+// lives behind the admin-gated /admin/ground route; bounce direct hits there
+// so the same `admin` realm-role guard (RequireAdmin, #100) applies and no
+// ungated authoring remains (follow-up to #154).
+redirectToAdminMapper(window.location)
