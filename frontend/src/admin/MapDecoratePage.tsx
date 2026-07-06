@@ -5,7 +5,7 @@ import type { BakedMap } from '../maps/schema.ts'
 import { TileObjectsService } from '../tileObjects/service.ts'
 import type { TileObject } from '../tileObjects/schema.ts'
 import { makeMask, setMaskCell, resizeMask, isMaskEmpty, type Mask } from './maskPaint.ts'
-import { placeProp, erasePropAt, coveredCells, propEntities, propsFromBaked, type PlacedProp, type SizeOf } from '../maps/props.ts'
+import { placeProp, erasePropAt, propEntities, propsFromBaked, type PlacedProp, type SizeOf } from '../maps/props.ts'
 import MapPreview from './MapPreview.tsx'
 import { runEdge } from '../lib/runEdge.ts'
 import './admin.css'
@@ -44,8 +44,6 @@ export default function MapDecoratePage() {
     const o = byId.get(id)
     return { w: o?.footprint_w ?? 1, h: o?.footprint_h ?? 1 }
   }
-  const propAt = useMemo(() => coveredCells(props, sizeOf), [props, byId]) // eslint-disable-line react-hooks/exhaustive-deps
-
   // Entities this editor doesn't manage (legacy tileset/frame props, later
   // kinds) — kept on the preview and on save so decorating never wipes them.
   const otherEntities = useMemo(
@@ -170,48 +168,45 @@ export default function MapDecoratePage() {
           </div>
         )}
 
-        <div>
-          <p className="admin-hint">{mode === 'props' ? 'Place props' : 'Collision mask'}</p>
-          <div
-            style={{ display: 'grid', gridTemplateColumns: `repeat(${baked.cols}, 22px)` }}
-            onMouseLeave={() => (painting.current = false)}
-          >
-            {Array.from({ length: baked.rows }, (_, y) =>
-              Array.from({ length: baked.cols }, (_, x) => {
-                const blocked = !!collision[y]?.[x]
-                return (
-                  <div
-                    key={`d${x},${y}`}
-                    role="button"
-                    aria-label={`cell ${x},${y}`}
-                    aria-pressed={mode === 'collision' ? blocked : propAt.has(`${x},${y}`)}
-                    onMouseDown={() => down(x, y)}
-                    onMouseEnter={() => enter(x, y)}
-                    onMouseUp={() => (painting.current = false)}
-                    style={{
-                      width: 22,
-                      height: 22,
-                      background: showMask && blocked ? '#dd3333' : '#3a3a3a',
-                      border: '1px solid #0004',
-                      boxSizing: 'border-box',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    {/* A dot marks a cell carrying a prop; the preview shows the art. */}
-                    {propAt.has(`${x},${y}`) && (
-                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#fff', boxShadow: '0 0 0 1px #0008', pointerEvents: 'none' }} />
-                    )}
-                  </div>
-                )
-              }),
-            )}
+        {/* Collision keeps the abstract cell grid (paint/erase blocked cells,
+            #131). Props mode drops it entirely (#143): the preview *is* the
+            placement surface — clicking it stamps/erases at the cursor tile. */}
+        {mode === 'collision' && (
+          <div>
+            <p className="admin-hint">Collision mask</p>
+            <div
+              style={{ display: 'grid', gridTemplateColumns: `repeat(${baked.cols}, 22px)` }}
+              onMouseLeave={() => (painting.current = false)}
+            >
+              {Array.from({ length: baked.rows }, (_, y) =>
+                Array.from({ length: baked.cols }, (_, x) => {
+                  const blocked = !!collision[y]?.[x]
+                  return (
+                    <div
+                      key={`d${x},${y}`}
+                      role="button"
+                      aria-label={`cell ${x},${y}`}
+                      aria-pressed={blocked}
+                      onMouseDown={() => down(x, y)}
+                      onMouseEnter={() => enter(x, y)}
+                      onMouseUp={() => (painting.current = false)}
+                      style={{
+                        width: 22,
+                        height: 22,
+                        background: showMask && blocked ? '#dd3333' : '#3a3a3a',
+                        border: '1px solid #0004',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                  )
+                }),
+              )}
+            </div>
           </div>
-        </div>
+        )}
         <div>
-          <p className="admin-hint">Preview (baked)</p>
-          <MapPreview baked={previewMap} objects={palette} />
+          <p className="admin-hint">{mode === 'props' ? 'Preview — click to place' : 'Preview (baked)'}</p>
+          <MapPreview baked={previewMap} objects={palette} onTileClick={mode === 'props' ? down : undefined} />
         </div>
       </div>
 
