@@ -71,6 +71,8 @@ class KeycloakAuthenticator
 
   # Returns the verified claims hash, or raises Error. Pinning `algorithms` to
   # RS256 is deliberate — it blocks "alg":"none" and HS256 confusion attacks.
+  # Audience is checked by us (see verify_audience!), not the jwt gem, so we can
+  # accept `azp` as well as `aud`.
   def verify(token)
     raise Error, "missing bearer token" if token.to_s.strip.empty?
 
@@ -78,18 +80,32 @@ class KeycloakAuthenticator
       algorithms: [ "RS256" ],
       jwks: ->(opts) { jwks(force: opts[:invalidate]) },
       iss: @issuer, verify_iss: true,
-      aud: @audience, verify_aud: true,
       verify_expiration: true)
+    verify_audience!(payload)
     payload
   rescue JWT::DecodeError => e
     # JWT::DecodeError is the base of the whole verify/decode/JWKS error family
     # in ruby-jwt 2.x (there is no `JWT::Error` constant). Catching it turns any
     # bad token — malformed, wrong signature, unknown kid, expired, wrong
-    # iss/aud — into our Error so callers reject with 401 instead of 500.
+    # iss — into our Error so callers reject with 401 instead of 500.
     raise Error, e.message
   end
 
   private
+
+  # This token is for us if either `aud` includes our client (the Audience mapper
+  # the org Keycloak should stamp) OR `azp` is our client. Keycloak sets `azp` to
+  # the client the token was issued for, and public-SPA tokens routinely ship an
+  # `aud` that omits the client (it lists other resource servers instead), so
+  # `azp` is the standard, safe fallback — a token minted for a different client
+  # carries a different `azp` and is still rejected.
+  def verify_audience!(payload)
+    aud = Array(payload["aud"])
+    return if aud.include?(@audience) || payload["azp"] == @audience
+
+    raise Error, "token audience #{aud.inspect} / azp #{payload["azp"].inspect} " \
+      "is not #{@audience.inspect}"
+  end
 
   # JWKS as a `{ keys: [...] }` hash (symbol keys, as the jwt gem expects),
   # cached for `cache_ttl` seconds. `force` bypasses the cache so the jwt gem
