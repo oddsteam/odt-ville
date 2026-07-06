@@ -3,6 +3,8 @@ import { useParams } from 'react-router-dom'
 import Phaser from 'phaser'
 import MapScene from '../game/phaser/scenes/MapScene.js'
 import { MapsService } from './service.ts'
+import { TileObjectsService } from '../tileObjects/service.ts'
+import { objectIdsFrom } from './props.ts'
 import { runEdge } from '../lib/runEdge.ts'
 import { subscribeAuthToken } from '../lib/authToken.ts'
 import { loadActiveManifest } from '../character/manifest.js'
@@ -25,6 +27,9 @@ export default function MapPage() {
   // already in hand when Phaser boots (loadActiveManifest owns its own
   // fallback chain and never throws — null means the bundled fallback frames).
   const manifestRef = useRef<unknown>(null)
+  // The tile objects the map's entities reference (ADR-0008), batch-fetched
+  // (#138) after the map so the shared loader has their images at boot.
+  const objectsRef = useRef<unknown>([])
 
   useEffect(() => {
     if (!slug) return
@@ -33,9 +38,11 @@ export default function MapPage() {
       runEdge(MapsService.get(slug)),
       loadActiveManifest().catch(() => null),
     ])
-      .then(([m, manifest]) => {
+      .then(async ([m, manifest]) => {
+        const objects = await runEdge(TileObjectsService.getMany(objectIdsFrom(m.entities)))
         if (!active) return
         manifestRef.current = manifest
+        objectsRef.current = objects
         setMap(m)
       })
       .catch((e) => active && setError(e instanceof Error ? e.message : String(e)))
@@ -69,6 +76,7 @@ export default function MapPage() {
       scene: [MapScene],
     })
     game.registry.set('bakedMap', map)
+    game.registry.set('bakedObjects', objectsRef.current)
     game.registry.set('characterManifest', manifestRef.current)
     return () => {
       game.destroy(true)

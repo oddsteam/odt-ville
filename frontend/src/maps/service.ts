@@ -9,9 +9,11 @@ import * as Schema from 'effect/Schema'
 import { DecodeError, Http } from '../lib/http.ts'
 import type { HttpError } from '../lib/http.ts'
 import { BakedMap } from './schema.ts'
-import type { BakedGround } from './schema.ts'
+import type { BakedEntity, BakedGround } from './schema.ts'
 import { bakeSourceMap } from './baker.ts'
 import type { SourceMap } from './baker.ts'
+import { propEntities } from './props.ts'
+import type { PlacedProp } from './props.ts'
 import type { TileCatalog } from '../game/phaser/tileCatalog.ts'
 
 const decodeOne = Schema.decodeUnknown(BakedMap)
@@ -102,17 +104,37 @@ export const list = (): Effect.Effect<readonly MapSummary[], HttpError, Http> =>
     return yield* decode('/maps', decodeList)(raw)
   })
 
-// PATCH /maps/:slug -> re-save just the collision mask (decoupled from create,
-// #131 follow-up). A null mask clears it. Returns the re-serialized baked map.
-export const updateCollision = (
+// The baked-document patch the decorate editor sends for a saved map (#139,
+// ADR-0008): its collision mask AND placed props (object references), as full
+// desired state — plus `otherEntities`, the loaded entities the editor doesn't
+// manage (legacy tileset/frame props), preserved so a save never wipes them.
+// Blank layers (null mask, no entities) are sent null/empty so the backend
+// drops the keys. Pure, so it's unit-testable apart from the request.
+export function decorationsBaked(
+  collision: ReadonlyArray<ReadonlyArray<boolean>> | null,
+  props: readonly PlacedProp[],
+  otherEntities: readonly BakedEntity[],
+) {
+  return {
+    collision,
+    entities: [...otherEntities, ...propEntities(props)],
+  }
+}
+
+// PATCH /maps/:slug -> re-save a saved map's authored decorations — collision
+// mask + placed props — in one write (the decorate editor, #139, extends the
+// #131 collision-only patch). Returns the re-serialized baked map.
+export const saveDecorations = (
   slug: string,
   collision: ReadonlyArray<ReadonlyArray<boolean>> | null,
+  props: readonly PlacedProp[],
+  otherEntities: readonly BakedEntity[],
 ): Effect.Effect<BakedMap, HttpError, Http> =>
   Effect.gen(function* () {
     const http = yield* Http
     const path = `/maps/${encodeURIComponent(slug)}`
-    const raw = yield* http.patch(path, { baked: { collision } })
+    const raw = yield* http.patch(path, { baked: decorationsBaked(collision, props, otherEntities) })
     return yield* decode(path, decodeOne)(raw)
   })
 
-export const MapsService = { get, create, list, updateCollision } as const
+export const MapsService = { get, create, list, saveDecorations } as const

@@ -339,6 +339,39 @@ module Api
         assert_response :forbidden
       end
 
+      # Props (#139, ADR-0008): the decorate editor PATCHes placed props as
+      # *object references* — `{kind:"prop", object_id, x, y}`, art fetched by
+      # id at play — under the same opaque baked jsonb the collision patch uses.
+      test "an admin saves placed props onto a map as object references" do
+        make_painted_map(slug: "grove")
+
+        patch "/api/v1/maps/grove",
+          params: { baked: { entities: [{ kind: "prop", object_id: 7, x: 0, y: 0 }] } },
+          headers: auth(@user, roles: ["admin"]), as: :json
+
+        assert_response :success
+        assert_equal 1, json[:entities].length
+        assert_equal 7, json[:entities].first[:object_id]
+
+        get "/api/v1/maps/grove", headers: auth(@user)
+        assert_equal 7, json[:entities].first[:object_id]
+      end
+
+      test "clearing all props drops the entities key entirely" do
+        map = make_painted_map(slug: "grove")
+        map.update!(baked: map.baked.merge(
+          "entities" => [{ "kind" => "prop", "object_id" => 7, "x" => 0, "y" => 0 }]
+        ))
+
+        patch "/api/v1/maps/grove",
+          params: { baked: { entities: [] } },
+          headers: auth(@user, roles: ["admin"]), as: :json
+
+        assert_response :success
+        assert_equal [], json[:entities]
+        assert_not_includes Map.find_by!(slug: "grove").baked.keys, "entities"
+      end
+
       test "updating an unknown slug returns 404" do
         patch "/api/v1/maps/does-not-exist",
           params: { baked: { collision: [[true]] } },
