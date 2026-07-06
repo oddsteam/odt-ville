@@ -6,7 +6,14 @@ module Api
         only: %i[create activate deactivate destroy]
 
       # GET /api/v1/tile_objects — roster (no image blobs). Optional ?kind=.
+      # With ?ids=1,2,3 (#138, ADR-0008): the FULL objects (incl. image) for
+      # those ids, unknown ids skipped — the one batched request the shared
+      # entity loader makes for every object a map references.
       def index
+        if params[:ids].present?
+          ids = params[:ids].split(",").map(&:to_i)
+          return render json: TileObject.where(id: ids).map { |o| TileObjectSerializer.call(o) }
+        end
         scope = TileObject.order(:kind, :name)
         scope = scope.where(kind: params[:kind]) if params[:kind].present?
         render json: scope.map { |o| TileObjectSerializer.summary(o) }
