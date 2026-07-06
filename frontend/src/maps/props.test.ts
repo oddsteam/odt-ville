@@ -4,7 +4,7 @@
 // covered cell) — baked to object_id entities and reconstructed on re-open.
 
 import { describe, expect, it } from 'vitest'
-import { placeProp, erasePropAt, coveredCells, propEntities, propsFromBaked, objectIdsFrom } from './props.ts'
+import { placeProp, erasePropAt, coveredCells, propEntities, propsFromBaked, objectIdsFrom, propGhost } from './props.ts'
 import type { PlacedProp } from './props.ts'
 
 // Object 7 is 2×2, object 9 is 1×1, object 5 is fractional (1.4×1.8 ≈ 2×2 cells).
@@ -69,6 +69,28 @@ describe('propsFromBaked', () => {
       { kind: 'house', object_id: 3, x: 1, y: 1 }, // not a prop
     ]
     expect(propsFromBaked(entities)).toEqual([{ object_id: 7, x: 2, y: 2 }])
+  })
+})
+
+describe('propGhost', () => {
+  const props = [{ object_id: 7, x: 1, y: 1 }] // 2×2 covering (1..2, 1..2)
+
+  it('gives the selected object footprint at the hovered tile, valid when it fits', () => {
+    expect(propGhost({ x: 0, y: 0 }, 7, [], size, bounds)).toEqual({ x: 0, y: 0, w: 2, h: 2, valid: true })
+  })
+
+  it('marks the ghost invalid when the footprint would hang off the map', () => {
+    // 2 wide at col 3 of 4 hangs off — refused (matches placeProp).
+    expect(propGhost({ x: 3, y: 1 }, 7, [], size, bounds)).toEqual({ x: 3, y: 1, w: 2, h: 2, valid: false })
+  })
+
+  it('in erase mode returns the footprint of the prop under the cursor', () => {
+    // A covered (non-anchor) cell resolves to the whole 2×2 that a click removes.
+    expect(propGhost({ x: 2, y: 2 }, 'erase', props, size, bounds)).toEqual({ x: 1, y: 1, w: 2, h: 2, valid: true })
+  })
+
+  it('in erase mode returns null off any prop', () => {
+    expect(propGhost({ x: 0, y: 0 }, 'erase', props, size, bounds)).toBeNull()
   })
 })
 

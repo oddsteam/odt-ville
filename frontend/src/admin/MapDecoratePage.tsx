@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { MapsService } from '../maps/service.ts'
 import type { BakedMap } from '../maps/schema.ts'
 import { TileObjectsService } from '../tileObjects/service.ts'
 import type { TileObject } from '../tileObjects/schema.ts'
 import { makeMask, setMaskCell, resizeMask, isMaskEmpty, type Mask } from './maskPaint.ts'
-import { placeProp, erasePropAt, propEntities, propsFromBaked, type PlacedProp, type SizeOf } from '../maps/props.ts'
+import { placeProp, erasePropAt, propEntities, propsFromBaked, propGhost, type PlacedProp, type SizeOf } from '../maps/props.ts'
 import MapPreview from './MapPreview.tsx'
 import { runEdge } from '../lib/runEdge.ts'
 import './admin.css'
@@ -29,9 +29,10 @@ export default function MapDecoratePage() {
   // What a grid click does: place/erase a prop, or paint/erase the collision mask.
   const [mode, setMode] = useState<'props' | 'collision'>('props')
   const [propTool, setPropTool] = useState<number | 'erase' | null>(null)
+  // The tile the cursor is over, driving the footprint ghost (#144); null off-map.
+  const [hover, setHover] = useState<{ x: number; y: number } | null>(null)
   const [maskTool, setMaskTool] = useState<'paint' | 'erase'>('paint')
   const [showMask, setShowMask] = useState(true)
-  const painting = useRef(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
@@ -85,16 +86,9 @@ export default function MapDecoratePage() {
     }
   }, [slug])
 
-  // Release the drag if the mouse comes up off the grid.
-  useEffect(() => {
-    const end = () => (painting.current = false)
-    window.addEventListener('mouseup', end)
-    return () => window.removeEventListener('mouseup', end)
-  }, [])
-
+  // A press on the preview: paint the collision cell, or place/erase a prop.
   const down = (x: number, y: number) => {
     if (mode === 'collision') {
-      painting.current = true
       setCollision((m) => setMaskCell(m, x, y, maskTool === 'paint'))
       return
     }
@@ -105,10 +99,25 @@ export default function MapDecoratePage() {
         : placeProp(ps, { object_id: propTool, x, y }, sizeOf, { cols: baked.cols, rows: baked.rows }),
     )
   }
-  // Only collision paints on drag; props are click-only (one prop per cell).
-  const enter = (x: number, y: number) => {
-    if (mode === 'collision' && painting.current) setCollision((m) => setMaskCell(m, x, y, maskTool === 'paint'))
+  // Only collision paints on drag (the preview reports one tile per crossing);
+  // props stay click-only (one prop per cell).
+  const paint = (x: number, y: number) => {
+    if (mode === 'collision') setCollision((m) => setMaskCell(m, x, y, maskTool === 'paint'))
   }
+
+  // The footprint ghost under the cursor (#144): only in props mode with a tool
+  // picked. In place mode it's the selected object's art (red when off-edge, so
+  // clicking would be refused); in erase mode a highlight box round the prop a
+  // click removes. Pure presentation — never enters `props` or the save output.
+  const ghost = useMemo(() => {
+    if (mode !== 'props' || propTool == null || !hover || !baked) return null
+    const g = propGhost(hover, propTool, props, sizeOf, { cols: baked.cols, rows: baked.rows })
+    if (!g) return null
+    const image = propTool === 'erase' ? undefined : byId.get(propTool)?.image
+    return { x: g.x, y: g.y, w: g.w, h: g.h, image, refused: !g.valid }
+    // sizeOf is derived from byId; listing byId keeps the footprint lookup fresh.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, propTool, hover, baked, props, byId])
 
   const save = async () => {
     setBusy(true)
@@ -168,45 +177,24 @@ export default function MapDecoratePage() {
           </div>
         )}
 
-        {/* Collision keeps the abstract cell grid (paint/erase blocked cells,
-            #131). Props mode drops it entirely (#143): the preview *is* the
-            placement surface — clicking it stamps/erases at the cursor tile. */}
-        {mode === 'collision' && (
-          <div>
-            <p className="admin-hint">Collision mask</p>
-            <div
-              style={{ display: 'grid', gridTemplateColumns: `repeat(${baked.cols}, 22px)` }}
-              onMouseLeave={() => (painting.current = false)}
-            >
-              {Array.from({ length: baked.rows }, (_, y) =>
-                Array.from({ length: baked.cols }, (_, x) => {
-                  const blocked = !!collision[y]?.[x]
-                  return (
-                    <div
-                      key={`d${x},${y}`}
-                      role="button"
-                      aria-label={`cell ${x},${y}`}
-                      aria-pressed={blocked}
-                      onMouseDown={() => down(x, y)}
-                      onMouseEnter={() => enter(x, y)}
-                      onMouseUp={() => (painting.current = false)}
-                      style={{
-                        width: 22,
-                        height: 22,
-                        background: showMask && blocked ? '#dd3333' : '#3a3a3a',
-                        border: '1px solid #0004',
-                        boxSizing: 'border-box',
-                      }}
-                    />
-                  )
-                }),
-              )}
-            </div>
-          </div>
-        )}
+        {/* One direct surface for both modes (#143/#145): the WYSIWYG preview
+            *is* the editor. Props mode stamps/erases at the clicked tile;
+            collision mode paints blocked cells (drawn back as the red overlay)
+            and drag-paints across tiles. The abstract grid is gone. */}
         <div>
-          <p className="admin-hint">{mode === 'props' ? 'Preview — click to place' : 'Preview (baked)'}</p>
-          <MapPreview baked={previewMap} objects={palette} onTileClick={mode === 'props' ? down : undefined} />
+          <p className="admin-hint">
+            {mode === 'props' ? 'Preview — click to place' : 'Preview — drag to paint collision'}
+          </p>
+          <MapPreview
+            baked={previewMap}
+            objects={palette}
+            onTileDown={down}
+            onTileDrag={paint}
+            onTileHover={(x, y) => setHover({ x, y })}
+            onTileHoverEnd={() => setHover(null)}
+            overlay={mode === 'collision' && showMask ? collision : null}
+            ghost={ghost}
+          />
         </div>
       </div>
 

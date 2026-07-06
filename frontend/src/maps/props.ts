@@ -75,6 +75,31 @@ export function coveredCells(props: readonly PlacedProp[], sizeOf: SizeOf): Set<
   return out
 }
 
+// The footprint rect a hover would act on, for the ghost cursor (#144). In
+// place mode (numeric tool) it's the selected object's footprint at the hovered
+// tile, with `valid` false when it would hang off the grid (the same edge
+// refusal placeProp enforces) so the caller can tint it red. In erase mode it's
+// the footprint of the prop under the cursor — what a click removes — or null
+// when there's none. Pure presentation: never touches the placed list.
+export function propGhost(
+  hover: { x: number; y: number },
+  tool: number | 'erase',
+  props: readonly PlacedProp[],
+  sizeOf: SizeOf,
+  bounds: { cols: number; rows: number },
+): { x: number; y: number; w: number; h: number; valid: boolean } | null {
+  if (tool === 'erase') {
+    const hit = props.find((p) => {
+      const r = rectOf(p, sizeOf)
+      return hover.x >= r.x && hover.x < r.x + r.w && hover.y >= r.y && hover.y < r.y + r.h
+    })
+    return hit ? { ...rectOf(hit, sizeOf), valid: true } : null
+  }
+  const { w, h } = sizeOf(tool)
+  const rect = { x: hover.x, y: hover.y, w: cells(w), h: cells(h) }
+  return { ...rect, valid: rect.x + rect.w <= bounds.cols && rect.y + rect.h <= bounds.rows }
+}
+
 // Bake the placed props into the runtime's entity list (kind:"prop" references).
 export function propEntities(props: readonly PlacedProp[]): BakedEntity[] {
   return props.map((p) => ({ kind: 'prop', object_id: p.object_id, x: p.x, y: p.y }))

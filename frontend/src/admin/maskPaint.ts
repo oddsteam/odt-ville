@@ -31,3 +31,12 @@ export function resizeMask(mask: Mask, cols: number, rows: number): Mask {
 export function isMaskEmpty(mask: Mask): boolean {
   return mask.every((row) => row.every((c) => !c))
 }
+
+// The blocked cells as {x,y} coordinates, row-major. The WYSIWYG overlay (#145)
+// draws one red rectangle per blocked cell over the map art, so it wants just
+// the painted tiles — not a div per grid cell (a large map is mostly empty).
+export function blockedCells(mask: Mask): Array<{ x: number; y: number }> {
+  const cells: Array<{ x: number; y: number }> = []
+  mask.forEach((row, y) => row.forEach((blocked, x) => blocked && cells.push({ x, y })))
+  return cells
+}

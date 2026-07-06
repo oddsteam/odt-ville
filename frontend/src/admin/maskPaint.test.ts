@@ -2,7 +2,7 @@
 // empty check that keeps an unmasked map's document clean.
 
 import { describe, expect, it } from 'vitest'
-import { makeMask, setMaskCell, resizeMask, isMaskEmpty } from './maskPaint.ts'
+import { makeMask, setMaskCell, resizeMask, isMaskEmpty, blockedCells } from './maskPaint.ts'
 
 describe('makeMask', () => {
   it('is a rows×cols grid with nothing masked', () => {
@@ -46,5 +46,23 @@ describe('resizeMask', () => {
     // Shrinking drops the out-of-range cell.
     const smaller = resizeMask(m, 1, 1)
     expect(smaller).toEqual([[true]])
+  })
+})
+
+describe('blockedCells', () => {
+  it('lists every blocked cell in row-major order', () => {
+    // The WYSIWYG overlay (#145) draws one red rectangle per blocked cell, so it
+    // only needs the coordinates that are actually blocked — not the whole grid.
+    let m = makeMask(3, 2)
+    m = setMaskCell(m, 2, 0, true)
+    m = setMaskCell(m, 0, 1, true)
+    expect(blockedCells(m)).toEqual([
+      { x: 2, y: 0 },
+      { x: 0, y: 1 },
+    ])
+  })
+
+  it('is empty when nothing is blocked', () => {
+    expect(blockedCells(makeMask(2, 2))).toEqual([])
   })
 })
