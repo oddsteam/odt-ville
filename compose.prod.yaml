@@ -5,48 +5,36 @@
 #
 # compose.yaml stays the dev base (start-dev Keycloak, Vite dev server) so the
 # laptop path is byte-for-byte unchanged. This overlay hardens the deploy:
-#   - Keycloak runs in prod mode (`start`) on Postgres (persistent), behind its
-#     own Cloudflare tunnel at https://odt-ville-auth.p2d.uk, importing the
-#     tightened prod realm (scoped redirect/web origins, no dev users/grants).
-#   - Backend trusts that public issuer; JWKS is still fetched in-network.
+#   - Auth uses the ORG Keycloak at https://sso.odd.works/realms/odt (client
+#     `odt-ville-web`). The self-hosted keycloak service is retired (parked under
+#     an unused compose profile below).
+#   - Backend trusts the org issuer and fetches its JWKS over the public internet
+#     (the homeserver must be able to reach sso.odd.works).
 #   - Frontend serves a real production build, so the #94 redirect login fires.
-#
-# One-time prep on the homeserver before the first `up`:
-#   - create the Keycloak database:  docker compose exec db createdb -U postgres keycloak
-#   - set KEYCLOAK_ADMIN_USER / KEYCLOAK_ADMIN_PASSWORD in the gitignored .env
-#   - add a Cloudflare tunnel ingress: odt-ville-auth.p2d.uk -> localhost:8080
 services:
   keycloak:
-    command: start --import-realm
-    environment:
-      KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://db:5432/keycloak
-      KC_DB_USERNAME: postgres
-      KC_DB_PASSWORD: postgres
-      # Cloudflare terminates TLS and forwards HTTP to the container; tell
-      # Keycloak its public origin so issued tokens' `iss` is the https URL.
-      KC_HOSTNAME: https://odt-ville-auth.p2d.uk
-      KC_HTTP_ENABLED: "true"
-      KC_PROXY_HEADERS: xforwarded
-      # Real admin creds live in the gitignored .env — no insecure default.
-      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USER:?set KEYCLOAK_ADMIN_USER in .env}
-      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?set KEYCLOAK_ADMIN_PASSWORD in .env}
-    volumes:
-      # Replace the dev realm with the tightened prod realm (same mount target).
-      - ./keycloak/realm-export.prod.json:/opt/keycloak/data/import/realm-export.json:ro
-    depends_on:
-      db:
-        condition: service_healthy
+    # RETIRED: auth moved to the org Keycloak at https://sso.odd.works/realms/odt.
+    # This self-hosted Keycloak is no longer used, but compose.yaml (the dev base)
+    # still defines the service, so `-f compose.yaml -f compose.prod.yaml up` would
+    # otherwise start it. Parking it under an unused profile excludes it from the
+    # prod `up` while leaving the dev stack (which never loads this overlay)
+    # untouched. Fully delete once the odt-ville-auth.p2d.uk tunnel is torn down.
+    profiles: ["retired-self-hosted-keycloak"]
 
   backend:
     environment:
-      # Tokens' `iss` is the public Keycloak origin; verify against it. JWKS is
-      # still fetched over the private network (keycloak:8080 in compose.yaml).
-      KEYCLOAK_ISSUER: https://odt-ville-auth.p2d.uk/realms/odtville
+      # Org Keycloak (sso.odd.works, realm `odt`). Verify `iss` against the org
+      # issuer, and fetch the JWKS from it over the public internet — there is no
+      # in-network Keycloak anymore, so we override compose.yaml's private
+      # keycloak:8080 JWKS_URI. Audience is the org client id `odt-ville-web`.
+      KEYCLOAK_ISSUER: https://sso.odd.works/realms/odt
+      KEYCLOAK_AUDIENCE: odt-ville-web
+      KEYCLOAK_JWKS_URI: https://sso.odd.works/realms/odt/protocol/openid-connect/certs
 
   frontend:
     # Production build → import.meta.env.DEV is false → bootstrapAuth() runs the
     # real Keycloak redirect login. VITE_KEYCLOAK_URL is inlined at build time.
     command: bash -c "pnpm install && pnpm run build && pnpm run preview --host 0.0.0.0 --port 5460"
     environment:
-      VITE_KEYCLOAK_URL: https://odt-ville-auth.p2d.uk
+      VITE_KEYCLOAK_URL: https://sso.odd.works
+      VITE_KEYCLOAK_REALM: odt

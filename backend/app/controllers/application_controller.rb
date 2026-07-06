@@ -21,14 +21,10 @@ class ApplicationController < ActionController::API
     @token_claims = nil
   end
 
-  # Email domains we auto-enroll on first login (#96). Temporary, while the org's
-  # real Keycloak integration is pending — see #97 for what to discard then.
-  ALLOWED_SIGNUP_DOMAINS = %w[odds.team odt.co.th].freeze
-
   # The authenticated user, resolved from the token. A known subject maps
-  # straight to its user; an unknown subject from an allowed email domain is
-  # JIT-provisioned (#96). Returns nil otherwise, and callers gate via
-  # require_user!.
+  # straight to its user; an unknown subject with an email is JIT-provisioned
+  # (#96) — the org Keycloak is the access boundary, so there's no domain gate.
+  # Returns nil otherwise, and callers gate via require_user!.
   def current_user
     @current_user ||= find_or_provision_user
   end
@@ -45,8 +41,11 @@ class ApplicationController < ActionController::API
     # changes `sub` — reuses the same user instead of duplicating (#97).
     # ponytail: find_or_initialize races under concurrent first-logins; the
     # unique email index makes the loser raise rather than double-create.
+    # No domain gate — the org Keycloak is the access-control boundary now (#97),
+    # so any token it issues with an email provisions a user. Email is required
+    # (we key on it); a token without one can't be provisioned.
     email = claims.email.to_s.downcase
-    return nil unless ALLOWED_SIGNUP_DOMAINS.include?(email.split("@").last)
+    return nil if email.blank?
 
     user = User.find_or_initialize_by(email: email)
     user.external_id = sub
