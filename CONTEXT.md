@@ -253,6 +253,20 @@ and get specced in the multi-map PRD.
   tilesets need **no Tile Catalog entry** because the baked document
   self-carries `{name, cell}`. (ADR-0007 — 0005/0006 are claimed by the
   world-graph and Basecamp ADRs on `docs/adr-0005-world-graph`.)
+- **Saved tile objects are the shared prop catalog; maps place references**
+  — added 2026-07-05. The objects authored in `/admin/objects` are
+  ADR-0004's kernel catalog made concrete: the one authoring surface for
+  prop/house art, footprints, walk/edge/foreground masks. Both producers
+  emit the same placed-entity shape `{kind:"prop", object_id, x, y}` — the
+  editor stores the id the author picked; the generated hometown resolves
+  "active object of kind X" to an id at generation time (so swapping the
+  active tree still rethemes hometowns, while authored maps keep their
+  chosen object). One shared kernel loader resolves references at load
+  (batched fetch → `obj.<id>` textures → stamp at footprint). Maps do NOT
+  copy the image into `baked` — the hometown can't bake, and copies fork
+  art. A dangling `object_id` renders nothing and warns in the editor;
+  legacy `{tileset, frame}` entities stay renderable. ADR-0003 unaffected
+  (entity art was always a flat reference). (ADR-0008)
 
 ## Where the model is heading
 
