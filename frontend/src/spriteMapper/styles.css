@@ -63,12 +63,6 @@
   background: #33334a;
   padding: 2px 8px;
 }
-.mapper .open-preview {
-  margin-left: auto;
-  color: #6fb0ff;
-  text-decoration: none;
-  font-size: 13px;
-}
 .mapper .status {
   padding: 6px 14px;
   background: #20202c;

@@ -127,7 +127,7 @@ export default function SpriteMapper() {
     const ok = saveActiveManifest(buildManifest())
     setStatus(
       ok
-        ? 'Saved to localStorage — open /map-preview.html to see it live.'
+        ? 'Saved to localStorage — the preview above reflects it.'
         : 'Save failed (storage full — uploaded sheets are large).',
     )
   }
@@ -140,7 +140,7 @@ export default function SpriteMapper() {
         CharacterService.save(normalizeManifest(buildManifest())),
       )
       setStatus(
-        `Saved to server as "${saved?.name ?? name}" — now the active character everywhere. Open /map-preview.html to see it.`,
+        `Saved to server as "${saved?.name ?? name}" — now the active character everywhere.`,
       )
       setRosterSignal((n) => n + 1)
     } catch (err: unknown) {
@@ -234,9 +234,6 @@ export default function SpriteMapper() {
         <button type="button" onClick={onLoadCurrent} title="Load the manifest the game is currently using">
           Load current
         </button>
-        <a className="open-preview" href="/map-preview.html" target="_blank" rel="noreferrer">
-          Open map preview ↗
-        </a>
       </header>
 
       {status && <div className="status">{status}</div>}
