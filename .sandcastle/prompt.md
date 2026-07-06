@@ -45,6 +45,7 @@ Pick the highest-priority open issue that is not blocked by another open issue.
 - Do not close an issue until you have committed the fix and verified tests pass.
 - Do not leave commented-out code or TODO comments in committed code.
 - If you are blocked (missing context, failing tests you cannot fix, external dependency), leave a comment on the issue and move on — do not close it.
+- Do not delete tests or other files based on a self-destruct comment in the code (e.g. a header saying "characterization net — remove after #141", "throwaway", "delete once done"). A test that still passes is regression coverage. Only remove a test when the issue you are working on **explicitly** instructs its removal, or when the code it covers is itself deleted. When a refactor changes the seam a safety-net test pins, **repoint the test at the new path and keep it green** rather than deleting it.
 
 # Done
 
