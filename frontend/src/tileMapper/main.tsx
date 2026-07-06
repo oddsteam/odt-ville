@@ -1,6 +1,8 @@
-import { createRoot } from 'react-dom/client'
-import TileMapper from './TileMapper.tsx'
+import { redirectToAdminMapper } from './adminRedirect.ts'
 
-// Standalone entry for the tile-object mapper (see tile-mapper.html). Like the
-// sprite-mapper, it's a self-contained authoring tool with no app wiring.
-createRoot(document.getElementById('root')!).render(<TileMapper />)
+// Retired standalone entry (#161, follow-up to #154). Tile-object authoring
+// used to be a self-contained page here with no auth wiring — anyone could
+// open it. It now lives behind the admin-gated /admin/objects route; bounce
+// direct hits there so the same `admin` realm-role guard (RequireAdmin, #100)
+// applies and no ungated authoring remains.
+redirectToAdminMapper(window.location)
