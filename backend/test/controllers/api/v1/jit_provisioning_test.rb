@@ -2,10 +2,11 @@ require "test_helper"
 
 module Api
   module V1
-    # JIT provisioning (issue #96, Option 1): a verified token from an allowed
-    # email domain auto-creates the local user on first login, keyed by email so
-    # a later IdP swap (#97) re-links instead of duplicating. Stubbed token is
-    # "<sub>||<email>" (see test_helper).
+    # JIT provisioning (issue #96, Option 1): a verified token with an email
+    # auto-creates the local user on first login, keyed by email so a later IdP
+    # swap (#97) re-links instead of duplicating. No email-domain gate — the org
+    # Keycloak is the access boundary. Stubbed token is "<sub>||<email>" (see
+    # test_helper).
     class JitProvisioningTest < ActionDispatch::IntegrationTest
       setup do
         @company, _ = setup_company(name: "ODT") # ensures Company.first exists
@@ -15,27 +16,27 @@ module Api
         { "Authorization" => "Bearer #{sub}||#{email}" }
       end
 
-      test "first login from an allowed domain provisions a local user" do
+      test "first login provisions a local user regardless of email domain" do
         assert_difference -> { User.count }, 1 do
-          get "/api/v1/me", headers: auth_email("kc-sub-1", "newbie@odds.team")
+          get "/api/v1/me", headers: auth_email("kc-sub-1", "newbie@odd.works")
         end
         assert_response :success
         u = User.find_by(external_id: "kc-sub-1")
-        assert_equal "newbie@odds.team", u.email
+        assert_equal "newbie@odd.works", u.email
         assert_equal "branch_employee", u.role
         assert_equal @company.id, u.company_id
         assert_equal u.id, json[:user][:id]
       end
 
-      test "allowed domain match is case-insensitive" do
-        get "/api/v1/me", headers: auth_email("kc-sub-2", "Mixed@ODT.co.th")
+      test "provisioned email is lowercased" do
+        get "/api/v1/me", headers: auth_email("kc-sub-2", "Mixed@ODD.works")
         assert_response :success
-        assert_equal "mixed@odt.co.th", User.find_by(external_id: "kc-sub-2").email
+        assert_equal "mixed@odd.works", User.find_by(external_id: "kc-sub-2").email
       end
 
-      test "a disallowed email domain is rejected and provisions nothing" do
+      test "a token without an email provisions nothing and is unauthorized" do
         assert_no_difference -> { User.count } do
-          get "/api/v1/me", headers: auth_email("kc-sub-3", "stranger@gmail.com")
+          get "/api/v1/me", headers: auth_email("kc-sub-3", "")
         end
         assert_response :unauthorized
       end
