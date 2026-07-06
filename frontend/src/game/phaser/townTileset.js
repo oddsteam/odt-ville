@@ -19,17 +19,3 @@ export const PROPS = treeUrl
 
 // On once the tree art is present.
 export const ENABLED = Boolean(treeUrl)
-
-// Deterministic placement: a tree on every boundary 'T' tile, turning the map
-// edge into a tree line. Pure function of the grid, so rows added as the town
-// grows get trees automatically. Returns [{ key, col, row }].
-export function tallPropsFor(town) {
-  if (!PROPS['prop.tree']) return []
-  const out = []
-  for (let y = 0; y < town.rows; y++) {
-    for (let x = 0; x < town.cols; x++) {
-      if (town.map[y][x] === 'T') out.push({ key: 'prop.tree', col: x, row: y })
-    }
-  }
-  return out
-}

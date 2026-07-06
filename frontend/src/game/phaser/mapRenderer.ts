@@ -6,6 +6,11 @@
 
 import { TILE } from '../constants.js'
 import type { BakedGround, BakedMap } from '../../maps/schema.ts'
+import { loadObjectTextures, objectTextureKey, stampEntity } from './entityLoader.ts'
+
+// Re-exported for this module's consumers: the shared prop catalog's texture
+// key now lives in the kernel entity loader (ADR-0008), shared with the town.
+export { objectTextureKey }
 
 // The Phaser scene, structurally — we touch only a handful of fields, so the
 // scene stays loose (same convention as townRenderer).
@@ -25,11 +30,6 @@ export interface BakedDraw {
 // Texture key for a baked tileset spritesheet. The frame index addresses the
 // cell within it, exactly as the ground-tile renderer keys `gtset.<name>`.
 export const bakedTextureKey = (tileset: string) => `bake.${tileset}`
-
-// Texture key for a referenced tile object (ADR-0008) — the shared prop
-// catalog. The map stores only `object_id`; the object's image data URL is
-// fetched by id (#138) and registered under this key.
-export const objectTextureKey = (id: number) => `obj.${id}`
 
 // What the draw list needs off a fetched object — structural, so the pure
 // part is testable without full TileObjects.
@@ -117,7 +117,7 @@ export function preloadBakedMap(scene: Scene) {
   const objects: Array<{ id: number; image: string; footprint_w: number; footprint_h: number }> =
     scene.registry.get('bakedObjects') || []
   scene._bakedObjects = objects
-  for (const o of objects) scene.load.image(objectTextureKey(o.id), o.image)
+  loadObjectTextures(scene, objects)
 }
 
 // Stamp the baked map: ground cells at depth 0, entities just above so props
@@ -130,16 +130,7 @@ export function renderBakedMap(scene: Scene) {
     (scene._bakedObjects || []).map((o: { id: number } & ObjectArt) => [o.id, o]),
   )
 
-  const stamp = (d: BakedDraw, depth: number) => {
-    if (!scene.textures.exists(d.key)) return
-    scene.add
-      .image(d.x * TILE, d.y * TILE, d.key, d.frame)
-      .setOrigin(0, 0)
-      .setDepth(depth)
-      .setDisplaySize(TILE * (d.w ?? 1), TILE * (d.h ?? 1))
-  }
-
-  for (const d of bakedDraws(map, objects)) stamp(d, d.depth)
+  for (const d of bakedDraws(map, objects)) stampEntity(scene, d)
 
   // Size the world to the authored grid so the camera can frame it.
   const worldW = map.cols * TILE

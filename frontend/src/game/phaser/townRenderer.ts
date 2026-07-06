@@ -11,9 +11,11 @@
 // helpers (buildGroundTileMap / buildEdgeMap) are exported for unit tests.
 
 import { TILE } from '../constants.js'
-import { buildingOverlayDepth, planFlowers } from '../town.js'
+import { buildingOverlayDepth } from '../town.js'
+import { townPropDraws, type TownPropArt } from '../townProps.ts'
+import { loadObjectTextures, objectTextureKey, stampEntity } from './entityLoader.ts'
 import { buildingKeyFor, DEFAULT_BUILDING } from '../buildings.js'
-import { ENABLED as TILESET_ENABLED, PROPS, tallPropsFor } from './townTileset.js'
+import { ENABLED as TILESET_ENABLED, PROPS } from './townTileset.js'
 import { preloadCharacter } from './characterRig.js'
 import { GATE_TRAINER } from '../encounters.js'
 import {
@@ -54,9 +56,9 @@ const DEV_NUM_KEYS = ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX', 'SEVEN', 'EI
 // ---- preload -------------------------------------------------------------
 
 // Load every texture the town renders: player walk frames, the active manifest
-// sheet, building roof/body pairs, the gate trainer, tall-prop art, and the
-// ground-tile spritesheets. Stashes the manifest / tree object / ground catalog
-// on the scene so create() + render() can read them back.
+// sheet, building roof/body pairs, the gate trainer, foliage art (tree + flower
+// objects, plus the bundled fallback), and the ground-tile spritesheets. Stashes
+// the manifest / ground catalog on the scene so create() + render() read it back.
 export function preloadAssets(scene: Scene) {
   const reg = scene.registry.get('assets') || {}
 
@@ -88,24 +90,16 @@ export function preloadAssets(scene: Scene) {
   // share one source of truth for the opponent table.
   scene.load.image('trainer.boss-k', GATE_TRAINER.sprite)
 
-  // Tall-prop art for the overlay pass. An admin-defined tree object
-  // (tile-object mapper → registry) wins; otherwise the bundled tree art
-  // from townTileset.js is used.
-  scene._treeObject = scene.registry.get('treeObject') || null
-  if (scene._treeObject?.image) {
-    scene.load.image('prop.tree', scene._treeObject.image)
-  } else if (TILESET_ENABLED) {
+  // Foliage art (trees + the '*' flower scatter) now flows through the shared
+  // entity loader (ADR-0008): the active tree / flower-group / flower-single
+  // tile-objects are references resolved to `obj.<id>` textures, exactly as the
+  // authored map loads its placed props. The bundled tree art stays as the
+  // fallback texture when no tree object is authored; the procedural tile.flower
+  // buds (ensureTileTextures) back the flower roles.
+  loadObjectTextures(scene, foliageObjects(scene))
+  if (TILESET_ENABLED) {
     for (const prop of Object.values<any>(PROPS)) scene.load.image(prop.key, prop.url)
   }
-
-  // Admin flower art (tile-object mapper) for the '*' scatter. The 'flower-group'
-  // object is tiled across contiguous clusters; 'flower-single' fills leftover/
-  // lone cells (#27). Either absent → that role falls back to the procedural
-  // tile.flower buds (#26 behaviour for a 1x1 group).
-  scene._flowerGroup = scene.registry.get('flowerGroup') || null
-  scene._flowerSingle = scene.registry.get('flowerSingle') || null
-  if (scene._flowerGroup?.image) scene.load.image('prop.flowerGroup', scene._flowerGroup.image)
-  if (scene._flowerSingle?.image) scene.load.image('prop.flowerSingle', scene._flowerSingle.image)
 
   // Admin-mapped house (#29). When present it replaces the bundled roof/body
   // stack on every plot (addBuildingSprite); absent → the bundled art.
@@ -155,10 +149,10 @@ export function render(scene: Scene) {
   scene.groundTiles = buildGroundTileMap(scene)
   paintGround(scene)
 
-  // Tall props (trees) — bottom-anchored sprites that overflow their tile
-  // and y-sort against the player. Runs if either the bundled art or an
-  // admin tree object is available.
-  if (TILESET_ENABLED || scene._treeObject?.image) addTallProps(scene)
+  // Foliage — boundary trees (bottom-anchored, y-sorted) and the flower scatter
+  // (a flat overlay). Both resolve to shared-loader draws and stamp through the
+  // one kernel entity path the authored map uses (ADR-0008 / #141).
+  addProps(scene)
 
   // Buildings — placement sorted by position_order, dropped onto the
   // town's plots in turn. Same shape as buildBuildings() in VillageGame.
@@ -322,40 +316,6 @@ function paintGround(scene: Scene) {
       if (DEV) scene.devLayers?.grass?.push(img)
     }
   }
-
-  // Flowers ('*' cells from the procedural scatter, town.ts) are an overlay over
-  // the grass beneath — the ground-tile mapper renders '*' identically to '.',
-  // so without this pass the scatter is invisible. Above the ground fills, below
-  // props/buildings/player (issue #25). The admin-saved flower object (kind
-  // 'prop') replaces the procedural buds when present; kept at the flat 0.35
-  // depth so it never draws over the player (#26).
-  //
-  // For a multi-tile group footprint, stamping it at every '*' overlaps into a
-  // mess, so planFlowers (town.ts, #27) tiles the group across contiguous '*'
-  // clusters and leaves the leftover/lone cells as 1x1 singles. A 1x1 group
-  // (no admin group art) degenerates to one stamp per '*' — the pre-#27 paint.
-  const groupObj = scene._flowerGroup?.image && scene.textures.exists('prop.flowerGroup') ? scene._flowerGroup : null
-  const singleObj = scene._flowerSingle?.image && scene.textures.exists('prop.flowerSingle') ? scene._flowerSingle : null
-  const groupKey = groupObj ? 'prop.flowerGroup' : 'tile.flower'
-  const singleKey = singleObj ? 'prop.flowerSingle' : 'tile.flower'
-  const fw = groupObj?.footprint_w || 1
-  const fh = groupObj?.footprint_h || 1
-  const stampFlower = (x: number, y: number, key: string, w: number, h: number) => {
-    const img = scene.add
-      .image(x * TILE, y * TILE, key)
-      .setOrigin(0, 0)
-      .setDisplaySize(w * TILE, h * TILE)
-      .setDepth(0.35)
-    if (DEV) scene.devLayers?.grass?.push(img)
-  }
-  // planFlowers floors the footprint to whole tiles for the cluster grid, but
-  // we stamp at the real footprint so fractional art (e.g. the #26 default
-  // 1.4×1.8) keeps its size instead of snapping to 1×1.
-  const { groups, singles } = planFlowers(scene.town, fw, fh)
-  for (const g of groups) stampFlower(g.x, g.y, groupKey, fw, fh)
-  // Leftover/lone cells get the single art (admin 'flower-single', else the
-  // procedural bud) — never the group art squished into one cell.
-  for (const s of singles) stampFlower(s.x, s.y, singleKey, 1, 1)
 }
 
 // Build the two-layer building sprite. We don't yet hue-rotate from
@@ -449,28 +409,65 @@ function addBuildingSprite(scene: Scene, community: any, plot: any) {
   return roof
 }
 
-// Render tall props from the atlas (townTileset.tallPropsFor). Each is
-// bottom-anchored on its tile so it overflows upward, and depth-sorted by
-// its base row so the player passes in front of / behind it correctly. A
-// prop flagged `blocks` adds its base tile to propCells for walkability.
-function addTallProps(scene: Scene) {
+// The active foliage tile-objects, in the shape the shared loader registers
+// (id + image + footprint). Absent roles are dropped; a full TileObject from
+// the registry satisfies EntityObject. Trees rethemes for free — the hometown
+// regenerates every load, so swapping the active object in /admin/objects is
+// picked up here on the next boot.
+function foliageObjects(scene: Scene) {
+  return [
+    scene.registry.get('treeObject'),
+    scene.registry.get('flowerGroup'),
+    scene.registry.get('flowerSingle'),
+  ].filter((o) => o?.image)
+}
+
+// Resolve each foliage role to a texture key + footprint for townPropDraws. An
+// admin-saved object (its `obj.<id>` texture loaded in preload) wins; otherwise
+// the bundled tree art / procedural flower buds back the role. A role with no
+// usable texture at all resolves to null and places nothing.
+function resolveFoliageArt(scene: Scene): TownPropArt {
+  const objKey = (o: any) => (o?.image ? objectTextureKey(o.id) : null)
+  const has = (key: string | null) => key != null && scene.textures.exists(key)
+
+  const treeObj = scene.registry.get('treeObject')
+  const treeObjKey = objKey(treeObj)
+  const bundledTree = (PROPS as any)['prop.tree']
+  const tree = has(treeObjKey)
+    ? { key: treeObjKey!, w: treeObj.footprint_w || 1, h: treeObj.footprint_h || 1 }
+    : has('prop.tree') && bundledTree
+      ? { key: 'prop.tree', w: bundledTree.wTiles, h: bundledTree.hTiles }
+      : null
+
+  // Flowers always have the procedural tile.flower fallback; the admin group /
+  // single objects replace the buds when their textures are present.
+  const groupObj = scene.registry.get('flowerGroup')
+  const groupKey = objKey(groupObj)
+  const flowerGroup = has(groupKey)
+    ? { key: groupKey!, w: groupObj.footprint_w || 1, h: groupObj.footprint_h || 1 }
+    : { key: 'tile.flower', w: 1, h: 1 }
+
+  const singleKey = objKey(scene.registry.get('flowerSingle'))
+  const flowerSingle = { key: has(singleKey) ? singleKey! : 'tile.flower' }
+
+  return { tree, flowerGroup, flowerSingle }
+}
+
+// Stamp the town's foliage through the shared entity loader. Trees bucket into
+// the 'trees' dev layer, flowers into 'grass' (matching the pre-#141 split).
+// No tree today marks `blocks`, so propCells stays empty — boundary trees sit
+// on already-blocked 'T' tiles; the field is cleared so the walkability rule
+// keeps seeing an empty dynamic-blocker set from props.
+function addProps(scene: Scene) {
   scene.propCells.clear()
-  const tree = scene._treeObject
-  for (const { key, col, row } of tallPropsFor(scene.town)) {
-    if (!scene.textures.exists(key)) continue
-    const def = (PROPS as any)[key]
-    // Footprint: an admin tree object wins for the tree key; otherwise the
-    // bundled prop definition.
-    const useTree = key === 'prop.tree' && tree
-    const wTiles = (useTree ? tree.footprint_w : def?.wTiles) || 1
-    const hTiles = (useTree ? tree.footprint_h : def?.hTiles) || 1
-    const sprite = scene.add
-      .image(col * TILE + TILE / 2, (row + 1) * TILE, key)
-      .setOrigin(0.5, 1)
-      .setDisplaySize(wTiles * TILE, hTiles * TILE)
-      .setDepth((row + 1) * 10 - 1)
-    if (DEV) scene.devLayers?.trees?.push(sprite)
-    if (def?.blocks) scene.propCells.add(`${col},${row}`)
+  const { trees, flowers } = townPropDraws(scene.town, resolveFoliageArt(scene))
+  for (const d of trees) {
+    const sprite = stampEntity(scene, d)
+    if (DEV && sprite) scene.devLayers?.trees?.push(sprite)
+  }
+  for (const d of flowers) {
+    const sprite = stampEntity(scene, d)
+    if (DEV && sprite) scene.devLayers?.grass?.push(sprite)
   }
 }
 
