@@ -5,7 +5,7 @@ import type { BakedMap } from '../maps/schema.ts'
 import { TileObjectsService } from '../tileObjects/service.ts'
 import type { TileObject } from '../tileObjects/schema.ts'
 import { makeMask, setMaskCell, resizeMask, isMaskEmpty, type Mask } from './maskPaint.ts'
-import { placeProp, erasePropAt, propEntities, propsFromBaked, type PlacedProp, type SizeOf } from '../maps/props.ts'
+import { placeProp, erasePropAt, propEntities, propsFromBaked, propGhost, type PlacedProp, type SizeOf } from '../maps/props.ts'
 import MapPreview from './MapPreview.tsx'
 import { runEdge } from '../lib/runEdge.ts'
 import './admin.css'
@@ -29,6 +29,8 @@ export default function MapDecoratePage() {
   // What a grid click does: place/erase a prop, or paint/erase the collision mask.
   const [mode, setMode] = useState<'props' | 'collision'>('props')
   const [propTool, setPropTool] = useState<number | 'erase' | null>(null)
+  // The tile the cursor is over, driving the footprint ghost (#144); null off-map.
+  const [hover, setHover] = useState<{ x: number; y: number } | null>(null)
   const [maskTool, setMaskTool] = useState<'paint' | 'erase'>('paint')
   const [showMask, setShowMask] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -103,6 +105,20 @@ export default function MapDecoratePage() {
     if (mode === 'collision') setCollision((m) => setMaskCell(m, x, y, maskTool === 'paint'))
   }
 
+  // The footprint ghost under the cursor (#144): only in props mode with a tool
+  // picked. In place mode it's the selected object's art (red when off-edge, so
+  // clicking would be refused); in erase mode a highlight box round the prop a
+  // click removes. Pure presentation — never enters `props` or the save output.
+  const ghost = useMemo(() => {
+    if (mode !== 'props' || propTool == null || !hover || !baked) return null
+    const g = propGhost(hover, propTool, props, sizeOf, { cols: baked.cols, rows: baked.rows })
+    if (!g) return null
+    const image = propTool === 'erase' ? undefined : byId.get(propTool)?.image
+    return { x: g.x, y: g.y, w: g.w, h: g.h, image, refused: !g.valid }
+    // sizeOf is derived from byId; listing byId keeps the footprint lookup fresh.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, propTool, hover, baked, props, byId])
+
   const save = async () => {
     setBusy(true)
     setError(null)
@@ -174,7 +190,10 @@ export default function MapDecoratePage() {
             objects={palette}
             onTileDown={down}
             onTileDrag={paint}
+            onTileHover={(x, y) => setHover({ x, y })}
+            onTileHoverEnd={() => setHover(null)}
             overlay={mode === 'collision' && showMask ? collision : null}
+            ghost={ghost}
           />
         </div>
       </div>

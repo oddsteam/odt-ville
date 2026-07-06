@@ -28,7 +28,10 @@ export default function MapPreview({
   objects,
   onTileDown,
   onTileDrag,
+  onTileHover,
+  onTileHoverEnd,
   overlay,
+  ghost,
 }: {
   baked: BakedMap
   // The fetched tile objects the map's entities reference (ADR-0008), for the
@@ -41,9 +44,19 @@ export default function MapPreview({
   // own place/erase/paint; out-of-map cursors are dropped here.
   onTileDown?: (x: number, y: number) => void
   onTileDrag?: (x: number, y: number) => void
+  // Hover reporting for the footprint ghost (#144): `onTileHover` fires as the
+  // (button-up) cursor crosses in-bounds tiles; `onTileHoverEnd` when it leaves
+  // the map. The caller turns the hovered tile into a `ghost` to draw back.
+  onTileHover?: (x: number, y: number) => void
+  onTileHoverEnd?: () => void
   // The collision mask to draw as a red overlay over the map art (#145); null
   // hides it. Semi-transparent so the terrain beneath stays visible.
   overlay?: Mask | null
+  // The footprint ghost to preview under the cursor (#144): a tile rect the size
+  // of the acted-on footprint. `image` (place mode) draws the object art semi-
+  // transparent; `refused` tints it red (placement would hang off the edge);
+  // no image (erase mode) draws a highlight box round the prop a click removes.
+  ghost?: { x: number; y: number; w: number; h: number; image?: string; refused?: boolean } | null
 }) {
   const hostRef = useRef<HTMLDivElement>(null)
   // The live Phaser canvas — measured on press to map cursor px → tile,
@@ -107,14 +120,20 @@ export default function MapPreview({
   }
 
   const handleMove = (e: { clientX: number; clientY: number }) => {
-    if (!dragging.current || !onTileDrag) return
     const t = tileAt(e)
-    if (!t || (lastTile.current && t.x === lastTile.current.x && t.y === lastTile.current.y)) return
-    lastTile.current = t
-    onTileDrag(t.x, t.y)
+    // Button held: extend the collision stroke, one report per tile crossed.
+    if (dragging.current && onTileDrag) {
+      if (t && !(lastTile.current && t.x === lastTile.current.x && t.y === lastTile.current.y)) {
+        lastTile.current = t
+        onTileDrag(t.x, t.y)
+      }
+      return
+    }
+    // Button up: report the hovered tile for the ghost cursor (or its absence).
+    if (onTileHover) t ? onTileHover(t.x, t.y) : onTileHoverEnd?.()
   }
 
-  const interactive = !!(onTileDown || onTileDrag)
+  const interactive = !!(onTileDown || onTileDrag || onTileHover)
 
   // Size to the baked canvas (cols×rows × TILE); scroll rather than clip when a
   // large map exceeds the column width. (Not the tiny .admin-preview thumbnail.)
@@ -135,6 +154,7 @@ export default function MapPreview({
       <div
         onMouseDown={interactive ? handleDown : undefined}
         onMouseMove={interactive ? handleMove : undefined}
+        onMouseLeave={onTileHoverEnd}
         style={{
           position: 'relative',
           width: baked.cols * TILE,
@@ -160,6 +180,31 @@ export default function MapPreview({
                 }}
               />
             ))}
+          </div>
+        )}
+        {ghost && (
+          <div
+            style={{
+              position: 'absolute',
+              pointerEvents: 'none',
+              left: `${(ghost.x / baked.cols) * 100}%`,
+              top: `${(ghost.y / baked.rows) * 100}%`,
+              width: `${(ghost.w / baked.cols) * 100}%`,
+              height: `${(ghost.h / baked.rows) * 100}%`,
+              opacity: 0.55,
+              // Erase highlight (no image) fills white; a refused placement tints
+              // red behind the semi-transparent art so it reads as "won't stamp".
+              background: ghost.refused ? '#dd3333' : ghost.image ? undefined : '#ffffff',
+              outline: `2px solid ${ghost.refused ? '#dd3333' : '#ffffff'}`,
+            }}
+          >
+            {ghost.image && (
+              <img
+                src={ghost.image}
+                alt=""
+                style={{ width: '100%', height: '100%', objectFit: 'fill', imageRendering: 'pixelated' }}
+              />
+            )}
           </div>
         )}
       </div>
