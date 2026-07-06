@@ -16,6 +16,7 @@ const decodeWith =
     Effect.mapError(Schema.decodeUnknown(schema)(raw), (e) => new DecodeError({ path, reason: e instanceof Error ? e.message : String(e) }))
 
 const decode = decodeWith(TileObject)
+const decodeMany = decodeWith(Schema.Array(TileObject))
 const decodeSummary = decodeWith(TileObjectSummary)
 const decodeSummaries = decodeWith(Schema.Array(TileObjectSummary))
 
@@ -51,6 +52,21 @@ export const save = (
     const raw = yield* http.post('/tile_objects', { ...body, active: true })
     return yield* decode('/tile_objects')(raw)
   })
+
+// GET /tile_objects?ids=1,2,3 -> the full objects (incl. image) for those ids,
+// unknown ids skipped (#138, ADR-0008) — the one batched request the shared
+// entity loader makes for every object a map references. No ids, no request.
+export const getMany = (
+  ids: readonly number[],
+): Effect.Effect<readonly TileObject[], HttpError, Http> =>
+  ids.length === 0
+    ? Effect.succeed([])
+    : Effect.gen(function* () {
+        const http = yield* Http
+        const path = `/tile_objects?ids=${ids.join(',')}`
+        const raw = yield* http.get(path)
+        return yield* decodeMany(path)(raw)
+      })
 
 // GET /tile_objects[?kind=] -> roster summaries (no image), for the saved-
 // objects list. Optional kind filter.
@@ -95,4 +111,4 @@ export const del = (id: number): Effect.Effect<void, HttpError, Http> =>
     yield* http.del(`/tile_objects/${id}`)
   })
 
-export const TileObjectsService = { getActive, get, save, list, activate, deactivate, del } as const
+export const TileObjectsService = { getActive, get, getMany, save, list, activate, deactivate, del } as const

@@ -18,6 +18,21 @@ module Api
         assert_not json.first.key?(:image), "summary must omit the heavy image blob"
       end
 
+      # Batched read (#138, ADR-0008): the shared entity loader fetches every
+      # object a map references in one request, images included. A play-path
+      # read, so any authenticated user — like show/active.
+      test "index with ids returns the full objects (incl. image) for those ids, skipping unknown ids" do
+        oak = TileObject.create!(name: "Oak", kind: "tree", image: "data:oak", active: true)
+        bush = TileObject.create!(name: "Bush", kind: "prop", image: "data:bush", active: true)
+        TileObject.create!(name: "Unwanted", kind: "prop", image: "data:no", active: false)
+
+        get "/api/v1/tile_objects", params: { ids: "#{oak.id},#{bush.id},999999" }, headers: auth(@user)
+
+        assert_response :success
+        assert_equal [oak.id, bush.id].sort, json.map { _1[:id] }.sort
+        assert_equal %w[data:oak data:bush].sort, json.map { _1[:image] }.sort
+      end
+
       test "a non-admin is forbidden from creating a tile object" do
         assert_no_difference -> { TileObject.count } do
           post "/api/v1/tile_objects",
