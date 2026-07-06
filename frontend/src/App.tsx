@@ -18,7 +18,7 @@ import MapPage from './maps/MapPage.tsx'
 // preview) ride the same admin-only split.
 const MapsListPage = lazy(() => import('./admin/MapsListPage.tsx'))
 const MapEditorPage = lazy(() => import('./admin/MapEditorPage.tsx'))
-const MapCollisionPage = lazy(() => import('./admin/MapCollisionPage.tsx'))
+const MapDecoratePage = lazy(() => import('./admin/MapDecoratePage.tsx'))
 
 // Route table. RootLayout is the persistent shell (brand header + Village/Admin
 // nav); the village game lives at "/" and the admin console — the four former
@@ -57,10 +57,10 @@ export default function App() {
             }
           />
           <Route
-            path="maps/:slug/collision"
+            path="maps/:slug/decorate"
             element={
               <Suspense fallback={<p className="admin-hint">Loading editor…</p>}>
-                <MapCollisionPage />
+                <MapDecoratePage />
               </Suspense>
             }
           />

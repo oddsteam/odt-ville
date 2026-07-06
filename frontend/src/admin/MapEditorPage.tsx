@@ -48,8 +48,8 @@ export default function MapEditorPage() {
   const [selected, setSelected] = useState('')
   const [tool, setTool] = useState<'brush' | 'rect'>('brush')
 
-  // Collision is no longer painted here — it's a separate step on a saved map
-  // (/admin/maps/:slug/collision), so create/import stays focused on terrain.
+  // Collision and props are not placed here — they're a separate step on a saved
+  // map (/admin/maps/:slug/decorate), so create/import stays focused on terrain.
 
   // The real Tile Catalog is derived from the ground tiles mapped in the Ground
   // Tiles tool + the persisted terrain priority (#120). Baking against it makes
@@ -333,7 +333,7 @@ export default function MapEditorPage() {
       {error && <p className="admin-msg admin-msg-error">{error}</p>}
       {savedSlug && (
         <p className="admin-msg">
-          Saved. <Link to={`/admin/maps/${savedSlug}/collision`}>Paint collision</Link>
+          Saved. <Link to={`/admin/maps/${savedSlug}/decorate`}>Decorate</Link>
           {' · '}
           <a href={`/maps/${savedSlug}`}>Open /maps/{savedSlug}</a>
         </p>

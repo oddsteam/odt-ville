@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { bakedDraws, bakedDrawList, bakedTextureKey } from '../src/game/phaser/mapRenderer.ts'
+import { bakedDraws, bakedTextureKey, objectTextureKey } from '../src/game/phaser/mapRenderer.ts'
 import type { BakedGround, BakedMap } from '../src/maps/schema.ts'
 
 const map: BakedMap = {
@@ -19,25 +19,19 @@ const map: BakedMap = {
   entities: [{ kind: 'prop', tileset: 'Terra', frame: 12, x: 1, y: 0 }],
 }
 
-describe('bakedDrawList', () => {
-  it('flattens baked cells to draw instructions at their grid coordinate', () => {
-    const { tiles } = bakedDrawList(map)
+describe('bakedDraws', () => {
+  it('flattens baked cells to draw instructions at their grid coordinate, flat tiles at depth 0', () => {
+    const tiles = bakedDraws({ ...map, entities: [] })
     expect(tiles).toEqual([
-      { x: 0, y: 0, key: bakedTextureKey('Terra'), frame: 0 },
-      { x: 1, y: 0, key: bakedTextureKey('Terra'), frame: 3 },
-      { x: 1, y: 1, key: bakedTextureKey('Terra'), frame: 7 },
+      { x: 0, y: 0, key: bakedTextureKey('Terra'), frame: 0, depth: 0 },
+      { x: 1, y: 0, key: bakedTextureKey('Terra'), frame: 3, depth: 0 },
+      { x: 1, y: 1, key: bakedTextureKey('Terra'), frame: 7, depth: 0 },
     ])
   })
 
   it('skips transparent (null) cells — no stamp where nothing was painted', () => {
-    const { tiles } = bakedDrawList(map)
     // The (0,1) cell is null, so no draw instruction references it.
-    expect(tiles.some((t) => t.x === 0 && t.y === 1)).toBe(false)
-  })
-
-  it('emits entities as their own stamps from the baked entity list', () => {
-    const { entities } = bakedDrawList(map)
-    expect(entities).toEqual([{ x: 1, y: 0, key: bakedTextureKey('Terra'), frame: 12 }])
+    expect(bakedDraws({ ...map, entities: [] }).some((t) => t.x === 0 && t.y === 1)).toBe(false)
   })
 
   it('reads frames verbatim — no neighbour inspection / autotiling at runtime', () => {
@@ -50,18 +44,15 @@ describe('bakedDrawList', () => {
       rows: 1,
       entities: [],
     }
-    const { tiles } = bakedDrawList(uniform)
-    expect(tiles.map((t) => t.frame)).toEqual([9, 9])
+    expect(bakedDraws(uniform).map((t) => t.frame)).toEqual([9, 9])
   })
-})
 
-describe('bakedDraws', () => {
-  it('draws flat tiles at depth 0 and entities above at depth 1', () => {
+  it('draws entities above the flat tiles at depth 1', () => {
     expect(bakedDraws(map)).toEqual([
       { x: 0, y: 0, key: bakedTextureKey('Terra'), frame: 0, depth: 0 },
       { x: 1, y: 0, key: bakedTextureKey('Terra'), frame: 3, depth: 0 },
       { x: 1, y: 1, key: bakedTextureKey('Terra'), frame: 7, depth: 0 },
-      { x: 1, y: 0, key: bakedTextureKey('Terra'), frame: 12, depth: 1 },
+      { x: 1, y: 0, key: bakedTextureKey('Terra'), frame: 12, depth: 1, w: 1, h: 1 },
     ])
   })
 
@@ -81,5 +72,25 @@ describe('bakedDraws', () => {
       { x: 0, y: 0, key: bakedTextureKey('Terra'), frame: 1, depth: 0.1 },
       { x: 0, y: 0, key: bakedTextureKey('Terra'), frame: 2, depth: 0.2 },
     ])
+  })
+})
+
+// Entity references to saved tile objects (#139, ADR-0008): the prop is
+// `{kind:"prop", object_id, x, y}` and the fetched object supplies texture +
+// footprint; a dangling reference (deleted object) draws nothing.
+describe('bakedDraws object entities', () => {
+  const bare = { ...map, tiles: [], entities: [] }
+
+  it('stamps an object-reference prop at its footprint via obj.<id>', () => {
+    const m = { ...bare, entities: [{ kind: 'prop', object_id: 7, x: 1, y: 0 }] }
+    const objects = new Map([[7, { footprint_w: 2, footprint_h: 3 }]])
+    expect(bakedDraws(m, objects)).toEqual([
+      { x: 1, y: 0, key: objectTextureKey(7), frame: 0, depth: 1, w: 2, h: 3 },
+    ])
+  })
+
+  it('skips a dangling object reference (deleted object)', () => {
+    const m = { ...bare, entities: [{ kind: 'prop', object_id: 404, x: 1, y: 1 }] }
+    expect(bakedDraws(m, new Map())).toEqual([])
   })
 })

@@ -54,7 +54,7 @@ export default function MapsListPage() {
                   {m.cols}×{m.rows}
                 </td>
                 <td style={{ padding: '4px 16px 4px 0' }}>
-                  <Link to={`${m.slug}/collision`}>Paint collision</Link>
+                  <Link to={`${m.slug}/decorate`}>Decorate</Link>
                   {' · '}
                   <Link to={`/maps/${m.slug}`}>Play</Link>
                 </td>

@@ -34,15 +34,17 @@ module Api
         render json: MapSerializer.call(map), status: :created
       end
 
-      # PATCH /api/v1/maps/:slug — re-save an authored map's collision mask from
-      # the standalone collision editor (decoupled from create). The editor sends
-      # the mask under `baked` (the same opaque jsonb create stores); we merge it
-      # over the persisted baked so the ground/producer are untouched. A blank
-      # mask drops the key so an unmasked map's document stays clean (#131).
+      # PATCH /api/v1/maps/:slug — re-save an authored map's decorations from the
+      # standalone decorate editor (decoupled from create): the collision mask
+      # (#131) and the placed props as object references (#139, ADR-0008). The
+      # editor sends them under `baked` (the same opaque jsonb create stores); we
+      # merge over the persisted baked so the ground/producer are untouched.
       def update
         map = Map.find_by!(slug: params[:slug])
         baked = (map.baked.is_a?(Hash) ? map.baked : {}).merge(update_params["baked"] || {})
-        baked.delete("collision") if baked["collision"].blank?
+        # Blank authored layers (cleared mask, no props) drop out so an
+        # undecorated map's document stays clean.
+        %w[collision entities].each { |k| baked.delete(k) if baked[k].blank? }
         map.update!(baked: baked)
         render json: MapSerializer.call(map)
       end

@@ -23,12 +23,16 @@ export const BakedTile = Schema.Struct({
 export type BakedTile = Schema.Schema.Type<typeof BakedTile>
 
 // A placed entity — a decorative prop for now. Stamped at a tile coordinate
-// from a tileset cell, above the ground. Houses/zones (ADR-0004) are later
-// slices; this tracer carries only `kind: "prop"`.
+// above the ground. Houses/zones (ADR-0004) are later slices; this tracer
+// carries only `kind: "prop"`. The art is a reference, one of two styles:
+// `object_id` points at a saved tile object — the shared prop catalog
+// (ADR-0008) — drawn at that object's footprint; the legacy `tileset`+`frame`
+// pair addresses a spritesheet cell (the seed's fixture maps), drawn 1×1.
 export const BakedEntity = Schema.Struct({
   kind: Schema.String,
-  tileset: Schema.String,
-  frame: Schema.Number,
+  object_id: Schema.optional(Schema.Number),
+  tileset: Schema.optional(Schema.String),
+  frame: Schema.optional(Schema.Number),
   x: Schema.Number,
   y: Schema.Number,
   // Optional per-entity collision footprint (ADR-0004 walk-mask): a row-major

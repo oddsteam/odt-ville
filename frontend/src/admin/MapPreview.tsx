@@ -21,7 +21,15 @@ class PreviewScene extends Phaser.Scene {
   }
 }
 
-export default function MapPreview({ baked }: { baked: BakedMap }) {
+export default function MapPreview({
+  baked,
+  objects,
+}: {
+  baked: BakedMap
+  // The fetched tile objects the map's entities reference (ADR-0008), for the
+  // shared loader to register as obj.<id> textures. Absent on prop-less maps.
+  objects?: readonly { id: number; image: string; footprint_w: number; footprint_h: number }[]
+}) {
   const hostRef = useRef<HTMLDivElement>(null)
 
   // ponytail: rebuild the game on every bake change. Fine for editor-sized
@@ -39,8 +47,9 @@ export default function MapPreview({ baked }: { baked: BakedMap }) {
       scene: [PreviewScene],
     })
     game.registry.set('bakedMap', baked)
+    game.registry.set('bakedObjects', objects ?? [])
     return () => game.destroy(true)
-  }, [baked])
+  }, [baked, objects])
 
   // Size to the baked canvas (cols×rows × TILE); scroll rather than clip when a
   // large map exceeds the column width. (Not the tiny .admin-preview thumbnail.)
