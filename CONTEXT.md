@@ -197,6 +197,22 @@ own priority. (Open: whether each pattern carries its own edge set, how a
 pattern is selected at bake, and the exact-match pattern-to-pattern transition
 tile — being resolved.)
 
+**Hometown Policy** (2026-07-07) — the generated producer's authored inputs:
+which catalog object is *active* per kind (tree, flower-group, flower-single,
+building), the wild-encounter pool, and (future) seed / density / flora
+theming. Read by `buildTown` at generation time. **One global admin-configured
+policy for every user** — the "active"/"enabled" toggles in the admin pages
+are its current form. The producer reads it through a single resolution point,
+so per-user/per-cohort policies (department flora, onboarding pools) stay a
+*possible later* second adapter behind the same seam — not built, not promised.
+Distinct from the **Tile Catalog** (the set of things that *exist*) and from
+the Authored Map Document (fixed maps carry explicit placements and Zone
+payloads instead of a policy — they never read one). Consequently there is no
+"hometown map editor": the hometown has no layout to edit, only policy; the
+admin surface for it is a *generation settings* page, separate from catalog
+CRUD. _Avoid_: modelling the active toggles as catalog data, or "activating"
+anything for authored maps.
+
 ### Decisions (2026-06-29)
 
 Index, not rationale — the load-bearing ones have ADRs; the rest are settled
