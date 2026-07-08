@@ -1,4 +1,4 @@
-import { NavLink, Outlet } from 'react-router-dom'
+import { Link, NavLink, Outlet } from 'react-router-dom'
 import LogoutButton from '../auth/LogoutButton.tsx'
 import './admin.css'
 
@@ -29,6 +29,13 @@ export default function AdminLayout() {
             {t.label}
           </NavLink>
         ))}
+        {/* Dev-only hop back to the game (stripped from prod builds, like the
+            game header's ⚙ ADMIN shortcut — prod reaches routes by URL only). */}
+        {import.meta.env.DEV && (
+          <Link className="admin-nav-link" to="/">
+            🕹 GAME
+          </Link>
+        )}
         <LogoutButton className="admin-logout" />
       </nav>
       <div className="admin-console-body">

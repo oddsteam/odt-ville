@@ -157,7 +157,8 @@ button:disabled {
   gap: 12px;
 }
 
-.app-logout {
+.app-logout,
+.app-dev-admin {
   font: inherit;
   font-size: 8px;
   padding: 3px 6px;
@@ -168,8 +169,14 @@ button:disabled {
   cursor: pointer;
 }
 
-.app-logout:hover {
+.app-logout:hover,
+.app-dev-admin:hover {
   background: #3a4a6b;
+}
+
+/* The dev-only ⚙ ADMIN shortcut is a router <Link>, so an anchor. */
+.app-dev-admin {
+  text-decoration: none;
 }
 
 /* ---- Dev-only user switcher (issue #93) --------------------- */
