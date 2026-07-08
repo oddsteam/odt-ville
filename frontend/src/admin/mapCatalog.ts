@@ -11,35 +11,11 @@
 
 import { tilesetUrl } from '../groundTiles/tilesets.js'
 import type { GroundTile } from '../groundTiles/schema.ts'
-import { catalogFromArt } from '../game/phaser/tileCatalog.ts'
-import type { CatalogArtTile, CatalogTileset, TileCatalog } from '../game/phaser/tileCatalog.ts'
 
-// Unique preserving first-seen order.
-const uniq = <T>(xs: T[]) => [...new Set(xs)]
-
-export function catalogFromGroundTiles(
-  tiles: readonly GroundTile[],
-  colsByTileset: Record<string, number>,
-  priority: readonly string[],
-): TileCatalog {
-  const cellByTileset = new Map(tiles.map((t) => [t.tileset, t.cell]))
-  const tilesets: CatalogTileset[] = uniq(tiles.map((t) => t.tileset)).map((name) => ({
-    name,
-    cell: cellByTileset.get(name) ?? 32,
-    cols: colsByTileset[name] ?? 1,
-  }))
-
-  const artTiles: CatalogArtTile[] = tiles.map((t) => ({
-    tile_type: t.tile_type,
-    tileset: t.tileset,
-    col: t.col,
-    row: t.row,
-    role: t.role,
-    side: t.side,
-  }))
-
-  return catalogFromArt(artTiles, tilesets, priority)
-}
+// The catalog assembly itself lives in the kernel (#171) — the live hometown
+// producer builds the same catalog from the same data, so it is re-exported
+// here for the editor's callers.
+export { catalogFromGroundTiles } from '../game/phaser/tileCatalog.ts'
 
 // The image column count a sheet needs for `frame = row*cols + col`, read from
 // the loaded PNG exactly as the runtime does (image.width / cell). Best-effort:

@@ -18,11 +18,6 @@ import { HOMETOWN_CATALOG } from '../src/game/phaser/tileCatalog.ts'
 // Frame math is row * cols + col; the hometown sheet declares 32 columns.
 const f = (col: number, row: number) => row * 32 + col
 
-// Terrain priority as persisted (#120), low→high — the same data the editor
-// reads. The town's terrains (road < dirt < grass) keep their order under it, so
-// the bake is byte-identical to the old hardcoded stack.
-const PRIORITY = ['water', 'road', 'sand', 'dirt', 'grass']
-
 // An independent authored source document with the town's terrain — the shape an
 // editor would save. Built without townTerrainSource so the equality test below
 // genuinely compares two producers, not a function against itself.
@@ -50,7 +45,7 @@ describe('townTerrainSource', () => {
 describe('bakeTownGround — runtime map shape via the shared engine', () => {
   it('bakes a ground sized to the town', () => {
     const town = buildTown(6)
-    const ground = bakeTownGround(town, PRIORITY)
+    const ground = bakeTownGround(town, HOMETOWN_CATALOG)
     expect(ground.cols).toBe(town.cols)
     expect(ground.rows).toBe(town.rows)
     expect(ground.cells).toHaveLength(town.rows)
@@ -58,22 +53,25 @@ describe('bakeTownGround — runtime map shape via the shared engine', () => {
   })
 
   it('only references the bundled terrain sheet it actually used', () => {
-    const ground = bakeTownGround(buildTown(1), PRIORITY)
+    const ground = bakeTownGround(buildTown(1), HOMETOWN_CATALOG)
     expect(ground.tilesets).toEqual([{ name: '1_Terrains_and_Fences_32x32', cell: 32 }])
   })
 
   it('bakes plain open ground to a single grass fill', () => {
     const town = buildTown(6)
-    // An interior open-ground cell with grass on all four sides resolves to one
-    // grass fill at grass depth (0.2) — no seam, no autotile.
+    // An interior open-ground cell with grass on all EIGHT sides resolves to one
+    // grass fill at grass depth (0.2) — no seam, no autotile, and no road/dirt
+    // coverage beneath (#171: those spill diagonally, so diagonals must be grass
+    // too for the cell to be plain).
     const at = findCell(town, (x, y) => {
-      if (typeForTileChar(tileChar(town, x, y)) !== 'grass') return false
-      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as Array<[number, number]>) {
-        if (typeForTileChar(tileChar(town, x + dx, y + dy)) !== 'grass') return false
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (typeForTileChar(tileChar(town, x + dx, y + dy)) !== 'grass') return false
+        }
       }
       return true
     })
-    const ground = bakeTownGround(town, PRIORITY)
+    const ground = bakeTownGround(town, HOMETOWN_CATALOG)
     expect(ground.cells[at.y][at.x]).toEqual([
       { tileset: '1_Terrains_and_Fences_32x32', frame: f(2, 0), depth: 0.2 },
     ])
@@ -93,7 +91,7 @@ describe('bakeTownGround — runtime map shape via the shared engine', () => {
         typeForTileChar(tileChar(town, x + 1, y)) === 'grass'
       )
     })
-    const ground = bakeTownGround(town, PRIORITY)
+    const ground = bakeTownGround(town, HOMETOWN_CATALOG)
     expect(ground.cells[at.y][at.x]).toEqual([
       { tileset: '1_Terrains_and_Fences_32x32', frame: f(1, 0), depth: 0.1 }, // dirt coverage
       { tileset: '1_Terrains_and_Fences_32x32', frame: f(2, 1), depth: 0.2 }, // grass S edge
@@ -106,7 +104,7 @@ describe('generated and authored maps resolve identical tiles for identical terr
     it(`the town producer and an authored document bake the same ground (${count} plots)`, () => {
       const town = buildTown(count)
       const authored = bakeGround(authoredFromTown(town), HOMETOWN_CATALOG)
-      expect(bakeTownGround(town, PRIORITY)).toEqual(authored)
+      expect(bakeTownGround(town, HOMETOWN_CATALOG)).toEqual(authored)
     })
   }
 })
@@ -114,11 +112,11 @@ describe('generated and authored maps resolve identical tiles for identical terr
 describe('buildTownMap', () => {
   it('emits the town geometry unchanged plus the baked runtime ground', () => {
     const town = buildTown(6)
-    const map = buildTownMap(6, PRIORITY)
+    const map = buildTownMap(6, HOMETOWN_CATALOG)
     // Geometry is byte-identical to buildTown (the golden net guards this); the
     // baked ground is added alongside as the runtime map shape.
     expect({ cols: map.cols, rows: map.rows, map: map.map, plots: map.plots, entrance: map.entrance, entities: map.entities }).toEqual(town)
-    expect(map.ground).toEqual(bakeTownGround(town, PRIORITY))
+    expect(map.ground).toEqual(bakeTownGround(town, HOMETOWN_CATALOG))
   })
 })
 

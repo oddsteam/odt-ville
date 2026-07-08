@@ -130,11 +130,37 @@ const HOMETOWN_TILES: CatalogArtTile[] = [
   { tile_type: 'grass', tileset: HOMETOWN_SHEET, col: 0, row: 3, role: 'corner', side: 'SW' },
 ]
 
-// The hometown catalog for a given terrain priority (#120): the fixed hometown
-// art resolved against data-driven priority. The town producer's bake path calls
-// this with the persisted order instead of a hardcoded stack.
-export function hometownCatalog(priority: readonly string[]): TileCatalog {
-  return catalogFromArt(HOMETOWN_TILES, HOMETOWN_TILESETS, priority)
+// A mapped ground-tile record, structurally: the catalog art fields plus the
+// sheet's cell size. The kernel declares only what it reads (ADR-0004: depends
+// on nobody), and the groundTiles resource's GroundTile satisfies it.
+export interface GroundArtTile extends CatalogArtTile {
+  cell: number
+}
+
+// Build the catalog from the mapped ground tiles + each sheet's column count +
+// the persisted terrain priority (#120) — the one assembly both the map editor
+// and the live hometown producer use (#171), so the game bakes exactly the
+// cells the author tagged.
+export function catalogFromGroundTiles(
+  tiles: ReadonlyArray<GroundArtTile>,
+  colsByTileset: Record<string, number>,
+  priority: readonly string[],
+): TileCatalog {
+  const cellByTileset = new Map(tiles.map((t) => [t.tileset, t.cell]))
+  const tilesets: CatalogTileset[] = [...new Set(tiles.map((t) => t.tileset))].map((name) => ({
+    name,
+    cell: cellByTileset.get(name) ?? 32,
+    cols: colsByTileset[name] ?? 1,
+  }))
+  const artTiles: CatalogArtTile[] = tiles.map((t) => ({
+    tile_type: t.tile_type,
+    tileset: t.tileset,
+    col: t.col,
+    row: t.row,
+    role: t.role,
+    side: t.side,
+  }))
+  return catalogFromArt(artTiles, tilesets, priority)
 }
 
 // The generated hometown's catalog — the data equivalent of the old hardcoded

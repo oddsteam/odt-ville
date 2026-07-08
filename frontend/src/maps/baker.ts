@@ -12,8 +12,12 @@
 import {
   EDGE_CORNERS,
   ORTHOGONAL_DIRS,
+  dirtLayerBorders,
+  dirtLayerCoversCell,
   groundPaintStackForCell,
+  roadLayerCoversCell,
   terrainBorders,
+  terrainDepth,
 } from '../game/phaser/groundModel.js'
 import { edgeSetsFromCatalog, innerSetsFromCatalog } from '../game/phaser/tileCatalog.ts'
 import type { CatalogArtTile, TileCatalog } from '../game/phaser/tileCatalog.ts'
@@ -83,6 +87,46 @@ function bakeCell(
     layers.push({ tileset: art.tileset, frame: frameFor(art, colsByTileset), depth })
     return true
   }
+  // A terrain's concrete tiles for a border set: outer corners consume their two
+  // sides, remaining sides draw flat edges, and a cell with no matching edge art
+  // falls back to the fill so it is never a hole.
+  const pushBorderTiles = (terrain: string, borders: Record<string, boolean>, depth: number) => {
+    const used = new Set<string>()
+    let drew = false
+    for (const { c, a, b } of EDGE_CORNERS) {
+      if (borders[a] && borders[b] && push(artIndex.get(`${terrain}|corner|${c}`), depth)) {
+        used.add(a)
+        used.add(b)
+        drew = true
+      }
+    }
+    for (const { d } of ORTHOGONAL_DIRS) {
+      if (borders[d] && !used.has(d) && push(artIndex.get(`${terrain}|edge|${d}`), depth)) {
+        drew = true
+      }
+    }
+    if (!drew) push(artIndex.get(`${terrain}|fill|`), depth)
+  }
+
+  // The runtime coverage special-cases, ported from the town renderer (#171).
+  // road — the opaque base — extends one cell in every direction beneath
+  // neighbouring painted terrain (diagonals included) so transparent caps and
+  // corners above it never open a hole; an unpainted cell stays transparent
+  // because nothing sits above a spill there. dirt lays a one-cell mask beneath
+  // neighbouring grass and autotiles against the mask's own boundary, not
+  // terrain rank — a flat fill until dirt edge art exists.
+  const terrain = field.terrainAt(x, y)
+  const roadCovered = roadLayerCoversCell(field, x, y)
+  const dirtCovered = dirtLayerCoversCell(field, x, y)
+  if (terrain && terrain !== 'road' && roadCovered) {
+    push(artIndex.get('road|fill|'), terrainDepth('road', catalog))
+  }
+  if (dirtCovered) {
+    pushBorderTiles('dirt', dirtLayerBorders(field, x, y) as Record<string, boolean>, terrainDepth('dirt', catalog))
+  }
+  // The mask pass above IS the dirt cell's own drawing (runtime parity: dirt
+  // resolves against the mask boundary, never the generic plan).
+  if (terrain === 'dirt') return layers
 
   // groundModel.js is untyped; its `= null` defaults make TS infer null-only
   // params, so the engine boundary takes loose casts (as townRenderer does).
@@ -93,6 +137,14 @@ function bakeCell(
     depth: number
   }>
   for (const entry of plan) {
+    // The road spill / dirt mask already painted this backing — don't stack a
+    // duplicate coverage fill on top of it.
+    if (
+      entry.role === 'coverage' &&
+      ((entry.terrain === 'road' && roadCovered) || (entry.terrain === 'dirt' && dirtCovered))
+    ) {
+      continue
+    }
     if (entry.role === 'inner') {
       // Concave corner: the transparent-notched inner-corner tile. Its coverage
       // (the diagonal terrain) is a separate 'coverage' entry drawn below.
@@ -104,27 +156,9 @@ function bakeCell(
       push(artIndex.get(`${entry.terrain}|fill|`), entry.depth)
       continue
     }
-    // Transparent edge: pick the concrete corner/edge tiles for the borders the
-    // higher terrain owns. A corner consumes its two sides so they don't also
-    // draw a flat edge over it.
-    const borders = terrainBorders(field, x, y, entry.terrain, catalog) as Record<string, boolean>
-    const used = new Set<string>()
-    let drew = false
-    for (const { c, a, b } of EDGE_CORNERS) {
-      if (borders[a] && borders[b] && push(artIndex.get(`${entry.terrain}|corner|${c}`), entry.depth)) {
-        used.add(a)
-        used.add(b)
-        drew = true
-      }
-    }
-    for (const { d } of ORTHOGONAL_DIRS) {
-      if (borders[d] && !used.has(d) && push(artIndex.get(`${entry.terrain}|edge|${d}`), entry.depth)) {
-        drew = true
-      }
-    }
-    // No matching edge art for these borders — fall back to the flat fill so the
-    // cell is never a hole (matches the renderer's drawOwn fallback).
-    if (!drew) push(artIndex.get(`${entry.terrain}|fill|`), entry.depth)
+    // Transparent edge: the concrete corner/edge tiles for the borders the
+    // higher terrain owns.
+    pushBorderTiles(entry.terrain, terrainBorders(field, x, y, entry.terrain, catalog) as Record<string, boolean>, entry.depth)
   }
   return layers
 }

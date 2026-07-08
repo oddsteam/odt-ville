@@ -70,6 +70,8 @@ describe('baker inner (concave) corners', () => {
 
   it('falls back to a plain fill when the terrain has no inner-corner art', () => {
     const cell = bakeGround(CONCAVE, withoutInner).cells[2][2]
-    expect(cell.map((l) => l.frame)).toEqual([GRASS_FILL])
+    // The road under-spill (#171) sits beneath the opaque fill; the visible
+    // tile is still the plain grass fill, with no inner-corner art.
+    expect(cell.map((l) => l.frame)).toEqual([ROAD_FILL, GRASS_FILL])
   })
 })

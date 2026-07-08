@@ -71,20 +71,6 @@
   },
   {
     "type": "dependency",
-    "from": "src/game/phaser/groundModel.js",
-    "to": "src/game/town.ts",
-    "unresolvedTo": "../town.ts",
-    "dependencyTypes": [
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "kernel-depends-on-nobody"
-    }
-  },
-  {
-    "type": "dependency",
     "from": "src/game/phaser/mapRenderer.ts",
     "to": "src/game/constants.js",
     "unresolvedTo": "../constants.js",

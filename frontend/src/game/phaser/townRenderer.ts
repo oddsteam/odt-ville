@@ -1,33 +1,23 @@
-// Town presentation (R4). Everything that paints the town lives here: ground
-// layers (road/dirt/grass fill + autotiled edges), building sprites + name-
-// plates, tall props, plus the dev-only layer inspector and tile grid. The
-// scene stays an orchestrator — it calls preloadAssets() in preload(),
-// render() in create() to lay the world down, and setupDevTools() once the
-// test API is up.
+// Town presentation (R4). Everything that paints the town lives here: the
+// producer-baked ground blit (#171 — no autotile resolution at runtime,
+// ADR-0003), building sprites + nameplates, tall props, plus the dev-only
+// layer inspector and tile grid. The scene stays an orchestrator — it calls
+// preloadAssets() in preload(), render() in create() to lay the world down,
+// and setupDevTools() once the test API is up.
 //
 // Phaser-coupled by design (it owns the `scene.add.*` calls), so it takes the
 // live scene and reads/writes the same `scene.*` fields the scene used to own
-// (groundTiles, buildings, propCells, devLayers, …). The pure frame-index
-// helpers (buildGroundTileMap / buildEdgeMap) are exported for unit tests.
+// (buildings, propCells, devLayers, …). The pure column-count helper
+// (tilesetColumns) is exported for unit tests.
 
 import { TILE } from '../constants.js'
 import { buildingOverlayDepth } from '../town.js'
 import { townPropDraws } from '../townProps.ts'
 import { loadObjectTextures, stampEntity } from './entityLoader.ts'
+import { bakedTextureKey, groundDrawList } from './mapRenderer.ts'
 import { buildingKeyFor, DEFAULT_BUILDING } from '../buildings.js'
 import { preloadCharacter } from './characterRig.js'
 import { GATE_TRAINER } from '../encounters.js'
-import {
-  GROUND_STACK,
-  EDGE_CORNERS,
-  coverageTerrainForCell,
-  dirtLayerBorders,
-  dirtLayerCoversCell,
-  groundPaintStackForCell,
-  roadLayerCoversCell,
-  terrainBorders,
-  typeForTileChar,
-} from './groundModel.js'
 
 // The Phaser scene, structurally. We touch only a handful of its fields; typing
 // the full Phaser surface here buys nothing, so the scene stays loose.
@@ -109,12 +99,13 @@ export function preloadAssets(scene: Scene) {
   if (scene._buildingObject?.fg_mask) scene.load.image('building.fgmask', scene._buildingObject.fg_mask)
 
   // Ground-tile catalog (ground-tile mapper). Each referenced tileset loads
-  // once as a uniform spritesheet (frame = cell), so create() can stamp a
-  // specific cell — grass/dirt/road — onto the map by frame index.
+  // once as a uniform spritesheet (frame = cell) under the SAME `bake.<name>`
+  // key the authored-map renderer uses, because the town's ground is now baked
+  // in the producer and blitted through the same draw path (#171).
   scene._groundTiles = scene.registry.get('groundTiles') || []
   const seenSheets = new Set<string>()
   for (const t of scene._groundTiles) {
-    const key = `gtset.${t.tileset}`
+    const key = bakedTextureKey(t.tileset)
     if (seenSheets.has(key)) continue
     seenSheets.add(key)
     scene.load.spritesheet(key, `/maps/tilesets/${t.tileset}.png`, {
@@ -122,6 +113,19 @@ export function preloadAssets(scene: Scene) {
       frameHeight: t.cell,
     })
   }
+}
+
+// Column count of every loaded ground sheet (frame = row * cols + col), read
+// off the texture exactly as the map editor reads the PNG — the one piece of
+// catalog data only known once images exist. Feeds catalogFromGroundTiles.
+export function tilesetColumns(scene: Scene): Record<string, number> {
+  const out: Record<string, number> = {}
+  for (const t of scene._groundTiles || []) {
+    if (out[t.tileset] || !scene.textures.exists(bakedTextureKey(t.tileset))) continue
+    const width = scene.textures.get(bakedTextureKey(t.tileset)).getSourceImage().width
+    out[t.tileset] = Math.max(1, Math.floor(width / t.cell))
+  }
+  return out
 }
 
 // ---- render --------------------------------------------------------------
@@ -141,12 +145,31 @@ export function render(scene: Scene) {
     }
   }
 
-  // Ground is rendered at fixed road → dirt → grass depths. The higher layer
-  // owns each seam and reveals a targeted lower-layer fill beneath its edge.
-  // Fill + edge cells come from the ground-tile mapper; unknowns (the sign)
-  // fall back to the procedural textures.
-  scene.groundTiles = buildGroundTileMap(scene)
-  paintGround(scene)
+  // Ground: blit the producer-baked cells exactly as mapRenderer blits an
+  // authored map (#171, ADR-0003) — every stamp was resolved in the bake, so
+  // there is no autotile logic here. A baked depth is its terrain's stack
+  // index × 0.1, so the catalog stack maps each stamp back to a dev-inspector
+  // bucket; terrains without a bucket (e.g. water) just aren't toggleable.
+  const stack: string[] = scene._groundStack || []
+  const bucketForDepth = (depth: number) => {
+    const terrain = stack[Math.round(depth * 10)]
+    return terrain === 'grass' ? 'grass' : `${terrain}Base`
+  }
+  for (const d of groundDrawList(scene.town.ground)) {
+    const img = stampEntity(scene, d)
+    if (DEV && img) scene.devLayers[bucketForDepth(d.depth)]?.push(img)
+  }
+
+  // Non-terrain chars (the signpost) keep their procedural texture, drawn one
+  // step above the topmost ground layer; the grass beneath is in the bake.
+  const signDepth = stack.length * 0.1 || 0.3
+  for (let y = 0; y < scene.town.rows; y++) {
+    for (let x = 0; x < scene.town.cols; x++) {
+      if (scene.town.map[y][x] !== 's') continue
+      const img = scene.add.image(x * TILE, y * TILE, 'tile.sign').setOrigin(0, 0).setDepth(signDepth)
+      if (DEV) scene.devLayers?.grass?.push(img)
+    }
+  }
 
   // Foliage — boundary trees (bottom-anchored, y-sorted) and the flower scatter
   // (a flat overlay). Both resolve to shared-loader draws and stamp through the
@@ -162,159 +185,6 @@ export function render(scene: Scene) {
     const sprite = addBuildingSprite(scene, community, plot)
     return { community, ...plot, sprite }
   })
-}
-
-// Resolve the ground-tile catalog into a `tileChar -> { key, frame }` lookup
-// for the ground layer. Surface types map onto the town's map chars:
-//   grass -> '.' open ground AND '*' flower patches (same grass cell)
-//   dirt  -> 'g' tall-grass encounter field
-//   road  -> ':' streets, side avenue, entrance stem
-// The spritesheet was loaded in preload(); the cell's frame index is
-// row * columns + col, with columns derived from the loaded image width.
-export function buildGroundTileMap(scene: Scene): Record<string, { key: string; frame: number }> {
-  const TYPE_TO_CHARS: Record<string, string[]> = { grass: ['.', '*'], dirt: ['g'], road: [':'] }
-  const out: Record<string, { key: string; frame: number }> = {}
-  for (const t of scene._groundTiles || []) {
-    // Only fill tiles paint the interior; edge tiles (role: 'edge') are
-    // resolved by the boundary pass — Step 2, not yet wired here.
-    if (t.role && t.role !== 'fill') continue
-    const chars = TYPE_TO_CHARS[t.tile_type]
-    if (!chars) continue
-    const key = `gtset.${t.tileset}`
-    if (!scene.textures.exists(key)) continue
-    const width = scene.textures.get(key).getSourceImage().width
-    const cols = Math.max(1, Math.floor(width / t.cell))
-    const cell = { key, frame: t.row * cols + t.col }
-    for (const ch of chars) out[ch] = cell
-  }
-  return out
-}
-
-// Edge + corner tiles from the catalog, as `{ type: { side: { key, frame } } }`.
-// Orthogonal sides (N/E/S/W) are edges, diagonal (NE/NW/SE/SW) are corners;
-// they share the keyspace since the side names don't collide. Fill tiles are
-// ignored here (they live in the fill map).
-export function buildEdgeMap(scene: Scene): Record<string, Record<string, { key: string; frame: number }>> {
-  const out: Record<string, Record<string, { key: string; frame: number }>> = {}
-  for (const t of scene._groundTiles || []) {
-    if ((t.role !== 'edge' && t.role !== 'corner') || !t.side) continue
-    const key = `gtset.${t.tileset}`
-    if (!scene.textures.exists(key)) continue
-    const cols = Math.max(1, Math.floor(scene.textures.get(key).getSourceImage().width / t.cell))
-    ;(out[t.tile_type] ||= {})[t.side] = { key, frame: t.row * cols + t.col }
-  }
-  return out
-}
-
-// Render fixed road → dirt → grass layers. Logical terrain ownership never
-// changes: the higher terrain owns each seam, and its transparent edge gets
-// the highest applicable lower terrain as backing at that terrain's depth.
-function paintGround(scene: Scene) {
-  const fill = scene.groundTiles
-  const edges = buildEdgeMap(scene)
-  // Flat fill tile per terrain type (the char fill map keyed by terrain).
-  const fillFor: Record<string, any> = {
-    road: fill[':'] || null,
-    dirt: fill.g || null,
-    grass: fill['.'] || null,
-  }
-  // Outer corners: a diagonal tile spanning two adjacent orthogonal borders.
-  const stamp = (x: number, y: number, t: any, depth: number, bucket?: string) => {
-    if (!t) return
-    const img = scene.add
-      .image(x * TILE, y * TILE, t.key, t.frame)
-      .setOrigin(0, 0)
-      .setDepth(depth)
-      .setDisplaySize(TILE, TILE)
-    if (DEV && bucket) scene.devLayers[bucket]?.push(img)
-  }
-  // Dev-inspector bucket for a layer. Grass fill/edges/corners are one layer;
-  // road/dirt are their base layers.
-  const bucketFor = (layer: string) => (layer === 'grass' ? 'grass' : `${layer}Base`)
-
-  // Draw a terrain's own tile at (x,y): autotiled (fill / edge / corner) when
-  // the terrain has edge tiles tagged — grass today, dirt/road automatically
-  // once tagged — otherwise a flat fill. Generic across every terrain.
-  const drawOwn = (layer: string, x: number, y: number, depth: number, borderOverride: any = null) => {
-    const e = edges[layer]
-    const f = fillFor[layer]
-    if (!e) {
-      stamp(x, y, f, depth, bucketFor(layer))
-      return
-    }
-    const border = borderOverride || terrainBorders(scene.town, x, y, layer)
-    const used = new Set<string>()
-    let drew = false
-    for (const { c, a, b } of EDGE_CORNERS) {
-      if (border[a] && border[b] && e[c]) {
-        stamp(x, y, e[c], depth, bucketFor(layer))
-        used.add(a)
-        used.add(b)
-        drew = true
-      }
-    }
-    for (const d of ['N', 'E', 'S', 'W']) {
-      if (border[d] && !used.has(d) && e[d]) {
-        stamp(x, y, e[d], depth, bucketFor(layer))
-        drew = true
-      }
-    }
-    if (!drew) stamp(x, y, f, depth, bucketFor(layer))
-  }
-
-  // One generic pass per layer, bottom → top. Dirt also paints its autotiled
-  // underlay mask beneath neighbouring grass; this never changes the logical
-  // surface. Other transparent edges stamp the selected lower neighbour at
-  // its canonical depth.
-  GROUND_STACK.forEach((layer, i) => {
-    const f = fillFor[layer]
-    if (!f) return // terrain has no fill tile tagged yet
-    const depth = i * 0.1
-    for (let y = 0; y < scene.town.rows; y++) {
-      for (let x = 0; x < scene.town.cols; x++) {
-        const cType = typeForTileChar(scene.town.map[y][x])
-        const roadCoverage = layer === 'road' && roadLayerCoversCell(scene.town, x, y)
-        const dirtCoverage = layer === 'dirt' && dirtLayerCoversCell(scene.town, x, y)
-        if (cType === layer || roadCoverage || dirtCoverage) {
-          if (layer === 'road') {
-            stamp(x, y, f, depth, bucketFor(layer))
-            continue
-          }
-          if (layer === 'dirt') {
-            // groundModel.js is untyped; its `= null` default params make TS
-            // infer null-only, so the border/edge maps need a loose annotation.
-            const dirtBorders: any = dirtLayerBorders(scene.town, x, y)
-            const roadBacking = coverageTerrainForCell(scene.town, x, y, 'dirt', dirtBorders)
-            if (roadBacking === 'road' && !roadLayerCoversCell(scene.town, x, y)) {
-              stamp(x, y, fillFor.road, 0, bucketFor('road'))
-            }
-            drawOwn(layer, x, y, depth, dirtBorders)
-            continue
-          }
-          const plan: any[] = groundPaintStackForCell(scene.town, x, y, edges as any)
-          const backing = plan.find(({ role }: any) => role === 'coverage')
-          const alreadyPaintedByLowerLayer =
-            (backing?.terrain === 'dirt' && dirtLayerCoversCell(scene.town, x, y)) ||
-            (backing?.terrain === 'road' && roadLayerCoversCell(scene.town, x, y))
-          if (!alreadyPaintedByLowerLayer) {
-            stamp(x, y, fillFor[backing?.terrain], backing?.depth, bucketFor(backing?.terrain))
-          }
-          drawOwn(layer, x, y, depth)
-        }
-      }
-    }
-  })
-
-  // Non-terrain chars (the signpost) keep their procedural texture, drawn on
-  // top of the ground layers. typeForTileChar treats 's' as grass for
-  // neighbour purposes, and the grass layer already paints the cell beneath.
-  for (let y = 0; y < scene.town.rows; y++) {
-    for (let x = 0; x < scene.town.cols; x++) {
-      if (scene.town.map[y][x] !== 's') continue
-      const img = scene.add.image(x * TILE, y * TILE, 'tile.sign').setOrigin(0, 0).setDepth(0.3)
-      if (DEV) scene.devLayers?.grass?.push(img)
-    }
-  }
 }
 
 // Build the two-layer building sprite. We don't yet hue-rotate from
