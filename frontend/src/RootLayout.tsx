@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Outlet } from 'react-router-dom'
+import { Link, Outlet } from 'react-router-dom'
 
 import { runEdge } from './lib/runEdge.ts'
 import { subscribeAuthToken } from './lib/authToken.ts'
@@ -11,9 +11,10 @@ import { trackSessionActiveTime } from './analytics/sessionTime.ts'
 import type { Viewer } from './viewer/schema.ts'
 
 // The game shell: brand header + the village game via <Outlet>. The admin
-// console is a separate top-level route (see App + AdminLayout) with no link
-// from here — it's reached by URL only. `me` is purely for the header, fetched
-// best-effort so the game renders even if the viewer endpoint is slow or down.
+// console is a separate top-level route (see App + AdminLayout) reached by URL
+// only in production; dev builds get a header shortcut (stripped like the
+// UserSwitcher). `me` is purely for the header, fetched best-effort so the
+// game renders even if the viewer endpoint is slow or down.
 export default function RootLayout() {
   const [me, setMe] = useState<Viewer | null>(null)
 
@@ -48,6 +49,11 @@ export default function RootLayout() {
           </div>
         </div>
         <div className="app-header-right">
+          {import.meta.env.DEV && (
+            <Link className="app-dev-admin" to="/admin">
+              ⚙ ADMIN
+            </Link>
+          )}
           {import.meta.env.DEV && <UserSwitcher />}
           {me && (
             <div className="app-user">
