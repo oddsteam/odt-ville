@@ -1,0 +1,93 @@
+strict digraph "dependency-cruiser output"{
+    rankdir="LR" splines="true" overlap="false" nodesep="0.16" ranksep="0.18" fontname="Helvetica-bold" fontsize="9" style="rounded,bold,filled" fillcolor="#ffffff" compound="true"
+    node [shape="box" style="rounded, filled" height="0.2" color="black" fillcolor="#ffffcc" fontcolor="black" fontname="Helvetica" fontsize="9"]
+    edge [arrowhead="normal" arrowsize="0.6" penwidth="2.0" color="#00000033" fontname="Helvetica" fontsize="9"]
+
+    "src" [label=<src> tooltip="src" URL="src" shape="box3d"]
+    "src" -> "src/admin"
+    "src" -> "src/auth"
+    "src" -> "src/groundTiles"
+    "src" -> "src/maps"
+    "src" -> "src/posture"
+    "src" -> "src/spriteMapper"
+    "src" -> "src/tileMapper"
+    "src" -> "src/analytics"
+    "src" -> "src/dev"
+    "src" -> "src/lib"
+    "src" -> "src/viewer"
+    "src" -> "src/communities"
+    "src" -> "src/game-session"
+    "src" -> "src/game"
+    "src" -> "src/character"
+    "src" -> "src/monsters"
+    "src" -> "src/tileObjects"
+    subgraph "cluster_src" {label="src" "src" [width="0.05" shape="point" style="invis"] "src/admin" [label=<admin> tooltip="admin" URL="src/admin" shape="box3d"] }
+    "src/admin" -> "src/auth"
+    "src/admin" -> "src/communities"
+    "src/admin" -> "src/lib"
+    "src/admin" -> "src/maps"
+    "src/admin" -> "src/tileObjects"
+    "src/admin" -> "src/game" [xlabel="authoring-never-imports-game-runtime" tooltip="authoring-never-imports-game-runtime" fontcolor="red" color="red"]
+    "src/admin" -> "src/game/phaser"
+    "src/admin" -> "src/groundTiles"
+    "src/admin" -> "src/terrains"
+    "src/admin" -> "src/monsters"
+    subgraph "cluster_src" {label="src" "src" [width="0.05" shape="point" style="invis"] "src/analytics" [label=<analytics> tooltip="analytics" URL="src/analytics" shape="box3d"] }
+    "src/analytics" -> "src/lib"
+    subgraph "cluster_src" {label="src" "src" [width="0.05" shape="point" style="invis"] "src/auth" [label=<auth> tooltip="auth" URL="src/auth" shape="box3d"] }
+    "src/auth" -> "src/lib"
+    "src/auth" -> "src/viewer"
+    subgraph "cluster_src" {label="src" "src" [width="0.05" shape="point" style="invis"] "src/character" [label=<character> tooltip="character" URL="src/character" shape="box3d"] }
+    "src/character" -> "src/lib"
+    subgraph "cluster_src" {label="src" "src" [width="0.05" shape="point" style="invis"] "src/communities" [label=<communities> tooltip="communities" URL="src/communities" shape="box3d"] }
+    "src/communities" -> "src/lib"
+    "src/communities" -> "src/posture"
+    "src/communities" -> "src/tileMapper"
+    subgraph "cluster_src" {label="src" "src" [width="0.05" shape="point" style="invis"] "src/dev" [label=<dev> tooltip="dev" URL="src/dev" shape="box3d"] }
+    subgraph "cluster_src" {label="src" "src" [width="0.05" shape="point" style="invis"] "src/game" [label=<game> tooltip="game" URL="src/game" shape="box3d"] }
+    "src/game" -> "src/game/assets/character"
+    "src/game" -> "src/game/phaser"
+    "src/game" -> "src/game/assets/pokemon"
+    "src/game" -> "src/maps"
+    subgraph "cluster_src" {label="src" "src" [width="0.05" shape="point" style="invis"] "src/game-session" [label=<game-session> tooltip="game-session" URL="src/game-session" shape="box3d"] }
+    "src/game-session" -> "src/lib"
+    subgraph "cluster_src" {label="src" "src" [width="0.05" shape="point" style="invis"] subgraph "cluster_src/game" {label="game" "src/game" [width="0.05" shape="point" style="invis"] subgraph "cluster_src/game/assets" {label="assets" "src/game/assets" [width="0.05" shape="point" style="invis"] "src/game/assets/character" [label=<character> tooltip="character" URL="src/game/assets/character" shape="box3d"] } } }
+    subgraph "cluster_src" {label="src" "src" [width="0.05" shape="point" style="invis"] subgraph "cluster_src/game" {label="game" "src/game" [width="0.05" shape="point" style="invis"] subgraph "cluster_src/game/assets" {label="assets" "src/game/assets" [width="0.05" shape="point" style="invis"] subgraph "cluster_src/game/assets/character" {label="character" "src/game/assets/character" [width="0.05" shape="point" style="invis"] "src/game/assets/character/rpg-char-01" [label=<rpg-char-01> tooltip="rpg-char-01" URL="src/game/assets/character/rpg-char-01" shape="box3d"] } } } }
+    subgraph "cluster_src" {label="src" "src" [width="0.05" shape="point" style="invis"] subgraph "cluster_src/game" {label="game" "src/game" [width="0.05" shape="point" style="invis"] subgraph "cluster_src/game/assets" {label="assets" "src/game/assets" [width="0.05" shape="point" style="invis"] "src/game/assets/pokemon" [label=<pokemon> tooltip="pokemon" URL="src/game/assets/pokemon" shape="box3d"] } } }
+    subgraph "cluster_src" {label="src" "src" [width="0.05" shape="point" style="invis"] subgraph "cluster_src/game" {label="game" "src/game" [width="0.05" shape="point" style="invis"] "src/game/phaser" [label=<phaser> tooltip="phaser" URL="src/game/phaser" shape="box3d"] } }
+    "src/game/phaser" -> "src/game" [xlabel="kernel-depends-on-nobody" tooltip="kernel-depends-on-nobody" fontcolor="red" color="red"]
+    "src/game/phaser" -> "src/character" [xlabel="game-black-box-no-data-services" tooltip="game-black-box-no-data-services" fontcolor="red" color="red"]
+    "src/game/phaser" -> "src/game/assets/character/rpg-char-01"
+    "src/game/phaser" -> "src/game/phaser/scenes"
+    subgraph "cluster_src" {label="src" "src" [width="0.05" shape="point" style="invis"] subgraph "cluster_src/game" {label="game" "src/game" [width="0.05" shape="point" style="invis"] subgraph "cluster_src/game/phaser" {label="phaser" "src/game/phaser" [width="0.05" shape="point" style="invis"] "src/game/phaser/scenes" [label=<scenes> tooltip="scenes" URL="src/game/phaser/scenes" shape="box3d"] } } }
+    "src/game/phaser/scenes" -> "src/game/assets/character/rpg-char-01"
+    "src/game/phaser/scenes" -> "src/game"
+    "src/game/phaser/scenes" -> "src/game/phaser"
+    subgraph "cluster_src" {label="src" "src" [width="0.05" shape="point" style="invis"] "src/groundTiles" [label=<groundTiles> tooltip="groundTiles" URL="src/groundTiles" shape="box3d"] }
+    "src/groundTiles" -> "src/lib"
+    "src/groundTiles" -> "src/tileMapper"
+    subgraph "cluster_src" {label="src" "src" [width="0.05" shape="point" style="invis"] "src/lib" [label=<lib> tooltip="lib" URL="src/lib" shape="box3d"] }
+    subgraph "cluster_src" {label="src" "src" [width="0.05" shape="point" style="invis"] "src/maps" [label=<maps> tooltip="maps" URL="src/maps" shape="box3d"] }
+    "src/maps" -> "src/lib"
+    "src/maps" -> "src/game/phaser"
+    "src/maps" -> "src/character"
+    "src/maps" -> "src/game/phaser/scenes" [xlabel="authoring-never-imports-game-runtime" tooltip="authoring-never-imports-game-runtime" fontcolor="red" color="red"]
+    "src/maps" -> "src/tileObjects"
+    subgraph "cluster_src" {label="src" "src" [width="0.05" shape="point" style="invis"] subgraph "cluster_src/maps" {label="maps" "src/maps" [width="0.05" shape="point" style="invis"] "src/maps/fixtures" [label=<fixtures> tooltip="fixtures" URL="src/maps/fixtures" shape="box3d"] } }
+    "src/maps/fixtures" -> "src/game/phaser"
+    subgraph "cluster_src" {label="src" "src" [width="0.05" shape="point" style="invis"] "src/monsters" [label=<monsters> tooltip="monsters" URL="src/monsters" shape="box3d"] }
+    subgraph "cluster_src" {label="src" "src" [width="0.05" shape="point" style="invis"] "src/posture" [label=<posture> tooltip="posture" URL="src/posture" shape="box3d"] }
+    "src/posture" -> "src/lib"
+    subgraph "cluster_src" {label="src" "src" [width="0.05" shape="point" style="invis"] "src/spriteMapper" [label=<spriteMapper> tooltip="spriteMapper" URL="src/spriteMapper" shape="box3d"] }
+    "src/spriteMapper" -> "src/character"
+    "src/spriteMapper" -> "src/lib"
+    subgraph "cluster_src" {label="src" "src" [width="0.05" shape="point" style="invis"] "src/terrains" [label=<terrains> tooltip="terrains" URL="src/terrains" shape="box3d"] }
+    "src/terrains" -> "src/lib"
+    subgraph "cluster_src" {label="src" "src" [width="0.05" shape="point" style="invis"] "src/tileMapper" [label=<tileMapper> tooltip="tileMapper" URL="src/tileMapper" shape="box3d"] }
+    "src/tileMapper" -> "src/game" [xlabel="authoring-never-imports-game-runtime" tooltip="authoring-never-imports-game-runtime" fontcolor="red" color="red"]
+    "src/tileMapper" -> "src/tileObjects"
+    subgraph "cluster_src" {label="src" "src" [width="0.05" shape="point" style="invis"] "src/tileObjects" [label=<tileObjects> tooltip="tileObjects" URL="src/tileObjects" shape="box3d"] }
+    "src/tileObjects" -> "src/lib"
+    subgraph "cluster_src" {label="src" "src" [width="0.05" shape="point" style="invis"] "src/viewer" [label=<viewer> tooltip="viewer" URL="src/viewer" shape="box3d"] }
+    "src/viewer" -> "src/lib"
+}

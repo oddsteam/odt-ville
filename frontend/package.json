@@ -10,6 +10,8 @@
     "typecheck": "tsc --noEmit",
     "arch": "depcruise src --config .dependency-cruiser.cjs --ignore-known",
     "arch:baseline": "depcruise src --config .dependency-cruiser.cjs --output-type baseline --output-to .dependency-cruiser-known-violations.json",
+    "graph": "depcruise src --config .dependency-cruiser.cjs --include-only \"^src/\" --output-type dot --output-to codebase-map.dot",
+    "graph:folders": "depcruise src --config .dependency-cruiser.cjs --include-only \"^src/\" --output-type ddot --output-to codebase-map.folders.dot",
     "build": "vite build",
     "preview": "vite preview",
     "map:build": "node ../scripts/tmx-to-tiledjson.mjs public/maps/downtown.tmx public/maps/downtown.json",

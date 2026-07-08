@@ -1,0 +1,418 @@
+strict digraph "dependency-cruiser output"{
+    rankdir="LR" splines="true" overlap="false" nodesep="0.16" ranksep="0.18" fontname="Helvetica-bold" fontsize="9" style="rounded,bold,filled" fillcolor="#ffffff" compound="true"
+    node [shape="box" style="rounded, filled" height="0.2" color="black" fillcolor="#ffffcc" fontcolor="black" fontname="Helvetica" fontsize="9"]
+    edge [arrowhead="normal" arrowsize="0.6" penwidth="2.0" color="#00000033" fontname="Helvetica" fontsize="9"]
+
+    subgraph "cluster_src" {label="src" "src/App.tsx" [label=<App.tsx> tooltip="App.tsx" URL="src/App.tsx" fillcolor="#bbfeff"] }
+    "src/App.tsx" -> "src/admin/AdminLayout.tsx"
+    "src/App.tsx" -> "src/admin/CommunitiesAdminPage.tsx"
+    "src/App.tsx" -> "src/admin/MapDecoratePage.tsx" [style="dashed"]
+    "src/App.tsx" -> "src/admin/MapEditorPage.tsx" [style="dashed"]
+    "src/App.tsx" -> "src/admin/MapsListPage.tsx" [style="dashed"]
+    "src/App.tsx" -> "src/admin/MonstersAdminPage.tsx"
+    "src/App.tsx" -> "src/auth/RequireAdmin.tsx"
+    "src/App.tsx" -> "src/groundTiles/GroundTileMapper.tsx"
+    "src/App.tsx" -> "src/maps/MapPage.tsx"
+    "src/App.tsx" -> "src/posture/CallbackPage.tsx"
+    "src/App.tsx" -> "src/RootLayout.tsx"
+    "src/App.tsx" -> "src/spriteMapper/SpriteMapper.tsx"
+    "src/App.tsx" -> "src/tileMapper/TileMapper.tsx"
+    "src/App.tsx" -> "src/VillagePage.tsx"
+    subgraph "cluster_src" {label="src" "src/RootLayout.tsx" [label=<RootLayout.tsx> tooltip="RootLayout.tsx" URL="src/RootLayout.tsx" fillcolor="#bbfeff"] }
+    "src/RootLayout.tsx" -> "src/analytics/sessionTime.ts"
+    "src/RootLayout.tsx" -> "src/auth/LogoutButton.tsx"
+    "src/RootLayout.tsx" -> "src/auth/UserSwitcher.tsx"
+    "src/RootLayout.tsx" -> "src/dev/ArchScoreBar.tsx"
+    "src/RootLayout.tsx" -> "src/lib/authToken.ts"
+    "src/RootLayout.tsx" -> "src/lib/runEdge.ts"
+    "src/RootLayout.tsx" -> "src/viewer/service.ts"
+    subgraph "cluster_src" {label="src" "src/VillagePage.tsx" [label=<VillagePage.tsx> tooltip="VillagePage.tsx" URL="src/VillagePage.tsx" fillcolor="#bbfeff"] }
+    "src/VillagePage.tsx" -> "src/analytics/events.ts"
+    "src/VillagePage.tsx" -> "src/communities/DailyBriefShortcut.tsx"
+    "src/VillagePage.tsx" -> "src/game-session/client.js"
+    "src/VillagePage.tsx" -> "src/game/VillageGame.tsx"
+    "src/VillagePage.tsx" -> "src/lib/authToken.ts"
+    "src/VillagePage.tsx" -> "src/lib/runEdge.ts"
+    "src/VillagePage.tsx" -> "src/posture/callback.ts"
+    "src/VillagePage.tsx" -> "src/posture/client.ts"
+    "src/VillagePage.tsx" -> "src/posture/popup.ts"
+    "src/VillagePage.tsx" -> "src/posture/runGate.ts"
+    "src/VillagePage.tsx" -> "src/townLoader.ts"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/admin" {label="admin" "src/admin/AdminLayout.tsx" [label=<AdminLayout.tsx> tooltip="AdminLayout.tsx" URL="src/admin/AdminLayout.tsx" fillcolor="#bbfeff"] } }
+    "src/admin/AdminLayout.tsx" -> "src/auth/LogoutButton.tsx"
+    "src/admin/AdminLayout.tsx" -> "src/admin/admin.css"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/admin" {label="admin" "src/admin/CommunitiesAdminPage.tsx" [label=<CommunitiesAdminPage.tsx> tooltip="CommunitiesAdminPage.tsx" URL="src/admin/CommunitiesAdminPage.tsx" fillcolor="#bbfeff"] } }
+    "src/admin/CommunitiesAdminPage.tsx" -> "src/communities/CommunitiesAdminPanel.tsx"
+    "src/admin/CommunitiesAdminPage.tsx" -> "src/communities/service.ts"
+    "src/admin/CommunitiesAdminPage.tsx" -> "src/lib/runEdge.ts"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/admin" {label="admin" "src/admin/MapDecoratePage.tsx" [label=<MapDecoratePage.tsx> tooltip="MapDecoratePage.tsx" URL="src/admin/MapDecoratePage.tsx" fillcolor="#bbfeff"] } }
+    "src/admin/MapDecoratePage.tsx" -> "src/lib/runEdge.ts"
+    "src/admin/MapDecoratePage.tsx" -> "src/maps/props.ts"
+    "src/admin/MapDecoratePage.tsx" -> "src/maps/service.ts"
+    "src/admin/MapDecoratePage.tsx" -> "src/tileObjects/service.ts"
+    "src/admin/MapDecoratePage.tsx" -> "src/admin/admin.css"
+    "src/admin/MapDecoratePage.tsx" -> "src/admin/MapPreview.tsx"
+    "src/admin/MapDecoratePage.tsx" -> "src/admin/maskPaint.ts"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/admin" {label="admin" "src/admin/MapEditorPage.tsx" [label=<MapEditorPage.tsx> tooltip="MapEditorPage.tsx" URL="src/admin/MapEditorPage.tsx" fillcolor="#bbfeff"] } }
+    "src/admin/MapEditorPage.tsx" -> "src/groundTiles/service.ts"
+    "src/admin/MapEditorPage.tsx" -> "src/lib/runEdge.ts"
+    "src/admin/MapEditorPage.tsx" -> "src/maps/baker.ts"
+    "src/admin/MapEditorPage.tsx" -> "src/maps/service.ts"
+    "src/admin/MapEditorPage.tsx" -> "src/maps/tiledImport.ts"
+    "src/admin/MapEditorPage.tsx" -> "src/terrains/schema.ts"
+    "src/admin/MapEditorPage.tsx" -> "src/terrains/service.ts"
+    "src/admin/MapEditorPage.tsx" -> "src/admin/admin.css"
+    "src/admin/MapEditorPage.tsx" -> "src/admin/mapCatalog.ts"
+    "src/admin/MapEditorPage.tsx" -> "src/admin/mapPaint.ts"
+    "src/admin/MapEditorPage.tsx" -> "src/admin/MapPreview.tsx"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/admin" {label="admin" "src/admin/MapPreview.tsx" [label=<MapPreview.tsx> tooltip="MapPreview.tsx" URL="src/admin/MapPreview.tsx" fillcolor="#bbfeff"] } }
+    "src/admin/MapPreview.tsx" -> "src/game/constants.js" [xlabel="authoring-never-imports-game-runtime" tooltip="authoring-never-imports-game-runtime" fontcolor="red" color="red"]
+    "src/admin/MapPreview.tsx" -> "src/game/phaser/mapRenderer.ts"
+    "src/admin/MapPreview.tsx" -> "src/admin/maskPaint.ts"
+    "src/admin/MapPreview.tsx" -> "src/admin/previewPointer.ts"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/admin" {label="admin" "src/admin/MapsListPage.tsx" [label=<MapsListPage.tsx> tooltip="MapsListPage.tsx" URL="src/admin/MapsListPage.tsx" fillcolor="#bbfeff"] } }
+    "src/admin/MapsListPage.tsx" -> "src/lib/runEdge.ts"
+    "src/admin/MapsListPage.tsx" -> "src/maps/service.ts"
+    "src/admin/MapsListPage.tsx" -> "src/admin/admin.css"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/admin" {label="admin" "src/admin/MonstersAdminPage.tsx" [label=<MonstersAdminPage.tsx> tooltip="MonstersAdminPage.tsx" URL="src/admin/MonstersAdminPage.tsx" fillcolor="#bbfeff"] } }
+    "src/admin/MonstersAdminPage.tsx" -> "src/lib/runEdge.ts"
+    "src/admin/MonstersAdminPage.tsx" -> "src/monsters/pngAlpha.ts"
+    "src/admin/MonstersAdminPage.tsx" -> "src/monsters/service.ts"
+    "src/admin/MonstersAdminPage.tsx" -> "src/admin/admin.css"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/admin" {label="admin" "src/admin/admin.css" [label=<admin.css> tooltip="admin.css" URL="src/admin/admin.css" ] } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/admin" {label="admin" "src/admin/mapCatalog.ts" [label=<mapCatalog.ts> tooltip="mapCatalog.ts" URL="src/admin/mapCatalog.ts" fillcolor="#ddfeff"] } }
+    "src/admin/mapCatalog.ts" -> "src/game/phaser/tileCatalog.ts" [arrowhead="inv"]
+    "src/admin/mapCatalog.ts" -> "src/groundTiles/tilesets.js"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/admin" {label="admin" "src/admin/mapPaint.ts" [label=<mapPaint.ts> tooltip="mapPaint.ts" URL="src/admin/mapPaint.ts" fillcolor="#ddfeff"] } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/admin" {label="admin" "src/admin/maskPaint.ts" [label=<maskPaint.ts> tooltip="maskPaint.ts" URL="src/admin/maskPaint.ts" fillcolor="#ddfeff"] } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/admin" {label="admin" "src/admin/previewPointer.ts" [label=<previewPointer.ts> tooltip="previewPointer.ts" URL="src/admin/previewPointer.ts" fillcolor="#ddfeff"] } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/analytics" {label="analytics" "src/analytics/events.ts" [label=<events.ts> tooltip="events.ts" URL="src/analytics/events.ts" fillcolor="#ddfeff"] } }
+    "src/analytics/events.ts" -> "src/analytics/posthog.ts"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/analytics" {label="analytics" "src/analytics/posthog.ts" [label=<posthog.ts> tooltip="posthog.ts" URL="src/analytics/posthog.ts" fillcolor="#ddfeff"] } }
+    "src/analytics/posthog.ts" -> "src/lib/authToken.ts"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/analytics" {label="analytics" "src/analytics/sessionTime.ts" [label=<sessionTime.ts> tooltip="sessionTime.ts" URL="src/analytics/sessionTime.ts" fillcolor="#ddfeff"] } }
+    "src/analytics/sessionTime.ts" -> "src/analytics/posthog.ts"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/auth" {label="auth" "src/auth/LogoutButton.tsx" [label=<LogoutButton.tsx> tooltip="LogoutButton.tsx" URL="src/auth/LogoutButton.tsx" fillcolor="#bbfeff"] } }
+    "src/auth/LogoutButton.tsx" -> "src/auth/session.ts"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/auth" {label="auth" "src/auth/RequireAdmin.tsx" [label=<RequireAdmin.tsx> tooltip="RequireAdmin.tsx" URL="src/auth/RequireAdmin.tsx" fillcolor="#bbfeff"] } }
+    "src/auth/RequireAdmin.tsx" -> "src/lib/runEdge.ts"
+    "src/auth/RequireAdmin.tsx" -> "src/viewer/service.ts"
+    "src/auth/RequireAdmin.tsx" -> "src/auth/adminGate.ts"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/auth" {label="auth" "src/auth/UserSwitcher.tsx" [label=<UserSwitcher.tsx> tooltip="UserSwitcher.tsx" URL="src/auth/UserSwitcher.tsx" fillcolor="#bbfeff"] } }
+    "src/auth/UserSwitcher.tsx" -> "src/auth/keycloak.ts"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/auth" {label="auth" "src/auth/adminGate.ts" [label=<adminGate.ts> tooltip="adminGate.ts" URL="src/auth/adminGate.ts" fillcolor="#ddfeff"] } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/auth" {label="auth" "src/auth/config.ts" [label=<config.ts> tooltip="config.ts" URL="src/auth/config.ts" fillcolor="#ddfeff"] } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/auth" {label="auth" "src/auth/keycloak.ts" [label=<keycloak.ts> tooltip="keycloak.ts" URL="src/auth/keycloak.ts" fillcolor="#ddfeff"] } }
+    "src/auth/keycloak.ts" -> "src/lib/authToken.ts"
+    "src/auth/keycloak.ts" -> "src/auth/config.ts"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/auth" {label="auth" "src/auth/session.ts" [label=<session.ts> tooltip="session.ts" URL="src/auth/session.ts" fillcolor="#ddfeff"] } }
+    "src/auth/session.ts" -> "src/lib/authToken.ts"
+    "src/auth/session.ts" -> "src/auth/config.ts"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/character" {label="character" "src/character/manifest.js" [label=<manifest.js> tooltip="manifest.js" URL="src/character/manifest.js" ] } }
+    "src/character/manifest.js" -> "src/lib/runEdge.ts"
+    "src/character/manifest.js" -> "src/character/service.ts"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/character" {label="character" "src/character/schema.ts" [label=<schema.ts> tooltip="schema.ts" URL="src/character/schema.ts" fillcolor="#ddfeff"] } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/character" {label="character" "src/character/service.ts" [label=<service.ts> tooltip="service.ts" URL="src/character/service.ts" fillcolor="#ddfeff"] } }
+    "src/character/service.ts" -> "src/lib/http.ts"
+    "src/character/service.ts" -> "src/character/schema.ts"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/communities" {label="communities" "src/communities/CommunitiesAdminPanel.tsx" [label=<CommunitiesAdminPanel.tsx> tooltip="CommunitiesAdminPanel.tsx" URL="src/communities/CommunitiesAdminPanel.tsx" fillcolor="#bbfeff"] } }
+    "src/communities/CommunitiesAdminPanel.tsx" -> "src/lib/runEdge.ts"
+    "src/communities/CommunitiesAdminPanel.tsx" -> "src/posture/service.ts"
+    "src/communities/CommunitiesAdminPanel.tsx" -> "src/tileMapper/styles.css"
+    "src/communities/CommunitiesAdminPanel.tsx" -> "src/communities/admin.css"
+    "src/communities/CommunitiesAdminPanel.tsx" -> "src/communities/constants.js"
+    "src/communities/CommunitiesAdminPanel.tsx" -> "src/communities/service.ts"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/communities" {label="communities" "src/communities/DailyBriefShortcut.tsx" [label=<DailyBriefShortcut.tsx> tooltip="DailyBriefShortcut.tsx" URL="src/communities/DailyBriefShortcut.tsx" fillcolor="#bbfeff"] } }
+    "src/communities/DailyBriefShortcut.tsx" -> "src/communities/client.js"
+    "src/communities/DailyBriefShortcut.tsx" -> "src/communities/constants.js"
+    "src/communities/DailyBriefShortcut.tsx" -> "src/communities/format.js"
+    "src/communities/DailyBriefShortcut.tsx" -> "src/communities/PriorityChip.tsx"
+    "src/communities/DailyBriefShortcut.tsx" -> "src/communities/StateBadge.tsx"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/communities" {label="communities" "src/communities/PriorityChip.tsx" [label=<PriorityChip.tsx> tooltip="PriorityChip.tsx" URL="src/communities/PriorityChip.tsx" fillcolor="#bbfeff"] } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/communities" {label="communities" "src/communities/StateBadge.tsx" [label=<StateBadge.tsx> tooltip="StateBadge.tsx" URL="src/communities/StateBadge.tsx" fillcolor="#bbfeff"] } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/communities" {label="communities" "src/communities/admin.css" [label=<admin.css> tooltip="admin.css" URL="src/communities/admin.css" ] } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/communities" {label="communities" "src/communities/client.js" [label=<client.js> tooltip="client.js" URL="src/communities/client.js" ] } }
+    "src/communities/client.js" -> "src/lib/runEdge.ts"
+    "src/communities/client.js" -> "src/communities/service.ts"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/communities" {label="communities" "src/communities/constants.js" [label=<constants.js> tooltip="constants.js" URL="src/communities/constants.js" ] } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/communities" {label="communities" "src/communities/format.js" [label=<format.js> tooltip="format.js" URL="src/communities/format.js" ] } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/communities" {label="communities" "src/communities/schema.ts" [label=<schema.ts> tooltip="schema.ts" URL="src/communities/schema.ts" fillcolor="#ddfeff"] } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/communities" {label="communities" "src/communities/service.ts" [label=<service.ts> tooltip="service.ts" URL="src/communities/service.ts" fillcolor="#ddfeff"] } }
+    "src/communities/service.ts" -> "src/lib/http.ts"
+    "src/communities/service.ts" -> "src/communities/schema.ts"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/dev" {label="dev" "src/dev/ArchScoreBar.tsx" [label=<ArchScoreBar.tsx> tooltip="ArchScoreBar.tsx" URL="src/dev/ArchScoreBar.tsx" fillcolor="#bbfeff"] } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game-session" {label="game-session" "src/game-session/client.js" [label=<client.js> tooltip="client.js" URL="src/game-session/client.js" ] } }
+    "src/game-session/client.js" -> "src/lib/runEdge.ts"
+    "src/game-session/client.js" -> "src/game-session/service.ts"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game-session" {label="game-session" "src/game-session/schema.ts" [label=<schema.ts> tooltip="schema.ts" URL="src/game-session/schema.ts" fillcolor="#ddfeff"] } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game-session" {label="game-session" "src/game-session/service.ts" [label=<service.ts> tooltip="service.ts" URL="src/game-session/service.ts" fillcolor="#ddfeff"] } }
+    "src/game-session/service.ts" -> "src/lib/http.ts"
+    "src/game-session/service.ts" -> "src/game-session/schema.ts"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" "src/game/MobileDpad.tsx" [label=<MobileDpad.tsx> tooltip="MobileDpad.tsx" URL="src/game/MobileDpad.tsx" fillcolor="#bbfeff"] } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" "src/game/PerfStallNotice.tsx" [label=<PerfStallNotice.tsx> tooltip="PerfStallNotice.tsx" URL="src/game/PerfStallNotice.tsx" fillcolor="#bbfeff"] } }
+    "src/game/PerfStallNotice.tsx" -> "src/game/phaser/bus.js"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" "src/game/VillageGame.tsx" [label=<VillageGame.tsx> tooltip="VillageGame.tsx" URL="src/game/VillageGame.tsx" fillcolor="#bbfeff"] } }
+    "src/game/VillageGame.tsx" -> "src/game/phaser/PhaserGame.tsx"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" subgraph "cluster_src/game/assets" {label="assets" subgraph "cluster_src/game/assets/character" {label="character" "src/game/assets/character/back-still.png" [label=<back-still.png> tooltip="back-still.png" URL="src/game/assets/character/back-still.png" ] } } } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" subgraph "cluster_src/game/assets" {label="assets" subgraph "cluster_src/game/assets/character" {label="character" "src/game/assets/character/back-walk-1.png" [label=<back-walk-1.png> tooltip="back-walk-1.png" URL="src/game/assets/character/back-walk-1.png" ] } } } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" subgraph "cluster_src/game/assets" {label="assets" subgraph "cluster_src/game/assets/character" {label="character" "src/game/assets/character/back-walk-2.png" [label=<back-walk-2.png> tooltip="back-walk-2.png" URL="src/game/assets/character/back-walk-2.png" ] } } } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" subgraph "cluster_src/game/assets" {label="assets" subgraph "cluster_src/game/assets/character" {label="character" "src/game/assets/character/back-walk-3.png" [label=<back-walk-3.png> tooltip="back-walk-3.png" URL="src/game/assets/character/back-walk-3.png" ] } } } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" subgraph "cluster_src/game/assets" {label="assets" subgraph "cluster_src/game/assets/character" {label="character" "src/game/assets/character/boss-k.png" [label=<boss-k.png> tooltip="boss-k.png" URL="src/game/assets/character/boss-k.png" ] } } } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" subgraph "cluster_src/game/assets" {label="assets" subgraph "cluster_src/game/assets/character" {label="character" "src/game/assets/character/front-still.png" [label=<front-still.png> tooltip="front-still.png" URL="src/game/assets/character/front-still.png" ] } } } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" subgraph "cluster_src/game/assets" {label="assets" subgraph "cluster_src/game/assets/character" {label="character" "src/game/assets/character/front-walk-1.png" [label=<front-walk-1.png> tooltip="front-walk-1.png" URL="src/game/assets/character/front-walk-1.png" ] } } } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" subgraph "cluster_src/game/assets" {label="assets" subgraph "cluster_src/game/assets/character" {label="character" "src/game/assets/character/front-walk-2.png" [label=<front-walk-2.png> tooltip="front-walk-2.png" URL="src/game/assets/character/front-walk-2.png" ] } } } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" subgraph "cluster_src/game/assets" {label="assets" subgraph "cluster_src/game/assets/character" {label="character" "src/game/assets/character/front-walk-3.png" [label=<front-walk-3.png> tooltip="front-walk-3.png" URL="src/game/assets/character/front-walk-3.png" ] } } } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" subgraph "cluster_src/game/assets" {label="assets" subgraph "cluster_src/game/assets/character" {label="character" "src/game/assets/character/left-still.png" [label=<left-still.png> tooltip="left-still.png" URL="src/game/assets/character/left-still.png" ] } } } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" subgraph "cluster_src/game/assets" {label="assets" subgraph "cluster_src/game/assets/character" {label="character" "src/game/assets/character/left-walk-1.png" [label=<left-walk-1.png> tooltip="left-walk-1.png" URL="src/game/assets/character/left-walk-1.png" ] } } } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" subgraph "cluster_src/game/assets" {label="assets" subgraph "cluster_src/game/assets/character" {label="character" "src/game/assets/character/left-walk-2.png" [label=<left-walk-2.png> tooltip="left-walk-2.png" URL="src/game/assets/character/left-walk-2.png" ] } } } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" subgraph "cluster_src/game/assets" {label="assets" subgraph "cluster_src/game/assets/character" {label="character" "src/game/assets/character/left-walk-3.png" [label=<left-walk-3.png> tooltip="left-walk-3.png" URL="src/game/assets/character/left-walk-3.png" ] } } } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" subgraph "cluster_src/game/assets" {label="assets" subgraph "cluster_src/game/assets/character" {label="character" "src/game/assets/character/right-still.png" [label=<right-still.png> tooltip="right-still.png" URL="src/game/assets/character/right-still.png" ] } } } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" subgraph "cluster_src/game/assets" {label="assets" subgraph "cluster_src/game/assets/character" {label="character" "src/game/assets/character/right-walk-1.png" [label=<right-walk-1.png> tooltip="right-walk-1.png" URL="src/game/assets/character/right-walk-1.png" ] } } } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" subgraph "cluster_src/game/assets" {label="assets" subgraph "cluster_src/game/assets/character" {label="character" "src/game/assets/character/right-walk-2.png" [label=<right-walk-2.png> tooltip="right-walk-2.png" URL="src/game/assets/character/right-walk-2.png" ] } } } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" subgraph "cluster_src/game/assets" {label="assets" subgraph "cluster_src/game/assets/character" {label="character" "src/game/assets/character/right-walk-3.png" [label=<right-walk-3.png> tooltip="right-walk-3.png" URL="src/game/assets/character/right-walk-3.png" ] } } } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" subgraph "cluster_src/game/assets" {label="assets" subgraph "cluster_src/game/assets/character" {label="character" subgraph "cluster_src/game/assets/character/rpg-char-01" {label="rpg-char-01" "src/game/assets/character/rpg-char-01/r0-c0.png" [label=<r0-c0.png> tooltip="r0-c0.png" URL="src/game/assets/character/rpg-char-01/r0-c0.png" ] } } } } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" subgraph "cluster_src/game/assets" {label="assets" subgraph "cluster_src/game/assets/character" {label="character" subgraph "cluster_src/game/assets/character/rpg-char-01" {label="rpg-char-01" "src/game/assets/character/rpg-char-01/r0-c1.png" [label=<r0-c1.png> tooltip="r0-c1.png" URL="src/game/assets/character/rpg-char-01/r0-c1.png" ] } } } } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" subgraph "cluster_src/game/assets" {label="assets" subgraph "cluster_src/game/assets/character" {label="character" subgraph "cluster_src/game/assets/character/rpg-char-01" {label="rpg-char-01" "src/game/assets/character/rpg-char-01/r0-c2.png" [label=<r0-c2.png> tooltip="r0-c2.png" URL="src/game/assets/character/rpg-char-01/r0-c2.png" ] } } } } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" subgraph "cluster_src/game/assets" {label="assets" subgraph "cluster_src/game/assets/character" {label="character" subgraph "cluster_src/game/assets/character/rpg-char-01" {label="rpg-char-01" "src/game/assets/character/rpg-char-01/r1-c0.png" [label=<r1-c0.png> tooltip="r1-c0.png" URL="src/game/assets/character/rpg-char-01/r1-c0.png" ] } } } } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" subgraph "cluster_src/game/assets" {label="assets" subgraph "cluster_src/game/assets/character" {label="character" subgraph "cluster_src/game/assets/character/rpg-char-01" {label="rpg-char-01" "src/game/assets/character/rpg-char-01/r1-c1.png" [label=<r1-c1.png> tooltip="r1-c1.png" URL="src/game/assets/character/rpg-char-01/r1-c1.png" ] } } } } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" subgraph "cluster_src/game/assets" {label="assets" subgraph "cluster_src/game/assets/character" {label="character" subgraph "cluster_src/game/assets/character/rpg-char-01" {label="rpg-char-01" "src/game/assets/character/rpg-char-01/r1-c2.png" [label=<r1-c2.png> tooltip="r1-c2.png" URL="src/game/assets/character/rpg-char-01/r1-c2.png" ] } } } } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" subgraph "cluster_src/game/assets" {label="assets" subgraph "cluster_src/game/assets/character" {label="character" subgraph "cluster_src/game/assets/character/rpg-char-01" {label="rpg-char-01" "src/game/assets/character/rpg-char-01/r2-c0.png" [label=<r2-c0.png> tooltip="r2-c0.png" URL="src/game/assets/character/rpg-char-01/r2-c0.png" ] } } } } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" subgraph "cluster_src/game/assets" {label="assets" subgraph "cluster_src/game/assets/character" {label="character" subgraph "cluster_src/game/assets/character/rpg-char-01" {label="rpg-char-01" "src/game/assets/character/rpg-char-01/r2-c1.png" [label=<r2-c1.png> tooltip="r2-c1.png" URL="src/game/assets/character/rpg-char-01/r2-c1.png" ] } } } } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" subgraph "cluster_src/game/assets" {label="assets" subgraph "cluster_src/game/assets/character" {label="character" subgraph "cluster_src/game/assets/character/rpg-char-01" {label="rpg-char-01" "src/game/assets/character/rpg-char-01/r2-c2.png" [label=<r2-c2.png> tooltip="r2-c2.png" URL="src/game/assets/character/rpg-char-01/r2-c2.png" ] } } } } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" subgraph "cluster_src/game/assets" {label="assets" subgraph "cluster_src/game/assets/character" {label="character" subgraph "cluster_src/game/assets/character/rpg-char-01" {label="rpg-char-01" "src/game/assets/character/rpg-char-01/r3-c0.png" [label=<r3-c0.png> tooltip="r3-c0.png" URL="src/game/assets/character/rpg-char-01/r3-c0.png" ] } } } } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" subgraph "cluster_src/game/assets" {label="assets" subgraph "cluster_src/game/assets/character" {label="character" subgraph "cluster_src/game/assets/character/rpg-char-01" {label="rpg-char-01" "src/game/assets/character/rpg-char-01/r3-c1.png" [label=<r3-c1.png> tooltip="r3-c1.png" URL="src/game/assets/character/rpg-char-01/r3-c1.png" ] } } } } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" subgraph "cluster_src/game/assets" {label="assets" subgraph "cluster_src/game/assets/character" {label="character" subgraph "cluster_src/game/assets/character/rpg-char-01" {label="rpg-char-01" "src/game/assets/character/rpg-char-01/r3-c2.png" [label=<r3-c2.png> tooltip="r3-c2.png" URL="src/game/assets/character/rpg-char-01/r3-c2.png" ] } } } } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" subgraph "cluster_src/game/assets" {label="assets" subgraph "cluster_src/game/assets/pokemon" {label="pokemon" "src/game/assets/pokemon/mr-p.png" [label=<mr-p.png> tooltip="mr-p.png" URL="src/game/assets/pokemon/mr-p.png" ] } } } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" subgraph "cluster_src/game/assets" {label="assets" subgraph "cluster_src/game/assets/pokemon" {label="pokemon" "src/game/assets/pokemon/vayu-phoenix.png" [label=<vayu-phoenix.png> tooltip="vayu-phoenix.png" URL="src/game/assets/pokemon/vayu-phoenix.png" ] } } } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" "src/game/buildings.js" [label=<buildings.js> tooltip="buildings.js" URL="src/game/buildings.js" ] } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" "src/game/constants.js" [label=<constants.js> tooltip="constants.js" URL="src/game/constants.js" ] } }
+    "src/game/constants.js" -> "src/game/assets/character/back-still.png"
+    "src/game/constants.js" -> "src/game/assets/character/back-walk-1.png"
+    "src/game/constants.js" -> "src/game/assets/character/back-walk-2.png"
+    "src/game/constants.js" -> "src/game/assets/character/back-walk-3.png"
+    "src/game/constants.js" -> "src/game/assets/character/front-still.png"
+    "src/game/constants.js" -> "src/game/assets/character/front-walk-1.png"
+    "src/game/constants.js" -> "src/game/assets/character/front-walk-2.png"
+    "src/game/constants.js" -> "src/game/assets/character/front-walk-3.png"
+    "src/game/constants.js" -> "src/game/assets/character/left-still.png"
+    "src/game/constants.js" -> "src/game/assets/character/left-walk-1.png"
+    "src/game/constants.js" -> "src/game/assets/character/left-walk-2.png"
+    "src/game/constants.js" -> "src/game/assets/character/left-walk-3.png"
+    "src/game/constants.js" -> "src/game/assets/character/right-still.png"
+    "src/game/constants.js" -> "src/game/assets/character/right-walk-1.png"
+    "src/game/constants.js" -> "src/game/assets/character/right-walk-2.png"
+    "src/game/constants.js" -> "src/game/assets/character/right-walk-3.png"
+    "src/game/constants.js" -> "src/game/town.ts" [arrowhead="inv"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" "src/game/encounters.js" [label=<encounters.js> tooltip="encounters.js" URL="src/game/encounters.js" ] } }
+    "src/game/encounters.js" -> "src/game/assets/character/boss-k.png"
+    "src/game/encounters.js" -> "src/game/assets/pokemon/mr-p.png"
+    "src/game/encounters.js" -> "src/game/assets/pokemon/vayu-phoenix.png"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" subgraph "cluster_src/game/phaser" {label="phaser" "src/game/phaser/PhaserGame.tsx" [label=<PhaserGame.tsx> tooltip="PhaserGame.tsx" URL="src/game/phaser/PhaserGame.tsx" fillcolor="#bbfeff"] } } }
+    "src/game/phaser/PhaserGame.tsx" -> "src/game/assets/character/rpg-char-01/r0-c0.png"
+    "src/game/phaser/PhaserGame.tsx" -> "src/game/assets/character/rpg-char-01/r0-c1.png"
+    "src/game/phaser/PhaserGame.tsx" -> "src/game/assets/character/rpg-char-01/r0-c2.png"
+    "src/game/phaser/PhaserGame.tsx" -> "src/game/assets/character/rpg-char-01/r1-c0.png"
+    "src/game/phaser/PhaserGame.tsx" -> "src/game/assets/character/rpg-char-01/r1-c1.png"
+    "src/game/phaser/PhaserGame.tsx" -> "src/game/assets/character/rpg-char-01/r1-c2.png"
+    "src/game/phaser/PhaserGame.tsx" -> "src/game/assets/character/rpg-char-01/r2-c0.png"
+    "src/game/phaser/PhaserGame.tsx" -> "src/game/assets/character/rpg-char-01/r2-c1.png"
+    "src/game/phaser/PhaserGame.tsx" -> "src/game/assets/character/rpg-char-01/r2-c2.png"
+    "src/game/phaser/PhaserGame.tsx" -> "src/game/assets/character/rpg-char-01/r3-c0.png"
+    "src/game/phaser/PhaserGame.tsx" -> "src/game/assets/character/rpg-char-01/r3-c1.png"
+    "src/game/phaser/PhaserGame.tsx" -> "src/game/assets/character/rpg-char-01/r3-c2.png"
+    "src/game/phaser/PhaserGame.tsx" -> "src/game/buildings.js"
+    "src/game/phaser/PhaserGame.tsx" -> "src/game/MobileDpad.tsx"
+    "src/game/phaser/PhaserGame.tsx" -> "src/game/PerfStallNotice.tsx"
+    "src/game/phaser/PhaserGame.tsx" -> "src/game/phaser/bus.js"
+    "src/game/phaser/PhaserGame.tsx" -> "src/game/phaser/scenes/EncounterScene.js"
+    "src/game/phaser/PhaserGame.tsx" -> "src/game/phaser/scenes/InteriorScene.js"
+    "src/game/phaser/PhaserGame.tsx" -> "src/game/phaser/scenes/TownScene.js"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" subgraph "cluster_src/game/phaser" {label="phaser" "src/game/phaser/bus.js" [label=<bus.js> tooltip="bus.js" URL="src/game/phaser/bus.js" ] } } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" subgraph "cluster_src/game/phaser" {label="phaser" "src/game/phaser/characterRig.js" [label=<characterRig.js> tooltip="characterRig.js" URL="src/game/phaser/characterRig.js" ] } } }
+    "src/game/phaser/characterRig.js" -> "src/character/manifest.js" [xlabel="game-black-box-no-data-services" tooltip="game-black-box-no-data-services" fontcolor="red" color="red"]
+    "src/game/phaser/characterRig.js" -> "src/game/constants.js"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" subgraph "cluster_src/game/phaser" {label="phaser" "src/game/phaser/entityLoader.ts" [label=<entityLoader.ts> tooltip="entityLoader.ts" URL="src/game/phaser/entityLoader.ts" fillcolor="#ddfeff"] } } }
+    "src/game/phaser/entityLoader.ts" -> "src/game/constants.js" [xlabel="kernel-depends-on-nobody" tooltip="kernel-depends-on-nobody" fontcolor="red" color="red"]
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" subgraph "cluster_src/game/phaser" {label="phaser" "src/game/phaser/groundModel.js" [label=<groundModel.js> tooltip="groundModel.js" URL="src/game/phaser/groundModel.js" ] } } }
+    "src/game/phaser/groundModel.js" -> "src/game/phaser/tileCatalog.ts"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" subgraph "cluster_src/game/phaser" {label="phaser" "src/game/phaser/mapRenderer.ts" [label=<mapRenderer.ts> tooltip="mapRenderer.ts" URL="src/game/phaser/mapRenderer.ts" fillcolor="#ddfeff"] } } }
+    "src/game/phaser/mapRenderer.ts" -> "src/game/constants.js" [xlabel="kernel-depends-on-nobody" tooltip="kernel-depends-on-nobody" fontcolor="red" color="red"]
+    "src/game/phaser/mapRenderer.ts" -> "src/game/phaser/entityLoader.ts"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" subgraph "cluster_src/game/phaser" {label="phaser" "src/game/phaser/mapWalk.ts" [label=<mapWalk.ts> tooltip="mapWalk.ts" URL="src/game/phaser/mapWalk.ts" fillcolor="#ddfeff"] } } }
+    "src/game/phaser/mapWalk.ts" -> "src/game/constants.js"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" subgraph "cluster_src/game/phaser" {label="phaser" "src/game/phaser/movement.ts" [label=<movement.ts> tooltip="movement.ts" URL="src/game/phaser/movement.ts" fillcolor="#ddfeff"] } } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" subgraph "cluster_src/game/phaser" {label="phaser" "src/game/phaser/perfStall.ts" [label=<perfStall.ts> tooltip="perfStall.ts" URL="src/game/phaser/perfStall.ts" fillcolor="#ddfeff"] } } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" subgraph "cluster_src/game/phaser" {label="phaser" subgraph "cluster_src/game/phaser/scenes" {label="scenes" "src/game/phaser/scenes/EncounterScene.js" [label=<EncounterScene.js> tooltip="EncounterScene.js" URL="src/game/phaser/scenes/EncounterScene.js" ] } } } }
+    "src/game/phaser/scenes/EncounterScene.js" -> "src/game/phaser/bus.js"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" subgraph "cluster_src/game/phaser" {label="phaser" subgraph "cluster_src/game/phaser/scenes" {label="scenes" "src/game/phaser/scenes/InteriorScene.js" [label=<InteriorScene.js> tooltip="InteriorScene.js" URL="src/game/phaser/scenes/InteriorScene.js" ] } } } }
+    "src/game/phaser/scenes/InteriorScene.js" -> "src/game/constants.js"
+    "src/game/phaser/scenes/InteriorScene.js" -> "src/game/phaser/bus.js"
+    "src/game/phaser/scenes/InteriorScene.js" -> "src/game/phaser/characterRig.js"
+    "src/game/phaser/scenes/InteriorScene.js" -> "src/game/phaser/movement.ts"
+    "src/game/phaser/scenes/InteriorScene.js" -> "src/game/phaser/perfStall.ts"
+    "src/game/phaser/scenes/InteriorScene.js" -> "src/game/phaser/tileTextures.js"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" subgraph "cluster_src/game/phaser" {label="phaser" subgraph "cluster_src/game/phaser/scenes" {label="scenes" "src/game/phaser/scenes/MapScene.js" [label=<MapScene.js> tooltip="MapScene.js" URL="src/game/phaser/scenes/MapScene.js" ] } } } }
+    "src/game/phaser/scenes/MapScene.js" -> "src/game/assets/character/rpg-char-01/r0-c0.png"
+    "src/game/phaser/scenes/MapScene.js" -> "src/game/assets/character/rpg-char-01/r1-c0.png"
+    "src/game/phaser/scenes/MapScene.js" -> "src/game/assets/character/rpg-char-01/r2-c0.png"
+    "src/game/phaser/scenes/MapScene.js" -> "src/game/assets/character/rpg-char-01/r3-c0.png"
+    "src/game/phaser/scenes/MapScene.js" -> "src/game/constants.js"
+    "src/game/phaser/scenes/MapScene.js" -> "src/game/phaser/characterRig.js"
+    "src/game/phaser/scenes/MapScene.js" -> "src/game/phaser/mapRenderer.ts"
+    "src/game/phaser/scenes/MapScene.js" -> "src/game/phaser/mapWalk.ts"
+    "src/game/phaser/scenes/MapScene.js" -> "src/game/phaser/movement.ts"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" subgraph "cluster_src/game/phaser" {label="phaser" subgraph "cluster_src/game/phaser/scenes" {label="scenes" "src/game/phaser/scenes/TownScene.js" [label=<TownScene.js> tooltip="TownScene.js" URL="src/game/phaser/scenes/TownScene.js" ] } } } }
+    "src/game/phaser/scenes/TownScene.js" -> "src/game/constants.js"
+    "src/game/phaser/scenes/TownScene.js" -> "src/game/encounters.js"
+    "src/game/phaser/scenes/TownScene.js" -> "src/game/town.ts"
+    "src/game/phaser/scenes/TownScene.js" -> "src/game/townMap.ts"
+    "src/game/phaser/scenes/TownScene.js" -> "src/game/phaser/bus.js"
+    "src/game/phaser/scenes/TownScene.js" -> "src/game/phaser/characterRig.js"
+    "src/game/phaser/scenes/TownScene.js" -> "src/game/phaser/movement.ts"
+    "src/game/phaser/scenes/TownScene.js" -> "src/game/phaser/perfStall.ts"
+    "src/game/phaser/scenes/TownScene.js" -> "src/game/phaser/tileCatalog.ts"
+    "src/game/phaser/scenes/TownScene.js" -> "src/game/phaser/tileTextures.js"
+    "src/game/phaser/scenes/TownScene.js" -> "src/game/phaser/townInteractions.ts"
+    "src/game/phaser/scenes/TownScene.js" -> "src/game/phaser/townRenderer.ts"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" subgraph "cluster_src/game/phaser" {label="phaser" "src/game/phaser/tileCatalog.ts" [label=<tileCatalog.ts> tooltip="tileCatalog.ts" URL="src/game/phaser/tileCatalog.ts" fillcolor="#ddfeff"] } } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" subgraph "cluster_src/game/phaser" {label="phaser" "src/game/phaser/tileTextures.js" [label=<tileTextures.js> tooltip="tileTextures.js" URL="src/game/phaser/tileTextures.js" ] } } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" subgraph "cluster_src/game/phaser" {label="phaser" "src/game/phaser/townInteractions.ts" [label=<townInteractions.ts> tooltip="townInteractions.ts" URL="src/game/phaser/townInteractions.ts" fillcolor="#ddfeff"] } } }
+    "src/game/phaser/townInteractions.ts" -> "src/game/town.ts"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" subgraph "cluster_src/game/phaser" {label="phaser" "src/game/phaser/townRenderer.ts" [label=<townRenderer.ts> tooltip="townRenderer.ts" URL="src/game/phaser/townRenderer.ts" fillcolor="#ddfeff"] } } }
+    "src/game/phaser/townRenderer.ts" -> "src/game/buildings.js"
+    "src/game/phaser/townRenderer.ts" -> "src/game/constants.js"
+    "src/game/phaser/townRenderer.ts" -> "src/game/encounters.js"
+    "src/game/phaser/townRenderer.ts" -> "src/game/town.ts"
+    "src/game/phaser/townRenderer.ts" -> "src/game/townProps.ts"
+    "src/game/phaser/townRenderer.ts" -> "src/game/phaser/characterRig.js"
+    "src/game/phaser/townRenderer.ts" -> "src/game/phaser/entityLoader.ts"
+    "src/game/phaser/townRenderer.ts" -> "src/game/phaser/mapRenderer.ts"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" "src/game/town.ts" [label=<town.ts> tooltip="town.ts" URL="src/game/town.ts" fillcolor="#ddfeff"] } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" "src/game/townMap.ts" [label=<townMap.ts> tooltip="townMap.ts" URL="src/game/townMap.ts" fillcolor="#ddfeff"] } }
+    "src/game/townMap.ts" -> "src/maps/baker.ts"
+    "src/game/townMap.ts" -> "src/game/town.ts"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/game" {label="game" "src/game/townProps.ts" [label=<townProps.ts> tooltip="townProps.ts" URL="src/game/townProps.ts" fillcolor="#ddfeff"] } }
+    "src/game/townProps.ts" -> "src/game/phaser/entityLoader.ts"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/groundTiles" {label="groundTiles" "src/groundTiles/GroundTileMapper.tsx" [label=<GroundTileMapper.tsx> tooltip="GroundTileMapper.tsx" URL="src/groundTiles/GroundTileMapper.tsx" fillcolor="#bbfeff"] } }
+    "src/groundTiles/GroundTileMapper.tsx" -> "src/tileMapper/styles.css"
+    "src/groundTiles/GroundTileMapper.tsx" -> "src/groundTiles/client.js"
+    "src/groundTiles/GroundTileMapper.tsx" -> "src/groundTiles/styles.css"
+    "src/groundTiles/GroundTileMapper.tsx" -> "src/groundTiles/tilesets.js"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/groundTiles" {label="groundTiles" "src/groundTiles/adminRedirect.ts" [label=<adminRedirect.ts> tooltip="adminRedirect.ts" URL="src/groundTiles/adminRedirect.ts" fillcolor="#ddfeff"] } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/groundTiles" {label="groundTiles" "src/groundTiles/client.js" [label=<client.js> tooltip="client.js" URL="src/groundTiles/client.js" ] } }
+    "src/groundTiles/client.js" -> "src/lib/runEdge.ts"
+    "src/groundTiles/client.js" -> "src/groundTiles/service.ts"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/groundTiles" {label="groundTiles" "src/groundTiles/main.tsx" [label=<main.tsx> tooltip="main.tsx" URL="src/groundTiles/main.tsx" fillcolor="#bbfeff"] } }
+    "src/groundTiles/main.tsx" -> "src/groundTiles/adminRedirect.ts"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/groundTiles" {label="groundTiles" "src/groundTiles/schema.ts" [label=<schema.ts> tooltip="schema.ts" URL="src/groundTiles/schema.ts" fillcolor="#ddfeff"] } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/groundTiles" {label="groundTiles" "src/groundTiles/service.ts" [label=<service.ts> tooltip="service.ts" URL="src/groundTiles/service.ts" fillcolor="#ddfeff"] } }
+    "src/groundTiles/service.ts" -> "src/lib/http.ts"
+    "src/groundTiles/service.ts" -> "src/groundTiles/schema.ts"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/groundTiles" {label="groundTiles" "src/groundTiles/styles.css" [label=<styles.css> tooltip="styles.css" URL="src/groundTiles/styles.css" ] } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/groundTiles" {label="groundTiles" "src/groundTiles/tilesets.js" [label=<tilesets.js> tooltip="tilesets.js" URL="src/groundTiles/tilesets.js" ] } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/lib" {label="lib" "src/lib/authToken.ts" [label=<authToken.ts> tooltip="authToken.ts" URL="src/lib/authToken.ts" fillcolor="#ddfeff"] } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/lib" {label="lib" "src/lib/http.ts" [label=<http.ts> tooltip="http.ts" URL="src/lib/http.ts" fillcolor="#ddfeff"] } }
+    "src/lib/http.ts" -> "src/lib/authToken.ts"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/lib" {label="lib" "src/lib/runEdge.ts" [label=<runEdge.ts> tooltip="runEdge.ts" URL="src/lib/runEdge.ts" fillcolor="#ddfeff"] } }
+    "src/lib/runEdge.ts" -> "src/lib/runtime.ts"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/lib" {label="lib" "src/lib/runtime.ts" [label=<runtime.ts> tooltip="runtime.ts" URL="src/lib/runtime.ts" fillcolor="#ddfeff"] } }
+    "src/lib/runtime.ts" -> "src/lib/http.ts"
+    subgraph "cluster_src" {label="src" "src/main.tsx" [label=<main.tsx> tooltip="main.tsx" URL="src/main.tsx" fillcolor="#bbfeff"] }
+    "src/main.tsx" -> "src/analytics/posthog.ts"
+    "src/main.tsx" -> "src/App.tsx"
+    "src/main.tsx" -> "src/auth/session.ts"
+    "src/main.tsx" -> "src/styles.css"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/maps" {label="maps" "src/maps/MapPage.tsx" [label=<MapPage.tsx> tooltip="MapPage.tsx" URL="src/maps/MapPage.tsx" fillcolor="#bbfeff"] } }
+    "src/maps/MapPage.tsx" -> "src/character/manifest.js"
+    "src/maps/MapPage.tsx" -> "src/game/phaser/scenes/MapScene.js" [xlabel="authoring-never-imports-game-runtime" tooltip="authoring-never-imports-game-runtime" fontcolor="red" color="red"]
+    "src/maps/MapPage.tsx" -> "src/lib/authToken.ts"
+    "src/maps/MapPage.tsx" -> "src/lib/runEdge.ts"
+    "src/maps/MapPage.tsx" -> "src/tileObjects/service.ts"
+    "src/maps/MapPage.tsx" -> "src/maps/props.ts"
+    "src/maps/MapPage.tsx" -> "src/maps/service.ts"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/maps" {label="maps" "src/maps/baker.ts" [label=<baker.ts> tooltip="baker.ts" URL="src/maps/baker.ts" fillcolor="#ddfeff"] } }
+    "src/maps/baker.ts" -> "src/game/phaser/groundModel.js"
+    "src/maps/baker.ts" -> "src/game/phaser/tileCatalog.ts"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/maps" {label="maps" subgraph "cluster_src/maps/fixtures" {label="fixtures" "src/maps/fixtures/meadow.ts" [label=<meadow.ts> tooltip="meadow.ts" URL="src/maps/fixtures/meadow.ts" fillcolor="#ddfeff"] } } }
+    "src/maps/fixtures/meadow.ts" -> "src/game/phaser/tileCatalog.ts"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/maps" {label="maps" "src/maps/props.ts" [label=<props.ts> tooltip="props.ts" URL="src/maps/props.ts" fillcolor="#ddfeff"] } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/maps" {label="maps" "src/maps/schema.ts" [label=<schema.ts> tooltip="schema.ts" URL="src/maps/schema.ts" fillcolor="#ddfeff"] } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/maps" {label="maps" "src/maps/service.ts" [label=<service.ts> tooltip="service.ts" URL="src/maps/service.ts" fillcolor="#ddfeff"] } }
+    "src/maps/service.ts" -> "src/lib/http.ts"
+    "src/maps/service.ts" -> "src/maps/baker.ts"
+    "src/maps/service.ts" -> "src/maps/props.ts"
+    "src/maps/service.ts" -> "src/maps/schema.ts"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/maps" {label="maps" "src/maps/tiledImport.ts" [label=<tiledImport.ts> tooltip="tiledImport.ts" URL="src/maps/tiledImport.ts" fillcolor="#ddfeff"] } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/monsters" {label="monsters" "src/monsters/pngAlpha.ts" [label=<pngAlpha.ts> tooltip="pngAlpha.ts" URL="src/monsters/pngAlpha.ts" fillcolor="#ddfeff"] } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/monsters" {label="monsters" "src/monsters/schema.ts" [label=<schema.ts> tooltip="schema.ts" URL="src/monsters/schema.ts" fillcolor="#ddfeff"] } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/monsters" {label="monsters" "src/monsters/service.ts" [label=<service.ts> tooltip="service.ts" URL="src/monsters/service.ts" fillcolor="#ddfeff"] } }
+    "src/monsters/service.ts" -> "src/monsters/schema.ts"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/posture" {label="posture" "src/posture/CallbackPage.tsx" [label=<CallbackPage.tsx> tooltip="CallbackPage.tsx" URL="src/posture/CallbackPage.tsx" fillcolor="#bbfeff"] } }
+    "src/posture/CallbackPage.tsx" -> "src/posture/callback.ts"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/posture" {label="posture" "src/posture/callback.ts" [label=<callback.ts> tooltip="callback.ts" URL="src/posture/callback.ts" fillcolor="#ddfeff"] } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/posture" {label="posture" "src/posture/client.ts" [label=<client.ts> tooltip="client.ts" URL="src/posture/client.ts" fillcolor="#ddfeff"] } }
+    "src/posture/client.ts" -> "src/lib/runEdge.ts"
+    "src/posture/client.ts" -> "src/posture/service.ts"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/posture" {label="posture" "src/posture/popup.ts" [label=<popup.ts> tooltip="popup.ts" URL="src/posture/popup.ts" fillcolor="#ddfeff"] } }
+    "src/posture/popup.ts" -> "src/posture/callback.ts"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/posture" {label="posture" "src/posture/runGate.ts" [label=<runGate.ts> tooltip="runGate.ts" URL="src/posture/runGate.ts" fillcolor="#ddfeff"] } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/posture" {label="posture" "src/posture/schema.ts" [label=<schema.ts> tooltip="schema.ts" URL="src/posture/schema.ts" fillcolor="#ddfeff"] } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/posture" {label="posture" "src/posture/service.ts" [label=<service.ts> tooltip="service.ts" URL="src/posture/service.ts" fillcolor="#ddfeff"] } }
+    "src/posture/service.ts" -> "src/posture/schema.ts"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/spriteMapper" {label="spriteMapper" "src/spriteMapper/AnimPreview.tsx" [label=<AnimPreview.tsx> tooltip="AnimPreview.tsx" URL="src/spriteMapper/AnimPreview.tsx" fillcolor="#bbfeff"] } }
+    "src/spriteMapper/AnimPreview.tsx" -> "src/spriteMapper/useImage.js"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/spriteMapper" {label="spriteMapper" "src/spriteMapper/CharacterRoster.tsx" [label=<CharacterRoster.tsx> tooltip="CharacterRoster.tsx" URL="src/spriteMapper/CharacterRoster.tsx" fillcolor="#bbfeff"] } }
+    "src/spriteMapper/CharacterRoster.tsx" -> "src/character/manifest.js"
+    "src/spriteMapper/CharacterRoster.tsx" -> "src/character/service.ts"
+    "src/spriteMapper/CharacterRoster.tsx" -> "src/lib/runEdge.ts"
+    "src/spriteMapper/CharacterRoster.tsx" -> "src/spriteMapper/AnimPreview.tsx"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/spriteMapper" {label="spriteMapper" "src/spriteMapper/PosturePanel.tsx" [label=<PosturePanel.tsx> tooltip="PosturePanel.tsx" URL="src/spriteMapper/PosturePanel.tsx" fillcolor="#bbfeff"] } }
+    "src/spriteMapper/PosturePanel.tsx" -> "src/character/manifest.js"
+    "src/spriteMapper/PosturePanel.tsx" -> "src/spriteMapper/useImage.js"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/spriteMapper" {label="spriteMapper" "src/spriteMapper/SheetCanvas.tsx" [label=<SheetCanvas.tsx> tooltip="SheetCanvas.tsx" URL="src/spriteMapper/SheetCanvas.tsx" fillcolor="#bbfeff"] } }
+    "src/spriteMapper/SheetCanvas.tsx" -> "src/spriteMapper/useImage.js"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/spriteMapper" {label="spriteMapper" "src/spriteMapper/SpriteMapper.tsx" [label=<SpriteMapper.tsx> tooltip="SpriteMapper.tsx" URL="src/spriteMapper/SpriteMapper.tsx" fillcolor="#bbfeff"] } }
+    "src/spriteMapper/SpriteMapper.tsx" -> "src/character/manifest.js"
+    "src/spriteMapper/SpriteMapper.tsx" -> "src/character/service.ts"
+    "src/spriteMapper/SpriteMapper.tsx" -> "src/lib/runEdge.ts"
+    "src/spriteMapper/SpriteMapper.tsx" -> "src/spriteMapper/AnimPreview.tsx"
+    "src/spriteMapper/SpriteMapper.tsx" -> "src/spriteMapper/CharacterRoster.tsx"
+    "src/spriteMapper/SpriteMapper.tsx" -> "src/spriteMapper/PosturePanel.tsx"
+    "src/spriteMapper/SpriteMapper.tsx" -> "src/spriteMapper/SheetCanvas.tsx"
+    "src/spriteMapper/SpriteMapper.tsx" -> "src/spriteMapper/styles.css"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/spriteMapper" {label="spriteMapper" "src/spriteMapper/adminRedirect.ts" [label=<adminRedirect.ts> tooltip="adminRedirect.ts" URL="src/spriteMapper/adminRedirect.ts" fillcolor="#ddfeff"] } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/spriteMapper" {label="spriteMapper" "src/spriteMapper/main.tsx" [label=<main.tsx> tooltip="main.tsx" URL="src/spriteMapper/main.tsx" fillcolor="#bbfeff"] } }
+    "src/spriteMapper/main.tsx" -> "src/spriteMapper/adminRedirect.ts"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/spriteMapper" {label="spriteMapper" "src/spriteMapper/styles.css" [label=<styles.css> tooltip="styles.css" URL="src/spriteMapper/styles.css" ] } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/spriteMapper" {label="spriteMapper" "src/spriteMapper/useImage.js" [label=<useImage.js> tooltip="useImage.js" URL="src/spriteMapper/useImage.js" ] } }
+    subgraph "cluster_src" {label="src" "src/styles.css" [label=<styles.css> tooltip="styles.css" URL="src/styles.css" ] }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/terrains" {label="terrains" "src/terrains/schema.ts" [label=<schema.ts> tooltip="schema.ts" URL="src/terrains/schema.ts" fillcolor="#ddfeff"] } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/terrains" {label="terrains" "src/terrains/service.ts" [label=<service.ts> tooltip="service.ts" URL="src/terrains/service.ts" fillcolor="#ddfeff"] } }
+    "src/terrains/service.ts" -> "src/lib/http.ts"
+    "src/terrains/service.ts" -> "src/terrains/schema.ts"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/tileMapper" {label="tileMapper" "src/tileMapper/TileMapper.tsx" [label=<TileMapper.tsx> tooltip="TileMapper.tsx" URL="src/tileMapper/TileMapper.tsx" fillcolor="#bbfeff"] } }
+    "src/tileMapper/TileMapper.tsx" -> "src/game/town.ts" [xlabel="authoring-never-imports-game-runtime" tooltip="authoring-never-imports-game-runtime" fontcolor="red" color="red"]
+    "src/tileMapper/TileMapper.tsx" -> "src/tileObjects/client.js"
+    "src/tileMapper/TileMapper.tsx" -> "src/tileMapper/styles.css"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/tileMapper" {label="tileMapper" "src/tileMapper/adminRedirect.ts" [label=<adminRedirect.ts> tooltip="adminRedirect.ts" URL="src/tileMapper/adminRedirect.ts" fillcolor="#ddfeff"] } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/tileMapper" {label="tileMapper" "src/tileMapper/main.tsx" [label=<main.tsx> tooltip="main.tsx" URL="src/tileMapper/main.tsx" fillcolor="#bbfeff"] } }
+    "src/tileMapper/main.tsx" -> "src/tileMapper/adminRedirect.ts"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/tileMapper" {label="tileMapper" "src/tileMapper/styles.css" [label=<styles.css> tooltip="styles.css" URL="src/tileMapper/styles.css" ] } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/tileObjects" {label="tileObjects" "src/tileObjects/client.js" [label=<client.js> tooltip="client.js" URL="src/tileObjects/client.js" ] } }
+    "src/tileObjects/client.js" -> "src/lib/runEdge.ts"
+    "src/tileObjects/client.js" -> "src/tileObjects/service.ts"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/tileObjects" {label="tileObjects" "src/tileObjects/schema.ts" [label=<schema.ts> tooltip="schema.ts" URL="src/tileObjects/schema.ts" fillcolor="#ddfeff"] } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/tileObjects" {label="tileObjects" "src/tileObjects/service.ts" [label=<service.ts> tooltip="service.ts" URL="src/tileObjects/service.ts" fillcolor="#ddfeff"] } }
+    "src/tileObjects/service.ts" -> "src/tileObjects/schema.ts"
+    subgraph "cluster_src" {label="src" "src/townLoader.ts" [label=<townLoader.ts> tooltip="townLoader.ts" URL="src/townLoader.ts" fillcolor="#ddfeff"] }
+    "src/townLoader.ts" -> "src/character/manifest.js"
+    "src/townLoader.ts" -> "src/communities/service.ts"
+    "src/townLoader.ts" -> "src/game-session/service.ts"
+    "src/townLoader.ts" -> "src/groundTiles/service.ts"
+    "src/townLoader.ts" -> "src/monsters/service.ts"
+    "src/townLoader.ts" -> "src/tileObjects/service.ts"
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/viewer" {label="viewer" "src/viewer/schema.ts" [label=<schema.ts> tooltip="schema.ts" URL="src/viewer/schema.ts" fillcolor="#ddfeff"] } }
+    subgraph "cluster_src" {label="src" subgraph "cluster_src/viewer" {label="viewer" "src/viewer/service.ts" [label=<service.ts> tooltip="service.ts" URL="src/viewer/service.ts" fillcolor="#ddfeff"] } }
+    "src/viewer/service.ts" -> "src/lib/http.ts"
+    "src/viewer/service.ts" -> "src/viewer/schema.ts"
+}
