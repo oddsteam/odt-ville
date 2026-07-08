@@ -5,6 +5,7 @@ import { runEdge } from './lib/runEdge.ts'
 import { subscribeAuthToken } from './lib/authToken.ts'
 import UserSwitcher from './auth/UserSwitcher.tsx'
 import LogoutButton from './auth/LogoutButton.tsx'
+import ArchScoreBar from './dev/ArchScoreBar.tsx'
 import { ViewerService } from './viewer/service.ts'
 import { trackSessionActiveTime } from './analytics/sessionTime.ts'
 import type { Viewer } from './viewer/schema.ts'
@@ -61,6 +62,8 @@ export default function RootLayout() {
       <main className="app-main">
         <Outlet />
       </main>
+
+      {import.meta.env.DEV && <ArchScoreBar />}
     </div>
   )
 }
