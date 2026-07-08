@@ -9,10 +9,10 @@
 // is the engine's, shared with every other producer. Pure and Phaser-free.
 
 import { buildTown, tileChar, typeForTileChar } from './town.ts'
-import type { DoorAnchor, Footprint, Town } from './town.ts'
+import type { DoorAnchor, Footprint, HometownPolicy, Town } from './town.ts'
 import { bakeGround } from '../maps/baker.ts'
 import type { SourceMap } from '../maps/baker.ts'
-import { hometownCatalog } from './phaser/tileCatalog.ts'
+import type { TileCatalog } from './phaser/tileCatalog.ts'
 import type { BakedGround } from '../maps/schema.ts'
 
 // Present the generated town as a *source document* — the same painted-terrain
@@ -32,11 +32,10 @@ export function townTerrainSource(town: Town): SourceMap {
 // Bake the town's ground through the shared engine. Identical terrain resolves
 // to identical baked tiles whether it came from `buildTown` or an authored
 // document, because this is the very same `bakeGround` (ADR-0003/0004). The
-// stack order comes from persisted terrain priority (#120) — the same data the
-// editor reads — not a hardcoded catalog: `priority` is the terrain names
-// low→high (higher owns the seam).
-export function bakeTownGround(town: Town, priority: readonly string[]): BakedGround {
-  return bakeGround(townTerrainSource(town), hometownCatalog(priority))
+// catalog is the caller's — the live path builds it from the mapped ground
+// tiles + persisted terrain priority (#120), the same data the editor reads.
+export function bakeTownGround(town: Town, catalog: TileCatalog): BakedGround {
+  return bakeGround(townTerrainSource(town), catalog)
 }
 
 // The runtime map shape the generated hometown emits (ADR-0004): the town
@@ -51,12 +50,13 @@ export interface TownMap extends Town {
 // hometown net pins them — with the baked runtime ground added alongside.
 export function buildTownMap(
   plotCount: number,
-  priority: readonly string[],
+  catalog: TileCatalog,
   door?: DoorAnchor,
   footprint?: Footprint,
   walkMask?: string[],
   edgeMask?: string[],
+  policy?: HometownPolicy | null,
 ): TownMap {
-  const town = buildTown(plotCount, door, footprint, walkMask, edgeMask)
-  return { ...town, ground: bakeTownGround(town, priority) }
+  const town = buildTown(plotCount, door, footprint, walkMask, edgeMask, policy)
+  return { ...town, ground: bakeTownGround(town, catalog) }
 }

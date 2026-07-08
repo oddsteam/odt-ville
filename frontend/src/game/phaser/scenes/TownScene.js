@@ -1,5 +1,7 @@
 import Phaser from 'phaser'
-import { TILE, MOVE_MS, PLAYER_FEET_LIFT, buildTown } from '../../constants.js'
+import { TILE, MOVE_MS, PLAYER_FEET_LIFT } from '../../constants.js'
+import { buildTownMap } from '../../townMap.ts'
+import { catalogFromGroundTiles, HOMETOWN_CATALOG } from '../tileCatalog.ts'
 import { isWalkable, edgeBlocked, playerDepthAt, isLadderCell, doorAnchorFor, footprintFor, walkMaskFor, edgeMaskFor } from '../../town.ts'
 import { ensureTileTextures } from '../tileTextures.js'
 import {
@@ -12,7 +14,7 @@ import bus from '../bus.js'
 import { resolveDirection, stepTile } from '../movement.ts'
 import { initialPerfStallState, observeFrame } from '../perfStall.ts'
 import { townInteractionsAt } from '../townInteractions.ts'
-import { render, setupDevTools, preloadAssets } from '../townRenderer.ts'
+import { render, setupDevTools, preloadAssets, tilesetColumns } from '../townRenderer.ts'
 import {
   GATE_TRAINER,
   resolveTrainerStart,
@@ -108,8 +110,23 @@ export default class TownScene extends Phaser.Scene {
     // It also drives each plot's footprint (#30, clamped 3..15 x 4..15) so a
     // non-3x4 house renders undistorted with the grid re-spaced around it.
     const buildingObject = this.registry.get('buildingObject') || null
-    this.town = buildTown(
+    // The converged producer (#171, ADR-0003/0004): one call generates the
+    // layout AND bakes its ground through the shared engine, against a catalog
+    // assembled from the mapped ground tiles (art) + the hometown's OWN terrain
+    // order. The order is deliberately NOT the terrains-table priority the map
+    // editor reorders — /admin/maps must never reshape the hometown. A hometown
+    // admin config can replace this constant later (Hometown Policy seam).
+    const catalog = catalogFromGroundTiles(
+      this.registry.get('groundTiles') || [],
+      tilesetColumns(this),
+      HOMETOWN_CATALOG.stack,
+    )
+    // The renderer reads the stack to map baked depths (index × 0.1) back to
+    // terrain names for the dev-layer inspector and the sign's above-ground depth.
+    this._groundStack = catalog.stack
+    this.town = buildTownMap(
       Math.max(communities.length, 1),
+      catalog,
       doorAnchorFor(buildingObject),
       footprintFor(buildingObject),
       // Authored interior walk mask (#32): which footprint cells the avatar may
@@ -133,10 +150,9 @@ export default class TownScene extends Phaser.Scene {
     this.cameras.main.setBounds(0, 0, worldW, worldH)
     this.physics?.world.setBounds(0, 0, worldW, worldH)
 
-    // Paint the static town — ground layers (road/dirt/grass fill + autotiled
-    // edges), tall props, and building sprites with nameplates. Sets
-    // this.groundTiles / this.buildings / this.propCells, plus the dev-layer
-    // buckets render fills for setupDevTools.
+    // Paint the static town — the producer-baked ground blit, tall props, and
+    // building sprites with nameplates. Sets this.buildings / this.propCells,
+    // plus the dev-layer buckets render fills for setupDevTools.
     render(this)
 
     // Slice the manifest sheet into frames + walk anims (no-op when there's no

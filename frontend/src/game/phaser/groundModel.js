@@ -1,6 +1,4 @@
-import { tileChar, typeForTileChar } from '../town.ts'
 import { HOMETOWN_CATALOG } from './tileCatalog.ts'
-export { typeForTileChar } from '../town.ts'
 
 // The autotile rules are now Tile Catalog *data* (tileCatalog.ts), not constants
 // baked into this engine (ADR-0003/0004). Every resolver takes a `catalog`
@@ -42,14 +40,13 @@ export const DIAGONAL_CORNERS = [
   { c: 'SW', dx: -1, dy: 1 },
 ]
 
-// Resolve a cell's terrain from a *field*. A field is either a town tile grid
-// (resolved through its map chars) or any producer-supplied source exposing a
-// `terrainAt(x, y)` accessor (the baker passes the latter). Out-of-bounds is the
-// field's own concern: the town treats it as grass (border 'T'), an authored
-// source returns null.
+// Resolve a cell's terrain from a *field*: any producer-supplied source
+// exposing a `terrainAt(x, y)` accessor (the baker wraps its SourceMap this
+// way; #171 removed the last raw-town caller, so the kernel reads no town
+// chars). Out-of-bounds is the field's own concern — an authored source
+// returns null.
 function terrainForCell(field, x, y) {
-  if (typeof field.terrainAt === 'function') return field.terrainAt(x, y)
-  return typeForTileChar(tileChar(field, x, y))
+  return field.terrainAt(x, y)
 }
 
 // Only the higher-ranked terrain owns a seam. A dirt cell therefore edges
