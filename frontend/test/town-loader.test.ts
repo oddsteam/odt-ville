@@ -61,7 +61,7 @@ describe('loadTown orchestration', () => {
       expect(exit.value.communities).toEqual([])
       expect(exit.value.session).toEqual(SESSION)
       expect(exit.value.feed).toEqual([])
-      expect(exit.value.treeObject).toBeNull()
+      expect(exit.value.policy).toEqual({ tree: null, flowerGroup: null, flowerSingle: null })
       expect(exit.value.groundTiles).toEqual([])
       expect(exit.value.characterManifest).toEqual({ name: 'scout' })
       expect(exit.value.monsterPool).toEqual(POOL)

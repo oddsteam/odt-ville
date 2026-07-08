@@ -23,6 +23,28 @@ export interface TileGrid {
 export interface Town extends TileGrid {
   plots: Plot[]
   entrance: { x: number; y: number }
+  entities: PlacedEntity[]
+}
+
+// A placed-entity reference (ADR-0008): the shape both producers emit, resolved
+// to pixels by the shared entity loader. The town's foliage now rides it too.
+export interface PlacedEntity {
+  kind: 'prop'
+  object_id: number
+  x: number
+  y: number
+}
+
+// The resolved Hometown Policy the generator reads (CONTEXT.md 2026-07-07,
+// #173): the active catalog object per foliage kind, already fetched by the
+// shell's single resolution point. Structural — a full TileObject satisfies
+// each role. A null role places nothing (there is no bundled fallback art;
+// like a dangling reference, nothing renders). `building` stays bespoke until
+// the House slice (#90).
+export interface HometownPolicy {
+  tree: { id: number; footprint_w?: number | null; footprint_h?: number | null } | null
+  flowerGroup: { id: number; footprint_w?: number | null; footprint_h?: number | null } | null
+  flowerSingle: { id: number } | null
 }
 
 // A placed building footprint. The renderer adds sprite/community fields; the
@@ -228,6 +250,7 @@ export function buildTown(
   footprint?: Footprint,
   walkMask?: string[],
   edgeMask?: string[],
+  policy?: HometownPolicy | null,
 ): Town {
   const count = Math.max(plotCount, 1)
   const { w: W, h: H } = clampFootprint(footprint?.w ?? MIN_W, footprint?.h ?? MIN_H)
@@ -318,7 +341,37 @@ export function buildTown(
     map.push(row)
   }
 
-  return { cols, rows, map, plots, entrance: { x: entranceCol, y: rows - 2 } }
+  const grid = { cols, rows, map }
+  return { ...grid, plots, entrance: { x: entranceCol, y: rows - 2 }, entities: placeFoliage(grid, policy) }
+}
+
+// Resolve the policy's active kinds to placed-entity references (#173): one
+// tree per boundary 'T' cell, and the '*' scatter clustered into full-footprint
+// groups plus leftover singles (planFlowers, #27). With no active group, every
+// scatter cell is a leftover, so it all falls to the single.
+function placeFoliage(grid: TileGrid, policy?: HometownPolicy | null): PlacedEntity[] {
+  const out: PlacedEntity[] = []
+  if (!policy) return out
+  if (policy.tree) {
+    for (let y = 0; y < grid.rows; y++)
+      for (let x = 0; x < grid.cols; x++)
+        if (grid.map[y][x] === 'T') out.push({ kind: 'prop', object_id: policy.tree.id, x, y })
+  }
+  if (policy.flowerGroup || policy.flowerSingle) {
+    const gw = Math.max(1, Math.floor(policy.flowerGroup?.footprint_w || 1))
+    const gh = Math.max(1, Math.floor(policy.flowerGroup?.footprint_h || 1))
+    const { groups, singles } = planFlowers(grid, gw, gh)
+    if (policy.flowerGroup) {
+      for (const g of groups) out.push({ kind: 'prop', object_id: policy.flowerGroup.id, x: g.x, y: g.y })
+    }
+    if (policy.flowerSingle) {
+      // No group → the 1×1 default footprint makes `groups` exactly the '*'
+      // cells; hand them to the single instead of dropping the whole scatter.
+      const cells = policy.flowerGroup ? singles : [...groups, ...singles]
+      for (const s of cells) out.push({ kind: 'prop', object_id: policy.flowerSingle.id, x: s.x, y: s.y })
+    }
+  }
+  return out
 }
 
 // Tile classes that block movement on their own (independent of buildings):

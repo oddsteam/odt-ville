@@ -13,6 +13,7 @@ import { trackEnterDoor, trackInteractBoard, trackEncounter } from './analytics/
 import type { Community, FeedItem } from './communities/schema.ts'
 import type { GameSession } from './game-session/schema.ts'
 import type { TileObject } from './tileObjects/schema.ts'
+import type { HometownPolicy } from './game/town.ts'
 import type { GroundTile } from './groundTiles/schema.ts'
 import type { MonsterPoolEntry } from './monsters/schema.ts'
 
@@ -38,14 +39,13 @@ export default function VillagePage() {
   const [communities, setCommunities] = useState<readonly Community[] | null>(null)
   const [session, setSession] = useState<GameSession | null>(null)
   const [feed, setFeed] = useState<readonly FeedItem[]>([])
-  // The admin-defined tree object (tile-object mapper), rendered by the game.
-  // Optional enhancement — null is fine and falls back to the bundled tree.
-  const [treeObject, setTreeObject] = useState<TileObject | null>(null)
-  // Admin flower art (tile-object mapper, kinds 'flower-group' / 'flower-single')
-  // for the '*' scatter (#27): the group is tiled across clusters, the single
-  // fills leftover cells. Optional — null falls back to the procedural buds.
-  const [flowerGroup, setFlowerGroup] = useState<TileObject | null>(null)
-  const [flowerSingle, setFlowerSingle] = useState<TileObject | null>(null)
+  // The resolved Hometown Policy (#173): the active foliage object per kind,
+  // read by the generated town at build time. A null role places nothing.
+  const [policy, setPolicy] = useState<HometownPolicy>({
+    tree: null,
+    flowerGroup: null,
+    flowerSingle: null,
+  })
   // Admin-mapped house (tile-object mapper, kind 'building', #29) — replaces the
   // bundled buildings and carries the door anchor. Null falls back to bundled art.
   const [building, setBuilding] = useState<TileObject | null>(null)
@@ -70,9 +70,7 @@ export default function VillagePage() {
     setCommunities(town.communities)
     setSession(town.session)
     setFeed(town.feed)
-    setTreeObject(town.treeObject)
-    setFlowerGroup(town.flowerGroup)
-    setFlowerSingle(town.flowerSingle)
+    setPolicy(town.policy)
     setBuilding(town.building)
     setGroundTiles(town.groundTiles)
     setCharacterManifest(town.characterManifest)
@@ -237,9 +235,7 @@ export default function VillagePage() {
       <VillageGame
         communities={communities}
         session={session}
-        treeObject={treeObject}
-        flowerGroup={flowerGroup}
-        flowerSingle={flowerSingle}
+        policy={policy}
         building={building}
         groundTiles={groundTiles}
         characterManifest={characterManifest}

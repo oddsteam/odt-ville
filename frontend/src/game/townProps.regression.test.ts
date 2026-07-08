@@ -23,13 +23,22 @@
 // townProps.test.ts is trusted to cover it.
 
 import { describe, expect, it } from 'vitest'
-import { buildTown, type Town } from './town.ts'
+import { buildTown, type HometownPolicy, type Town } from './town.ts'
 import { planFlowers } from './town.ts'
 import { townPropDraws } from './townProps.ts'
 
 // A fixed six-plot town (two building rows). buildTown takes only a plot count
 // here; every other input is defaulted, so this is byte-for-byte reproducible.
 const town: Town = buildTown(6)
+
+// A resolved Hometown Policy (#173) with 1×1 flower art — the default-footprint
+// geometry the pre-#141 snapshots pinned.
+const POLICY: HometownPolicy = {
+  tree: { id: 7, footprint_w: 1, footprint_h: 2 },
+  flowerGroup: { id: 3, footprint_w: 1, footprint_h: 1 },
+  flowerSingle: { id: 4 },
+}
+const townWithFoliage: Town = buildTown(6, undefined, undefined, undefined, undefined, POLICY)
 
 // Every 'T' cell in row-major order — the ground truth the tree pass stamps.
 // tallPropsFor early-returns [] when the bundled tree art glob doesn't resolve
@@ -167,11 +176,7 @@ describe('town prop placement (regression guard)', () => {
     // (depth (row+1)*10-1) tree per T cell. Derive each draw back to its (col,
     // row) and compare against the pinned tree geometry — this is the
     // independent oracle that the new entity path didn't move the trees.
-    const { trees } = townPropDraws(town, {
-      tree: { key: 'prop.tree', w: 1.4, h: 1.8 },
-      flowerGroup: null,
-      flowerSingle: null,
-    })
+    const { trees } = townPropDraws(townWithFoliage.entities, POLICY)
     const placed = trees.map((d) => ({ col: d.x - 0.5, row: d.y - 1, ox: d.originX, oy: d.originY, depth: d.depth }))
     const expected = treeCells(town).map((c) => ({
       col: c.col,
@@ -187,11 +192,7 @@ describe('town prop placement (regression guard)', () => {
     // The new path routes flowers through the same planFlowers the snapshots
     // pin; assert the emitted draws' cells match planFlowers so the shared
     // loader is verified end-to-end, not just the underlying scatter.
-    const { flowers } = townPropDraws(town, {
-      tree: null,
-      flowerGroup: { key: 'tile.flower', w: 1, h: 1 },
-      flowerSingle: { key: 'tile.flower' },
-    })
+    const { flowers } = townPropDraws(townWithFoliage.entities, POLICY)
     const drawCells = flowers.map((d) => `${d.x},${d.y}`)
     const layout = planFlowers(town, 1, 1)
     const expected = [...layout.groups, ...layout.singles].map((c) => `${c.x},${c.y}`)
