@@ -96,11 +96,53 @@ export default class TownScene extends Phaser.Scene {
     preloadAssets(this)
   }
 
+  // Boot the scene as an ordered sequence of setup steps. Each step below is a
+  // named private method so this reads as the scene's lifecycle at a glance;
+  // the ordering is load-bearing (dev tools hang off the test API, shutdown
+  // tears down what the earlier steps subscribed).
   create() {
+    this.buildWorld()
+
+    // Slice the manifest sheet into frames + walk anims (no-op when there's no
+    // manifest, leaving usingManifest false → bundled-frame player).
+    this.setupCharacter()
+
+    // Player sprite + spawn. Falls back to the entrance if the session is
+    // empty or names a community that no longer exists.
+    this.spawnPlayer(this.registry.get('session') || null)
+
+    // Gate trainer (PR-D) — derived from the town's entrance via
+    // resolveTrainerStart() so position follows the entrance even when
+    // the town reshapes. Defeated state is read from the registry.
+    this.addGateTrainer()
+
+    // Keyboard + overlay D-pad, both feeding activeDirection().
+    this.setupInput()
+
+    // Gated-door resolution handed back from the shell (issue #24).
+    this.setupEntryResolution()
+
+    // Playwright introspection hook (window.__game).
+    this.exposeTestApi()
+
+    // Dev-only tile grid (G) + ground-layer inspector (L), wired after the test
+    // API so the inspector can hang off window.__game. Stripped in production.
+    setupDevTools(this)
+
+    // React → Phaser registry watchers + the EncounterScene resume hook.
+    this.setupSceneEvents()
+
+    // Tear down every subscription the steps above registered on shutdown.
+    this.setupShutdown()
+  }
+
+  // Build the town world and lay it down: the baked map (converged producer),
+  // the ground stack the renderer reads back, the camera bounds, and the static
+  // ground/props/buildings paint.
+  buildWorld() {
     ensureTileTextures(this)
 
     const communities = this.registry.get('communities') || []
-    const session = this.registry.get('session') || null
 
     // Town geometry is identical to the DOM engine's — we keep a single
     // source of truth in constants.js so PR-B doesn't drift from the
@@ -154,21 +196,12 @@ export default class TownScene extends Phaser.Scene {
     // building sprites with nameplates. Sets this.buildings / this.propCells,
     // plus the dev-layer buckets render fills for setupDevTools.
     render(this)
+  }
 
-    // Slice the manifest sheet into frames + walk anims (no-op when there's no
-    // manifest, leaving usingManifest false → bundled-frame player).
-    this.setupCharacter()
-
-    // Player sprite + spawn. Falls back to the entrance if the session is
-    // empty or names a community that no longer exists.
-    this.spawnPlayer(session)
-
-    // Gate trainer (PR-D) — derived from the town's entrance via
-    // resolveTrainerStart() so position follows the entrance even when
-    // the town reshapes. Defeated state is read from the registry.
-    this.addGateTrainer()
-
-    // Keyboard input — Phaser's cursor keys + WASD via additional keys.
+  // Keyboard input (cursor keys + WASD) and the React overlay D-pad, both
+  // resolved through activeDirection() so on-screen and physical keys behave
+  // identically.
+  setupInput() {
     this.cursors = this.input.keyboard.createCursorKeys()
     this.wasd = this.input.keyboard.addKeys({
       up: Phaser.Input.Keyboard.KeyCodes.W,
@@ -176,9 +209,8 @@ export default class TownScene extends Phaser.Scene {
       left: Phaser.Input.Keyboard.KeyCodes.A,
       right: Phaser.Input.Keyboard.KeyCodes.D,
     })
-    // Overlay D-pad — React emits press/release events on the bus so
-    // we drive movement from tap/click input the same way keyboard
-    // input feeds activeDirection().
+    // React emits D-pad press/release events on the bus so we drive movement
+    // from tap/click input the same way keyboard input feeds activeDirection().
     this.dpadDir = null
     this._onDpadPress = (d) => {
       this.dpadDir = d
@@ -188,10 +220,12 @@ export default class TownScene extends Phaser.Scene {
     }
     bus.on('dpadPress', this._onDpadPress)
     bus.on('dpadRelease', this._onDpadRelease)
+  }
 
-    // Gated-door resolution from the shell (issue #24). handleArrival paused us
-    // and emitted 'requestEntry'; the shell runs the gate, then reports back:
-    // enter the community on a pass, just resume in place (release) on a fail.
+  // Gated-door resolution from the shell (issue #24). handleArrival paused us
+  // and emitted 'requestEntry'; the shell runs the gate, then reports back:
+  // enter the community on a pass, just resume in place (release) on a fail.
+  setupEntryResolution() {
     this._onEntryResolved = ({ communityId, granted }) => {
       const b = this.buildings.find((x) => x.community.id === communityId)
       if (granted && b) {
@@ -202,10 +236,12 @@ export default class TownScene extends Phaser.Scene {
       }
     }
     bus.on('entryResolved', this._onEntryResolved)
+  }
 
-    // Test API. PR-A only exposed `engine`; PR-B+ hang reads off the
-    // same object so Playwright can introspect scene state without
-    // poking around Phaser internals.
+  // Test API. PR-A only exposed `engine`; PR-B+ hang reads off the
+  // same object so Playwright can introspect scene state without
+  // poking around Phaser internals.
+  exposeTestApi() {
     if (typeof window !== 'undefined') {
       window.__game = {
         engine: 'phaser',
@@ -227,34 +263,35 @@ export default class TownScene extends Phaser.Scene {
         }),
       }
     }
+  }
 
-    // Dev-only tile grid (G) + ground-layer inspector (L), wired after the test
-    // API so the inspector can hang off window.__game. Stripped in production.
-    setupDevTools(this)
-
-    // React → Phaser registry watchers. The rule for what the scene
-    // subscribes to: **structural data is a scene-boot input, not a
-    // live data source.** The community list (positions, titles,
-    // colours) and the session are read once by spawnPlayer +
-    // render() during create() and never re-read mid-scene.
-    // The shell still pushes fresh communities/session into the
-    // registry on every loadTown() refresh, but the scene ignores
-    // those events — the new shape takes effect the next time
-    // VillageGame mounts (tab switch ⚙ ADMIN → 🕹️ VILLAGE, or a
-    // page reload). That keeps the player in place during normal
-    // play and removes the surprise-restart bug class entirely.
-    //
-    // Only **presentation-level** registry keys are listened to
-    // here. trainerDefeated is presentation (sprite tint + sight
-    // markers); when live notification badges arrive they'll get
-    // their own dedicated key + handler with the same in-place
-    // update discipline.
+  // React → Phaser registry watchers. The rule for what the scene
+  // subscribes to: **structural data is a scene-boot input, not a
+  // live data source.** The community list (positions, titles,
+  // colours) and the session are read once by spawnPlayer +
+  // render() during create() and never re-read mid-scene.
+  // The shell still pushes fresh communities/session into the
+  // registry on every loadTown() refresh, but the scene ignores
+  // those events — the new shape takes effect the next time
+  // VillageGame mounts (tab switch ⚙ ADMIN → 🕹️ VILLAGE, or a
+  // page reload). That keeps the player in place during normal
+  // play and removes the surprise-restart bug class entirely.
+  //
+  // Only **presentation-level** registry keys are listened to
+  // here. trainerDefeated is presentation (sprite tint + sight
+  // markers); when live notification badges arrive they'll get
+  // their own dedicated key + handler with the same in-place
+  // update discipline.
+  setupSceneEvents() {
     this.registry.events.on('changedata-trainerDefeated', this.refreshTrainerVisuals, this)
 
     // When EncounterScene closes it scene.resume()s us; this is the
     // hook to re-arm grace steps after a wild run.
     this.events.on(Phaser.Scenes.Events.RESUME, this.handleResume, this)
+  }
 
+  // Unsubscribe everything create() wired up when the scene shuts down.
+  setupShutdown() {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.registry.events.off('changedata-trainerDefeated', this.refreshTrainerVisuals, this)
       this.events.off(Phaser.Scenes.Events.RESUME, this.handleResume, this)
