@@ -30,9 +30,7 @@ import PhaserGame, { type PhaserGameProps } from './phaser/PhaserGame.tsx'
 export default function VillageGame({
   communities,
   session,
-  treeObject,
-  flowerGroup,
-  flowerSingle,
+  policy,
   building,
   groundTiles,
   characterManifest,
@@ -51,9 +49,7 @@ export default function VillageGame({
     <PhaserGame
       communities={communities}
       session={session}
-      treeObject={treeObject}
-      flowerGroup={flowerGroup}
-      flowerSingle={flowerSingle}
+      policy={policy}
       building={building}
       groundTiles={groundTiles}
       characterManifest={characterManifest}

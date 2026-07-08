@@ -9,6 +9,7 @@ import bus from './bus.js'
 import type { Community } from '../../communities/schema.ts'
 import type { GameSession } from '../../game-session/schema.ts'
 import type { TileObject } from '../../tileObjects/schema.ts'
+import type { HometownPolicy } from '../town.ts'
 import type { GroundTile } from '../../groundTiles/schema.ts'
 import type { MonsterPoolEntry } from '../../monsters/schema.ts'
 
@@ -58,9 +59,9 @@ const DESIGN_HEIGHT = 912
 export type PhaserGameProps = {
   communities: readonly Community[]
   session: GameSession
-  treeObject: TileObject | null
-  flowerGroup: TileObject | null
-  flowerSingle: TileObject | null
+  // The resolved Hometown Policy (#173): the active foliage object per kind,
+  // consumed by buildTown at scene boot. A null role places nothing.
+  policy: HometownPolicy
   building: TileObject | null
   groundTiles: readonly GroundTile[]
   characterManifest: object | null
@@ -84,9 +85,7 @@ export type PhaserGameProps = {
 export default function PhaserGame({
   communities,
   session,
-  treeObject,
-  flowerGroup,
-  flowerSingle,
+  policy,
   building,
   groundTiles,
   characterManifest,
@@ -148,16 +147,14 @@ export default function PhaserGame({
     game.registry.set('assets', ASSETS)
     game.registry.set('communities', communities)
     game.registry.set('session', session)
-    game.registry.set('treeObject', treeObject || null)
-    game.registry.set('flowerGroup', flowerGroup || null)
-    game.registry.set('flowerSingle', flowerSingle || null)
+    game.registry.set('hometownPolicy', policy || null)
     game.registry.set('buildingObject', building || null)
     // Ground-tile catalog — read once by TownScene.preload() to load the
-    // referenced tilesets, same boot-input timing as treeObject.
+    // referenced tilesets, same boot-input timing as the hometown policy.
     game.registry.set('groundTiles', groundTiles || [])
     // The active character manifest (sprite-mapper). Set synchronously after
     // construction — Phaser defers boot, so this lands before TownScene's
-    // preload() reads it (same timing the treeObject relies on).
+    // preload() reads it (same timing the hometown policy relies on).
     game.registry.set('characterManifest', characterManifest || null)
     // Authored wild-encounter pool (#69) — read at roll time in TownScene.
     game.registry.set('monsterPool', monsterPool || [])
@@ -213,28 +210,14 @@ export default function PhaserGame({
     game.registry.set('session', session)
   }, [session])
 
-  // Like communities/session, the tree object is a scene-boot input: the
-  // scene reads it once in preload(). Pushing it keeps the registry fresh so
-  // the next VillageGame mount / reload renders the latest tree.
+  // Like communities/session, the Hometown Policy is a scene-boot input: the
+  // scene reads it once at create(). Pushing it keeps the registry fresh so
+  // the next VillageGame mount / reload renders the latest active objects.
   useEffect(() => {
     const game = gameRef.current
     if (!game) return
-    game.registry.set('treeObject', treeObject || null)
-  }, [treeObject])
-
-  // Flower art (group + single) — boot inputs like treeObject; keep the
-  // registry fresh for the next VillageGame mount / reload.
-  useEffect(() => {
-    const game = gameRef.current
-    if (!game) return
-    game.registry.set('flowerGroup', flowerGroup || null)
-  }, [flowerGroup])
-
-  useEffect(() => {
-    const game = gameRef.current
-    if (!game) return
-    game.registry.set('flowerSingle', flowerSingle || null)
-  }, [flowerSingle])
+    game.registry.set('hometownPolicy', policy || null)
+  }, [policy])
 
   // Admin-mapped house (#29) — boot input like the flower art; refresh the
   // registry so the next VillageGame mount / reload renders the latest house.
@@ -244,7 +227,7 @@ export default function PhaserGame({
     game.registry.set('buildingObject', building || null)
   }, [building])
 
-  // Ground-tile catalog — boot input like treeObject; pushing it keeps the
+  // Ground-tile catalog — boot input like the hometown policy; pushing it keeps the
   // registry fresh for the next VillageGame mount / reload.
   useEffect(() => {
     const game = gameRef.current
@@ -252,7 +235,7 @@ export default function PhaserGame({
     game.registry.set('groundTiles', groundTiles || [])
   }, [groundTiles])
 
-  // Like treeObject, the character manifest is a scene-boot input read once in
+  // Like the hometown policy, the character manifest is a scene-boot input read once in
   // preload(); pushing it keeps the registry fresh for the next mount/reload.
   useEffect(() => {
     const game = gameRef.current

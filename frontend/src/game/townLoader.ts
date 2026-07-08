@@ -13,20 +13,18 @@ import { GroundTilesService } from '../groundTiles/service.ts'
 import { MonstersService } from '../monsters/service.ts'
 import { loadActiveManifest } from '../character/manifest.js'
 
-export const loadTown = () =>
+// The Hometown Policy resolution point (CONTEXT.md 2026-07-07, #173): the one
+// place the generated producer's authored inputs — the active object per
+// foliage kind — are resolved. Today's only adapter is the global admin config
+// (the active-object toggles); a per-user/per-cohort policy would be a second
+// adapter behind this same seam. Each role is best-effort: a missing/erroring
+// endpoint resolves to null and that kind simply places nothing. The group
+// falls back to the legacy 'prop' kind (#26) so existing flower art keeps
+// rendering. `building` stays bespoke until the House slice (#90).
+export const resolveHometownPolicy = () =>
   Effect.all(
     {
-      communities: CommunitiesService.list(),
-      session: GameSessionService.get(),
-      feed: CommunitiesService.getFeed(),
-      // Optional visual enhancements: swallow any failure to a fallback so a
-      // missing/erroring endpoint never breaks the town load.
-      treeObject: Effect.orElseSucceed(TileObjectsService.getActive('tree'), () => null),
-      // Flower art for the '*' scatter (#27). The multi-tile group is tiled
-      // across contiguous '*' clusters; the single is the per-cell fallback for
-      // leftover/lone cells. The group falls back to the legacy 'prop' kind
-      // (#26) so existing flower art keeps rendering. Both best-effort: none →
-      // procedural buds, town still renders.
+      tree: Effect.orElseSucceed(TileObjectsService.getActive('tree'), () => null),
       flowerGroup: Effect.orElseSucceed(
         TileObjectsService.getActive('flower-group').pipe(
           Effect.flatMap((g) => (g ? Effect.succeed(g) : TileObjectsService.getActive('prop'))),
@@ -34,6 +32,18 @@ export const loadTown = () =>
         () => null,
       ),
       flowerSingle: Effect.orElseSucceed(TileObjectsService.getActive('flower-single'), () => null),
+    },
+    { concurrency: 'unbounded' },
+  )
+
+export const loadTown = () =>
+  Effect.all(
+    {
+      communities: CommunitiesService.list(),
+      session: GameSessionService.get(),
+      feed: CommunitiesService.getFeed(),
+      // The hometown's generation inputs, resolved once (#173).
+      policy: resolveHometownPolicy(),
       // Admin-mapped house (#29): replaces the bundled roof/body art on every
       // plot and supplies the door anchor. Absent → bundled buildings.
       building: Effect.orElseSucceed(TileObjectsService.getActive('building'), () => null),

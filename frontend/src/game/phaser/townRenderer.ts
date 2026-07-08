@@ -12,10 +12,9 @@
 
 import { TILE } from '../constants.js'
 import { buildingOverlayDepth } from '../town.js'
-import { townPropDraws, type TownPropArt } from '../townProps.ts'
-import { loadObjectTextures, objectTextureKey, stampEntity } from './entityLoader.ts'
+import { townPropDraws } from '../townProps.ts'
+import { loadObjectTextures, stampEntity } from './entityLoader.ts'
 import { buildingKeyFor, DEFAULT_BUILDING } from '../buildings.js'
-import { ENABLED as TILESET_ENABLED, PROPS } from './townTileset.js'
 import { preloadCharacter } from './characterRig.js'
 import { GATE_TRAINER } from '../encounters.js'
 import {
@@ -90,16 +89,16 @@ export function preloadAssets(scene: Scene) {
   // share one source of truth for the opponent table.
   scene.load.image('trainer.boss-k', GATE_TRAINER.sprite)
 
-  // Foliage art (trees + the '*' flower scatter) now flows through the shared
-  // entity loader (ADR-0008): the active tree / flower-group / flower-single
-  // tile-objects are references resolved to `obj.<id>` textures, exactly as the
-  // authored map loads its placed props. The bundled tree art stays as the
-  // fallback texture when no tree object is authored; the procedural tile.flower
-  // buds (ensureTileTextures) back the flower roles.
-  loadObjectTextures(scene, foliageObjects(scene))
-  if (TILESET_ENABLED) {
-    for (const prop of Object.values<any>(PROPS)) scene.load.image(prop.key, prop.url)
-  }
+  // Foliage art (trees + the '*' flower scatter) flows through the shared
+  // entity loader (ADR-0008): the Hometown Policy's active objects (#173) are
+  // references resolved to `obj.<id>` textures, exactly as the authored map
+  // loads its placed props. A kind with no active object places nothing —
+  // there is no bundled fallback art.
+  const policy = scene.registry.get('hometownPolicy') || {}
+  loadObjectTextures(
+    scene,
+    [policy.tree, policy.flowerGroup, policy.flowerSingle].filter((o) => o?.image),
+  )
 
   // Admin-mapped house (#29). When present it replaces the bundled roof/body
   // stack on every plot (addBuildingSprite); absent → the bundled art.
@@ -409,58 +408,15 @@ function addBuildingSprite(scene: Scene, community: any, plot: any) {
   return roof
 }
 
-// The active foliage tile-objects, in the shape the shared loader registers
-// (id + image + footprint). Absent roles are dropped; a full TileObject from
-// the registry satisfies EntityObject. Trees rethemes for free — the hometown
-// regenerates every load, so swapping the active object in /admin/objects is
-// picked up here on the next boot.
-function foliageObjects(scene: Scene) {
-  return [
-    scene.registry.get('treeObject'),
-    scene.registry.get('flowerGroup'),
-    scene.registry.get('flowerSingle'),
-  ].filter((o) => o?.image)
-}
-
-// Resolve each foliage role to a texture key + footprint for townPropDraws. An
-// admin-saved object (its `obj.<id>` texture loaded in preload) wins; otherwise
-// the bundled tree art / procedural flower buds back the role. A role with no
-// usable texture at all resolves to null and places nothing.
-function resolveFoliageArt(scene: Scene): TownPropArt {
-  const objKey = (o: any) => (o?.image ? objectTextureKey(o.id) : null)
-  const has = (key: string | null) => key != null && scene.textures.exists(key)
-
-  const treeObj = scene.registry.get('treeObject')
-  const treeObjKey = objKey(treeObj)
-  const bundledTree = (PROPS as any)['prop.tree']
-  const tree = has(treeObjKey)
-    ? { key: treeObjKey!, w: treeObj.footprint_w || 1, h: treeObj.footprint_h || 1 }
-    : has('prop.tree') && bundledTree
-      ? { key: 'prop.tree', w: bundledTree.wTiles, h: bundledTree.hTiles }
-      : null
-
-  // Flowers always have the procedural tile.flower fallback; the admin group /
-  // single objects replace the buds when their textures are present.
-  const groupObj = scene.registry.get('flowerGroup')
-  const groupKey = objKey(groupObj)
-  const flowerGroup = has(groupKey)
-    ? { key: groupKey!, w: groupObj.footprint_w || 1, h: groupObj.footprint_h || 1 }
-    : { key: 'tile.flower', w: 1, h: 1 }
-
-  const singleKey = objKey(scene.registry.get('flowerSingle'))
-  const flowerSingle = { key: has(singleKey) ? singleKey! : 'tile.flower' }
-
-  return { tree, flowerGroup, flowerSingle }
-}
-
-// Stamp the town's foliage through the shared entity loader. Trees bucket into
-// the 'trees' dev layer, flowers into 'grass' (matching the pre-#141 split).
-// No tree today marks `blocks`, so propCells stays empty — boundary trees sit
-// on already-blocked 'T' tiles; the field is cleared so the walkability rule
-// keeps seeing an empty dynamic-blocker set from props.
+// Stamp the town's placed entities through the shared entity loader. Trees
+// bucket into the 'trees' dev layer, flowers into 'grass' (matching the
+// pre-#141 split). No tree today marks `blocks`, so propCells stays empty —
+// boundary trees sit on already-blocked 'T' tiles; the field is cleared so the
+// walkability rule keeps seeing an empty dynamic-blocker set from props.
 function addProps(scene: Scene) {
   scene.propCells.clear()
-  const { trees, flowers } = townPropDraws(scene.town, resolveFoliageArt(scene))
+  const policy = scene.registry.get('hometownPolicy') || { tree: null, flowerGroup: null, flowerSingle: null }
+  const { trees, flowers } = townPropDraws(scene.town.entities, policy)
   for (const d of trees) {
     const sprite = stampEntity(scene, d)
     if (DEV && sprite) scene.devLayers?.trees?.push(sprite)

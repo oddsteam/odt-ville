@@ -15,8 +15,6 @@ const PALETTE = {
   treeDk: 0x1c5f27,
   path: 0xf0dca6,
   pathDk: 0xcdb472,
-  flowerA: 0xf6c41f,
-  flowerB: 0xec5436,
   wall: 0xf3e6bb,
   door: 0x432a14,
   ink: 0x1b241b,
@@ -26,7 +24,6 @@ const PALETTE = {
 // Texture keys mirror the tile-char-to-class mapping in <VillageMap>:
 //   '.' → 'tile.grass'
 //   ':' → 'tile.path'
-//   '*' → 'tile.flower'
 //   'g' → 'tile.tallgrass'
 //   'T' → 'tile.tree'
 //   's' → 'tile.sign'
@@ -48,19 +45,6 @@ export function ensureTileTextures(scene) {
     g.fillRect(0, 0, TILE, TILE)
     g.lineStyle(1, PALETTE.pathDk, 1)
     g.strokeRect(0.5, 0.5, TILE - 1, TILE - 1)
-  })
-
-  // Flower: a few tiny coloured buds on a TRANSPARENT tile, so it overlays
-  // whatever grass (procedural or admin tileset art) is painted beneath it.
-  drawTile(scene, 'tile.flower', (g) => {
-    g.fillStyle(PALETTE.flowerA, 1)
-    g.fillRect(14, 16, 8, 8)
-    g.fillStyle(PALETTE.flowerB, 1)
-    g.fillRect(24, 22, 8, 8)
-    g.fillStyle(PALETTE.flowerB, 1)
-    g.fillRect(24, 26, 8, 8)
-    g.fillStyle(PALETTE.flowerA, 1)
-    g.fillRect(12, 30, 8, 8)
   })
 
   // Tall grass: grass base + a dark-green clump of "blades" in the lower

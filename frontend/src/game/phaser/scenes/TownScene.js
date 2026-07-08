@@ -118,6 +118,9 @@ export default class TownScene extends Phaser.Scene {
       // Authored impassable cell borders (#53): which footprint-cell sides the
       // avatar cannot step across. Absent → today's free movement.
       edgeMaskFor(buildingObject),
+      // Hometown Policy (#173): the active foliage objects, resolved to placed
+      // entities at generation time and rendered via the shared entity loader.
+      this.registry.get('hometownPolicy') || null,
     )
 
     // With Scale.RESIZE in PhaserGame, the canvas display size matches
