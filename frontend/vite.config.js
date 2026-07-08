@@ -57,10 +57,18 @@ function archScoreEndpoint() {
           const deps = s.totalDependenciesCruised || 0
           const violations = s.violations || []
           const rules = {}
+          const byModule = {}
           for (const v of violations) {
             const name = (v.rule && v.rule.name) || 'unknown'
             rules[name] = (rules[name] || 0) + 1
+            const m = byModule[v.from] || (byModule[v.from] = [])
+            m.push({ to: v.to, rule: name })
           }
+          // Worst-offending source modules first, so the bar can show where the
+          // divergence actually concentrates.
+          const offenders = Object.entries(byModule)
+            .map(([from, edges]) => ({ from, count: edges.length, edges }))
+            .sort((a, b) => b.count - a.count)
           const score = deps ? ((deps - violations.length) / deps) * 100 : 100
           res({
             score: Math.round(score * 10) / 10,
@@ -68,6 +76,7 @@ function archScoreEndpoint() {
             dependencies: deps,
             modules: s.totalCruised || 0,
             rules,
+            offenders,
           })
         } catch (e) {
           res({ error: String((e && e.message) || e) })

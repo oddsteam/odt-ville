@@ -5,13 +5,17 @@ import { useEffect, useState } from 'react'
 // edge obeys the target architecture; lower = more edges break a rule. The
 // number comes from the /__arch-score dev endpoint (see vite.config.js), which
 // runs dependency-cruiser on request. Rendered only behind import.meta.env.DEV
-// (RootLayout), so it and the endpoint drop out of production builds.
+// (RootLayout), so it and the endpoint drop out of production builds. Click the
+// bar to expand the worst-offending modules.
+type Edge = { to: string; rule: string }
+type Offender = { from: string; count: number; edges: Edge[] }
 type Score = {
   score: number
   violations: number
   dependencies: number
   modules: number
   rules: Record<string, number>
+  offenders: Offender[]
   error?: string
 }
 
@@ -21,9 +25,13 @@ function color(pct: number) {
   return '#f85149'
 }
 
+// Trim the `src/` prefix so paths fit the narrow panel.
+const short = (p: string) => p.replace(/^src\//, '')
+
 export default function ArchScoreBar() {
   const [data, setData] = useState<Score | null>(null)
   const [failed, setFailed] = useState(false)
+  const [open, setOpen] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -43,63 +51,112 @@ export default function ArchScoreBar() {
   if (failed) return null
 
   const pct = data ? data.score : null
-  const tip = data
-    ? Object.entries(data.rules)
-        .map(([r, n]) => `${n}× ${r}`)
-        .join('\n') || 'no violations 🎉'
-    : 'measuring…'
 
   return (
     <div
-      title={tip}
       style={{
         position: 'fixed',
         left: 12,
         bottom: 12,
         zIndex: 9999,
-        width: 210,
-        padding: '6px 10px',
-        borderRadius: 8,
+        width: 240,
         font: '11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace',
         color: '#e6edf3',
         background: 'rgba(13,17,23,0.85)',
         border: '1px solid rgba(255,255,255,0.12)',
+        borderRadius: 8,
         backdropFilter: 'blur(4px)',
         userSelect: 'none',
+        overflow: 'hidden',
       }}
     >
-      <div
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        disabled={!data}
+        title={data ? 'Click for the worst-offending modules' : undefined}
         style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          marginBottom: 4,
-        }}
-      >
-        <span>ARCH ALIGN</span>
-        <strong style={{ color: pct == null ? '#8b949e' : color(pct) }}>
-          {pct == null ? '…' : `${pct}%`}
-        </strong>
-      </div>
-      <div
-        style={{
-          height: 6,
-          borderRadius: 3,
-          background: 'rgba(255,255,255,0.12)',
-          overflow: 'hidden',
+          all: 'unset',
+          display: 'block',
+          boxSizing: 'border-box',
+          width: '100%',
+          padding: '6px 10px',
+          cursor: data ? 'pointer' : 'default',
         }}
       >
         <div
           style={{
-            height: '100%',
-            width: `${pct ?? 0}%`,
-            background: pct == null ? '#8b949e' : color(pct),
-            transition: 'width .4s ease',
+            display: 'flex',
+            justifyContent: 'space-between',
+            marginBottom: 4,
           }}
-        />
-      </div>
-      {data && (
-        <div style={{ marginTop: 4, color: '#8b949e' }}>
-          {data.violations} violations · {data.dependencies} deps
+        >
+          <span>
+            {data ? (open ? '▾ ' : '▸ ') : ''}ARCH ALIGN
+          </span>
+          <strong style={{ color: pct == null ? '#8b949e' : color(pct) }}>
+            {pct == null ? '…' : `${pct}%`}
+          </strong>
+        </div>
+        <div
+          style={{
+            height: 6,
+            borderRadius: 3,
+            background: 'rgba(255,255,255,0.12)',
+            overflow: 'hidden',
+          }}
+        >
+          <div
+            style={{
+              height: '100%',
+              width: `${pct ?? 0}%`,
+              background: pct == null ? '#8b949e' : color(pct),
+              transition: 'width .4s ease',
+            }}
+          />
+        </div>
+        {data && (
+          <div style={{ marginTop: 4, color: '#8b949e' }}>
+            {data.violations} violations · {data.dependencies} deps
+          </div>
+        )}
+      </button>
+
+      {open && data && (
+        <div
+          style={{
+            borderTop: '1px solid rgba(255,255,255,0.12)',
+            padding: '6px 10px',
+            maxHeight: 240,
+            overflowY: 'auto',
+          }}
+        >
+          {data.offenders.length === 0 && (
+            <div style={{ color: '#3fb950' }}>no violations 🎉</div>
+          )}
+          {data.offenders.map((o) => (
+            <div key={o.from} style={{ marginBottom: 6 }}>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <span style={{ color: color(100 - o.count * 8), fontWeight: 700 }}>
+                  {o.count}
+                </span>
+                <span style={{ wordBreak: 'break-all' }}>{short(o.from)}</span>
+              </div>
+              {o.edges.map((e, i) => (
+                <div
+                  key={i}
+                  style={{
+                    color: '#8b949e',
+                    paddingLeft: 14,
+                    wordBreak: 'break-all',
+                  }}
+                  title={e.rule}
+                >
+                  → {short(e.to)}
+                </div>
+              ))}
+            </div>
+          ))}
         </div>
       )}
     </div>
