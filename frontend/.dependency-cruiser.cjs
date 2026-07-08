@@ -18,11 +18,11 @@
 // Baseline as of 2026-07-07 (12 violations) and what deletes them:
 //   kernel -> game (mapRenderer/entityLoader -> constants, groundModel ->
 //     town.ts): the physical kernel extraction, #178.
-//   game/townLoader -> data services (x5) + characterRig -> character:
-//     shell-side data orchestration living inside the black box. #173 shrinks
-//     townLoader's fetches; moving it out to the shell has no issue yet — the
-//     baseline itself tracks it. characterRig resolution belongs to the
-//     per-user-character work (#155).
+//   characterRig -> character: the last black-box data edge. townLoader's five
+//     edges are gone — #185 moved that shell-side data orchestration out of
+//     src/game/ to src/townLoader.ts (its only caller, VillagePage, drives it
+//     and hands the bundle to the game as props). characterRig resolution
+//     belongs to the per-user-character work (#155).
 //   authoring -> game (TileMapper -> town.ts, MapPreview -> constants): #178
 //     (shared constants/kernel move).
 //   maps/MapPage.tsx -> MapScene: likely a MODEL refinement, not a code bug —
