@@ -13,7 +13,7 @@ vi.mock('../src/character/manifest.js', () => ({
   loadActiveManifest: vi.fn(async () => ({ name: 'scout' })),
 }))
 
-import { loadTown } from '../src/game/townLoader.ts'
+import { loadTown } from '../src/townLoader.ts'
 
 const SESSION = {
   last_area: 'town',

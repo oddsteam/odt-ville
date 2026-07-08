@@ -6,12 +6,12 @@
 
 import * as Effect from 'effect/Effect'
 
-import { CommunitiesService } from '../communities/service.ts'
-import { GameSessionService } from '../game-session/service.ts'
-import { TileObjectsService } from '../tileObjects/service.ts'
-import { GroundTilesService } from '../groundTiles/service.ts'
-import { MonstersService } from '../monsters/service.ts'
-import { loadActiveManifest } from '../character/manifest.js'
+import { CommunitiesService } from './communities/service.ts'
+import { GameSessionService } from './game-session/service.ts'
+import { TileObjectsService } from './tileObjects/service.ts'
+import { GroundTilesService } from './groundTiles/service.ts'
+import { MonstersService } from './monsters/service.ts'
+import { loadActiveManifest } from './character/manifest.js'
 
 // The Hometown Policy resolution point (CONTEXT.md 2026-07-07, #173): the one
 // place the generated producer's authored inputs — the active object per
