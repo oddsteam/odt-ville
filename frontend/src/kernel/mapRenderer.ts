@@ -4,8 +4,8 @@
 // flattens a BakedMap into draw instructions (unit-tested apart from Phaser);
 // `preloadBakedMap` / `renderBakedMap` load and stamp them.
 
-import { TILE } from '../constants.js'
-import type { BakedGround, BakedMap } from '../../maps/schema.ts'
+import { TILE } from './constants.ts'
+import type { BakedGround, BakedMap } from './schema.ts'
 import { loadObjectTextures, objectTextureKey, stampEntity } from './entityLoader.ts'
 
 // Re-exported for this module's consumers: the shared prop catalog's texture

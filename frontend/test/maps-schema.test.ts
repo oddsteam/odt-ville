@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import * as Schema from 'effect/Schema'
 import { Either } from 'effect'
 
-import { BakedMap } from '../src/maps/schema.ts'
+import { BakedMap } from '../src/kernel/schema.ts'
 
 describe('BakedMap schema', () => {
   const valid = {

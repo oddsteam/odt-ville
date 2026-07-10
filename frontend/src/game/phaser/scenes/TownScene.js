@@ -1,7 +1,7 @@
 import Phaser from 'phaser'
 import { TILE, MOVE_MS, PLAYER_FEET_LIFT } from '../../constants.js'
 import { buildTownMap } from '../../townMap.ts'
-import { catalogFromGroundTiles, HOMETOWN_CATALOG } from '../tileCatalog.ts'
+import { catalogFromGroundTiles, HOMETOWN_CATALOG } from '../../../kernel/tileCatalog.ts'
 import { isWalkable, edgeBlocked, playerDepthAt, isLadderCell, doorAnchorFor, footprintFor, walkMaskFor, edgeMaskFor } from '../../town.ts'
 import { ensureTileTextures } from '../tileTextures.js'
 import {

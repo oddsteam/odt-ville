@@ -10,10 +10,10 @@
 
 import { buildTown, tileChar, typeForTileChar } from './town.ts'
 import type { DoorAnchor, Footprint, HometownPolicy, Town } from './town.ts'
-import { bakeGround } from '../maps/baker.ts'
-import type { SourceMap } from '../maps/baker.ts'
-import type { TileCatalog } from './phaser/tileCatalog.ts'
-import type { BakedGround } from '../maps/schema.ts'
+import { bakeGround } from '../kernel/baker.ts'
+import type { SourceMap } from '../kernel/baker.ts'
+import type { TileCatalog } from '../kernel/tileCatalog.ts'
+import type { BakedGround } from '../kernel/schema.ts'
 
 // Present the generated town as a *source document* — the same painted-terrain
 // shape an authored map saves — so both producers feed ONE engine. Each cell's

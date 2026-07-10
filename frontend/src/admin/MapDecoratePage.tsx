@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { MapsService } from '../maps/service.ts'
-import type { BakedMap } from '../maps/schema.ts'
+import type { BakedMap } from '../kernel/schema.ts'
 import { TileObjectsService } from '../tileObjects/service.ts'
 import type { TileObject } from '../tileObjects/schema.ts'
 import { makeMask, setMaskCell, resizeMask, isMaskEmpty, type Mask } from './maskPaint.ts'

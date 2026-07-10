@@ -1,10 +1,10 @@
 import { useEffect, useRef } from 'react'
 import Phaser from 'phaser'
-import { preloadBakedMap, renderBakedMap } from '../game/phaser/mapRenderer.ts'
-import { TILE } from '../game/constants.js'
+import { preloadBakedMap, renderBakedMap } from '../kernel/mapRenderer.ts'
+import { TILE } from '../kernel/constants.ts'
 import { tileFromPointer } from './previewPointer.ts'
 import { blockedCells, type Mask } from './maskPaint.ts'
-import type { BakedMap } from '../maps/schema.ts'
+import type { BakedMap } from '../kernel/schema.ts'
 
 // The editor's WYSIWYG bake preview (#107). It renders the *real* baked map
 // through the shared draw path (preloadBakedMap/renderBakedMap) — the same

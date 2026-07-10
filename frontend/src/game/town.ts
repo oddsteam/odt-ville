@@ -1,7 +1,7 @@
 // Pure town geometry and terrain helpers. Keeping these free of image imports
 // lets the generator invariants run in Node without booting Vite or Phaser.
 
-import { maskCharWalkable, walkMaskConnected, EDGE_N, EDGE_E, EDGE_S, EDGE_W } from './walkMask.ts'
+import { maskCharWalkable, walkMaskConnected, EDGE_N, EDGE_E, EDGE_S, EDGE_W } from '../kernel/walkMask.ts'
 
 export interface Plot {
   col: number

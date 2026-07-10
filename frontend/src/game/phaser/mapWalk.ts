@@ -4,9 +4,9 @@
 // into the shared stepTile loop.
 
 import { TILE, PLAYER_FEET_LIFT } from '../constants.js'
-import { maskCharSolid } from '../walkMask.ts'
+import { maskCharSolid } from '../../kernel/walkMask.ts'
 import type { Tile } from './movement.ts'
-import type { BakedEntity } from '../../maps/schema.ts'
+import type { BakedEntity } from '../../kernel/schema.ts'
 
 interface GridSize {
   cols: number

@@ -8,7 +8,7 @@ import { objectIdsFrom } from './props.ts'
 import { runEdge } from '../lib/runEdge.ts'
 import { subscribeAuthToken } from '../lib/authToken.ts'
 import { loadActiveManifest } from '../character/manifest.js'
-import type { BakedMap } from './schema.ts'
+import type { BakedMap } from '../kernel/schema.ts'
 
 // Play surface for an authored map (ADR-0004). It loads a baked map by slug and
 // boots Phaser with the map-agnostic MapScene — the runtime renders "the

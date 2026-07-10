@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { mapWalkable, isMasked, entityBlockedFor } from './mapWalk.ts'
-import type { BakedEntity } from '../../maps/schema.ts'
+import type { BakedEntity } from '../../kernel/schema.ts'
 
 const SIZE = { cols: 3, rows: 3 }
 

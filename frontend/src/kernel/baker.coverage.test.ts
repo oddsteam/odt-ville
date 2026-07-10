@@ -10,7 +10,7 @@
 //     painted the cell, so no duplicate stacks.
 
 import { describe, expect, it } from 'vitest'
-import { makeCatalog } from '../game/phaser/tileCatalog.ts'
+import { makeCatalog } from './tileCatalog.ts'
 import { bakeGround } from './baker.ts'
 import type { SourceMap } from './baker.ts'
 

@@ -5,8 +5,8 @@ import {
   coverageTerrainForCell,
   groundPaintStackForCell,
   terrainBorders,
-} from '../src/game/phaser/groundModel.js'
-import { makeCatalog } from '../src/game/phaser/tileCatalog.ts'
+} from '../src/kernel/groundModel.js'
+import { makeCatalog } from '../src/kernel/tileCatalog.ts'
 
 // A terrain field over a raw grid — the generic accessor the engine resolves
 // against (out-of-bounds is null, like an authored map's edge).

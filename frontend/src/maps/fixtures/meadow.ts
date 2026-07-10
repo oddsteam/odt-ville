@@ -9,9 +9,9 @@
 // change (the autotile engine reads it as-is). It references the bundled
 // 1_Terrains_and_Fences_32x32 sheet (32 columns).
 
-import { makeCatalog } from '../../game/phaser/tileCatalog.ts'
-import type { TileCatalog } from '../../game/phaser/tileCatalog.ts'
-import type { SourceMap } from '../baker.ts'
+import { makeCatalog } from '../../kernel/tileCatalog.ts'
+import type { TileCatalog } from '../../kernel/tileCatalog.ts'
+import type { SourceMap } from '../../kernel/baker.ts'
 
 const SHEET = '1_Terrains_and_Fences_32x32'
 

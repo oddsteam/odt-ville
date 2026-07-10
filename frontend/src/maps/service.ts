@@ -8,13 +8,13 @@ import * as Schema from 'effect/Schema'
 
 import { DecodeError, Http } from '../lib/http.ts'
 import type { HttpError } from '../lib/http.ts'
-import { BakedMap } from './schema.ts'
-import type { BakedEntity, BakedGround } from './schema.ts'
-import { bakeSourceMap } from './baker.ts'
-import type { SourceMap } from './baker.ts'
+import { BakedMap } from '../kernel/schema.ts'
+import type { BakedEntity, BakedGround } from '../kernel/schema.ts'
+import { bakeSourceMap } from '../kernel/baker.ts'
+import type { SourceMap } from '../kernel/baker.ts'
 import { propEntities } from './props.ts'
 import type { PlacedProp } from './props.ts'
-import type { TileCatalog } from '../game/phaser/tileCatalog.ts'
+import type { TileCatalog } from '../kernel/tileCatalog.ts'
 
 const decodeOne = Schema.decodeUnknown(BakedMap)
 

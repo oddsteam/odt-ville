@@ -1,19 +1,40 @@
 import { HOMETOWN_CATALOG } from './tileCatalog.ts'
+import type { TileCatalog } from './tileCatalog.ts'
 
-// The autotile rules are now Tile Catalog *data* (tileCatalog.ts), not constants
+// The autotile rules are Tile Catalog *data* (tileCatalog.ts), not constants
 // baked into this engine (ADR-0003/0004). Every resolver takes a `catalog`
 // argument that defaults to the generated hometown's catalog, so the existing
-// hometown render path (townRenderer, which calls these without a catalog) is
-// byte-identical, while a second producer can pass a catalog that introduces a
-// new terrain with no engine change.
+// hometown render path is byte-identical, while a second producer can pass a
+// catalog that introduces a new terrain with no engine change.
 export { HOMETOWN_CATALOG } from './tileCatalog.ts'
 
-// Back-compat aliases for the old module constants — still the hometown's stack
-// and autotiled set, but now sourced from the catalog data.
-export const GROUND_STACK = HOMETOWN_CATALOG.stack
-export const AUTOTILED_TERRAINS = HOMETOWN_CATALOG.autotiled
+// A producer-supplied terrain source: any grid exposing a `terrainAt(x, y)`
+// accessor (the baker wraps its SourceMap this way; #171 removed the last
+// raw-town caller, so the kernel reads no town chars). Out-of-bounds is the
+// field's own concern — an authored source returns null.
+export interface TerrainField {
+  terrainAt(x: number, y: number): string | null
+}
 
-export function terrainDepth(terrain, catalog = HOMETOWN_CATALOG) {
+// Which sides of a cell a border/edge applies to, keyed by direction name
+// (N/S/E/W from ORTHOGONAL_DIRS, NE/NW/SE/SW from the corner tables).
+export type Borders = Record<string, boolean>
+
+// Per-terrain side availability derived from catalog art — the shape
+// edgeSetsFromCatalog / innerSetsFromCatalog (tileCatalog.ts) produce.
+export type SideSets = Record<string, Record<string, boolean>>
+
+// One paint instruction for a cell: which terrain draws, in which surface
+// role, at which canonical depth. `side` only accompanies 'inner'.
+export interface GroundLayer {
+  terrain: string
+  role: 'fill' | 'edge' | 'coverage' | 'inner'
+  side?: string
+  opaque: boolean
+  depth: number
+}
+
+export function terrainDepth(terrain: string, catalog: TileCatalog = HOMETOWN_CATALOG): number {
   return catalog.stack.indexOf(terrain) * 0.1
 }
 
@@ -40,39 +61,48 @@ export const DIAGONAL_CORNERS = [
   { c: 'SW', dx: -1, dy: 1 },
 ]
 
-// Resolve a cell's terrain from a *field*: any producer-supplied source
-// exposing a `terrainAt(x, y)` accessor (the baker wraps its SourceMap this
-// way; #171 removed the last raw-town caller, so the kernel reads no town
-// chars). Out-of-bounds is the field's own concern — an authored source
-// returns null.
-function terrainForCell(field, x, y) {
-  return field.terrainAt(x, y)
+// A terrain's priority rank in the catalog stack; -1 for unknown/unpainted.
+function rankOf(terrain: string | null, catalog: TileCatalog): number {
+  return terrain === null ? -1 : catalog.stack.indexOf(terrain)
 }
 
 // Only the higher-ranked terrain owns a seam. A dirt cell therefore edges
 // toward road, but remains fill toward grass; the adjacent grass cell draws the
 // dirt/grass transition and reveals dirt coverage at dirt's normal depth.
-export function terrainBorders(field, x, y, terrain, catalog = HOMETOWN_CATALOG) {
-  const borders = {}
+export function terrainBorders(
+  field: TerrainField,
+  x: number,
+  y: number,
+  terrain: string,
+  catalog: TileCatalog = HOMETOWN_CATALOG,
+): Borders {
+  const borders: Borders = {}
   const rank = catalog.stack.indexOf(terrain)
   for (const { d, dx, dy } of ORTHOGONAL_DIRS) {
-    const neighbour = terrainForCell(field, x + dx, y + dy)
-    const neighbourRank = catalog.stack.indexOf(neighbour)
+    const neighbourRank = rankOf(field.terrainAt(x + dx, y + dy), catalog)
     borders[d] = neighbourRank >= 0 && neighbourRank < rank
   }
   return borders
 }
 
 // A transparent edge needs an opaque terrain fill in its own cell. If several
-// different neighbours meet there, the highest terrain in GROUND_STACK wins.
-// The painter stamps this choice at the backing terrain's canonical depth;
-// sub-tile, per-side backing is out of scope.
-export function coverageTerrainForCell(field, x, y, terrain, borders = null, catalog = HOMETOWN_CATALOG) {
-  const neighbours = new Set()
+// different neighbours meet there, the highest terrain in the catalog stack
+// wins. The painter stamps this choice at the backing terrain's canonical
+// depth; sub-tile, per-side backing is out of scope.
+export function coverageTerrainForCell(
+  field: TerrainField,
+  x: number,
+  y: number,
+  terrain: string,
+  borders: Borders | null = null,
+  catalog: TileCatalog = HOMETOWN_CATALOG,
+): string | null {
+  const neighbours = new Set<string>()
   const rank = catalog.stack.indexOf(terrain)
   for (const { d, dx, dy } of ORTHOGONAL_DIRS) {
     if (borders && !borders[d]) continue
-    const neighbour = terrainForCell(field, x + dx, y + dy)
+    const neighbour = field.terrainAt(x + dx, y + dy)
+    if (neighbour === null) continue
     const neighbourRank = catalog.stack.indexOf(neighbour)
     if (neighbourRank >= 0 && neighbourRank < rank) neighbours.add(neighbour)
   }
@@ -85,31 +115,38 @@ export function coverageTerrainForCell(field, x, y, terrain, borders = null, cat
 // Returns one `{ side, terrain }` per such diagonal — `terrain` is the diagonal
 // neighbour that shows through the concave notch. This is the counterpart to
 // `terrainBorders`' straight/outer-corner ownership (see #119).
-export function terrainInnerCorners(field, x, y, terrain, catalog = HOMETOWN_CATALOG) {
+export function terrainInnerCorners(
+  field: TerrainField,
+  x: number,
+  y: number,
+  terrain: string,
+  catalog: TileCatalog = HOMETOWN_CATALOG,
+): Array<{ side: string; terrain: string }> {
   const rank = catalog.stack.indexOf(terrain)
   if (rank < 0) return []
-  const lower = (nx, ny) => {
-    const r = catalog.stack.indexOf(terrainForCell(field, nx, ny))
+  const lower = (nx: number, ny: number) => {
+    const r = rankOf(field.terrainAt(nx, ny), catalog)
     return r >= 0 && r < rank
   }
-  const out = []
+  const out: Array<{ side: string; terrain: string }> = []
   for (const { c, dx, dy } of DIAGONAL_CORNERS) {
-    if (lower(x + dx, y + dy) && !lower(x + dx, y) && !lower(x, y + dy)) {
-      out.push({ side: c, terrain: terrainForCell(field, x + dx, y + dy) })
+    const diagonal = field.terrainAt(x + dx, y + dy)
+    if (diagonal !== null && lower(x + dx, y + dy) && !lower(x + dx, y) && !lower(x, y + dy)) {
+      out.push({ side: c, terrain: diagonal })
     }
   }
   return out
 }
 
 export function groundPaintStackForCell(
-  field,
-  x,
-  y,
-  edgeSets = null,
-  catalog = HOMETOWN_CATALOG,
-  innerSets = null,
-) {
-  const terrain = terrainForCell(field, x, y)
+  field: TerrainField,
+  x: number,
+  y: number,
+  edgeSets: SideSets | null = null,
+  catalog: TileCatalog = HOMETOWN_CATALOG,
+  innerSets: SideSets | null = null,
+): GroundLayer[] {
+  const terrain = field.terrainAt(x, y)
   if (!terrain) return []
   const borders = terrainBorders(field, x, y, terrain, catalog)
   const edgeSet = edgeSets?.[terrain]
@@ -130,7 +167,7 @@ export function groundPaintStackForCell(
     : []
 
   const depth = terrainDepth(terrain, catalog)
-  const layers = []
+  const layers: GroundLayer[] = []
   if (isTransparentEdge) {
     const backing = coverageTerrainForCell(field, x, y, terrain, borders, catalog)
     if (backing) {
@@ -154,12 +191,12 @@ export function groundPaintStackForCell(
 // Road is the bottom layer, so its base extends one cell in every direction
 // beneath neighbouring higher terrain. Diagonal cells are included to keep
 // caps and corners covered even though edge ownership is orthogonal.
-export function roadLayerCoversCell(town, x, y) {
-  if (terrainForCell(town, x, y) === 'road') return true
+export function roadLayerCoversCell(town: TerrainField, x: number, y: number): boolean {
+  if (town.terrainAt(x, y) === 'road') return true
   for (let dy = -1; dy <= 1; dy++) {
     for (let dx = -1; dx <= 1; dx++) {
       if (!dx && !dy) continue
-      if (terrainForCell(town, x + dx, y + dy) === 'road') return true
+      if (town.terrainAt(x + dx, y + dy) === 'road') return true
     }
   }
   return false
@@ -168,29 +205,33 @@ export function roadLayerCoversCell(town, x, y) {
 // Dirt's lower-layer coverage is a one-cell mask beneath neighbouring grass.
 // It does not change the logical/top terrain: grass still paints above it, and
 // roads are never absorbed into the dirt mask.
-export function dirtLayerCoversCell(town, x, y) {
-  const terrain = terrainForCell(town, x, y)
+export function dirtLayerCoversCell(town: TerrainField, x: number, y: number): boolean {
+  const terrain = town.terrainAt(x, y)
   if (terrain === 'dirt') return true
   if (terrain !== 'grass') return false
 
   for (let dy = -1; dy <= 1; dy++) {
     for (let dx = -1; dx <= 1; dx++) {
       if (!dx && !dy) continue
-      if (terrainForCell(town, x + dx, y + dy) === 'dirt') return true
+      if (town.terrainAt(x + dx, y + dy) === 'dirt') return true
     }
   }
   return false
 }
 
-export function dirtLayerBorders(town, x, y) {
-  const borders = {}
+export function dirtLayerBorders(town: TerrainField, x: number, y: number): Borders {
+  const borders: Borders = {}
   for (const { d, dx, dy } of ORTHOGONAL_DIRS) {
     borders[d] = !dirtLayerCoversCell(town, x + dx, y + dy)
   }
   return borders
 }
 
-export function dirtLayerTileForCell(town, x, y) {
+export function dirtLayerTileForCell(
+  town: TerrainField,
+  x: number,
+  y: number,
+): { role: 'corner' | 'edge' | 'fill'; side: string | null } | null {
   if (!dirtLayerCoversCell(town, x, y)) return null
   const borders = dirtLayerBorders(town, x, y)
   const corner = EDGE_CORNERS.find(({ a, b }) => borders[a] && borders[b])

@@ -1,5 +1,5 @@
 import Phaser from 'phaser'
-import { preloadBakedMap, renderBakedMap } from '../mapRenderer.ts'
+import { preloadBakedMap, renderBakedMap } from '../../../kernel/mapRenderer.ts'
 import { MOVE_MS } from '../../constants.js'
 import { spawnTile, mapWalkable, entityBlockedFor, feetWorldXY } from '../mapWalk.ts'
 import {
