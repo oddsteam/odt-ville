@@ -23,12 +23,18 @@
 //     src/game/ to src/townLoader.ts (its only caller, VillagePage, drives it
 //     and hands the bundle to the game as props). characterRig resolution
 //     belongs to the per-user-character work (#155).
-//   authoring -> game (TileMapper -> town.ts, MapPreview -> constants): #178
-//     (shared constants/kernel move).
+//   authoring -> game (MapPreview -> constants): #178 (shared constants/kernel
+//     move). TileMapper -> town.ts is GONE — #172 moved validateWalkMask +
+//     EDGE_* into the kernel Walkability module (walkMask.ts).
 //   maps/MapPage.tsx -> MapScene: likely a MODEL refinement, not a code bug —
 //     MapPage is the player-facing play route (#128) living under src/maps/;
 //     reclassify it out of the authoring group (or move the file) when the
 //     House/interior slice (#90/#111) touches it.
+//   groundTiles/GroundTileMapper.tsx -> tileMapper/styles.css (added with the
+//     CATALOG north star, 2026-07-10): a mapper UI living inside a catalog
+//     module borrows the authoring editor's stylesheet. Dissolves when the
+//     physical catalog/ move splits GroundTileMapper (authoring UI) from the
+//     groundTiles service/schema (catalog).
 
 // The shared kernel (ADR-0004: "map-agnostic, depends on nobody"). These files
 // physically move to a kernel/ directory in #178; until then the group is
@@ -40,9 +46,17 @@ const KERNEL = [
   '^src/game/phaser/tileCatalog\\.ts$',
   '^src/game/phaser/entityLoader\\.ts$',
   '^src/game/phaser/mapRenderer\\.ts$',
+  '^src/game/walkMask\\.ts$',
   '^src/maps/baker\\.ts$',
   '^src/maps/schema\\.ts$',
 ]
+
+// The Content Catalog (CONTEXT.md "Tile Catalog": the set of things that
+// *exist*) — the admin-managed palette of placeable objects, monsters,
+// terrains and tile images that both producers pick from. North star: these
+// modules physically move to a catalog/ directory later; until then the group
+// is listed explicitly, same as KERNEL awaiting #178.
+const CATALOG = '^src/(tileObjects|monsters|terrains|groundTiles)/'
 
 // Map Authoring (ADR-0004 bounded context): the editor/mapper admin surfaces
 // and the maps resource, minus the kernel files that live under src/maps/.
@@ -95,8 +109,19 @@ module.exports = {
       severity: 'error',
       from: { path: GAME, pathNot: KERNEL },
       to: {
-        path: '^src/(communities|tileObjects|groundTiles|monsters|terrains|viewer|posture|character)/',
+        path: [CATALOG, '^src/(communities|viewer|posture|character)/'],
       },
+    },
+    {
+      name: 'catalog-knows-no-consumers',
+      comment:
+        'CONTEXT.md: the Content Catalog is the palette of things that exist. ' +
+        'Producers, authoring and the shell pick from it; it may depend only ' +
+        'on itself and shared infrastructure (src/lib) — never on whoever ' +
+        'consumes it.',
+      severity: 'error',
+      from: { path: CATALOG },
+      to: { path: '^src/', pathNot: [CATALOG, '^src/lib/'] },
     },
     {
       name: 'communities-reusable-from-any-shell',

@@ -29,16 +29,16 @@
   },
   {
     "type": "dependency",
-    "from": "src/tileMapper/TileMapper.tsx",
-    "to": "src/game/town.ts",
-    "unresolvedTo": "../game/town.ts",
+    "from": "src/groundTiles/GroundTileMapper.tsx",
+    "to": "src/tileMapper/styles.css",
+    "unresolvedTo": "../tileMapper/styles.css",
     "dependencyTypes": [
       "local",
       "import"
     ],
     "rule": {
       "severity": "error",
-      "name": "authoring-never-imports-game-runtime"
+      "name": "catalog-knows-no-consumers"
     }
   },
   {

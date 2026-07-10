@@ -4,6 +4,7 @@
 // into the shared stepTile loop.
 
 import { TILE, PLAYER_FEET_LIFT } from '../constants.js'
+import { maskCharSolid } from '../walkMask.ts'
 import type { Tile } from './movement.ts'
 import type { BakedEntity } from '../../maps/schema.ts'
 
@@ -39,7 +40,7 @@ export function entityBlockedFor(
     for (let dy = 0; dy < mask.length; dy++) {
       const row = mask[dy] ?? ''
       for (let dx = 0; dx < row.length; dx++) {
-        if (row[dx] === '#') blocked.add(`${e.x + dx},${e.y + dy}`)
+        if (maskCharSolid(row[dx])) blocked.add(`${e.x + dx},${e.y + dy}`)
       }
     }
   }

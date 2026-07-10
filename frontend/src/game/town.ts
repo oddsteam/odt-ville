@@ -1,6 +1,8 @@
 // Pure town geometry and terrain helpers. Keeping these free of image imports
 // lets the generator invariants run in Node without booting Vite or Phaser.
 
+import { maskCharWalkable, walkMaskConnected, EDGE_N, EDGE_E, EDGE_S, EDGE_W } from './walkMask.ts'
+
 export interface Plot {
   col: number
   row: number
@@ -94,15 +96,6 @@ export function doorAnchorFor(
   return { dx: building.door_dx, dy: building.door_dy }
 }
 
-// A footprint cell the avatar may stand on: '.' = porch/path (drawn OVER the
-// house), 'o' = overhang (#44 — walkable, but drawn UNDER the house art, so
-// the building overhangs the character), or 'L' = ladder (#54 — walkable like
-// '.', but the avatar plays its climb posture while on it). '#' / anything
-// else is solid.
-function maskWalkableChar(ch: string | undefined): boolean {
-  return ch === '.' || ch === 'o' || ch === 'L'
-}
-
 // Is footprint cell (x,y) an authored ladder ('L', #54)? Walkable like a path,
 // but the avatar climbs while standing on it (with a walk fallback). Out-of-
 // footprint or unmasked cells are never ladders — buildings opt in per cell.
@@ -127,69 +120,6 @@ export function walkMaskFor(
 ): string[] | undefined {
   if (building == null || building.walk_mask == null || building.walk_mask.length === 0) return undefined
   return building.walk_mask
-}
-
-// Is the cell (x,y) walkable within a w×h walk mask? The door cell is walkable
-// regardless of the mask; otherwise a '.' marks walkable and anything else (or
-// out of bounds) is solid.
-function maskCellWalkable(
-  mask: string[],
-  w: number,
-  h: number,
-  door: { dx: number; dy: number },
-  x: number,
-  y: number,
-): boolean {
-  if (x < 0 || x >= w || y < 0 || y >= h) return false
-  if (x === door.dx && y === door.dy) return true
-  return maskWalkableChar(mask[y]?.[x])
-}
-
-// Is the door reachable from outside the footprint? Flood-fill from the door
-// over walkable mask cells; the door is reachable if any reached cell lies on
-// the footprint perimeter (every cell just outside the box is walkable ground).
-export function walkMaskConnected(
-  mask: string[],
-  w: number,
-  h: number,
-  door: { dx: number; dy: number },
-): boolean {
-  if (!maskCellWalkable(mask, w, h, door, door.dx, door.dy)) return false
-  const seen = new Set<string>([`${door.dx},${door.dy}`])
-  const queue: Array<[number, number]> = [[door.dx, door.dy]]
-  while (queue.length) {
-    const [x, y] = queue.shift()!
-    if (x === 0 || x === w - 1 || y === 0 || y === h - 1) return true
-    for (const [nx, ny] of [
-      [x + 1, y],
-      [x - 1, y],
-      [x, y + 1],
-      [x, y - 1],
-    ] as Array<[number, number]>) {
-      const k = `${nx},${ny}`
-      if (!seen.has(k) && maskCellWalkable(mask, w, h, door, nx, ny)) {
-        seen.add(k)
-        queue.push([nx, ny])
-      }
-    }
-  }
-  return false
-}
-
-// Save-time validation (#32). A building's walk mask is valid only when a door
-// is defined, at least one walkable tile is painted, and the door connects to a
-// footprint edge via walkable tiles. Pure, so the admin UI and any backend
-// guard can share it.
-export function validateWalkMask(
-  mask: string[] | null | undefined,
-  w: number,
-  h: number,
-  door: { dx: number; dy: number } | null | undefined,
-): { ok: boolean; reason?: 'no-door' | 'no-walkable' | 'unreachable' } {
-  if (door == null) return { ok: false, reason: 'no-door' }
-  if (mask == null || !mask.some((row) => row.includes('.') || row.includes('o') || row.includes('L'))) return { ok: false, reason: 'no-walkable' }
-  if (!walkMaskConnected(mask, w, h, door)) return { ok: false, reason: 'unreachable' }
-  return { ok: true }
 }
 
 // A plot's tile footprint (#30). Sourced from the active mapped building, but
@@ -540,17 +470,10 @@ export function isWalkable(
   if (inside) {
     // A footprint cell is walkable only where the authored mask marks it (#32):
     // '.' porch or 'o' overhang (#44); an unmasked building stays a solid box.
-    return maskWalkableChar(inside.mask?.[y - inside.row]?.[x - inside.col])
+    return maskCharWalkable(inside.mask?.[y - inside.row]?.[x - inside.col])
   }
   return !blockers.has(`${x},${y}`)
 }
-
-// Edge-blocking bits for a footprint cell's four sides (#53), packed one hex
-// digit per cell into a row-major edge mask the size of the footprint.
-export const EDGE_N = 1
-export const EDGE_E = 2
-export const EDGE_S = 4
-export const EDGE_W = 8
 
 // Pull the authored edge mask off the active "building" tile-object, or
 // undefined when none authored one (no impassable borders → free movement).

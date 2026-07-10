@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { activateTileObject, deactivateTileObject, deleteTileObject, getTileObject, listTileObjects, saveTileObject } from '../tileObjects/client.js'
 import type { TileObject, TileObjectSummary } from '../tileObjects/schema.ts'
-import { validateWalkMask, EDGE_N, EDGE_E, EDGE_S, EDGE_W } from '../game/town.ts'
+import { validateWalkMask, EDGE_N, EDGE_E, EDGE_S, EDGE_W } from '../game/walkMask.ts'
 import './styles.css'
 
 type Atlas = { img: HTMLImageElement; src: string; width: number; height: number }
