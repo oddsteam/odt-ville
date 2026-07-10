@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import * as Schema from 'effect/Schema'
 import { Either } from 'effect'
 
-import { GroundTile } from '../src/groundTiles/schema.ts'
+import { GroundTile } from '../src/catalog/groundTiles/schema.ts'
 
 describe('GroundTile schema', () => {
   const valid = {

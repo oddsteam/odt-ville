@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { activateTileObject, deactivateTileObject, deleteTileObject, getTileObject, listTileObjects, saveTileObject } from '../tileObjects/client.js'
-import type { TileObject, TileObjectSummary } from '../tileObjects/schema.ts'
+import { activateTileObject, deactivateTileObject, deleteTileObject, getTileObject, listTileObjects, saveTileObject } from '../catalog/tileObjects/client.js'
+import type { TileObject, TileObjectSummary } from '../catalog/tileObjects/schema.ts'
 import { validateWalkMask, EDGE_N, EDGE_E, EDGE_S, EDGE_W } from '../kernel/walkMask.ts'
 import './styles.css'
 

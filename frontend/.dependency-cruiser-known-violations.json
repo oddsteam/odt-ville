@@ -15,20 +15,6 @@
   },
   {
     "type": "dependency",
-    "from": "src/groundTiles/GroundTileMapper.tsx",
-    "to": "src/tileMapper/styles.css",
-    "unresolvedTo": "../tileMapper/styles.css",
-    "dependencyTypes": [
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "catalog-knows-no-consumers"
-    }
-  },
-  {
-    "type": "dependency",
     "from": "src/game/phaser/characterRig.js",
     "to": "src/character/manifest.js",
     "unresolvedTo": "../../character/manifest.js",

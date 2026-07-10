@@ -15,7 +15,7 @@
 // docs/adr/0004. A divergence means either the code is wrong (fix the code) or
 // the model is wrong (change this file + say why in the PR) — never ignore one.
 //
-// Baseline as of 2026-07-10 (3 violations) and what deletes them:
+// Baseline as of 2026-07-10 (2 violations) and what deletes them:
 //   characterRig -> character: the last black-box data edge. townLoader's five
 //     edges are gone — #185 moved that shell-side data orchestration out of
 //     src/game/ to src/townLoader.ts (its only caller, VillagePage, drives it
@@ -27,11 +27,9 @@
 //     MapPage is the player-facing play route (#128) living under src/maps/;
 //     reclassify it out of the authoring group (or move the file) when the
 //     House/interior slice (#90/#111) touches it.
-//   groundTiles/GroundTileMapper.tsx -> tileMapper/styles.css (added with the
-//     CATALOG north star, 2026-07-10): a mapper UI living inside a catalog
-//     module borrows the authoring editor's stylesheet. Dissolves when the
-//     physical catalog/ move splits GroundTileMapper (authoring UI) from the
-//     groundTiles service/schema (catalog).
+//   groundTiles/GroundTileMapper.tsx -> tileMapper/styles.css is GONE — #191
+//     moved the catalog modules to src/catalog/ and split the mapper UI out to
+//     src/groundMapper/ (authoring), where the stylesheet borrow is legal.
 
 // The shared kernel (ADR-0004: "map-agnostic, depends on nobody"), physically
 // extracted to src/kernel/ in #178. mapRenderer is included per the CONTEXT.md
@@ -41,14 +39,14 @@ const KERNEL = '^src/kernel/'
 
 // The Content Catalog (CONTEXT.md "Tile Catalog": the set of things that
 // *exist*) — the admin-managed palette of placeable objects, monsters,
-// terrains and tile images that both producers pick from. North star: these
-// modules physically move to a catalog/ directory later (#191); until then
-// the group is listed explicitly, the same path the kernel took in #178.
-const CATALOG = '^src/(tileObjects|monsters|terrains|groundTiles)/'
+// terrains and tile images that both producers pick from. Physically
+// extracted to src/catalog/ in #191, the same path the kernel took in #178.
+const CATALOG = '^src/catalog/'
 
 // Map Authoring (ADR-0004 bounded context): the editor/mapper admin surfaces
-// and the maps resource, minus the kernel files that live under src/maps/.
-const AUTHORING = '^src/(admin|maps|tileMapper|spriteMapper)/'
+// and the maps resource. groundMapper is the ground-tile authoring UI split
+// out of the groundTiles catalog module by #191.
+const AUTHORING = '^src/(admin|maps|tileMapper|spriteMapper|groundMapper)/'
 
 // Game Runtime (the black box), minus the kernel files under src/game/.
 const GAME = '^src/game/'

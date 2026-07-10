@@ -6,8 +6,8 @@
 import * as Effect from 'effect/Effect'
 import * as Schema from 'effect/Schema'
 
-import { DecodeError, Http } from '../lib/http.ts'
-import type { HttpError } from '../lib/http.ts'
+import { DecodeError, Http } from '../../lib/http.ts'
+import type { HttpError } from '../../lib/http.ts'
 import { Terrain } from './schema.ts'
 
 const decodeList = Schema.decodeUnknown(Schema.Array(Terrain))
