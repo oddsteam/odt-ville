@@ -8,7 +8,7 @@ import {
   MonsterSummary,
   NewMonster,
   UpdateMonster,
-} from '../src/monsters/schema.ts'
+} from '../src/catalog/monsters/schema.ts'
 
 describe('MonsterPoolEntry schema (wild-encounter pool row)', () => {
   const valid = { id: 1, name: 'Slime', encounter_dialog: 'A wild Slime oozes toward you!', encounter_rate: 3, image: 'data:image/png;base64,abc' }

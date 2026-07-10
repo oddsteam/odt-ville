@@ -8,10 +8,10 @@ import PerfStallNotice from '../PerfStallNotice.tsx'
 import bus from './bus.js'
 import type { Community } from '../../communities/schema.ts'
 import type { GameSession } from '../../game-session/schema.ts'
-import type { TileObject } from '../../tileObjects/schema.ts'
+import type { TileObject } from '../../catalog/tileObjects/schema.ts'
 import type { HometownPolicy } from '../town.ts'
-import type { GroundTile } from '../../groundTiles/schema.ts'
-import type { MonsterPoolEntry } from '../../monsters/schema.ts'
+import type { GroundTile } from '../../catalog/groundTiles/schema.ts'
+import type { MonsterPoolEntry } from '../../catalog/monsters/schema.ts'
 
 // Player walks — rpg-char-01 sprite sheet from the pokemon-js external
 // assets. 32×32 PNGs, rows = direction (r0 down, r1 left, r2 right,

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import * as Schema from 'effect/Schema'
 import { Either } from 'effect'
 
-import { TileObject } from '../src/tileObjects/schema.ts'
+import { TileObject } from '../src/catalog/tileObjects/schema.ts'
 
 describe('TileObject schema', () => {
   const valid = {

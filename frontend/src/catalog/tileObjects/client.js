@@ -6,7 +6,7 @@
 // Promise façades over that service for the JSX call sites (VillagePage,
 // TileMapper), keeping the same signatures so callers stay plain async/await.
 
-import { runEdge } from '../lib/runEdge.ts'
+import { runEdge } from '../../lib/runEdge.ts'
 import { TileObjectsService } from './service.ts'
 
 // GET /tile_objects/active?kind= -> the live object (or null when none).

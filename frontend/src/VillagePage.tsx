@@ -12,10 +12,10 @@ import { subscribeAuthToken } from './lib/authToken.ts'
 import { trackEnterDoor, trackInteractBoard, trackEncounter } from './analytics/events.ts'
 import type { Community, FeedItem } from './communities/schema.ts'
 import type { GameSession } from './game-session/schema.ts'
-import type { TileObject } from './tileObjects/schema.ts'
+import type { TileObject } from './catalog/tileObjects/schema.ts'
 import type { HometownPolicy } from './game/town.ts'
-import type { GroundTile } from './groundTiles/schema.ts'
-import type { MonsterPoolEntry } from './monsters/schema.ts'
+import type { GroundTile } from './catalog/groundTiles/schema.ts'
+import type { MonsterPoolEntry } from './catalog/monsters/schema.ts'
 
 // Demo target for every board's "open content list" action. Replaced in a
 // follow-up by per-board content-list views (see issue #15 follow-ups).

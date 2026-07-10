@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { pngHasAlpha } from '../src/monsters/pngAlpha.ts'
+import { pngHasAlpha } from '../src/catalog/monsters/pngAlpha.ts'
 
 // Build a minimal PNG data URL whose IHDR color-type byte (offset 25 in the
 // decoded bytes) is `colorType`. Only the signature + that byte are read.

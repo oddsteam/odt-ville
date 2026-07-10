@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { TILESETS, tilesetUrl } from './tilesets.js'
-import { listGroundTiles, saveGroundTile, deleteGroundTile } from './client.js'
-import type { GroundTile } from './schema.ts'
+import { TILESETS, tilesetUrl } from '../catalog/groundTiles/tilesets.js'
+import { listGroundTiles, saveGroundTile, deleteGroundTile } from '../catalog/groundTiles/client.js'
+import type { GroundTile } from '../catalog/groundTiles/schema.ts'
 import '../tileMapper/styles.css'
 import './styles.css'
 

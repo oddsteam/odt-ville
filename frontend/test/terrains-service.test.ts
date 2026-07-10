@@ -4,8 +4,8 @@ import * as Exit from 'effect/Exit'
 import * as Layer from 'effect/Layer'
 
 import { Http, type HttpError } from '../src/lib/http.ts'
-import { TerrainsService } from '../src/terrains/service.ts'
-import { priorityOrder, type Terrain } from '../src/terrains/schema.ts'
+import { TerrainsService } from '../src/catalog/terrains/service.ts'
+import { priorityOrder, type Terrain } from '../src/catalog/terrains/schema.ts'
 
 // Fake Http: GET returns the terrains payload; PUT echoes the reordered list it
 // is given, mirroring the controller's `render Terrain.ordered`.

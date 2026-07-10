@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { catalogFromGroundTiles } from '../src/admin/mapCatalog.ts'
-import type { GroundTile } from '../src/groundTiles/schema.ts'
+import type { GroundTile } from '../src/catalog/groundTiles/schema.ts'
 
 // Minimal GroundTile builder — only the fields the catalog reads matter.
 const gt = (p: Partial<GroundTile> & Pick<GroundTile, 'tile_type' | 'tileset' | 'col' | 'row' | 'role'>): GroundTile => ({

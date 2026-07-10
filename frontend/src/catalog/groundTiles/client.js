@@ -8,7 +8,7 @@
 // GroundTileMapper), keeping the same signatures so callers stay plain
 // async/await.
 
-import { runEdge } from '../lib/runEdge.ts'
+import { runEdge } from '../../lib/runEdge.ts'
 import { GroundTilesService } from './service.ts'
 
 // GET /ground_tiles -> the catalog (optionally filtered by surface type).
