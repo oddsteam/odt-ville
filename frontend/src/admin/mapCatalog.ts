@@ -15,7 +15,7 @@ import type { GroundTile } from '../groundTiles/schema.ts'
 // The catalog assembly itself lives in the kernel (#171) — the live hometown
 // producer builds the same catalog from the same data, so it is re-exported
 // here for the editor's callers.
-export { catalogFromGroundTiles } from '../game/phaser/tileCatalog.ts'
+export { catalogFromGroundTiles } from '../kernel/tileCatalog.ts'
 
 // The image column count a sheet needs for `frame = row*cols + col`, read from
 // the loaded PNG exactly as the runtime does (image.width / cell). Best-effort:

@@ -5,7 +5,7 @@
 // inner art fall back to a plain fill (no regression for today's grass/dirt).
 
 import { describe, expect, it } from 'vitest'
-import { makeCatalog } from '../game/phaser/tileCatalog.ts'
+import { makeCatalog } from './tileCatalog.ts'
 import { bakeGround } from './baker.ts'
 import type { SourceMap } from './baker.ts'
 

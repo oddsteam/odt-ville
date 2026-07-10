@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { bakeGround, bakeSourceMap } from '../src/maps/baker.ts'
-import type { SourceMap } from '../src/maps/baker.ts'
-import { groundDrawList } from '../src/game/phaser/mapRenderer.ts'
-import { makeCatalog } from '../src/game/phaser/tileCatalog.ts'
-import type { TileCatalog } from '../src/game/phaser/tileCatalog.ts'
+import { bakeGround, bakeSourceMap } from '../src/kernel/baker.ts'
+import type { SourceMap } from '../src/kernel/baker.ts'
+import { groundDrawList } from '../src/kernel/mapRenderer.ts'
+import { makeCatalog } from '../src/kernel/tileCatalog.ts'
+import type { TileCatalog } from '../src/kernel/tileCatalog.ts'
 import { MEADOW_CATALOG, MEADOW_SOURCE } from '../src/maps/fixtures/meadow.ts'
 
 // Frame math is row * cols + col; the meadow sheet declares 32 columns.

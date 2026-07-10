@@ -15,17 +15,14 @@
 // docs/adr/0004. A divergence means either the code is wrong (fix the code) or
 // the model is wrong (change this file + say why in the PR) — never ignore one.
 //
-// Baseline as of 2026-07-07 (12 violations) and what deletes them:
-//   kernel -> game (mapRenderer/entityLoader -> constants, groundModel ->
-//     town.ts): the physical kernel extraction, #178.
+// Baseline as of 2026-07-10 (3 violations) and what deletes them:
 //   characterRig -> character: the last black-box data edge. townLoader's five
 //     edges are gone — #185 moved that shell-side data orchestration out of
 //     src/game/ to src/townLoader.ts (its only caller, VillagePage, drives it
 //     and hands the bundle to the game as props). characterRig resolution
-//     belongs to the per-user-character work (#155).
-//   authoring -> game (MapPreview -> constants): #178 (shared constants/kernel
-//     move). TileMapper -> town.ts is GONE — #172 moved validateWalkMask +
-//     EDGE_* into the kernel Walkability module (walkMask.ts).
+//     belongs to the per-user-character work (#155). The kernel -> game and
+//     MapPreview -> game/constants edges are GONE — #178 extracted src/kernel/
+//     (TILE moved into it).
 //   maps/MapPage.tsx -> MapScene: likely a MODEL refinement, not a code bug —
 //     MapPage is the player-facing play route (#128) living under src/maps/;
 //     reclassify it out of the authoring group (or move the file) when the
@@ -36,26 +33,17 @@
 //     physical catalog/ move splits GroundTileMapper (authoring UI) from the
 //     groundTiles service/schema (catalog).
 
-// The shared kernel (ADR-0004: "map-agnostic, depends on nobody"). These files
-// physically move to a kernel/ directory in #178; until then the group is
-// listed explicitly. mapRenderer is included per the CONTEXT.md multi-map
-// decision that the WYSIWYG preview and the game share one renderer factored
-// into the kernel.
-const KERNEL = [
-  '^src/game/phaser/groundModel\\.js$',
-  '^src/game/phaser/tileCatalog\\.ts$',
-  '^src/game/phaser/entityLoader\\.ts$',
-  '^src/game/phaser/mapRenderer\\.ts$',
-  '^src/game/walkMask\\.ts$',
-  '^src/maps/baker\\.ts$',
-  '^src/maps/schema\\.ts$',
-]
+// The shared kernel (ADR-0004: "map-agnostic, depends on nobody"), physically
+// extracted to src/kernel/ in #178. mapRenderer is included per the CONTEXT.md
+// multi-map decision that the WYSIWYG preview and the game share one renderer
+// factored into the kernel.
+const KERNEL = '^src/kernel/'
 
 // The Content Catalog (CONTEXT.md "Tile Catalog": the set of things that
 // *exist*) — the admin-managed palette of placeable objects, monsters,
 // terrains and tile images that both producers pick from. North star: these
-// modules physically move to a catalog/ directory later; until then the group
-// is listed explicitly, same as KERNEL awaiting #178.
+// modules physically move to a catalog/ directory later (#191); until then
+// the group is listed explicitly, the same path the kernel took in #178.
 const CATALOG = '^src/(tileObjects|monsters|terrains|groundTiles)/'
 
 // Map Authoring (ADR-0004 bounded context): the editor/mapper admin surfaces
@@ -74,8 +62,7 @@ module.exports = {
       name: 'kernel-depends-on-nobody',
       comment:
         'ADR-0004: the Tile Catalog / Autotile Engine kernel sits beneath both ' +
-        'producers and depends on no app module. Baselined offenders move or ' +
-        'dissolve in #178 (e.g. entityLoader -> game constants).',
+        'producers and depends on no app module.',
       severity: 'error',
       from: { path: KERNEL },
       to: { path: '^src/', pathNot: KERNEL },

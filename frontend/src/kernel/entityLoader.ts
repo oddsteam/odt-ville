@@ -11,7 +11,7 @@
 // `objectTextureKey` + the draw/object shapes are Phaser-free, so producers and
 // tests can resolve references without booting Phaser.
 
-import { TILE } from '../constants.js'
+import { TILE } from './constants.ts'
 
 // The Phaser scene, structurally — the loader touches only load/textures/add,
 // so the scene stays loose (same convention as town/mapRenderer).

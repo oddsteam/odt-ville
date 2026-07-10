@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { bakedDraws, bakedTextureKey, objectTextureKey } from '../src/game/phaser/mapRenderer.ts'
-import type { BakedGround, BakedMap } from '../src/maps/schema.ts'
+import { bakedDraws, bakedTextureKey, objectTextureKey } from '../src/kernel/mapRenderer.ts'
+import type { BakedGround, BakedMap } from '../src/kernel/schema.ts'
 
 const map: BakedMap = {
   slug: 'atrium',

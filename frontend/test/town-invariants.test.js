@@ -3,13 +3,15 @@ import { test } from 'vitest'
 
 import { buildTown, tileChar, typeForTileChar } from '../src/game/town.ts'
 import {
-  AUTOTILED_TERRAINS,
+  HOMETOWN_CATALOG,
   ORTHOGONAL_DIRS,
   coverageTerrainForCell,
   dirtLayerTileForCell,
   groundPaintStackForCell,
   roadLayerCoversCell,
-} from '../src/game/phaser/groundModel.js'
+} from '../src/kernel/groundModel.ts'
+
+const AUTOTILED_TERRAINS = HOMETOWN_CATALOG.autotiled
 
 const colLabel = (index) => {
   let label = ''

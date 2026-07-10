@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { isLadderCell, isWalkable, playerDepthAt } from '../src/game/town.ts'
-import { validateWalkMask } from '../src/game/walkMask.ts'
+import { validateWalkMask } from '../src/kernel/walkMask.ts'
 
 // Ladder cells (#54): a new walk-mask state 'L' — walkable like a path '.', but
 // flagged so the avatar plays its climb posture while standing on it. Like '.',

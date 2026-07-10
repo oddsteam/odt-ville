@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest'
 import { buildTown, tileChar, typeForTileChar } from '../src/game/town.ts'
 import type { Town } from '../src/game/town.ts'
 import { bakeTownGround, buildTownMap, townTerrainSource } from '../src/game/townMap.ts'
-import { bakeGround } from '../src/maps/baker.ts'
-import type { SourceMap } from '../src/maps/baker.ts'
-import { HOMETOWN_CATALOG } from '../src/game/phaser/tileCatalog.ts'
+import { bakeGround } from '../src/kernel/baker.ts'
+import type { SourceMap } from '../src/kernel/baker.ts'
+import { HOMETOWN_CATALOG } from '../src/kernel/tileCatalog.ts'
 
 // #81: `buildTown` converges onto the SHARED producer — the same Map Baker the
 // authored map uses (ADR-0003/0004). These pin the convergence:

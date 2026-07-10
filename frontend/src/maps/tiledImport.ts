@@ -11,7 +11,7 @@
 // structural is this pure core. Object layers (incl. `collisions`) are ignored —
 // an imported map starts fully walkable; collision is authored in-app (ADR-0007).
 
-import type { BakedGround, BakedLayer } from './schema.ts'
+import type { BakedGround, BakedLayer } from '../kernel/schema.ts'
 
 const GRID = 32 // the map's tile size; ADR-0007 pins imports to a 32px grid.
 

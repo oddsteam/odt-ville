@@ -7,7 +7,7 @@
 // replaces whatever it overlaps, refuses to hang off the map, and erasing
 // works from any covered cell. Pure and Phaser-free.
 
-import type { BakedEntity } from './schema.ts'
+import type { BakedEntity } from '../kernel/schema.ts'
 
 // A prop stamped on the grid. Display data (image, footprint, name) is looked
 // up from the fetched objects by id — the placed model is just the reference.

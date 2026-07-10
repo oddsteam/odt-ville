@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { buildTown, isWalkable, walkMaskFor } from '../src/game/town.ts'
-import { validateWalkMask, walkMaskConnected } from '../src/game/walkMask.ts'
+import { validateWalkMask, walkMaskConnected } from '../src/kernel/walkMask.ts'
 
 // The authored walk mask (#32) is a row-major grid the size of the building
 // footprint: '#' = solid, '.' = walkable (porch/path). The door point is the

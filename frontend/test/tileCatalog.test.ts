@@ -4,7 +4,7 @@ import {
   HOMETOWN_CATALOG,
   edgeSetsFromCatalog,
   makeCatalog,
-} from '../src/game/phaser/tileCatalog.ts'
+} from '../src/kernel/tileCatalog.ts'
 
 describe('makeCatalog', () => {
   it('uses the terrain order as the priority stack (bottom -> top)', () => {

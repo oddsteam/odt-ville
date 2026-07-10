@@ -10,7 +10,7 @@
 // entity plays is recovered by matching its object_id back to the policy.
 
 import type { HometownPolicy, PlacedEntity, TileGrid } from './town.ts'
-import { objectTextureKey, type EntityDraw } from './phaser/entityLoader.ts'
+import { objectTextureKey, type EntityDraw } from '../kernel/entityLoader.ts'
 
 // Trees overflow their tile upward and y-sort against the avatar: bottom-
 // anchored, depth banded by the base row so a lower (souther) tree draws in

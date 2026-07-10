@@ -20,7 +20,7 @@ import rightWalk2 from './assets/character/right-walk-2.png'
 import rightWalk3 from './assets/character/right-walk-3.png'
 export { PER_ROW, buildTown, tileChar, isGroundWalkable } from './town.ts'
 
-export const TILE = 48 // rendered px per tile
+export { TILE } from '../kernel/constants.ts' // rendered px per tile — kernel-owned scale
 export const MOVE_MS = 170 // ms to slide one tile
 
 // Vertical offset added to the player sprite's foot position, in

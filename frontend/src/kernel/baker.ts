@@ -18,9 +18,9 @@ import {
   roadLayerCoversCell,
   terrainBorders,
   terrainDepth,
-} from '../game/phaser/groundModel.js'
-import { edgeSetsFromCatalog, innerSetsFromCatalog } from '../game/phaser/tileCatalog.ts'
-import type { CatalogArtTile, TileCatalog } from '../game/phaser/tileCatalog.ts'
+} from './groundModel.ts'
+import { edgeSetsFromCatalog, innerSetsFromCatalog } from './tileCatalog.ts'
+import type { CatalogArtTile, TileCatalog } from './tileCatalog.ts'
 import type { BakedGround, BakedLayer, BakedTileset } from './schema.ts'
 
 // The editable truth a producer/editor saves and re-opens (ADR-0003): identity
@@ -122,20 +122,13 @@ function bakeCell(
     push(artIndex.get('road|fill|'), terrainDepth('road', catalog))
   }
   if (dirtCovered) {
-    pushBorderTiles('dirt', dirtLayerBorders(field, x, y) as Record<string, boolean>, terrainDepth('dirt', catalog))
+    pushBorderTiles('dirt', dirtLayerBorders(field, x, y), terrainDepth('dirt', catalog))
   }
   // The mask pass above IS the dirt cell's own drawing (runtime parity: dirt
   // resolves against the mask boundary, never the generic plan).
   if (terrain === 'dirt') return layers
 
-  // groundModel.js is untyped; its `= null` defaults make TS infer null-only
-  // params, so the engine boundary takes loose casts (as townRenderer does).
-  const plan = groundPaintStackForCell(field, x, y, edgeSets as never, catalog, innerSets as never) as Array<{
-    terrain: string
-    role: string
-    side?: string
-    depth: number
-  }>
+  const plan = groundPaintStackForCell(field, x, y, edgeSets, catalog, innerSets)
   for (const entry of plan) {
     // The road spill / dirt mask already painted this backing — don't stack a
     // duplicate coverage fill on top of it.
@@ -158,7 +151,7 @@ function bakeCell(
     }
     // Transparent edge: the concrete corner/edge tiles for the borders the
     // higher terrain owns.
-    pushBorderTiles(entry.terrain, terrainBorders(field, x, y, entry.terrain, catalog) as Record<string, boolean>, entry.depth)
+    pushBorderTiles(entry.terrain, terrainBorders(field, x, y, entry.terrain, catalog), entry.depth)
   }
   return layers
 }

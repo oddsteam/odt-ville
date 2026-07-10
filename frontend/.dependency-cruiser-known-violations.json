@@ -1,20 +1,6 @@
 [
   {
     "type": "dependency",
-    "from": "src/admin/MapPreview.tsx",
-    "to": "src/game/constants.js",
-    "unresolvedTo": "../game/constants.js",
-    "dependencyTypes": [
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "authoring-never-imports-game-runtime"
-    }
-  },
-  {
-    "type": "dependency",
     "from": "src/maps/MapPage.tsx",
     "to": "src/game/phaser/scenes/MapScene.js",
     "unresolvedTo": "../game/phaser/scenes/MapScene.js",
@@ -53,34 +39,6 @@
     "rule": {
       "severity": "error",
       "name": "game-black-box-no-data-services"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/game/phaser/entityLoader.ts",
-    "to": "src/game/constants.js",
-    "unresolvedTo": "../constants.js",
-    "dependencyTypes": [
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "kernel-depends-on-nobody"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "src/game/phaser/mapRenderer.ts",
-    "to": "src/game/constants.js",
-    "unresolvedTo": "../constants.js",
-    "dependencyTypes": [
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "kernel-depends-on-nobody"
     }
   }
 ]
