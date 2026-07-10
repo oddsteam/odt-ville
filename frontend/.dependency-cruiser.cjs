@@ -23,8 +23,9 @@
 //     src/game/ to src/townLoader.ts (its only caller, VillagePage, drives it
 //     and hands the bundle to the game as props). characterRig resolution
 //     belongs to the per-user-character work (#155).
-//   authoring -> game (TileMapper -> town.ts, MapPreview -> constants): #178
-//     (shared constants/kernel move).
+//   authoring -> game (MapPreview -> constants): #178 (shared constants/kernel
+//     move). TileMapper -> town.ts is GONE — #172 moved validateWalkMask +
+//     EDGE_* into the kernel Walkability module (walkMask.ts).
 //   maps/MapPage.tsx -> MapScene: likely a MODEL refinement, not a code bug —
 //     MapPage is the player-facing play route (#128) living under src/maps/;
 //     reclassify it out of the authoring group (or move the file) when the
@@ -40,6 +41,7 @@ const KERNEL = [
   '^src/game/phaser/tileCatalog\\.ts$',
   '^src/game/phaser/entityLoader\\.ts$',
   '^src/game/phaser/mapRenderer\\.ts$',
+  '^src/game/walkMask\\.ts$',
   '^src/maps/baker\\.ts$',
   '^src/maps/schema\\.ts$',
 ]

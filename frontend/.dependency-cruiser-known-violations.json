@@ -29,20 +29,6 @@
   },
   {
     "type": "dependency",
-    "from": "src/tileMapper/TileMapper.tsx",
-    "to": "src/game/town.ts",
-    "unresolvedTo": "../game/town.ts",
-    "dependencyTypes": [
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "authoring-never-imports-game-runtime"
-    }
-  },
-  {
-    "type": "dependency",
     "from": "src/game/phaser/characterRig.js",
     "to": "src/character/manifest.js",
     "unresolvedTo": "../../character/manifest.js",
