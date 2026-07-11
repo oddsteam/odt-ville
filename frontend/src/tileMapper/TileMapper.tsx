@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { activateTileObject, deactivateTileObject, deleteTileObject, getTileObject, listTileObjects, saveTileObject } from '../catalog/tileObjects/client.js'
+import { TileObjectsService } from '../catalog/tileObjects/service.ts'
+import { TileObjectsWrite } from '../catalog/tileObjects/write.ts'
 import type { TileObject, TileObjectSummary } from '../catalog/tileObjects/schema.ts'
+import { runEdge } from '../lib/runEdge.ts'
 import { validateWalkMask, EDGE_N, EDGE_E, EDGE_S, EDGE_W } from '../kernel/walkMask.ts'
 import './styles.css'
 
@@ -267,13 +269,13 @@ export default function TileMapper() {
   // Saved-objects roster — which tile-objects exist and which is the active one
   // of each kind. Refreshed on mount and after every save/activate.
   const refreshSaved = useCallback(() => {
-    listTileObjects().then(setSaved).catch(() => {})
+    runEdge(TileObjectsService.list()).then(setSaved).catch(() => {})
   }, [])
   useEffect(() => refreshSaved(), [refreshSaved])
 
   const onActivate = useCallback(
     (id: number) => {
-      activateTileObject(id)
+      runEdge(TileObjectsWrite.activate(id))
         .then(() => refreshSaved())
         .catch((err: unknown) => setStatus(`Activate failed: ${err instanceof Error ? err.message : String(err)}`))
     },
@@ -282,7 +284,7 @@ export default function TileMapper() {
 
   const onDeactivate = useCallback(
     (id: number) => {
-      deactivateTileObject(id)
+      runEdge(TileObjectsWrite.deactivate(id))
         .then(() => refreshSaved())
         .catch((err: unknown) => setStatus(`Deactivate failed: ${err instanceof Error ? err.message : String(err)}`))
     },
@@ -294,7 +296,7 @@ export default function TileMapper() {
   const onDelete = useCallback(
     (o: TileObjectSummary) => {
       if (!window.confirm(`Delete "${o.name}"? This can't be undone.`)) return
-      deleteTileObject(o.id)
+      runEdge(TileObjectsWrite.del(o.id))
         .then(() => refreshSaved())
         .catch((err: unknown) => setStatus(`Delete failed: ${err instanceof Error ? err.message : String(err)}`))
     },
@@ -306,7 +308,7 @@ export default function TileMapper() {
   // against the real building (#29/#32). Re-saving upserts by name → same record.
   const onEdit = useCallback((id: number) => {
     setStatus('Loading…')
-    getTileObject(id)
+    runEdge(TileObjectsService.get(id))
       .then((o: TileObject) => {
         setName(o.name)
         setKind(o.kind)
@@ -627,7 +629,7 @@ export default function TileMapper() {
 
     setStatus('Saving…')
     try {
-      const obj = await saveTileObject({
+      const obj = await runEdge(TileObjectsWrite.save({
         name: name.trim(),
         kind,
         image,
@@ -645,7 +647,7 @@ export default function TileMapper() {
         // Foreground mask (#36) — the painted overlay's alpha as a PNG, only
         // when the admin actually painted some in-front pixels.
         fg_mask: isBuilding && maskHasInk(fgMaskRef.current) ? fgMaskRef.current!.toDataURL('image/png') : undefined,
-      })
+      }))
       setStatus(`Saved "${obj.name}" as the active ${obj.kind}. It'll show on the map on reload.`)
       refreshSaved()
     } catch (err: unknown) {

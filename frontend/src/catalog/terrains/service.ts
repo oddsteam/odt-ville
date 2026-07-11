@@ -1,7 +1,7 @@
-// Effect-based terrain resource service (#120). `list()` loads the persisted
-// terrain priority (GET /terrains); `setOrder(names)` reorders the stack
-// (PUT /terrains/order) so the editor flips seam ownership as data. No React,
-// no DOM — callers `runEdge(...)` it at the React boundary.
+// Effect-based terrain resource service (#120) — reads only; `setOrder` lives
+// in write.ts (#196). `list()` loads the persisted terrain priority
+// (GET /terrains). No React, no DOM — callers `runEdge(...)` it at the React
+// boundary.
 
 import * as Effect from 'effect/Effect'
 import * as Schema from 'effect/Schema'
@@ -32,13 +32,4 @@ export const list = (): Effect.Effect<readonly Terrain[], HttpError, Http> =>
     return yield* decode('/terrains', decodeList)(raw)
   })
 
-// PUT /terrains/order -> the reordered terrains. `order` is the new stack,
-// low→high; the server persists priority = position.
-export const setOrder = (order: readonly string[]): Effect.Effect<readonly Terrain[], HttpError, Http> =>
-  Effect.gen(function* () {
-    const http = yield* Http
-    const raw = yield* http.put('/terrains/order', { order })
-    return yield* decode('/terrains/order', decodeList)(raw)
-  })
-
-export const TerrainsService = { list, setOrder } as const
+export const TerrainsService = { list } as const

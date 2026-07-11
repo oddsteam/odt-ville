@@ -9,6 +9,10 @@ import type { TileCatalog } from '../kernel/tileCatalog.ts'
 import { GroundTilesService } from '../catalog/groundTiles/service.ts'
 import type { GroundTile } from '../catalog/groundTiles/schema.ts'
 import { TerrainsService } from '../catalog/terrains/service.ts'
+// Known divergence (#196 baseline): the terrain-priority reorder tool (#120) is
+// content authoring embedded in the map editor — extracting it to a content-
+// authoring surface is the burn-down.
+import { TerrainsWrite } from '../catalog/terrains/write.ts'
 import { priorityOrder } from '../catalog/terrains/schema.ts'
 import { catalogFromGroundTiles, colsForGroundTiles } from './mapCatalog.ts'
 import { makeTerrain, paintCell, paintRect, resizeTerrain, type Terrain } from './mapPaint.ts'
@@ -124,7 +128,7 @@ export default function MapEditorPage() {
     ;[next[i], next[j]] = [next[j], next[i]]
     setPriority(next)
     try {
-      await runEdge(TerrainsService.setOrder(next))
+      await runEdge(TerrainsWrite.setOrder(next))
     } catch (e) {
       setPriority(priority)
       setError((e as Error).message)

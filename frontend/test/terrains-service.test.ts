@@ -5,6 +5,7 @@ import * as Layer from 'effect/Layer'
 
 import { Http, type HttpError } from '../src/lib/http.ts'
 import { TerrainsService } from '../src/catalog/terrains/service.ts'
+import { TerrainsWrite } from '../src/catalog/terrains/write.ts'
 import { priorityOrder, type Terrain } from '../src/catalog/terrains/schema.ts'
 
 // Fake Http: GET returns the terrains payload; PUT echoes the reordered list it
@@ -33,10 +34,10 @@ describe('TerrainsService.list', () => {
   })
 })
 
-describe('TerrainsService.setOrder', () => {
+describe('TerrainsWrite.setOrder', () => {
   it('persists the reordered stack and decodes the result', async () => {
     const exit = await Effect.runPromiseExit(
-      Effect.provide(TerrainsService.setOrder(['grass', 'dirt', 'road']), fakeHttp(TERRAINS)),
+      Effect.provide(TerrainsWrite.setOrder(['grass', 'dirt', 'road']), fakeHttp(TERRAINS)),
     )
     expect(Exit.isSuccess(exit)).toBe(true)
     if (Exit.isSuccess(exit)) {

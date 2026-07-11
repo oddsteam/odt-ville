@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { MonstersService } from '../catalog/monsters/service.ts'
+import { MonstersWrite } from '../catalog/monsters/write.ts'
 import type { MonsterSummary, UpdateMonster } from '../catalog/monsters/schema.ts'
 import { runEdge } from '../lib/runEdge.ts'
 import { pngHasAlpha } from '../catalog/monsters/pngAlpha.ts'
@@ -124,7 +125,7 @@ export default function MonstersAdminPage() {
       setBusy(true)
       setFormError(null)
       try {
-        await runEdge(MonstersService.del(m.id))
+        await runEdge(MonstersWrite.del(m.id))
         if (editingId === m.id) resetForm()
         await load()
       } catch (err) {
@@ -145,7 +146,7 @@ export default function MonstersAdminPage() {
       setBusy(true)
       setFormError(null)
       try {
-        await runEdge(MonstersService.update(m.id, { enabled: !m.enabled }))
+        await runEdge(MonstersWrite.update(m.id, { enabled: !m.enabled }))
         await load()
       } catch (err) {
         setFormError((err as Error).message)
@@ -174,7 +175,7 @@ export default function MonstersAdminPage() {
             return
           }
           await runEdge(
-            MonstersService.create({
+            MonstersWrite.create({
               name: trimmed,
               image,
               encounter_dialog: dialog,
@@ -192,7 +193,7 @@ export default function MonstersAdminPage() {
             enabled,
             ...(imageReplaced && image ? { image } : {}),
           }
-          await runEdge(MonstersService.update(editingId, body))
+          await runEdge(MonstersWrite.update(editingId, body))
         }
         resetForm()
         await load()
