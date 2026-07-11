@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { TILESETS, tilesetUrl } from '../catalog/groundTiles/tilesets.js'
-import { listGroundTiles, saveGroundTile, deleteGroundTile } from '../catalog/groundTiles/client.js'
+import { GroundTilesService } from '../catalog/groundTiles/service.ts'
+import { GroundTilesWrite } from '../catalog/groundTiles/write.ts'
 import type { GroundTile } from '../catalog/groundTiles/schema.ts'
+import { runEdge } from '../lib/runEdge.ts'
 import '../tileMapper/styles.css'
 import './styles.css'
 
@@ -86,7 +88,7 @@ export default function GroundTileMapper() {
   }
 
   const refreshCatalog = useCallback(() => {
-    listGroundTiles()
+    runEdge(GroundTilesService.list())
       .then((rows) => setCatalog(rows ? [...rows] : []))
       .catch((e: unknown) => setStatus(`Load failed: ${(e as Error).message}`))
   }, [])
@@ -180,10 +182,10 @@ export default function GroundTileMapper() {
     if (!type.trim()) { setStatus('Set a tile type.'); return }
     setStatus('Saving…')
     try {
-      const saved = await saveGroundTile({
+      const saved = await runEdge(GroundTilesWrite.save({
         tile_type: type.trim(), tileset, col: sel.c, row: sel.r, cell, label: label.trim(),
         role, side: role === 'fill' ? null : side,
-      })
+      }))
       const desc =
         saved.role === 'fill' ? saved.tile_type : `${saved.tile_type} ${saved.role}·${saved.side}`
       setStatus(`Saved cell ${saved.col},${saved.row} as "${desc}".`)
@@ -195,7 +197,7 @@ export default function GroundTileMapper() {
 
   async function onDelete(id: number) {
     try {
-      await deleteGroundTile(id)
+      await runEdge(GroundTilesWrite.remove(id))
       refreshCatalog()
       setStatus('Removed tile from the catalog.')
     } catch (e: unknown) {

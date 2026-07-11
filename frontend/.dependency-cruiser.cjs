@@ -15,7 +15,7 @@
 // docs/adr/0004. A divergence means either the code is wrong (fix the code) or
 // the model is wrong (change this file + say why in the PR) — never ignore one.
 //
-// Baseline as of 2026-07-10 (2 violations) and what deletes them:
+// Baseline as of 2026-07-11 (3 violations) and what deletes them:
 //   characterRig -> character: the last black-box data edge. townLoader's five
 //     edges are gone — #185 moved that shell-side data orchestration out of
 //     src/game/ to src/townLoader.ts (its only caller, VillagePage, drives it
@@ -30,6 +30,12 @@
 //   groundTiles/GroundTileMapper.tsx -> tileMapper/styles.css is GONE — #191
 //     moved the catalog modules to src/catalog/ and split the mapper UI out to
 //     src/groundMapper/ (authoring), where the stylesheet borrow is legal.
+//   admin/MapEditorPage.tsx -> catalog/terrains/write.ts: deliberately recorded
+//     with #196 — the terrain-priority reorder tool (#120) is content authoring
+//     embedded in the map editor (same shape as #191's GroundTileMapper
+//     finding). Burn-down: extract the priority tool to a content-authoring
+//     surface. (The hometown bakes against HOMETOWN_CATALOG.stack, not the
+//     terrains table — the tool reshapes authored-map seams only.)
 
 // The shared kernel (ADR-0004: "map-agnostic, depends on nobody"), physically
 // extracted to src/kernel/ in #178. mapRenderer is included per the CONTEXT.md
@@ -43,10 +49,44 @@ const KERNEL = '^src/kernel/'
 // extracted to src/catalog/ in #191, the same path the kernel took in #178.
 const CATALOG = '^src/catalog/'
 
-// Map Authoring (ADR-0004 bounded context): the editor/mapper admin surfaces
-// and the maps resource. groundMapper is the ground-tile authoring UI split
-// out of the groundTiles catalog module by #191.
-const AUTHORING = '^src/(admin|maps|tileMapper|spriteMapper|groundMapper)/'
+// The single AUTHORING group split in two (#196): two authoring activities
+// with different write targets, running at different steps (a tree must exist
+// before anyone can place one).
+//
+// Content Authoring defines what *exists* — raw art in, catalog records out.
+// The mappers are standalone apps with their own main.tsx; MonstersAdminPage
+// is an admin SPA route (src/admin/ dissolves logically — the physical split
+// into contentAuthoring/mapAuthoring dirs is a deferred #191-style follow-up,
+// waiting on the Hometown-Policy questions in CONTEXT.md: the policy
+// "generation settings" page will be a *third* authoring kind).
+// Wrinkle: spriteMapper writes src/character/, not the catalog — Content
+// Authoring by nature, but the catalog write rule can't cover it until
+// character's data half joins the catalog (open domain question: monsters are
+// catalog, characters aren't).
+const CONTENT_AUTHORING = [
+  '^src/(tileMapper|groundMapper|spriteMapper)/',
+  '^src/admin/MonstersAdminPage\\.tsx$',
+]
+
+// Map Authoring places *references* to catalog content and paints terrain on
+// a specific map (ADR-0008: props are references to saved tile objects). It
+// reads the catalog as a palette and writes map documents only. Covers the
+// map admin pages, MapPreview + its paint/mask/pointer helpers, and the maps
+// resource. (maps/MapPage.tsx is the player-facing play route (#128) still
+// living here — reclassify with #90/#111, see the baseline note above.)
+const MAP_AUTHORING = [
+  '^src/maps/',
+  '^src/admin/(MapEditorPage|MapDecoratePage|MapPreview|MapsListPage)\\.tsx$',
+  '^src/admin/(mapCatalog|mapPaint|maskPaint|previewPointer)\\.ts$',
+]
+
+// Both authoring kinds — the game-runtime firewall applies to each alike.
+const AUTHORING = [...CONTENT_AUTHORING, ...MAP_AUTHORING]
+
+// The catalog's write surface (#196): each catalog module keeps its reads in
+// service.ts and its mutations in write.ts, so the write boundary below is
+// import-separable.
+const CATALOG_WRITES = '^src/catalog/[^/]+/write\\.ts$'
 
 // Game Runtime (the black box), minus the kernel files under src/game/.
 const GAME = '^src/game/'
@@ -82,6 +122,18 @@ module.exports = {
       severity: 'error',
       from: { path: GAME, pathNot: KERNEL },
       to: { path: AUTHORING, pathNot: KERNEL },
+    },
+    {
+      name: 'map-authoring-never-writes-the-catalog',
+      comment:
+        '#196: placing a tree can never mutate what a tree *is*. Map ' +
+        'Authoring reads the catalog as its palette (schemas + service.ts ' +
+        'reads); only Content Authoring may import a catalog module\'s write ' +
+        'surface (write.ts). Baselined offender: MapEditorPage\'s ' +
+        'terrain-priority tool (#120) — see the header note.',
+      severity: 'error',
+      from: { path: MAP_AUTHORING },
+      to: { path: CATALOG_WRITES },
     },
     {
       name: 'game-black-box-no-data-services',

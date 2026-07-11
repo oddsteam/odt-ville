@@ -26,5 +26,19 @@
       "severity": "error",
       "name": "game-black-box-no-data-services"
     }
+  },
+  {
+    "type": "dependency",
+    "from": "src/admin/MapEditorPage.tsx",
+    "to": "src/catalog/terrains/write.ts",
+    "unresolvedTo": "../catalog/terrains/write.ts",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "map-authoring-never-writes-the-catalog"
+    }
   }
 ]
