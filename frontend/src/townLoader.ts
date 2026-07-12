@@ -11,7 +11,7 @@ import { GameSessionService } from './game-session/service.ts'
 import { TileObjectsService } from './catalog/tileObjects/service.ts'
 import { GroundTilesService } from './catalog/groundTiles/service.ts'
 import { MonstersService } from './catalog/monsters/service.ts'
-import { loadActiveManifest } from './character/manifest.js'
+import { loadMyManifest } from './character/manifest.js'
 
 // The Hometown Policy resolution point (CONTEXT.md 2026-07-07, #173): the one
 // place the generated producer's authored inputs — the active object per
@@ -52,9 +52,10 @@ export const loadTown = () =>
       // endpoint falls back to [] and TownScene rolls the built-in table, so
       // the grass is never dead.
       monsterPool: Effect.orElseSucceed(MonstersService.pool(), () => []),
-      // loadActiveManifest owns its own fallback chain and never throws; mirror
+      // The current user's character (#155): pick -> global active -> default.
+      // loadMyManifest owns its own fallback chain and never throws; mirror
       // today's `.catch(() => null)` for parity.
-      characterManifest: Effect.promise(() => loadActiveManifest().catch(() => null)),
+      characterManifest: Effect.promise(() => loadMyManifest().catch(() => null)),
     },
     { concurrency: 'unbounded' },
   )

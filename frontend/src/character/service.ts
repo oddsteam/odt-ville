@@ -12,11 +12,12 @@ import { DecodeError, Http } from '../lib/http.ts'
 import type { HttpError } from '../lib/http.ts'
 import {
   ActiveManifest,
+  ManifestSummary,
   ManifestSummaryList,
-  type ManifestSummary,
 } from './schema.ts'
 
 const decodeActive = Schema.decodeUnknown(ActiveManifest)
+const decodeSummary = Schema.decodeUnknown(ManifestSummary)
 const decodeSummaryList = Schema.decodeUnknown(ManifestSummaryList)
 
 function decode<A>(
@@ -44,6 +45,35 @@ export const getActive = (): Effect.Effect<object | null, HttpError, Http> =>
     if (raw === null) return null
     const env = yield* decode(path, decodeActive)(raw)
     return env.data
+  })
+
+// GET /character_manifests/for_me -> the envelope of the character this user
+// renders (#155, ADR-0009: their pick, else the global active), or null (204)
+// when neither exists. Returns the full envelope — callers need the id to
+// mark the current choice — with the `data` blob to render.
+export const getForMe = (): Effect.Effect<
+  ActiveManifest | null,
+  HttpError,
+  Http
+> =>
+  Effect.gen(function* () {
+    const http = yield* Http
+    const path = '/character_manifests/for_me'
+    const raw = yield* http.get(path)
+    if (raw === null) return null
+    return yield* decode(path, decodeActive)(raw)
+  })
+
+// POST /character_manifests/:id/select -> make this manifest the current
+// user's character; returns its summary.
+export const select = (
+  id: number,
+): Effect.Effect<ManifestSummary, HttpError, Http> =>
+  Effect.gen(function* () {
+    const http = yield* Http
+    const path = `/character_manifests/${id}/select`
+    const raw = yield* http.post(path, {})
+    return yield* decode(path, decodeSummary)(raw)
   })
 
 // GET /character_manifests -> roster summaries (no data blobs).
@@ -83,4 +113,11 @@ export const save = (
     return yield* decode(path, decodeActive)(raw)
   })
 
-export const CharacterService = { getActive, list, getById, save } as const
+export const CharacterService = {
+  getActive,
+  getForMe,
+  select,
+  list,
+  getById,
+  save,
+} as const

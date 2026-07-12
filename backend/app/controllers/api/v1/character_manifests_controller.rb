@@ -26,6 +26,26 @@ module Api
         render json: CharacterManifestSerializer.call(manifest)
       end
 
+      # GET /api/v1/character_manifests/for_me — the character the current
+      # user renders (#155, ADR-0009): their pick, else the global active.
+      # 204 when neither exists (the client falls back to the committed
+      # default).
+      def for_me
+        manifest = current_user.character_manifest || CharacterManifest.current
+        return head :no_content unless manifest
+
+        render json: CharacterManifestSerializer.call(manifest)
+      end
+
+      # POST /api/v1/character_manifests/:id/select — make this manifest the
+      # current user's character. Writes only the caller's row; other users
+      # and the global active are untouched.
+      def select
+        manifest = CharacterManifest.find(params[:id])
+        current_user.update!(character_manifest: manifest)
+        render json: CharacterManifestSerializer.summary(manifest)
+      end
+
       # POST /api/v1/character_manifests — save from the sprite-mapper. Upserts
       # by manifest name and, unless `active: false` is passed, makes it the
       # one live character.

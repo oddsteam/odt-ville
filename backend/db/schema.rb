@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_07_01_000002) do
+ActiveRecord::Schema[8.1].define(version: 2026_07_12_000001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -162,6 +162,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_01_000002) do
   end
 
   create_table "users", force: :cascade do |t|
+    t.bigint "character_manifest_id"
     t.bigint "company_id", null: false
     t.datetime "created_at", null: false
     t.string "email"
@@ -169,6 +170,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_01_000002) do
     t.string "name", null: false
     t.string "role", default: "employee", null: false
     t.datetime "updated_at", null: false
+    t.index ["character_manifest_id"], name: "index_users_on_character_manifest_id"
     t.index ["company_id"], name: "index_users_on_company_id"
     t.index ["email"], name: "index_users_on_email", unique: true
     t.index ["external_id"], name: "index_users_on_external_id", unique: true
@@ -181,5 +183,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_01_000002) do
   add_foreign_key "user_content_states", "users"
   add_foreign_key "user_location_states", "companies"
   add_foreign_key "user_location_states", "users"
+  add_foreign_key "users", "character_manifests", on_delete: :nullify
   add_foreign_key "users", "companies"
 end

@@ -1,5 +1,8 @@
 class User < ApplicationRecord
   belongs_to :company
+  # The user's picked character (#155, ADR-0009); nil falls back to the
+  # global active manifest.
+  belongs_to :character_manifest, optional: true
   has_many :user_content_states, dependent: :destroy
   has_one :user_location_state, dependent: :destroy
 

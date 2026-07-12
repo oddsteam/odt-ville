@@ -7,7 +7,7 @@ import { TileObjectsService } from '../catalog/tileObjects/service.ts'
 import { objectIdsFrom } from './props.ts'
 import { runEdge } from '../lib/runEdge.ts'
 import { subscribeAuthToken } from '../lib/authToken.ts'
-import { loadActiveManifest } from '../character/manifest.js'
+import { loadMyManifest } from '../character/manifest.js'
 import type { BakedMap } from '../kernel/schema.ts'
 
 // Play surface for an authored map (ADR-0004). It loads a baked map by slug and
@@ -23,8 +23,8 @@ export default function MapPage() {
   // changes — the first paint fetches before a user is picked and 401s.
   const [reloadKey, setReloadKey] = useState(0)
 
-  // The active character manifest rides along with the map load so it is
-  // already in hand when Phaser boots (loadActiveManifest owns its own
+  // The user's character manifest (#155) rides along with the map load so it
+  // is already in hand when Phaser boots (loadMyManifest owns its own
   // fallback chain and never throws — null means the bundled fallback frames).
   const manifestRef = useRef<unknown>(null)
   // The tile objects the map's entities reference (ADR-0008), batch-fetched
@@ -36,7 +36,7 @@ export default function MapPage() {
     let active = true
     Promise.all([
       runEdge(MapsService.get(slug)),
-      loadActiveManifest().catch(() => null),
+      loadMyManifest().catch(() => null),
     ])
       .then(async ([m, manifest]) => {
         const objects = await runEdge(TileObjectsService.getMany(objectIdsFrom(m.entities)))

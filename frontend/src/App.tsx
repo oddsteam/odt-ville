@@ -11,6 +11,7 @@ import GroundTileMapper from './groundMapper/GroundTileMapper.tsx'
 import MonstersAdminPage from './admin/MonstersAdminPage.tsx'
 import PostureCallbackPage from './posture/CallbackPage.tsx'
 import MapPage from './maps/MapPage.tsx'
+import CharacterSelectPage from './character/CharacterSelectPage.tsx'
 
 // The map editor bakes (and later renders a Phaser preview, #107), so it is
 // code-split into its own chunk — it never ships in the player bundle (#106).
@@ -28,6 +29,8 @@ export default function App() {
     <Routes>
       <Route element={<RootLayout />}>
         <Route index element={<VillagePage />} />
+        {/* Pick which saved character *you* play as (#155, ADR-0009). */}
+        <Route path="character" element={<CharacterSelectPage />} />
       </Route>
       {/* The admin console is its own standalone shell (mapper-styled, dark) and
           is reachable by URL only — no link from the game UI. RequireAdmin gates

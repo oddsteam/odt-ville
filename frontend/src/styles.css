@@ -158,7 +158,8 @@ button:disabled {
 }
 
 .app-logout,
-.app-dev-admin {
+.app-dev-admin,
+.app-character-link {
   font: inherit;
   font-size: 8px;
   padding: 3px 6px;
@@ -170,13 +171,90 @@ button:disabled {
 }
 
 .app-logout:hover,
-.app-dev-admin:hover {
+.app-dev-admin:hover,
+.app-character-link:hover {
   background: #3a4a6b;
 }
 
-/* The dev-only ⚙ ADMIN shortcut is a router <Link>, so an anchor. */
-.app-dev-admin {
+/* The dev-only ⚙ ADMIN shortcut and 👤 CHARACTER are router <Link>s, so
+   anchors. */
+.app-dev-admin,
+.app-character-link {
   text-decoration: none;
+}
+
+/* ---- Character picker (#155) -------------------------------- */
+
+.char-select {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 16px;
+  color: var(--paper);
+}
+
+.char-select-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.char-select-head h2 {
+  font-size: 14px;
+  margin: 0;
+}
+
+.char-select-head a {
+  color: var(--paper);
+  font-size: 8px;
+}
+
+.char-select-hint {
+  font-size: 8px;
+  color: var(--paper-dk);
+}
+
+.char-select-error {
+  font-size: 8px;
+  color: var(--red);
+  margin-bottom: 8px;
+}
+
+.char-select-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.char-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 8px;
+  background: var(--bezel);
+  border: 2px solid var(--bezel-lip);
+  border-radius: 6px;
+}
+
+.char-card.is-current {
+  border-color: var(--grass);
+}
+
+.char-card-anim {
+  min-height: 96px;
+  display: flex;
+  align-items: center;
+}
+
+.char-card-name {
+  font-size: 9px;
+  word-break: break-all;
+  text-align: center;
+}
+
+.char-card button {
+  font-size: 8px;
 }
 
 /* ---- Dev-only user switcher (issue #93) --------------------- */

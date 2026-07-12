@@ -31,6 +31,10 @@ Rails.application.routes.draw do
       # the game/preview. `active` is the single live character.
       resources :character_manifests, only: [:index, :create, :show] do
         get :active, on: :collection
+        # Per-user selection (#155, ADR-0009): for_me resolves the caller's
+        # pick -> global active; select persists the caller's pick.
+        get :for_me, on: :collection
+        post :select, on: :member
       end
 
       # Tile objects — trees/props cropped from an atlas in the tile-object
