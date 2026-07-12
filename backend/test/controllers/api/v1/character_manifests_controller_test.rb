@@ -27,6 +27,56 @@ module Api
         end
         assert_response :forbidden
       end
+
+      # Per-user selection (#155, ADR-0009): for_me resolves pick -> global
+      # active -> 204; select persists the caller's pick.
+
+      test "for_me returns the user's pick over the global active" do
+        CharacterManifest.create!(name: "Default", data: {}).activate!
+        pick = CharacterManifest.create!(name: "Mine", data: {})
+        @user.update!(character_manifest: pick)
+
+        get "/api/v1/character_manifests/for_me", headers: auth(@user)
+        assert_response :success
+        assert_equal pick.id, json[:id]
+      end
+
+      test "for_me falls back to the global active when the user has no pick" do
+        active = CharacterManifest.create!(name: "Default", data: {})
+        active.activate!
+
+        get "/api/v1/character_manifests/for_me", headers: auth(@user)
+        assert_response :success
+        assert_equal active.id, json[:id]
+      end
+
+      test "for_me without a token is unauthorized" do
+        get "/api/v1/character_manifests/for_me"
+        assert_response :unauthorized
+      end
+
+      test "for_me is 204 when there is no pick and no active manifest" do
+        get "/api/v1/character_manifests/for_me", headers: auth(@user)
+        assert_response :no_content
+      end
+
+      test "select persists the pick for the current user only" do
+        pick = CharacterManifest.create!(name: "Mine", data: {})
+        _, other = setup_company(name: "Other")
+
+        post "/api/v1/character_manifests/#{pick.id}/select", headers: auth(@user)
+        assert_response :success
+        assert_equal pick.id, @user.reload.character_manifest_id
+        assert_nil other.reload.character_manifest_id
+      end
+
+      test "select requires authentication" do
+        pick = CharacterManifest.create!(name: "Mine", data: {})
+
+        post "/api/v1/character_manifests/#{pick.id}/select"
+        assert_response :unauthorized
+        assert_nil @user.reload.character_manifest_id
+      end
     end
   end
 end

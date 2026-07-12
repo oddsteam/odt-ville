@@ -49,6 +49,10 @@ export default function RootLayout() {
           </div>
         </div>
         <div className="app-header-right">
+          {/* Per-user character pick (#155). */}
+          <Link className="app-character-link" to="/character">
+            👤 CHARACTER
+          </Link>
           {import.meta.env.DEV && (
             <Link className="app-dev-admin" to="/admin">
               ⚙ ADMIN

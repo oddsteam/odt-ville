@@ -7,6 +7,7 @@ import { runEdge } from '../src/lib/runEdge.ts'
 import { AppRuntime } from '../src/lib/runtime.ts'
 import {
   loadActiveManifest,
+  loadMyManifest,
   normalizeManifest,
 } from '../src/character/manifest.js'
 
@@ -137,6 +138,51 @@ describe('CharacterService.save', () => {
   })
 })
 
+describe('CharacterService.getForMe', () => {
+  it('returns the resolved envelope when the backend has one', async () => {
+    globalThis.fetch = routeFetch({
+      '/character_manifests/for_me': new Response(JSON.stringify(envelope), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    }) as unknown as typeof fetch
+
+    const env = await runEdge(CharacterService.getForMe())
+    expect(env?.id).toBe(1)
+    expect(env?.data).toEqual(envelope.data)
+  })
+
+  it('returns null when neither a pick nor a global active exists (204)', async () => {
+    globalThis.fetch = routeFetch({
+      '/character_manifests/for_me': new Response(null, { status: 204 }),
+    }) as unknown as typeof fetch
+
+    const env = await runEdge(CharacterService.getForMe())
+    expect(env).toBeNull()
+  })
+})
+
+describe('CharacterService.select', () => {
+  it('POSTs to /character_manifests/:id/select and decodes the summary', async () => {
+    const calls: { url: string; init?: RequestInit }[] = []
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ url: String(input), init })
+      const { data: _data, ...summary } = envelope
+      return new Response(JSON.stringify(summary), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }) as unknown as typeof fetch
+
+    const picked = await runEdge(CharacterService.select(1))
+    expect(picked.id).toBe(1)
+
+    expect(calls).toHaveLength(1)
+    expect(calls[0]!.url).toBe('/api/v1/character_manifests/1/select')
+    expect(calls[0]!.init?.method).toBe('POST')
+  })
+})
+
 describe('normalizeManifest', () => {
   it('fills missing fields from the empty manifest', () => {
     const out = normalizeManifest({ name: 'hero', postures: { walkDown: [{ x: 1 }] } })
@@ -182,5 +228,46 @@ describe('loadActiveManifest resolution chain', () => {
     expect(m.name).toBe('scout-default')
     expect(m.grid.frameWidth).toBe(16) // provided by the default file
     expect(m.grid.frameHeight).toBe(64) // filled by normalize
+  })
+})
+
+describe('loadMyManifest resolution chain (#155)', () => {
+  it("uses the user's server-resolved manifest when for_me returns one", async () => {
+    globalThis.fetch = routeFetch({
+      // for_me wins; the committed default is intentionally unrouted.
+      '/character_manifests/for_me': new Response(JSON.stringify(envelope), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    }) as unknown as typeof fetch
+
+    const m = await loadMyManifest()
+    expect(m.name).toBe('scout')
+    expect(m.postures.walkDown).toEqual([{ x: 0 }])
+  })
+
+  it('falls back to the committed default on 204 (no pick, no global active)', async () => {
+    globalThis.fetch = routeFetch({
+      '/character_manifests/for_me': new Response(null, { status: 204 }),
+      'scout.json': new Response(JSON.stringify({ name: 'scout-default' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    }) as unknown as typeof fetch
+
+    const m = await loadMyManifest()
+    expect(m.name).toBe('scout-default')
+  })
+
+  it('falls back to the committed default when the backend is unreachable', async () => {
+    globalThis.fetch = routeFetch({
+      'scout.json': new Response(JSON.stringify({ name: 'scout-default' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    }) as unknown as typeof fetch
+
+    const m = await loadMyManifest()
+    expect(m.name).toBe('scout-default')
   })
 })

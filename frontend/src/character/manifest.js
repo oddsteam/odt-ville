@@ -109,13 +109,17 @@ async function fetchRemoteActive() {
   return data ? normalizeManifest(data) : null
 }
 
-// Resolve the active manifest deterministically from shared server state:
-// remote active, then the committed default. No per-browser override, so every
-// client renders the same character (#153). Always returns a normalized
-// manifest (never throws).
-export async function loadActiveManifest() {
-  const remote = await fetchRemoteActive()
-  if (remote) return remote
+// Fetch the character this user renders (#155, ADR-0009: their pick, else the
+// global active) — same null-on-204/error contract as fetchRemoteActive.
+async function fetchRemoteForMe() {
+  const env = await runEdge(CharacterService.getForMe()).catch((err) => {
+    console.warn('fetching my manifest failed:', err)
+    return null
+  })
+  return env ? normalizeManifest(env.data) : null
+}
+
+async function committedDefault() {
   try {
     const res = await fetch(DEFAULT_MANIFEST_URL)
     if (res.ok) return normalizeManifest(await res.json())
@@ -123,6 +127,22 @@ export async function loadActiveManifest() {
     console.warn('fetching default manifest failed:', err)
   }
   return emptyManifest()
+}
+
+// Resolve the active manifest deterministically from shared server state:
+// remote active, then the committed default. No per-browser override, so every
+// client renders the same character (#153). Always returns a normalized
+// manifest (never throws). This is the *global* character — the authoring
+// surfaces' notion of "current"; the game resolves per user via
+// loadMyManifest.
+export async function loadActiveManifest() {
+  return (await fetchRemoteActive()) || committedDefault()
+}
+
+// Resolve the character the current user renders (#155): their pick, else the
+// global active (both server-side via for_me), then the committed default.
+export async function loadMyManifest() {
+  return (await fetchRemoteForMe()) || committedDefault()
 }
 
 // Produce the committable form of a manifest: strip the inline data URL and
