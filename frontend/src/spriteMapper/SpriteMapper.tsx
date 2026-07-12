@@ -8,7 +8,6 @@ import {
   POSTURE_SLOTS,
   emptyPostures,
   normalizeManifest,
-  saveActiveManifest,
   downloadManifest,
   loadActiveManifest,
 } from '../character/manifest.js'
@@ -122,16 +121,6 @@ export default function SpriteMapper() {
     return true
   }
 
-  function onSave() {
-    if (!requireSheet()) return
-    const ok = saveActiveManifest(buildManifest())
-    setStatus(
-      ok
-        ? 'Saved to localStorage — the preview above reflects it.'
-        : 'Save failed (storage full — uploaded sheets are large).',
-    )
-  }
-
   async function onSaveRemote() {
     if (!requireSheet()) return
     setStatus('Saving to server…')
@@ -222,9 +211,6 @@ export default function SpriteMapper() {
             style={{ width: 48 }}
           />
         </label>
-        <button type="button" onClick={onSave} title="Save to this browser only (localStorage)">
-          Save (local)
-        </button>
         <button type="button" onClick={onSaveRemote} title="Save to the backend — shared across browsers and origins">
           Save (server)
         </button>

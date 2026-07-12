@@ -6,7 +6,6 @@ import { CharacterService } from '../src/character/service.ts'
 import { runEdge } from '../src/lib/runEdge.ts'
 import { AppRuntime } from '../src/lib/runtime.ts'
 import {
-  ACTIVE_KEY,
   loadActiveManifest,
   normalizeManifest,
 } from '../src/character/manifest.js'
@@ -23,21 +22,9 @@ function routeFetch(routes: Record<string, Response>) {
   })
 }
 
-// Minimal in-memory localStorage (the test env is node, which has none).
-function installLocalStorage(entries: Record<string, string> = {}) {
-  const store = new Map(Object.entries(entries))
-  ;(globalThis as { localStorage?: unknown }).localStorage = {
-    getItem: (k: string) => (store.has(k) ? store.get(k)! : null),
-    setItem: (k: string, v: string) => void store.set(k, v),
-    removeItem: (k: string) => void store.delete(k),
-    clear: () => store.clear(),
-  }
-}
-
 const realFetch = globalThis.fetch
 afterEach(() => {
   globalThis.fetch = realFetch
-  delete (globalThis as { localStorage?: unknown }).localStorage
 })
 
 const envelope = {
@@ -165,25 +152,24 @@ describe('normalizeManifest', () => {
   })
 })
 
-describe('loadActiveManifest fallback chain', () => {
-  it('uses the localStorage manifest when no remote is active', async () => {
-    installLocalStorage({
-      [ACTIVE_KEY]: JSON.stringify({ name: 'local-guy', postures: { walkUp: [{ x: 2 }] } }),
-    })
+describe('loadActiveManifest resolution chain', () => {
+  it('uses the remote active manifest when the backend has one', async () => {
     globalThis.fetch = routeFetch({
-      // No active remote; the committed default is intentionally unrouted —
-      // reaching it would throw, proving localStorage short-circuits first.
-      '/character_manifests/active': new Response(null, { status: 204 }),
+      // Remote wins; the committed default is intentionally unrouted —
+      // reaching it would throw, proving remote short-circuits first.
+      '/character_manifests/active': new Response(JSON.stringify(envelope), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
     }) as unknown as typeof fetch
 
     const m = await loadActiveManifest()
-    expect(m.name).toBe('local-guy')
-    expect(m.postures.walkUp).toEqual([{ x: 2 }])
+    expect(m.name).toBe('scout')
+    expect(m.postures.walkDown).toEqual([{ x: 0 }])
     expect(m.frameRate).toBe(9) // normalized
   })
 
-  it('falls back to the committed default when remote and localStorage are empty', async () => {
-    installLocalStorage()
+  it('falls back to the committed default when no remote is active', async () => {
     globalThis.fetch = routeFetch({
       '/character_manifests/active': new Response(null, { status: 204 }),
       'scout.json': new Response(JSON.stringify({ name: 'scout-default', grid: { frameWidth: 16 } }), {
