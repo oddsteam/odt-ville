@@ -1,0 +1,13 @@
+# Arch guard (#179/#182): block commits that break the dependency-cruiser
+# rules. Runs only when frontend sources or the cruiser config/baseline are
+# staged. Host Node 25 is refused by depcruise, so the check runs inside the
+# frontend container — start it with `docker compose up -d frontend` if down.
+# Escape hatch: `git commit --no-verify` (CI still enforces on push/PR).
+if git diff --cached --name-only | grep -qE '^frontend/(src/|\.dependency-cruiser)'; then
+  if ! command -v docker >/dev/null 2>&1; then
+    echo "pre-commit: docker unavailable, skipping arch check (CI will enforce)"
+    exit 0
+  fi
+  echo "pre-commit: frontend sources staged — running the arch check…"
+  docker compose exec -T frontend pnpm arch
+fi

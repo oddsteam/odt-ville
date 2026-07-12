@@ -5,9 +5,11 @@
   "packageManager": "pnpm@11.5.0",
   "scripts": {
     "sandcastle": "pnpm dlx tsx .sandcastle/main.ts",
-    "ship": "bash scripts/deploy-homeserver.sh"
+    "ship": "bash scripts/deploy-homeserver.sh",
+    "prepare": "husky"
   },
   "devDependencies": {
-    "@ai-hero/sandcastle": "^0.10.0"
+    "@ai-hero/sandcastle": "^0.10.0",
+    "husky": "^9.1.7"
   }
 }
