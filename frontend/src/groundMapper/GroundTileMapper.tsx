@@ -3,6 +3,10 @@ import { TILESETS, tilesetUrl } from '../catalog/groundTiles/tilesets.js'
 import { GroundTilesService } from '../catalog/groundTiles/service.ts'
 import { GroundTilesWrite } from '../catalog/groundTiles/write.ts'
 import type { GroundTile } from '../catalog/groundTiles/schema.ts'
+import { TerrainsService } from '../catalog/terrains/service.ts'
+import { TerrainsWrite } from '../catalog/terrains/write.ts'
+import { priorityOrder } from '../catalog/terrains/schema.ts'
+import { movedOrder } from './priorityMove.ts'
 import { runEdge } from '../lib/runEdge.ts'
 import '../tileMapper/styles.css'
 import './styles.css'
@@ -73,6 +77,11 @@ export default function GroundTileMapper() {
   const [role, setRole] = useState('fill')
   const [side, setSide] = useState('N')
   const [catalog, setCatalog] = useState<GroundTile[]>([])
+  // The persisted terrain priority stack, low→high (#120). Extracted here from
+  // the map editor (#198): priority is catalog data — what the terrain stack
+  // *is* — so it's authored where the rest of the ground catalog is. Editors
+  // pick up a reorder on next load.
+  const [priority, setPriority] = useState<string[]>([])
   const [status, setStatus] = useState('Pick a tileset, click a cell, set its type, then save.')
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -94,6 +103,25 @@ export default function GroundTileMapper() {
   }, [])
 
   useEffect(() => { refreshCatalog() }, [refreshCatalog])
+
+  useEffect(() => {
+    runEdge(TerrainsService.list())
+      .then((terrains) => setPriority(priorityOrder(terrains)))
+      .catch((e: unknown) => setStatus(`Load failed: ${(e as Error).message}`))
+  }, [])
+
+  // Optimistic reorder: swap and show at once, revert if the write fails.
+  async function movePriority(name: string, dir: 1 | -1) {
+    const next = movedOrder(priority, name, dir)
+    if (!next) return
+    setPriority(next)
+    try {
+      await runEdge(TerrainsWrite.setOrder(next))
+    } catch (e: unknown) {
+      setPriority(priority)
+      setStatus(`Reorder failed: ${(e as Error).message}`)
+    }
+  }
 
   // Load the selected tileset image.
   useEffect(() => {
@@ -323,6 +351,18 @@ export default function GroundTileMapper() {
                     <button type="button" className="del" onClick={() => onDelete(t.id)} title="Remove">×</button>
                   </div>
                 ))}
+              </div>
+            ))}
+          </div>
+
+          <h3>Terrain priority</h3>
+          <p className="hint">High to low — higher owns shared seams. Maps bake against this on next load.</p>
+          <div className="cat-group">
+            {[...priority].reverse().map((t) => (
+              <div key={t} className="cat-row">
+                <span className="cat-meta">{t}</span>
+                <button type="button" aria-label={`raise ${t} priority`} title="raise priority" onClick={() => movePriority(t, 1)}>▲</button>
+                <button type="button" aria-label={`lower ${t} priority`} title="lower priority" onClick={() => movePriority(t, -1)}>▼</button>
               </div>
             ))}
           </div>

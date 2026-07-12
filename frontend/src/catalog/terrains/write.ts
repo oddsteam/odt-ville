@@ -1,9 +1,7 @@
 // Terrain catalog write surface (#196): mutations that change what exists in
 // the catalog, split from the reads in service.ts so the write boundary is
 // import-separable. Only Content Authoring may import this module; Map
-// Authoring reads the catalog via service.ts. Known divergence: the terrain-
-// priority reorder tool (#120) still lives in MapEditorPage — that one edge is
-// baselined, see .dependency-cruiser.cjs.
+// Authoring reads the catalog via service.ts.
 
 import * as Effect from 'effect/Effect'
 import * as Schema from 'effect/Schema'
