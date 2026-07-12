@@ -15,7 +15,7 @@
 // docs/adr/0004. A divergence means either the code is wrong (fix the code) or
 // the model is wrong (change this file + say why in the PR) — never ignore one.
 //
-// Baseline as of 2026-07-11 (3 violations) and what deletes them:
+// Baseline as of 2026-07-11 (2 violations) and what deletes them:
 //   characterRig -> character: the last black-box data edge. townLoader's five
 //     edges are gone — #185 moved that shell-side data orchestration out of
 //     src/game/ to src/townLoader.ts (its only caller, VillagePage, drives it
@@ -30,12 +30,10 @@
 //   groundTiles/GroundTileMapper.tsx -> tileMapper/styles.css is GONE — #191
 //     moved the catalog modules to src/catalog/ and split the mapper UI out to
 //     src/groundMapper/ (authoring), where the stylesheet borrow is legal.
-//   admin/MapEditorPage.tsx -> catalog/terrains/write.ts: deliberately recorded
-//     with #196 — the terrain-priority reorder tool (#120) is content authoring
-//     embedded in the map editor (same shape as #191's GroundTileMapper
-//     finding). Burn-down: extract the priority tool to a content-authoring
-//     surface. (The hometown bakes against HOMETOWN_CATALOG.stack, not the
-//     terrains table — the tool reshapes authored-map seams only.)
+//   admin/MapEditorPage.tsx -> catalog/terrains/write.ts is GONE — #198 moved
+//     the terrain-priority reorder tool (#120) to the Ground Mapper (Content
+//     Authoring), where the catalog write is legal; the editor keeps its
+//     read-only use of priority via TerrainsService.list.
 
 // The shared kernel (ADR-0004: "map-agnostic, depends on nobody"), physically
 // extracted to src/kernel/ in #178. mapRenderer is included per the CONTEXT.md
@@ -129,8 +127,7 @@ module.exports = {
         '#196: placing a tree can never mutate what a tree *is*. Map ' +
         'Authoring reads the catalog as its palette (schemas + service.ts ' +
         'reads); only Content Authoring may import a catalog module\'s write ' +
-        'surface (write.ts). Baselined offender: MapEditorPage\'s ' +
-        'terrain-priority tool (#120) — see the header note.',
+        'surface (write.ts).',
       severity: 'error',
       from: { path: MAP_AUTHORING },
       to: { path: CATALOG_WRITES },

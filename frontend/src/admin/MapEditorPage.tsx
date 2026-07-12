@@ -9,10 +9,6 @@ import type { TileCatalog } from '../kernel/tileCatalog.ts'
 import { GroundTilesService } from '../catalog/groundTiles/service.ts'
 import type { GroundTile } from '../catalog/groundTiles/schema.ts'
 import { TerrainsService } from '../catalog/terrains/service.ts'
-// Known divergence (#196 baseline): the terrain-priority reorder tool (#120) is
-// content authoring embedded in the map editor — extracting it to a content-
-// authoring surface is the burn-down.
-import { TerrainsWrite } from '../catalog/terrains/write.ts'
 import { priorityOrder } from '../catalog/terrains/schema.ts'
 import { catalogFromGroundTiles, colsForGroundTiles } from './mapCatalog.ts'
 import { makeTerrain, paintCell, paintRect, resizeTerrain, type Terrain } from './mapPaint.ts'
@@ -58,8 +54,9 @@ export default function MapEditorPage() {
   // The real Tile Catalog is derived from the ground tiles mapped in the Ground
   // Tiles tool + the persisted terrain priority (#120). Baking against it makes
   // the preview blit the actual tagged cells, and the priority *data* — not a
-  // hardcoded stack — decides palette order + seam ownership, so reordering
-  // flips ownership live. Null until the ground tiles have loaded.
+  // hardcoded stack — decides palette order + seam ownership. Priority is
+  // authored in the Ground Mapper (#198); a reorder shows here on next load.
+  // Null until the ground tiles have loaded.
   const [tiles, setTiles] = useState<readonly GroundTile[] | null>(null)
   const [colsByTileset, setColsByTileset] = useState<Record<string, number>>({})
   const [priority, setPriority] = useState<string[]>([])
@@ -83,8 +80,7 @@ export default function MapEditorPage() {
   const rectStart = useRef<{ x: number; y: number } | null>(null)
 
   // Load once: the mapped ground tiles + each sheet's column count, and the
-  // persisted terrain priority (#120). The catalog is derived from all three, so
-  // a later reorder just updates `priority` and the preview re-bakes.
+  // persisted terrain priority (#120). The catalog is derived from all three.
   useEffect(() => {
     let live = true
     ;(async () => {
@@ -115,25 +111,6 @@ export default function MapEditorPage() {
     setSelected(top ?? '')
     setTerrain((t) => t.map((row) => row.map((c) => c ?? top)))
   }, [catalog, selected])
-
-  // Reorder terrain priority through the tool: swap a terrain with its neighbour
-  // in the persisted stack and save it. `dir` +1 raises priority (owns more
-  // seams), -1 lowers it. Optimistic — the preview re-bakes at once — reverting
-  // if the write fails.
-  const movePriority = async (name: string, dir: 1 | -1) => {
-    const i = priority.indexOf(name)
-    const j = i + dir
-    if (i < 0 || j < 0 || j >= priority.length) return
-    const next = [...priority]
-    ;[next[i], next[j]] = [next[j], next[i]]
-    setPriority(next)
-    try {
-      await runEdge(TerrainsWrite.setOrder(next))
-    } catch (e) {
-      setPriority(priority)
-      setError((e as Error).message)
-    }
-  }
 
   // Release the drag / cancel a rectangle if the mouse comes up off the grid.
   useEffect(() => {
@@ -292,14 +269,10 @@ export default function MapEditorPage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <p className="admin-hint">Terrain</p>
           {[...palette].reverse().map((t) => (
-            <span key={t} style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
-              <button onClick={() => setSelected(t)}
-                style={{ minWidth: 72, textAlign: 'left', outline: selected === t ? '2px solid #fff' : 'none', background: swatch(t), color: '#000' }}>
-                {t}
-              </button>
-              <button aria-label={`raise ${t} priority`} title="raise priority" onClick={() => movePriority(t, 1)}>▲</button>
-              <button aria-label={`lower ${t} priority`} title="lower priority" onClick={() => movePriority(t, -1)}>▼</button>
-            </span>
+            <button key={t} onClick={() => setSelected(t)}
+              style={{ minWidth: 72, textAlign: 'left', outline: selected === t ? '2px solid #fff' : 'none', background: swatch(t), color: '#000' }}>
+              {t}
+            </button>
           ))}
         </div>
         )}
