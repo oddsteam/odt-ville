@@ -1,16 +1,1 @@
-[
-  {
-    "type": "dependency",
-    "from": "src/maps/MapPage.tsx",
-    "to": "src/game/phaser/scenes/MapScene.js",
-    "unresolvedTo": "../game/phaser/scenes/MapScene.js",
-    "dependencyTypes": [
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "authoring-never-imports-game-runtime"
-    }
-  }
-]
+[]

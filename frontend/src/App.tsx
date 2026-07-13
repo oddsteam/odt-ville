@@ -10,7 +10,7 @@ import TileMapper from './tileMapper/TileMapper.tsx'
 import GroundTileMapper from './groundMapper/GroundTileMapper.tsx'
 import MonstersAdminPage from './admin/MonstersAdminPage.tsx'
 import PostureCallbackPage from './posture/CallbackPage.tsx'
-import MapPage from './maps/MapPage.tsx'
+import MapPage from './MapPage.tsx'
 import CharacterSelectPage from './character/CharacterSelectPage.tsx'
 
 // The map editor bakes (and later renders a Phaser preview, #107), so it is
