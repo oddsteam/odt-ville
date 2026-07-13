@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import Phaser from 'phaser'
-import MapScene from '../game/phaser/scenes/MapScene.js'
-import { MapsService } from './service.ts'
-import { TileObjectsService } from '../catalog/tileObjects/service.ts'
-import { objectIdsFrom } from './props.ts'
-import { runEdge } from '../lib/runEdge.ts'
-import { subscribeAuthToken } from '../lib/authToken.ts'
-import { loadMyManifest } from '../character/manifest.js'
-import type { BakedMap } from '../kernel/schema.ts'
+import MapScene from './game/phaser/scenes/MapScene.js'
+import { MapsService } from './maps/service.ts'
+import { TileObjectsService } from './catalog/tileObjects/service.ts'
+import { objectIdsFrom } from './maps/props.ts'
+import { runEdge } from './lib/runEdge.ts'
+import { subscribeAuthToken } from './lib/authToken.ts'
+import { loadMyManifest } from './character/manifest.js'
+import type { BakedMap } from './kernel/schema.ts'
 
 // Play surface for an authored map (ADR-0004). It loads a baked map by slug and
 // boots Phaser with the map-agnostic MapScene — the runtime renders "the

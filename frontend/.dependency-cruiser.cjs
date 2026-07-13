@@ -23,10 +23,9 @@
 //     belongs to the per-user-character work (#155). The kernel -> game and
 //     MapPreview -> game/constants edges are GONE — #178 extracted src/kernel/
 //     (TILE moved into it).
-//   maps/MapPage.tsx -> MapScene: likely a MODEL refinement, not a code bug —
-//     MapPage is the player-facing play route (#128) living under src/maps/;
-//     reclassify it out of the authoring group (or move the file) when the
-//     House/interior slice (#90/#111) touches it.
+//   maps/MapPage.tsx -> MapScene is GONE — #203 confirmed the MODEL refinement:
+//     MapPage is the player-facing play route (#128), not authoring, so it moved
+//     to src/MapPage.tsx and joined the SHELL group beside VillagePage.
 //   groundTiles/GroundTileMapper.tsx -> tileMapper/styles.css is GONE — #191
 //     moved the catalog modules to src/catalog/ and split the mapper UI out to
 //     src/groundMapper/ (authoring), where the stylesheet borrow is legal.
@@ -70,8 +69,8 @@ const CONTENT_AUTHORING = [
 // a specific map (ADR-0008: props are references to saved tile objects). It
 // reads the catalog as a palette and writes map documents only. Covers the
 // map admin pages, MapPreview + its paint/mask/pointer helpers, and the maps
-// resource. (maps/MapPage.tsx is the player-facing play route (#128) still
-// living here — reclassify with #90/#111, see the baseline note above.)
+// resource. (The player-facing play route MapPage.tsx moved out to the shell
+// in #203 — it boots the map-agnostic runtime like VillagePage, not authoring.)
 const MAP_AUTHORING = [
   '^src/maps/',
   '^src/admin/(MapEditorPage|MapDecoratePage|MapPreview|MapsListPage)\\.tsx$',
@@ -90,7 +89,7 @@ const CATALOG_WRITES = '^src/catalog/[^/]+/write\\.ts$'
 const GAME = '^src/game/'
 
 // The shell: composes everything; nothing may depend on it.
-const SHELL = '^src/(App|RootLayout|VillagePage|main)\\.tsx$'
+const SHELL = '^src/(App|RootLayout|VillagePage|MapPage|main)\\.tsx$'
 
 module.exports = {
   forbidden: [
