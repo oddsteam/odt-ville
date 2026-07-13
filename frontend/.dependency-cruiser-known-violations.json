@@ -12,19 +12,5 @@
       "severity": "error",
       "name": "authoring-never-imports-game-runtime"
     }
-  },
-  {
-    "type": "dependency",
-    "from": "src/game/phaser/characterRig.js",
-    "to": "src/character/manifest.js",
-    "unresolvedTo": "../../character/manifest.js",
-    "dependencyTypes": [
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "game-black-box-no-data-services"
-    }
   }
 ]
