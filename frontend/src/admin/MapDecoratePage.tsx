@@ -5,6 +5,7 @@ import type { BakedMap } from '../kernel/schema.ts'
 import { TileObjectsService } from '../catalog/tileObjects/service.ts'
 import type { TileObject } from '../catalog/tileObjects/schema.ts'
 import { makeMask, setMaskCell, resizeMask, isMaskEmpty, type Mask } from './maskPaint.ts'
+import { groupPalette } from './paletteGroups.ts'
 import { placeProp, erasePropAt, propEntities, propsFromBaked, propGhost, type PlacedProp, type SizeOf } from '../maps/props.ts'
 import MapPreview from './MapPreview.tsx'
 import { runEdge } from '../lib/runEdge.ts'
@@ -29,6 +30,8 @@ export default function MapDecoratePage() {
   // What a grid click does: place/erase a prop, or paint/erase the collision mask.
   const [mode, setMode] = useState<'props' | 'collision'>('props')
   const [propTool, setPropTool] = useState<number | 'erase' | null>(null)
+  // Search box over the palette — filters objects by name/kind (#165).
+  const [query, setQuery] = useState('')
   // The tile the cursor is over, driving the footprint ghost (#144); null off-map.
   const [hover, setHover] = useState<{ x: number; y: number } | null>(null)
   const [maskTool, setMaskTool] = useState<'paint' | 'erase'>('paint')
@@ -59,6 +62,10 @@ export default function MapDecoratePage() {
     () => (baked ? { ...baked, entities: [...otherEntities, ...propEntities(props)] } : null),
     [baked, otherEntities, props],
   )
+
+  // The palette, filtered by the search box and grouped under `kind` headers
+  // (#165). Free-form kinds → sections appear/disappear with the data.
+  const groups = useMemo(() => groupPalette(palette, query), [palette, query])
 
   // Load the map + the prop palette (roster → batched full objects, #138) and
   // seed both layers from the baked document (resizeMask fills missing cells
@@ -155,46 +162,62 @@ export default function MapDecoratePage() {
         )}
       </div>
 
-      <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-        {/* Prop palette — the saved objects (ADR-0008). Pick one then click the
-            grid to stamp its reference; Erase clears a cell. */}
+      <div className="decorate-layout">
+        {/* Prop palette (#165) — a fixed, scrollable side panel: a search box
+            over the saved objects (ADR-0008), grouped under collapsible `kind`
+            headers as a thumbnail grid. Pick one then click the preview to stamp
+            its reference; Erase clears a cell. */}
         {mode === 'props' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <p className="admin-hint">Props (saved objects)</p>
+          <div className="decorate-palette">
+            <input type="search" placeholder="Search objects…" value={query} onChange={(e) => setQuery(e.target.value)} />
+            <div className="admin-field-inline">
+              <button onClick={() => setPropTool('erase')}
+                style={{ outline: propTool === 'erase' ? '2px solid #fff' : 'none' }}>Erase prop</button>
+              {props.length > 0 && <span className="admin-hint">{props.length} placed</span>}
+            </div>
             {palette.length === 0 && (
               <p className="admin-msg admin-msg-error">No saved objects yet — add some in the Objects tool first.</p>
             )}
-            {palette.map((o) => (
-              <button key={o.id} onClick={() => setPropTool(o.id)} title={`${o.name} (${o.footprint_w}×${o.footprint_h})`}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: 4, outline: propTool === o.id ? '2px solid #fff' : 'none' }}>
-                <img src={o.image} alt="" style={{ width: 32, height: 32, objectFit: 'contain', imageRendering: 'pixelated' }} />
-                {o.name}
-              </button>
+            {palette.length > 0 && groups.length === 0 && <p className="admin-hint">No objects match “{query}”.</p>}
+            {groups.map((g) => (
+              <details key={g.kind} className="decorate-group" open>
+                <summary>{g.kind} ({g.objects.length})</summary>
+                <div className="decorate-grid">
+                  {g.objects.map((o) => (
+                    <button key={o.id} onClick={() => setPropTool(o.id)}
+                      className={`decorate-thumb${propTool === o.id ? ' on' : ''}`}
+                      title={`${o.name} (${o.footprint_w}×${o.footprint_h})`}>
+                      <img src={o.image} alt={o.name} />
+                    </button>
+                  ))}
+                </div>
+              </details>
             ))}
-            <button onClick={() => setPropTool('erase')}
-              style={{ outline: propTool === 'erase' ? '2px solid #fff' : 'none' }}>Erase prop</button>
-            {props.length > 0 && <span className="admin-hint">{props.length} prop{props.length > 1 ? 's' : ''} placed</span>}
           </div>
         )}
 
         {/* One direct surface for both modes (#143/#145): the WYSIWYG preview
             *is* the editor. Props mode stamps/erases at the clicked tile;
             collision mode paints blocked cells (drawn back as the red overlay)
-            and drag-paints across tiles. The abstract grid is gone. */}
-        <div>
+            and drag-paints across tiles. The abstract grid is gone. It grows to
+            fill the width the fixed palette leaves (#165). */}
+        <div className="decorate-preview">
           <p className="admin-hint">
             {mode === 'props' ? 'Preview — click to place' : 'Preview — drag to paint collision'}
           </p>
-          <MapPreview
-            baked={previewMap}
-            objects={palette}
-            onTileDown={down}
-            onTileDrag={paint}
-            onTileHover={(x, y) => setHover({ x, y })}
-            onTileHoverEnd={() => setHover(null)}
-            overlay={mode === 'collision' && showMask ? collision : null}
-            ghost={ghost}
-          />
+          <div style={{ flex: 1, minHeight: 0 }}>
+            <MapPreview
+              baked={previewMap}
+              objects={palette}
+              onTileDown={down}
+              onTileDrag={paint}
+              onTileHover={(x, y) => setHover({ x, y })}
+              onTileHoverEnd={() => setHover(null)}
+              overlay={mode === 'collision' && showMask ? collision : null}
+              ghost={ghost}
+              fill
+            />
+          </div>
         </div>
       </div>
 
