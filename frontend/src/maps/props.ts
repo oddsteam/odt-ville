@@ -21,6 +21,13 @@ export interface PlacedProp {
 // object (may be fractional, e.g. 1.4×1.8); occupancy ceils to whole cells.
 export type SizeOf = (object_id: number) => { w: number; h: number }
 
+// The walk-mask lookup denormalized onto baked entities at save (#166): the
+// authoring paint a placed object carries, resolved from the catalog by id so
+// re-authoring a mask re-applies on the next save (never stored in the placed
+// model). `undefined` for a plain prop / dangling reference omits the field →
+// blocks nothing, consistent with ADR-0008.
+export type MaskOf = (object_id: number) => readonly string[] | undefined
+
 const cells = (v: number) => Math.max(1, Math.ceil(v))
 
 // The whole-cell rect a prop occupies.
@@ -101,8 +108,15 @@ export function propGhost(
 }
 
 // Bake the placed props into the runtime's entity list (kind:"prop" references).
-export function propEntities(props: readonly PlacedProp[]): BakedEntity[] {
-  return props.map((p) => ({ kind: 'prop', object_id: p.object_id, x: p.x, y: p.y }))
+// Any placed object whose `maskOf` yields a walk_mask (buildings and future
+// paintable kinds) gets it denormalized onto the entity, so runtime collision
+// (mapWalkable/entityBlockedFor read inline walk_mask) applies with no manual
+// painting. No maskOf → plain references, unchanged.
+export function propEntities(props: readonly PlacedProp[], maskOf?: MaskOf): BakedEntity[] {
+  return props.map((p) => {
+    const walk_mask = maskOf?.(p.object_id)
+    return { kind: 'prop', object_id: p.object_id, x: p.x, y: p.y, ...(walk_mask ? { walk_mask } : {}) }
+  })
 }
 
 // Reconstruct the editor's placed-prop list from a loaded map's entities: the
