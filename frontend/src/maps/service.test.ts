@@ -29,4 +29,10 @@ describe('decorationsBaked', () => {
     const b = decorationsBaked(null, [], [])
     expect(b).toEqual({ collision: null, entities: [] })
   })
+
+  it('denormalizes a placed object\'s walk_mask onto its baked entity (#166)', () => {
+    const maskOf = (id: number) => (id === 7 ? ['##', '##'] : undefined)
+    const b = decorationsBaked(null, [{ object_id: 7, x: 1, y: 1 }], [], maskOf)
+    expect(b.entities).toEqual([{ kind: 'prop', object_id: 7, x: 1, y: 1, walk_mask: ['##', '##'] }])
+  })
 })

@@ -58,6 +58,15 @@ describe('propEntities', () => {
   it('bakes each placed prop into a kind:"prop" object reference', () => {
     expect(propEntities([{ object_id: 7, x: 2, y: 2 }])).toEqual([{ kind: 'prop', object_id: 7, x: 2, y: 2 }])
   })
+
+  it('denormalizes an object\'s walk_mask onto the baked entity (#166), generic to any kind', () => {
+    const maskOf = (id: number) => (id === 7 ? ['##', '##'] : undefined)
+    expect(propEntities([{ object_id: 7, x: 2, y: 2 }, { object_id: 9, x: 0, y: 0 }], maskOf)).toEqual([
+      { kind: 'prop', object_id: 7, x: 2, y: 2, walk_mask: ['##', '##'] },
+      // Object 9 carries no mask → no field emitted → blocks nothing.
+      { kind: 'prop', object_id: 9, x: 0, y: 0 },
+    ])
+  })
 })
 
 describe('propsFromBaked', () => {

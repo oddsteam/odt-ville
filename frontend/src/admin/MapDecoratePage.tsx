@@ -6,7 +6,7 @@ import { TileObjectsService } from '../catalog/tileObjects/service.ts'
 import type { TileObject } from '../catalog/tileObjects/schema.ts'
 import { makeMask, setMaskCell, resizeMask, isMaskEmpty, type Mask } from './maskPaint.ts'
 import { groupPalette } from './paletteGroups.ts'
-import { placeProp, erasePropAt, propEntities, propsFromBaked, propGhost, type PlacedProp, type SizeOf } from '../maps/props.ts'
+import { placeProp, erasePropAt, propEntities, propsFromBaked, propGhost, type PlacedProp, type SizeOf, type MaskOf } from '../maps/props.ts'
 import MapPreview from './MapPreview.tsx'
 import { runEdge } from '../lib/runEdge.ts'
 import './admin.css'
@@ -25,7 +25,8 @@ export default function MapDecoratePage() {
   const [collision, setCollision] = useState<Mask>(() => makeMask(0, 0))
   const [props, setProps] = useState<PlacedProp[]>([])
   // The prop palette: the full saved objects (images ride along for thumbnails
-  // and the preview textures). Buildings are a later slice (#90) — not offered.
+  // and the preview textures). Includes buildings (#166) — placing one bakes
+  // its authoring walk_mask onto the entity so collision applies automatically.
   const [palette, setPalette] = useState<readonly TileObject[]>([])
   // What a grid click does: place/erase a prop, or paint/erase the collision mask.
   const [mode, setMode] = useState<'props' | 'collision'>('props')
@@ -48,6 +49,11 @@ export default function MapDecoratePage() {
     const o = byId.get(id)
     return { w: o?.footprint_w ?? 1, h: o?.footprint_h ?? 1 }
   }
+  // The authoring walk_mask a placed object carries, resolved from the catalog
+  // at save (#166): denormalized onto the baked entity so a placed building
+  // blocks its solid cells at runtime with no hand-painting. Null/absent → no
+  // mask emitted (plain prop or dangling reference).
+  const maskOf: MaskOf = (id) => byId.get(id)?.walk_mask ?? undefined
   // Entities this editor doesn't manage (legacy tileset/frame props, later
   // kinds) — kept on the preview and on save so decorating never wipes them.
   const otherEntities = useMemo(
@@ -76,7 +82,7 @@ export default function MapDecoratePage() {
     Promise.all([
       runEdge(MapsService.get(slug)),
       runEdge(TileObjectsService.list()).then((roster) =>
-        runEdge(TileObjectsService.getMany(roster.filter((o) => o.kind !== 'building').map((o) => o.id))),
+        runEdge(TileObjectsService.getMany(roster.map((o) => o.id))),
       ),
     ])
       .then(([m, objects]) => {
@@ -131,7 +137,7 @@ export default function MapDecoratePage() {
     setError(null)
     setSaved(false)
     try {
-      await runEdge(MapsService.saveDecorations(slug, isMaskEmpty(collision) ? null : collision, props, otherEntities))
+      await runEdge(MapsService.saveDecorations(slug, isMaskEmpty(collision) ? null : collision, props, otherEntities, maskOf))
       setSaved(true)
     } catch (e) {
       setError((e as Error).message)
