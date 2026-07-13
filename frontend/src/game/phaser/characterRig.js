@@ -3,7 +3,7 @@ import {
   POSTURE_KEYS,
   resolveSheetSrc,
   framesForFacing,
-} from '../../character/manifest.js'
+} from '../../kernel/characterManifest.js'
 
 // Shared "character rig" for the manifest-driven player (sprite-mapper). Both
 // TownScene and InteriorScene render the active character from the same sheet,
