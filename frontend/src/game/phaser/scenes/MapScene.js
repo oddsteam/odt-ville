@@ -1,7 +1,7 @@
 import Phaser from 'phaser'
 import { preloadBakedMap, renderBakedMap } from '../../../kernel/mapRenderer.ts'
 import { MOVE_MS } from '../../constants.js'
-import { spawnTile, mapWalkable, entityBlockedFor, entityEdgeBlockedFor, entityDoorCells, feetWorldXY } from '../mapWalk.ts'
+import { spawnTile, mapWalkable, entityBlockedFor, entityEdgeBlockedFor, entityDoorCells, entityLadderFor, feetWorldXY } from '../mapWalk.ts'
 import {
   CHAR_SHEET_KEY,
   preloadCharacter,
@@ -70,6 +70,12 @@ export default class MapScene extends Phaser.Scene {
     // rides stepTile's transition-aware veto rather than `walkable`. Legacy maps
     // carry no edge masks, so this reduces to "never blocked".
     this.edgeBlocked = entityEdgeBlockedFor(map.entities)
+    // Ladder posture (#54, #211): a placed object's walk-mask 'L' cell is
+    // walkable like a porch but swaps the walk loop for the climb posture while
+    // the avatar moves over it, mirroring town.ts's isLadderCell. Characters
+    // with no authored climb frames fall back to walk (handled in the rig).
+    // Legacy maps carry no 'L' cells, so this reduces to "never a ladder".
+    this.isLadder = entityLadderFor(map.entities)
     const feet = feetWorldXY(this.playerTile, this.usingManifest)
     if (this.usingManifest) {
       const render = this._charManifest.render || { originX: 0.5, originY: 1, scale: 1 }
@@ -134,7 +140,9 @@ export default class MapScene extends Phaser.Scene {
       duration: MOVE_MS,
       onStart: (t) => {
         this.playerTile = t
-        if (this.usingManifest) applyFacing(this.player, this.charDir, dir, true)
+        // Climb while stepping onto a placed object's ladder cell (#211); the
+        // rig falls back to walk when the character authors no climb frames.
+        if (this.usingManifest) applyFacing(this.player, this.charDir, dir, true, this.isLadder(t.x, t.y))
         else this.player.setTexture(`player.${dir}.0`)
       },
       onBlocked: () => {

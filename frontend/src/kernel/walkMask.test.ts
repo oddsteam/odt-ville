@@ -5,7 +5,7 @@
 // defined once.
 
 import { describe, expect, it } from 'vitest'
-import { maskCharWalkable, maskCharSolid } from './walkMask.ts'
+import { maskCharWalkable, maskCharSolid, maskCharLadder } from './walkMask.ts'
 
 describe('maskCharWalkable', () => {
   it('walks the porch/overhang/ladder chars, blocks the rest', () => {
@@ -28,5 +28,17 @@ describe('maskCharSolid', () => {
     expect(maskCharSolid('.')).toBe(false)
     expect(maskCharSolid('o')).toBe(false)
     expect(maskCharSolid(undefined)).toBe(false)
+  })
+})
+
+describe('maskCharLadder', () => {
+  it('marks only the explicit L as a ladder, everything else not', () => {
+    expect(maskCharLadder('L')).toBe(true)
+    // A ladder is walkable but distinct from a plain porch: only 'L' drives the
+    // climb posture, so no other walkable char reads as one.
+    expect(maskCharLadder('.')).toBe(false)
+    expect(maskCharLadder('o')).toBe(false)
+    expect(maskCharLadder('#')).toBe(false)
+    expect(maskCharLadder(undefined)).toBe(false)
   })
 })

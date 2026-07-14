@@ -4,7 +4,7 @@
 // into the shared stepTile loop.
 
 import { TILE, PLAYER_FEET_LIFT } from '../constants.js'
-import { maskCharSolid, EDGE_N, EDGE_E, EDGE_S, EDGE_W } from '../../kernel/walkMask.ts'
+import { maskCharSolid, maskCharLadder, EDGE_N, EDGE_E, EDGE_S, EDGE_W } from '../../kernel/walkMask.ts'
 import type { Tile } from './movement.ts'
 import type { BakedEntity } from '../../kernel/schema.ts'
 
@@ -45,6 +45,30 @@ export function entityBlockedFor(
     }
   }
   return (x, y) => blocked.has(`${x},${y}`)
+}
+
+// The ladder cells a set of placed entities contribute, as a fast predicate
+// (#54, #211). Each entity may carry a `walk_mask` footprint anchored at its
+// (x,y); a cell painted 'L' is walkable like a porch but drives the avatar's
+// climb posture (walk fallback when the character has no climb frames). Mirrors
+// town.ts `isLadderCell` for the authored-map path — MapScene reads it to decide
+// climb vs walk while moving. Generic: any placed object with 'L' cells
+// contributes, not just buildings. Entities with no walk mask contribute nothing.
+export function entityLadderFor(
+  entities: ReadonlyArray<BakedEntity>,
+): (x: number, y: number) => boolean {
+  const ladders = new Set<string>()
+  for (const e of entities) {
+    const mask = e.walk_mask
+    if (!mask) continue
+    for (let dy = 0; dy < mask.length; dy++) {
+      const row = mask[dy] ?? ''
+      for (let dx = 0; dx < row.length; dx++) {
+        if (maskCharLadder(row[dx])) ladders.add(`${e.x + dx},${e.y + dy}`)
+      }
+    }
+  }
+  return (x, y) => ladders.has(`${x},${y}`)
 }
 
 // The impassable cell borders a set of placed entities contribute, as a fast

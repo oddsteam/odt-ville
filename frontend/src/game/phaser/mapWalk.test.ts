@@ -5,7 +5,7 @@
 // none overrides another — so this locks all three failure modes.
 
 import { describe, expect, it } from 'vitest'
-import { mapWalkable, isMasked, entityBlockedFor, entityEdgeBlockedFor, entityDoorCells } from './mapWalk.ts'
+import { mapWalkable, isMasked, entityBlockedFor, entityEdgeBlockedFor, entityDoorCells, entityLadderFor } from './mapWalk.ts'
 import type { BakedEntity } from '../../kernel/schema.ts'
 
 const SIZE = { cols: 3, rows: 3 }
@@ -83,6 +83,40 @@ describe('entityBlockedFor', () => {
     expect(blocked(2, 1)).toBe(false) // '.' overhang
     expect(blocked(1, 2)).toBe(false)
     expect(blocked(0, 0)).toBe(false) // outside footprint
+  })
+})
+
+describe('entityLadderFor', () => {
+  it('marks no cell for entities with no walk-mask (today authored maps)', () => {
+    const prop: BakedEntity = { kind: 'prop', tileset: 't', frame: 0, x: 1, y: 1 }
+    const ladder = entityLadderFor([prop])
+    expect(ladder(1, 1)).toBe(false)
+  })
+
+  it('marks only L footprint cells anchored at the entity origin', () => {
+    // A 2×2 building at (1,1) with a ladder cell at footprint (1,0); the rest is
+    // solid/porch and must not read as a ladder.
+    const house: BakedEntity = {
+      kind: 'house',
+      tileset: 't',
+      frame: 0,
+      x: 1,
+      y: 1,
+      walk_mask: ['#L', '..'],
+    }
+    const ladder = entityLadderFor([house])
+    expect(ladder(2, 1)).toBe(true) // 'L' at footprint (1,0) → cell (2,1)
+    expect(ladder(1, 1)).toBe(false) // '#' solid
+    expect(ladder(1, 2)).toBe(false) // '.' porch
+    expect(ladder(0, 0)).toBe(false) // outside footprint
+  })
+
+  it('collects ladder cells from every placed object that paints them', () => {
+    const a: BakedEntity = { kind: 'prop', object_id: 1, x: 0, y: 0, walk_mask: ['L'] }
+    const b: BakedEntity = { kind: 'prop', object_id: 2, x: 5, y: 5, walk_mask: ['L'] }
+    const ladder = entityLadderFor([a, b])
+    expect(ladder(0, 0)).toBe(true)
+    expect(ladder(5, 5)).toBe(true)
   })
 })
 
