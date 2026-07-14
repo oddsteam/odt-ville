@@ -19,6 +19,21 @@ export function maskCharSolid(ch: string | undefined): boolean {
   return ch === '#'
 }
 
+// Does this cell char mean a ladder (#54)? Only an explicit 'L'. A ladder cell
+// is walkable like a porch but drives the avatar's climb posture, so this test
+// singles it out from the other walkable chars for the climb/walk decision.
+export function maskCharLadder(ch: string | undefined): boolean {
+  return ch === 'L'
+}
+
+// Does this cell char mean an overhang (#44)? Only an explicit 'o'. An overhang
+// cell is walkable like a porch but the object's art must draw *over* the avatar
+// (walk-under), so its depth stays below the object — this test singles it out
+// from the other walkable chars for the depth decision.
+export function maskCharOverhang(ch: string | undefined): boolean {
+  return ch === 'o'
+}
+
 // Is the cell (x,y) walkable within a w×h walk mask? The door cell is walkable
 // regardless of the mask; otherwise a walkable char marks walkable and anything
 // else (or out of bounds) is solid.

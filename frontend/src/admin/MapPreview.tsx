@@ -36,8 +36,16 @@ export default function MapPreview({
 }: {
   baked: BakedMap
   // The fetched tile objects the map's entities reference (ADR-0008), for the
-  // shared loader to register as obj.<id> textures. Absent on prop-less maps.
-  objects?: readonly { id: number; image: string; footprint_w: number; footprint_h: number }[]
+  // shared loader to register as obj.<id> textures. Absent on prop-less maps. An
+  // object's optional `fg_mask` (#168) rides along so the preview clips the same
+  // walk-behind overlay the runtime does — WYSIWYG foreground occlusion.
+  objects?: readonly {
+    id: number
+    image: string
+    footprint_w: number
+    footprint_h: number
+    fg_mask?: string | null
+  }[]
   // When set the preview *is* the editing surface (#143/#145): a press resolves
   // to the tile under the cursor and calls back. `onTileDown` fires on mousedown
   // (place a prop, start a collision stroke); `onTileDrag` fires as the cursor

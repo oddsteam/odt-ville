@@ -22,13 +22,23 @@ type Scene = any
 // is registered under this key so a stamp can address it.
 export const objectTextureKey = (id: number) => `obj.${id}`
 
+// Texture key for a referenced object's foreground mask (#36, #168): the PNG
+// whose alpha selects which of the object's pixels render *over* the avatar (the
+// walk-behind canopy). Keyed apart from the art so the map renderer can clip a
+// second, depth-bumped copy of `obj.<id>` to it. Only objects carrying an
+// `fg_mask` register one.
+export const objectForegroundKey = (id: number) => `objfg.${id}`
+
 // What the loader needs off a fetched tile object to register + size it. Both
-// producers hand it objects in this shape (a full TileObject satisfies it).
+// producers hand it objects in this shape (a full TileObject satisfies it). The
+// optional `fg_mask` is a PNG data URL (#36) present only on objects with a
+// walk-behind overlay — absent/null leaves the object art-only.
 export interface EntityObject {
   id: number
   image: string
   footprint_w: number
   footprint_h: number
+  fg_mask?: string | null
 }
 
 // A resolved stamp: a texture (key + frame) at a tile position, covering w×h
@@ -52,6 +62,16 @@ export interface EntityDraw {
 export function loadObjectTextures(scene: Scene, objects: readonly EntityObject[]) {
   for (const o of objects) {
     if (o?.image) scene.load.image(objectTextureKey(o.id), o.image)
+  }
+}
+
+// Register each object's foreground mask as an `objfg.<id>` texture (#168),
+// alongside its art. Best-effort per object (only objects with a walk-behind
+// overlay carry an `fg_mask`); call in preload() so renderBakedMap can clip a
+// masked copy over the avatar.
+export function loadObjectForegroundTextures(scene: Scene, objects: readonly EntityObject[]) {
+  for (const o of objects) {
+    if (o?.fg_mask) scene.load.image(objectForegroundKey(o.id), o.fg_mask)
   }
 }
 

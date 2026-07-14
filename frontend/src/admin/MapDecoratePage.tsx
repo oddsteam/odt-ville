@@ -6,7 +6,7 @@ import { TileObjectsService } from '../catalog/tileObjects/service.ts'
 import type { TileObject } from '../catalog/tileObjects/schema.ts'
 import { makeMask, setMaskCell, resizeMask, isMaskEmpty, type Mask } from './maskPaint.ts'
 import { groupPalette } from './paletteGroups.ts'
-import { placeProp, erasePropAt, propEntities, propsFromBaked, propGhost, type PlacedProp, type SizeOf, type MaskOf } from '../maps/props.ts'
+import { placeProp, erasePropAt, propEntities, propsFromBaked, propGhost, type PlacedProp, type SizeOf, type MaskOf, type DoorOf } from '../maps/props.ts'
 import MapPreview from './MapPreview.tsx'
 import { runEdge } from '../lib/runEdge.ts'
 import './admin.css'
@@ -54,6 +54,17 @@ export default function MapDecoratePage() {
   // blocks its solid cells at runtime with no hand-painting. Null/absent → no
   // mask emitted (plain prop or dangling reference).
   const maskOf: MaskOf = (id) => byId.get(id)?.walk_mask ?? undefined
+  // The finer authoring edge_mask a placed object carries (#207): fence-style
+  // border collision, denormalized onto the baked entity the same way so the
+  // authored-map runtime blocks the marked cell borders. Independent of walk_mask.
+  const edgeMaskOf: MaskOf = (id) => byId.get(id)?.edge_mask ?? undefined
+  // The door anchor a placed building carries (#29, #212): denormalized onto the
+  // baked entity as door_dx/door_dy so the authored-map runtime can identify the
+  // building's walkable entrance cell. Non-building / no door → no fields emitted.
+  const doorOf: DoorOf = (id) => {
+    const o = byId.get(id)
+    return o?.door_dx != null && o?.door_dy != null ? { dx: o.door_dx, dy: o.door_dy } : undefined
+  }
   // Entities this editor doesn't manage (legacy tileset/frame props, later
   // kinds) — kept on the preview and on save so decorating never wipes them.
   const otherEntities = useMemo(
@@ -137,7 +148,7 @@ export default function MapDecoratePage() {
     setError(null)
     setSaved(false)
     try {
-      await runEdge(MapsService.saveDecorations(slug, isMaskEmpty(collision) ? null : collision, props, otherEntities, maskOf))
+      await runEdge(MapsService.saveDecorations(slug, isMaskEmpty(collision) ? null : collision, props, otherEntities, maskOf, edgeMaskOf, doorOf))
       setSaved(true)
     } catch (e) {
       setError((e as Error).message)

@@ -13,7 +13,7 @@ import type { BakedEntity, BakedGround } from '../kernel/schema.ts'
 import { bakeSourceMap } from '../kernel/baker.ts'
 import type { SourceMap } from '../kernel/baker.ts'
 import { propEntities } from './props.ts'
-import type { PlacedProp, MaskOf } from './props.ts'
+import type { PlacedProp, MaskOf, DoorOf } from './props.ts'
 import type { TileCatalog } from '../kernel/tileCatalog.ts'
 
 const decodeOne = Schema.decodeUnknown(BakedMap)
@@ -115,10 +115,12 @@ export function decorationsBaked(
   props: readonly PlacedProp[],
   otherEntities: readonly BakedEntity[],
   maskOf?: MaskOf,
+  edgeMaskOf?: MaskOf,
+  doorOf?: DoorOf,
 ) {
   return {
     collision,
-    entities: [...otherEntities, ...propEntities(props, maskOf)],
+    entities: [...otherEntities, ...propEntities(props, maskOf, edgeMaskOf, doorOf)],
   }
 }
 
@@ -131,11 +133,15 @@ export const saveDecorations = (
   props: readonly PlacedProp[],
   otherEntities: readonly BakedEntity[],
   maskOf?: MaskOf,
+  edgeMaskOf?: MaskOf,
+  doorOf?: DoorOf,
 ): Effect.Effect<BakedMap, HttpError, Http> =>
   Effect.gen(function* () {
     const http = yield* Http
     const path = `/maps/${encodeURIComponent(slug)}`
-    const raw = yield* http.patch(path, { baked: decorationsBaked(collision, props, otherEntities, maskOf) })
+    const raw = yield* http.patch(path, {
+      baked: decorationsBaked(collision, props, otherEntities, maskOf, edgeMaskOf, doorOf),
+    })
     return yield* decode(path, decodeOne)(raw)
   })
 

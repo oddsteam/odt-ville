@@ -4,7 +4,8 @@
 // into the shared stepTile loop.
 
 import { TILE, PLAYER_FEET_LIFT } from '../constants.js'
-import { maskCharSolid } from '../../kernel/walkMask.ts'
+import { maskCharSolid, maskCharLadder, maskCharOverhang, EDGE_N, EDGE_E, EDGE_S, EDGE_W } from '../../kernel/walkMask.ts'
+import { MAP_ENTITY_DEPTH } from '../../kernel/mapRenderer.ts'
 import type { Tile } from './movement.ts'
 import type { BakedEntity } from '../../kernel/schema.ts'
 
@@ -45,6 +46,158 @@ export function entityBlockedFor(
     }
   }
   return (x, y) => blocked.has(`${x},${y}`)
+}
+
+// The ladder cells a set of placed entities contribute, as a fast predicate
+// (#54, #211). Each entity may carry a `walk_mask` footprint anchored at its
+// (x,y); a cell painted 'L' is walkable like a porch but drives the avatar's
+// climb posture (walk fallback when the character has no climb frames). Mirrors
+// town.ts `isLadderCell` for the authored-map path — MapScene reads it to decide
+// climb vs walk while moving. Generic: any placed object with 'L' cells
+// contributes, not just buildings. Entities with no walk mask contribute nothing.
+export function entityLadderFor(
+  entities: ReadonlyArray<BakedEntity>,
+): (x: number, y: number) => boolean {
+  const ladders = new Set<string>()
+  for (const e of entities) {
+    const mask = e.walk_mask
+    if (!mask) continue
+    for (let dy = 0; dy < mask.length; dy++) {
+      const row = mask[dy] ?? ''
+      for (let dx = 0; dx < row.length; dx++) {
+        if (maskCharLadder(row[dx])) ladders.add(`${e.x + dx},${e.y + dy}`)
+      }
+    }
+  }
+  return (x, y) => ladders.has(`${x},${y}`)
+}
+
+// The overhang cells a set of placed entities contribute, as a fast predicate
+// (#44, #210). Each entity may carry a `walk_mask` footprint anchored at its
+// (x,y); a cell painted 'o' is walkable like a porch but the object's art must
+// draw *over* the avatar (walk-under), so the avatar's depth stays below the
+// object while standing there. Mirrors town.ts `playerDepthAt`'s overhang branch
+// for the authored-map path — MapScene reads it to decide the avatar's depth.
+// Generic: any placed object with 'o' cells contributes, not just buildings.
+// Entities with no walk mask contribute nothing.
+export function entityOverhangFor(
+  entities: ReadonlyArray<BakedEntity>,
+): (x: number, y: number) => boolean {
+  const overhangs = new Set<string>()
+  for (const e of entities) {
+    const mask = e.walk_mask
+    if (!mask) continue
+    for (let dy = 0; dy < mask.length; dy++) {
+      const row = mask[dy] ?? ''
+      for (let dx = 0; dx < row.length; dx++) {
+        if (maskCharOverhang(row[dx])) overhangs.add(`${e.x + dx},${e.y + dy}`)
+      }
+    }
+  }
+  return (x, y) => overhangs.has(`${x},${y}`)
+}
+
+// The cells over which a placed object's foreground overlay covers the avatar
+// (#168) — its footprint (the walk-behind band). An object carrying an `fg_mask`
+// stamps a second, mask-clipped copy of its art at MAP_ENTITY_FG_DEPTH (just
+// above the base sprite); while the avatar stands on the footprint its depth
+// drops to MAP_PLAYER_FOREGROUND_DEPTH (between the two) so the masked canopy
+// covers it, and the avatar's default depth beats the overlay once south of the
+// footprint. The mask + footprint live on the object, not the entity, so this
+// takes the resolved objects. Mirrors town.ts's buildingOverlayDepth south band
+// for the flat-depth map path; generic across any object kind with a mask (#99).
+// Entities without an fg_mask contribute nothing.
+export function entityForegroundFor(
+  entities: ReadonlyArray<BakedEntity>,
+  objects: ReadonlyMap<number, { footprint_w: number; footprint_h: number; fg_mask?: string | null }>,
+): (x: number, y: number) => boolean {
+  const cells = new Set<string>()
+  for (const e of entities) {
+    if (e.object_id == null) continue
+    const obj = objects.get(e.object_id)
+    if (!obj?.fg_mask) continue
+    for (let dy = 0; dy < obj.footprint_h; dy++) {
+      for (let dx = 0; dx < obj.footprint_w; dx++) {
+        cells.add(`${e.x + dx},${e.y + dy}`)
+      }
+    }
+  }
+  return (x, y) => cells.has(`${x},${y}`)
+}
+
+// The authored-map avatar depth: above every placed entity's sprite (they sit at
+// MAP_ENTITY_DEPTH in mapRenderer) so the avatar walks over props by default,
+// but an overhang 'o' cell drops it just below that band so the object's art
+// draws over the avatar (walk-under, #210). A foreground cell (#168) drops it
+// only between the base art and the object's fg overlay (MAP_ENTITY_FG_DEPTH), so
+// the masked canopy covers the avatar while its body still draws over the base;
+// overhang wins when a cell is both (fully behind beats partly behind). Mirrors
+// town.ts's posture — the avatar depth is dynamic per step, the entity sprites
+// static. Both dropped depths stay above the ground stacks (< MAP_ENTITY_DEPTH
+// for overhang, > it for foreground) so only the object occludes, not the floor.
+export const MAP_PLAYER_DEPTH = 1000
+export const MAP_PLAYER_OVERHANG_DEPTH = MAP_ENTITY_DEPTH - 0.5
+export const MAP_PLAYER_FOREGROUND_DEPTH = MAP_ENTITY_DEPTH + 0.5
+export function mapPlayerDepth(isOverhang: boolean, isForeground = false): number {
+  if (isOverhang) return MAP_PLAYER_OVERHANG_DEPTH
+  if (isForeground) return MAP_PLAYER_FOREGROUND_DEPTH
+  return MAP_PLAYER_DEPTH
+}
+
+// The impassable cell borders a set of placed entities contribute, as a fast
+// transition-aware predicate (#53, #207). Each entity may carry an `edge_mask`
+// footprint anchored at its (x,y): one hex digit per cell packing the four
+// side bits (EDGE_N/E/S/W). Unlike `entityBlockedFor` (whole cells), this blocks
+// only the *border between* two otherwise-walkable cells. Transition-aware
+// companion to `entityBlockedFor`, mirroring town.ts `edgeBlocked`: the border
+// is blocked when EITHER adjacent cell's edge mask marks the shared side, so a
+// step is symmetric. Entities with no edge mask contribute nothing.
+export function entityEdgeBlockedFor(
+  entities: ReadonlyArray<BakedEntity>,
+): (fx: number, fy: number, tx: number, ty: number) => boolean {
+  // Accumulate the OR of every entity's side bits per cell — overlapping edge
+  // masks combine rather than the last one winning.
+  const bits = new Map<string, number>()
+  for (const e of entities) {
+    const mask = e.edge_mask
+    if (!mask) continue
+    for (let dy = 0; dy < mask.length; dy++) {
+      const row = mask[dy] ?? ''
+      for (let dx = 0; dx < row.length; dx++) {
+        const b = parseInt(row[dx], 16)
+        if (Number.isFinite(b) && b !== 0) {
+          const key = `${e.x + dx},${e.y + dy}`
+          bits.set(key, (bits.get(key) ?? 0) | b)
+        }
+      }
+    }
+  }
+  const sideAt = (x: number, y: number, bit: number) => ((bits.get(`${x},${y}`) ?? 0) & bit) !== 0
+  return (fx, fy, tx, ty) => {
+    const dx = tx - fx
+    const dy = ty - fy
+    const fromSide = dx === 1 ? EDGE_E : dx === -1 ? EDGE_W : dy === 1 ? EDGE_S : EDGE_N
+    const toSide = dx === 1 ? EDGE_W : dx === -1 ? EDGE_E : dy === 1 ? EDGE_N : EDGE_S
+    return sideAt(fx, fy, fromSide) || sideAt(tx, ty, toSide)
+  }
+}
+
+// The door cells a set of placed entities contribute, as a fast predicate (#29,
+// #212). Each entity may carry a door anchor (`door_dx`/`door_dy`) — the single
+// footprint cell that is its entrance, as an offset from (x,y). The resolved
+// door cell is (x + door_dx, y + door_dy). Mirrors town.ts's always-walkable
+// door: the authored-map runtime treats this cell as the walkable entry point,
+// overriding the entity's own walk-mask so a solid building is still enterable.
+// Entities with no door anchor contribute nothing.
+export function entityDoorCells(
+  entities: ReadonlyArray<BakedEntity>,
+): (x: number, y: number) => boolean {
+  const doors = new Set<string>()
+  for (const e of entities) {
+    if (e.door_dx == null || e.door_dy == null) continue
+    doors.add(`${e.x + e.door_dx},${e.y + e.door_dy}`)
+  }
+  return (x, y) => doors.has(`${x},${y}`)
 }
 
 // Where the player appears on an authored map. The map document carries no
