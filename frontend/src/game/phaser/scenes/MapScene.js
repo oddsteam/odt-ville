@@ -1,7 +1,7 @@
 import Phaser from 'phaser'
 import { preloadBakedMap, renderBakedMap } from '../../../kernel/mapRenderer.ts'
 import { MOVE_MS } from '../../constants.js'
-import { spawnTile, mapWalkable, entityBlockedFor, entityEdgeBlockedFor, entityDoorCells, entityLadderFor, feetWorldXY } from '../mapWalk.ts'
+import { spawnTile, mapWalkable, entityBlockedFor, entityEdgeBlockedFor, entityDoorCells, entityLadderFor, entityOverhangFor, mapPlayerDepth, feetWorldXY } from '../mapWalk.ts'
 import {
   CHAR_SHEET_KEY,
   preloadCharacter,
@@ -76,6 +76,12 @@ export default class MapScene extends Phaser.Scene {
     // with no authored climb frames fall back to walk (handled in the rig).
     // Legacy maps carry no 'L' cells, so this reduces to "never a ladder".
     this.isLadder = entityLadderFor(map.entities)
+    // Overhang depth (#44, #210): a placed object's walk-mask 'o' cell is walkable
+    // like a porch, but the object's art must draw *over* the avatar (walk-under),
+    // so while the avatar stands there its depth drops below the entity band —
+    // the authored-map companion to town.ts playerDepthAt's overhang branch.
+    // Legacy maps carry no 'o' cells, so this reduces to "never an overhang".
+    this.isOverhang = entityOverhangFor(map.entities)
     const feet = feetWorldXY(this.playerTile, this.usingManifest)
     if (this.usingManifest) {
       const render = this._charManifest.render || { originX: 0.5, originY: 1, scale: 1 }
@@ -91,9 +97,11 @@ export default class MapScene extends Phaser.Scene {
         // Same display size as TownScene (rpg-char-01 padding compensation).
         .setDisplaySize(96, 96)
     }
-    // Above every baked ground layer and entity (ground stacks carry small
-    // producer depths, entities sit at 1).
-    this.player.setDepth(1000)
+    // Above every baked ground layer and entity by default (ground stacks carry
+    // small producer depths, entities sit at MAP_ENTITY_DEPTH), except an
+    // overhang cell drops the avatar below the entity band so the object's art
+    // draws over it (walk-under, #210).
+    this.player.setDepth(mapPlayerDepth(this.isOverhang(this.playerTile.x, this.playerTile.y)))
 
     this.cursors = this.input.keyboard.createCursorKeys()
     this.wasd = this.input.keyboard.addKeys({
@@ -140,6 +148,10 @@ export default class MapScene extends Phaser.Scene {
       duration: MOVE_MS,
       onStart: (t) => {
         this.playerTile = t
+        // Drop below the entity band from the start of the step onto an overhang
+        // cell so the object's art overhangs the avatar the whole slide (#210),
+        // mirroring TownScene's per-step playerDepthAt.
+        this.player.setDepth(mapPlayerDepth(this.isOverhang(t.x, t.y)))
         // Climb while stepping onto a placed object's ladder cell (#211); the
         // rig falls back to walk when the character authors no climb frames.
         if (this.usingManifest) applyFacing(this.player, this.charDir, dir, true, this.isLadder(t.x, t.y))

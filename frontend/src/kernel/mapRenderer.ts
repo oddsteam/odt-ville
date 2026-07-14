@@ -31,6 +31,11 @@ export interface BakedDraw {
 // cell within it, exactly as the ground-tile renderer keys `gtset.<name>`.
 export const bakedTextureKey = (tileset: string) => `bake.${tileset}`
 
+// The depth every placed entity's sprite sits at (just above the ground stacks).
+// The avatar normally draws above this band; an overhang 'o' cell drops it just
+// below so the object's art overhangs the avatar (walk-under, #210).
+export const MAP_ENTITY_DEPTH = 1
+
 // What the draw list needs off a fetched object — structural, so the pure
 // part is testable without full TileObjects.
 export interface ObjectArt {
@@ -84,12 +89,12 @@ export function bakedDraws(
         y: e.y,
         key: objectTextureKey(e.object_id),
         frame: 0,
-        depth: 1,
+        depth: MAP_ENTITY_DEPTH,
         w: obj.footprint_w,
         h: obj.footprint_h,
       })
     } else if (e.tileset != null && e.frame != null) {
-      entities.push({ x: e.x, y: e.y, key: bakedTextureKey(e.tileset), frame: e.frame, depth: 1, w: 1, h: 1 })
+      entities.push({ x: e.x, y: e.y, key: bakedTextureKey(e.tileset), frame: e.frame, depth: MAP_ENTITY_DEPTH, w: 1, h: 1 })
     }
   }
   return [...ground, ...entities]

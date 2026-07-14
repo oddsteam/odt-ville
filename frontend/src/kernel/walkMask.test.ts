@@ -5,7 +5,7 @@
 // defined once.
 
 import { describe, expect, it } from 'vitest'
-import { maskCharWalkable, maskCharSolid, maskCharLadder } from './walkMask.ts'
+import { maskCharWalkable, maskCharSolid, maskCharLadder, maskCharOverhang } from './walkMask.ts'
 
 describe('maskCharWalkable', () => {
   it('walks the porch/overhang/ladder chars, blocks the rest', () => {
@@ -40,5 +40,17 @@ describe('maskCharLadder', () => {
     expect(maskCharLadder('o')).toBe(false)
     expect(maskCharLadder('#')).toBe(false)
     expect(maskCharLadder(undefined)).toBe(false)
+  })
+})
+
+describe('maskCharOverhang', () => {
+  it('marks only the explicit o as an overhang, everything else not', () => {
+    expect(maskCharOverhang('o')).toBe(true)
+    // An overhang is walkable but distinct from a plain porch: only 'o' keeps the
+    // avatar under the object's art (walk-under, #44), so no other char reads as one.
+    expect(maskCharOverhang('.')).toBe(false)
+    expect(maskCharOverhang('L')).toBe(false)
+    expect(maskCharOverhang('#')).toBe(false)
+    expect(maskCharOverhang(undefined)).toBe(false)
   })
 })

@@ -4,7 +4,8 @@
 // into the shared stepTile loop.
 
 import { TILE, PLAYER_FEET_LIFT } from '../constants.js'
-import { maskCharSolid, maskCharLadder, EDGE_N, EDGE_E, EDGE_S, EDGE_W } from '../../kernel/walkMask.ts'
+import { maskCharSolid, maskCharLadder, maskCharOverhang, EDGE_N, EDGE_E, EDGE_S, EDGE_W } from '../../kernel/walkMask.ts'
+import { MAP_ENTITY_DEPTH } from '../../kernel/mapRenderer.ts'
 import type { Tile } from './movement.ts'
 import type { BakedEntity } from '../../kernel/schema.ts'
 
@@ -69,6 +70,44 @@ export function entityLadderFor(
     }
   }
   return (x, y) => ladders.has(`${x},${y}`)
+}
+
+// The overhang cells a set of placed entities contribute, as a fast predicate
+// (#44, #210). Each entity may carry a `walk_mask` footprint anchored at its
+// (x,y); a cell painted 'o' is walkable like a porch but the object's art must
+// draw *over* the avatar (walk-under), so the avatar's depth stays below the
+// object while standing there. Mirrors town.ts `playerDepthAt`'s overhang branch
+// for the authored-map path — MapScene reads it to decide the avatar's depth.
+// Generic: any placed object with 'o' cells contributes, not just buildings.
+// Entities with no walk mask contribute nothing.
+export function entityOverhangFor(
+  entities: ReadonlyArray<BakedEntity>,
+): (x: number, y: number) => boolean {
+  const overhangs = new Set<string>()
+  for (const e of entities) {
+    const mask = e.walk_mask
+    if (!mask) continue
+    for (let dy = 0; dy < mask.length; dy++) {
+      const row = mask[dy] ?? ''
+      for (let dx = 0; dx < row.length; dx++) {
+        if (maskCharOverhang(row[dx])) overhangs.add(`${e.x + dx},${e.y + dy}`)
+      }
+    }
+  }
+  return (x, y) => overhangs.has(`${x},${y}`)
+}
+
+// The authored-map avatar depth: above every placed entity's sprite (they sit at
+// MAP_ENTITY_DEPTH in mapRenderer) so the avatar walks over props by default,
+// but an overhang 'o' cell drops it just below that band so the object's art
+// draws over the avatar (walk-under, #210). Mirrors town.ts's posture — the
+// avatar depth is dynamic per step, the entity sprites static. `on overhang`
+// stays above the ground stacks (< MAP_ENTITY_DEPTH) so the avatar is occluded
+// only by the object, not the floor.
+export const MAP_PLAYER_DEPTH = 1000
+export const MAP_PLAYER_OVERHANG_DEPTH = MAP_ENTITY_DEPTH - 0.5
+export function mapPlayerDepth(isOverhang: boolean): number {
+  return isOverhang ? MAP_PLAYER_OVERHANG_DEPTH : MAP_PLAYER_DEPTH
 }
 
 // The impassable cell borders a set of placed entities contribute, as a fast

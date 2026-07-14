@@ -5,7 +5,19 @@
 // none overrides another — so this locks all three failure modes.
 
 import { describe, expect, it } from 'vitest'
-import { mapWalkable, isMasked, entityBlockedFor, entityEdgeBlockedFor, entityDoorCells, entityLadderFor } from './mapWalk.ts'
+import {
+  mapWalkable,
+  isMasked,
+  entityBlockedFor,
+  entityEdgeBlockedFor,
+  entityDoorCells,
+  entityLadderFor,
+  entityOverhangFor,
+  mapPlayerDepth,
+  MAP_PLAYER_DEPTH,
+  MAP_PLAYER_OVERHANG_DEPTH,
+} from './mapWalk.ts'
+import { MAP_ENTITY_DEPTH } from '../../kernel/mapRenderer.ts'
 import type { BakedEntity } from '../../kernel/schema.ts'
 
 const SIZE = { cols: 3, rows: 3 }
@@ -117,6 +129,57 @@ describe('entityLadderFor', () => {
     const ladder = entityLadderFor([a, b])
     expect(ladder(0, 0)).toBe(true)
     expect(ladder(5, 5)).toBe(true)
+  })
+})
+
+describe('entityOverhangFor', () => {
+  it('marks no cell for entities with no walk-mask (today authored maps)', () => {
+    const prop: BakedEntity = { kind: 'prop', tileset: 't', frame: 0, x: 1, y: 1 }
+    const overhang = entityOverhangFor([prop])
+    expect(overhang(1, 1)).toBe(false)
+  })
+
+  it('marks only o footprint cells anchored at the entity origin', () => {
+    // A 2×2 building at (1,1) with an overhang cell at footprint (1,0); the rest
+    // is solid/porch/ladder and must not read as an overhang.
+    const house: BakedEntity = {
+      kind: 'house',
+      tileset: 't',
+      frame: 0,
+      x: 1,
+      y: 1,
+      walk_mask: ['#o', '.L'],
+    }
+    const overhang = entityOverhangFor([house])
+    expect(overhang(2, 1)).toBe(true) // 'o' at footprint (1,0) → cell (2,1)
+    expect(overhang(1, 1)).toBe(false) // '#' solid
+    expect(overhang(1, 2)).toBe(false) // '.' porch
+    expect(overhang(2, 2)).toBe(false) // 'L' ladder
+    expect(overhang(0, 0)).toBe(false) // outside footprint
+  })
+
+  it('collects overhang cells from every placed object that paints them', () => {
+    const a: BakedEntity = { kind: 'prop', object_id: 1, x: 0, y: 0, walk_mask: ['o'] }
+    const b: BakedEntity = { kind: 'prop', object_id: 2, x: 5, y: 5, walk_mask: ['o'] }
+    const overhang = entityOverhangFor([a, b])
+    expect(overhang(0, 0)).toBe(true)
+    expect(overhang(5, 5)).toBe(true)
+  })
+})
+
+describe('mapPlayerDepth', () => {
+  it('lifts the avatar above every placed entity off an overhang cell', () => {
+    // The avatar draws over props by default (walk-over).
+    expect(mapPlayerDepth(false)).toBe(MAP_PLAYER_DEPTH)
+    expect(mapPlayerDepth(false)).toBeGreaterThan(MAP_ENTITY_DEPTH)
+  })
+
+  it('drops the avatar below the entity band on an overhang cell (walk-under)', () => {
+    expect(mapPlayerDepth(true)).toBe(MAP_PLAYER_OVERHANG_DEPTH)
+    // Below the object's sprite so its art overhangs the avatar...
+    expect(mapPlayerDepth(true)).toBeLessThan(MAP_ENTITY_DEPTH)
+    // ...but still above the ground stacks (depth 0) so the floor doesn't occlude.
+    expect(mapPlayerDepth(true)).toBeGreaterThan(0)
   })
 })
 
