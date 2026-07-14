@@ -1,7 +1,7 @@
 import Phaser from 'phaser'
 import { preloadBakedMap, renderBakedMap } from '../../../kernel/mapRenderer.ts'
 import { MOVE_MS } from '../../constants.js'
-import { spawnTile, mapWalkable, entityBlockedFor, entityEdgeBlockedFor, feetWorldXY } from '../mapWalk.ts'
+import { spawnTile, mapWalkable, entityBlockedFor, entityEdgeBlockedFor, entityDoorCells, feetWorldXY } from '../mapWalk.ts'
 import {
   CHAR_SHEET_KEY,
   preloadCharacter,
@@ -54,10 +54,17 @@ export default class MapScene extends Phaser.Scene {
     this.charDir = rig.charDir
 
     this.playerTile = spawnTile(map)
+    // A placed building's door cell (#29, #212) is its walkable entrance: it
+    // overrides the entity's own walk-mask so a solid footprint is still
+    // enterable, mirroring town.ts's always-walkable door. Legacy/door-less maps
+    // yield no door cells, so this leaves walk-mask collision untouched.
+    this.doorCell = entityDoorCells(map.entities)
+    const entityBlocked = entityBlockedFor(map.entities)
     // Walkability = in bounds ∧ not in the collision mask ∧ not blocked by a
-    // placed entity's walk-mask (#131). Legacy maps carry no `collision` and only
-    // props (no walk_mask), so this reduces to the in-bounds tracer rule for them.
-    this.walkable = mapWalkable(map, map.collision, entityBlockedFor(map.entities))
+    // placed entity's walk-mask (#131), except the door cell is always walkable.
+    // Legacy maps carry no `collision` and only props (no walk_mask), so this
+    // reduces to the in-bounds tracer rule for them.
+    this.walkable = mapWalkable(map, map.collision, (x, y) => entityBlocked(x, y) && !this.doorCell(x, y))
     // Fence-style border collision (#207): a placed entity's edge_mask blocks the
     // border *between* two otherwise-walkable cells (not the cell itself), so it
     // rides stepTile's transition-aware veto rather than `walkable`. Legacy maps

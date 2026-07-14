@@ -47,6 +47,13 @@ export const BakedEntity = Schema.Struct({
   // (a fence, a low wall) rather than the cell itself — finer than walk_mask.
   // Absent on today's prop-only authored maps, so optional.
   edge_mask: Schema.optional(Schema.Array(Schema.String)),
+  // Optional per-entity door anchor (#29, #212): the single footprint cell that
+  // is the object's entrance, as an offset from (x,y). Denormalized at bake so
+  // the authored-map runtime can identify a placed building's walkable entry
+  // cell (resolved cell = (x + door_dx, y + door_dy)), mirroring town.ts's
+  // always-walkable door. Only a building carries one, so optional.
+  door_dx: Schema.optional(Schema.Number),
+  door_dy: Schema.optional(Schema.Number),
 })
 export type BakedEntity = Schema.Schema.Type<typeof BakedEntity>
 

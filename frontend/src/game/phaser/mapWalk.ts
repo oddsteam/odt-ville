@@ -85,6 +85,24 @@ export function entityEdgeBlockedFor(
   }
 }
 
+// The door cells a set of placed entities contribute, as a fast predicate (#29,
+// #212). Each entity may carry a door anchor (`door_dx`/`door_dy`) — the single
+// footprint cell that is its entrance, as an offset from (x,y). The resolved
+// door cell is (x + door_dx, y + door_dy). Mirrors town.ts's always-walkable
+// door: the authored-map runtime treats this cell as the walkable entry point,
+// overriding the entity's own walk-mask so a solid building is still enterable.
+// Entities with no door anchor contribute nothing.
+export function entityDoorCells(
+  entities: ReadonlyArray<BakedEntity>,
+): (x: number, y: number) => boolean {
+  const doors = new Set<string>()
+  for (const e of entities) {
+    if (e.door_dx == null || e.door_dy == null) continue
+    doors.add(`${e.x + e.door_dx},${e.y + e.door_dy}`)
+  }
+  return (x, y) => doors.has(`${x},${y}`)
+}
+
 // Where the player appears on an authored map. The map document carries no
 // spawn point yet, so the tracer starts at the grid centre (flooring keeps it
 // on-grid for even sizes: 8×6 → (4,3)).

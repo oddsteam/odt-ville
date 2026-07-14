@@ -5,7 +5,7 @@
 // none overrides another — so this locks all three failure modes.
 
 import { describe, expect, it } from 'vitest'
-import { mapWalkable, isMasked, entityBlockedFor, entityEdgeBlockedFor } from './mapWalk.ts'
+import { mapWalkable, isMasked, entityBlockedFor, entityEdgeBlockedFor, entityDoorCells } from './mapWalk.ts'
 import type { BakedEntity } from '../../kernel/schema.ts'
 
 const SIZE = { cols: 3, rows: 3 }
@@ -120,5 +120,43 @@ describe('entityEdgeBlockedFor', () => {
     const fence: BakedEntity = { kind: 'prop', tileset: 't', frame: 0, x: 0, y: 0, edge_mask: ['. '] }
     const edge = entityEdgeBlockedFor([fence])
     expect(edge(0, 0, 1, 0)).toBe(false)
+  })
+})
+
+describe('entityDoorCells', () => {
+  it('marks no cell for entities with no door anchor (today authored maps)', () => {
+    const prop: BakedEntity = { kind: 'prop', tileset: 't', frame: 0, x: 1, y: 1 }
+    const door = entityDoorCells([prop])
+    expect(door(1, 1)).toBe(false)
+  })
+
+  it('resolves the door cell at the entity (x,y) plus the anchor offset', () => {
+    // A building at (2,2) whose entrance is one column right, top row (dx=1,dy=0).
+    const house: BakedEntity = { kind: 'prop', object_id: 7, x: 2, y: 2, door_dx: 1, door_dy: 0 }
+    const door = entityDoorCells([house])
+    expect(door(3, 2)).toBe(true) // (2+1, 2+0)
+    expect(door(2, 2)).toBe(false) // footprint corner, not the door
+  })
+
+  it('makes the door cell walkable even though its walk-mask marks it solid', () => {
+    // A solid 2×2 building whose bottom-centre-ish cell (dx=1,dy=1) is the door.
+    const house: BakedEntity = { kind: 'prop', object_id: 7, x: 0, y: 0, walk_mask: ['##', '##'], door_dx: 1, door_dy: 1 }
+    const blocked = entityBlockedFor([house])
+    const door = entityDoorCells([house])
+    // The walk-mask alone would block the whole footprint...
+    expect(blocked(1, 1)).toBe(true)
+    // ...but the runtime composes the door override the same way MapScene does,
+    // so the entrance cell walks while the rest of the footprint stays solid.
+    const walkable = mapWalkable({ cols: 3, rows: 3 }, undefined, (x, y) => blocked(x, y) && !door(x, y))
+    expect(walkable(1, 1)).toBe(true) // door cell — enterable
+    expect(walkable(0, 0)).toBe(false) // solid footprint — blocked
+  })
+
+  it('collects door cells from every entity that carries an anchor', () => {
+    const a: BakedEntity = { kind: 'prop', object_id: 1, x: 0, y: 0, door_dx: 0, door_dy: 1 }
+    const b: BakedEntity = { kind: 'prop', object_id: 2, x: 5, y: 5, door_dx: 2, door_dy: 0 }
+    const door = entityDoorCells([a, b])
+    expect(door(0, 1)).toBe(true)
+    expect(door(7, 5)).toBe(true)
   })
 })
