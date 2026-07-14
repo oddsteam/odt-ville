@@ -13,11 +13,13 @@ import {
   entityDoorCells,
   entityLadderFor,
   entityOverhangFor,
+  entityForegroundFor,
   mapPlayerDepth,
   MAP_PLAYER_DEPTH,
   MAP_PLAYER_OVERHANG_DEPTH,
+  MAP_PLAYER_FOREGROUND_DEPTH,
 } from './mapWalk.ts'
-import { MAP_ENTITY_DEPTH } from '../../kernel/mapRenderer.ts'
+import { MAP_ENTITY_DEPTH, MAP_ENTITY_FG_DEPTH } from '../../kernel/mapRenderer.ts'
 import type { BakedEntity } from '../../kernel/schema.ts'
 
 const SIZE = { cols: 3, rows: 3 }
@@ -167,6 +169,50 @@ describe('entityOverhangFor', () => {
   })
 })
 
+describe('entityForegroundFor', () => {
+  const OBJ = (fg: string | null) => ({ footprint_w: 2, footprint_h: 2, fg_mask: fg })
+
+  it('marks no cell when the referenced object carries no fg mask', () => {
+    const e = { kind: 'prop', object_id: 1, x: 1, y: 1 }
+    const fg = entityForegroundFor([e], new Map([[1, OBJ(null)]]))
+    expect(fg(1, 1)).toBe(false)
+    expect(fg(2, 2)).toBe(false)
+  })
+
+  it("marks the full footprint of an fg-masked object anchored at the entity origin", () => {
+    // A 2×2 tree with foliage at (1,1); the whole footprint is the walk-behind
+    // band (the avatar drops under the masked canopy there).
+    const e = { kind: 'prop', object_id: 7, x: 1, y: 1 }
+    const fg = entityForegroundFor([e], new Map([[7, OBJ('data:png')]]))
+    expect(fg(1, 1)).toBe(true)
+    expect(fg(2, 1)).toBe(true)
+    expect(fg(1, 2)).toBe(true)
+    expect(fg(2, 2)).toBe(true)
+    expect(fg(0, 0)).toBe(false) // outside footprint
+    expect(fg(3, 3)).toBe(false)
+  })
+
+  it('ignores legacy tileset entities and dangling object references', () => {
+    const legacy = { kind: 'prop', tileset: 't', frame: 0, x: 0, y: 0 }
+    const dangling = { kind: 'prop', object_id: 99, x: 4, y: 4 }
+    const fg = entityForegroundFor([legacy, dangling], new Map([[7, OBJ('data:png')]]))
+    expect(fg(0, 0)).toBe(false)
+    expect(fg(4, 4)).toBe(false)
+  })
+
+  it('collects foreground cells from every fg-masked object placed', () => {
+    const a = { kind: 'prop', object_id: 1, x: 0, y: 0 }
+    const b = { kind: 'prop', object_id: 2, x: 5, y: 5 }
+    const objects = new Map([
+      [1, { footprint_w: 1, footprint_h: 1, fg_mask: 'a' }],
+      [2, { footprint_w: 1, footprint_h: 1, fg_mask: 'b' }],
+    ])
+    const fg = entityForegroundFor([a, b], objects)
+    expect(fg(0, 0)).toBe(true)
+    expect(fg(5, 5)).toBe(true)
+  })
+})
+
 describe('mapPlayerDepth', () => {
   it('lifts the avatar above every placed entity off an overhang cell', () => {
     // The avatar draws over props by default (walk-over).
@@ -180,6 +226,24 @@ describe('mapPlayerDepth', () => {
     expect(mapPlayerDepth(true)).toBeLessThan(MAP_ENTITY_DEPTH)
     // ...but still above the ground stacks (depth 0) so the floor doesn't occlude.
     expect(mapPlayerDepth(true)).toBeGreaterThan(0)
+  })
+
+  it('slots the avatar between the base art and the fg overlay on a foreground cell (#168)', () => {
+    const d = mapPlayerDepth(false, true)
+    expect(d).toBe(MAP_PLAYER_FOREGROUND_DEPTH)
+    // Above the object's base sprite so the avatar's body still draws over it...
+    expect(d).toBeGreaterThan(MAP_ENTITY_DEPTH)
+    // ...but below the fg overlay so the masked canopy covers the avatar...
+    expect(d).toBeLessThan(MAP_ENTITY_FG_DEPTH)
+    // ...and below the default depth, so stepping south of the footprint (no
+    // longer a foreground cell) lifts the avatar back over the overlay.
+    expect(d).toBeLessThan(MAP_PLAYER_DEPTH)
+  })
+
+  it('lets overhang win when a cell is both overhang and foreground', () => {
+    // Fully-behind (overhang) beats partly-behind (foreground): the object's
+    // whole art overhangs the avatar, not just its masked canopy.
+    expect(mapPlayerDepth(true, true)).toBe(MAP_PLAYER_OVERHANG_DEPTH)
   })
 })
 

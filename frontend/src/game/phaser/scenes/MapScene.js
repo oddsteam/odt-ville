@@ -1,7 +1,7 @@
 import Phaser from 'phaser'
 import { preloadBakedMap, renderBakedMap } from '../../../kernel/mapRenderer.ts'
 import { MOVE_MS } from '../../constants.js'
-import { spawnTile, mapWalkable, entityBlockedFor, entityEdgeBlockedFor, entityDoorCells, entityLadderFor, entityOverhangFor, mapPlayerDepth, feetWorldXY } from '../mapWalk.ts'
+import { spawnTile, mapWalkable, entityBlockedFor, entityEdgeBlockedFor, entityDoorCells, entityLadderFor, entityOverhangFor, entityForegroundFor, mapPlayerDepth, feetWorldXY } from '../mapWalk.ts'
 import {
   CHAR_SHEET_KEY,
   preloadCharacter,
@@ -82,6 +82,15 @@ export default class MapScene extends Phaser.Scene {
     // the authored-map companion to town.ts playerDepthAt's overhang branch.
     // Legacy maps carry no 'o' cells, so this reduces to "never an overhang".
     this.isOverhang = entityOverhangFor(map.entities)
+    // Foreground overlay occlusion (#36, #168): a placed object carrying an
+    // fg_mask stamps a masked copy of its art over the avatar's band (see
+    // mapRenderer). While the avatar stands on that object's footprint its depth
+    // drops between the base art and the overlay so the masked canopy covers it,
+    // but its default depth beats the overlay once south of the footprint. The
+    // mask + footprint live on the object, so this reads the resolved objects.
+    // Legacy/mask-less maps yield no foreground cells — a no-op here.
+    const objectsById = new Map((this._bakedObjects || []).map((o) => [o.id, o]))
+    this.isForeground = entityForegroundFor(map.entities, objectsById)
     const feet = feetWorldXY(this.playerTile, this.usingManifest)
     if (this.usingManifest) {
       const render = this._charManifest.render || { originX: 0.5, originY: 1, scale: 1 }
@@ -101,7 +110,12 @@ export default class MapScene extends Phaser.Scene {
     // small producer depths, entities sit at MAP_ENTITY_DEPTH), except an
     // overhang cell drops the avatar below the entity band so the object's art
     // draws over it (walk-under, #210).
-    this.player.setDepth(mapPlayerDepth(this.isOverhang(this.playerTile.x, this.playerTile.y)))
+    this.player.setDepth(
+      mapPlayerDepth(
+        this.isOverhang(this.playerTile.x, this.playerTile.y),
+        this.isForeground(this.playerTile.x, this.playerTile.y),
+      ),
+    )
 
     this.cursors = this.input.keyboard.createCursorKeys()
     this.wasd = this.input.keyboard.addKeys({
@@ -150,8 +164,10 @@ export default class MapScene extends Phaser.Scene {
         this.playerTile = t
         // Drop below the entity band from the start of the step onto an overhang
         // cell so the object's art overhangs the avatar the whole slide (#210),
-        // mirroring TownScene's per-step playerDepthAt.
-        this.player.setDepth(mapPlayerDepth(this.isOverhang(t.x, t.y)))
+        // or between the base art and the fg overlay onto a foreground cell so the
+        // masked canopy covers the avatar (#168), mirroring TownScene's per-step
+        // playerDepthAt.
+        this.player.setDepth(mapPlayerDepth(this.isOverhang(t.x, t.y), this.isForeground(t.x, t.y)))
         // Climb while stepping onto a placed object's ladder cell (#211); the
         // rig falls back to walk when the character authors no climb frames.
         if (this.usingManifest) applyFacing(this.player, this.charDir, dir, true, this.isLadder(t.x, t.y))

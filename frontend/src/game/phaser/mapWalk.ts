@@ -97,17 +97,51 @@ export function entityOverhangFor(
   return (x, y) => overhangs.has(`${x},${y}`)
 }
 
+// The cells over which a placed object's foreground overlay covers the avatar
+// (#168) — its footprint (the walk-behind band). An object carrying an `fg_mask`
+// stamps a second, mask-clipped copy of its art at MAP_ENTITY_FG_DEPTH (just
+// above the base sprite); while the avatar stands on the footprint its depth
+// drops to MAP_PLAYER_FOREGROUND_DEPTH (between the two) so the masked canopy
+// covers it, and the avatar's default depth beats the overlay once south of the
+// footprint. The mask + footprint live on the object, not the entity, so this
+// takes the resolved objects. Mirrors town.ts's buildingOverlayDepth south band
+// for the flat-depth map path; generic across any object kind with a mask (#99).
+// Entities without an fg_mask contribute nothing.
+export function entityForegroundFor(
+  entities: ReadonlyArray<BakedEntity>,
+  objects: ReadonlyMap<number, { footprint_w: number; footprint_h: number; fg_mask?: string | null }>,
+): (x: number, y: number) => boolean {
+  const cells = new Set<string>()
+  for (const e of entities) {
+    if (e.object_id == null) continue
+    const obj = objects.get(e.object_id)
+    if (!obj?.fg_mask) continue
+    for (let dy = 0; dy < obj.footprint_h; dy++) {
+      for (let dx = 0; dx < obj.footprint_w; dx++) {
+        cells.add(`${e.x + dx},${e.y + dy}`)
+      }
+    }
+  }
+  return (x, y) => cells.has(`${x},${y}`)
+}
+
 // The authored-map avatar depth: above every placed entity's sprite (they sit at
 // MAP_ENTITY_DEPTH in mapRenderer) so the avatar walks over props by default,
 // but an overhang 'o' cell drops it just below that band so the object's art
-// draws over the avatar (walk-under, #210). Mirrors town.ts's posture — the
-// avatar depth is dynamic per step, the entity sprites static. `on overhang`
-// stays above the ground stacks (< MAP_ENTITY_DEPTH) so the avatar is occluded
-// only by the object, not the floor.
+// draws over the avatar (walk-under, #210). A foreground cell (#168) drops it
+// only between the base art and the object's fg overlay (MAP_ENTITY_FG_DEPTH), so
+// the masked canopy covers the avatar while its body still draws over the base;
+// overhang wins when a cell is both (fully behind beats partly behind). Mirrors
+// town.ts's posture — the avatar depth is dynamic per step, the entity sprites
+// static. Both dropped depths stay above the ground stacks (< MAP_ENTITY_DEPTH
+// for overhang, > it for foreground) so only the object occludes, not the floor.
 export const MAP_PLAYER_DEPTH = 1000
 export const MAP_PLAYER_OVERHANG_DEPTH = MAP_ENTITY_DEPTH - 0.5
-export function mapPlayerDepth(isOverhang: boolean): number {
-  return isOverhang ? MAP_PLAYER_OVERHANG_DEPTH : MAP_PLAYER_DEPTH
+export const MAP_PLAYER_FOREGROUND_DEPTH = MAP_ENTITY_DEPTH + 0.5
+export function mapPlayerDepth(isOverhang: boolean, isForeground = false): number {
+  if (isOverhang) return MAP_PLAYER_OVERHANG_DEPTH
+  if (isForeground) return MAP_PLAYER_FOREGROUND_DEPTH
+  return MAP_PLAYER_DEPTH
 }
 
 // The impassable cell borders a set of placed entities contribute, as a fast
