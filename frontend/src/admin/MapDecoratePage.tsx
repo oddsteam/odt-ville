@@ -54,6 +54,10 @@ export default function MapDecoratePage() {
   // blocks its solid cells at runtime with no hand-painting. Null/absent → no
   // mask emitted (plain prop or dangling reference).
   const maskOf: MaskOf = (id) => byId.get(id)?.walk_mask ?? undefined
+  // The finer authoring edge_mask a placed object carries (#207): fence-style
+  // border collision, denormalized onto the baked entity the same way so the
+  // authored-map runtime blocks the marked cell borders. Independent of walk_mask.
+  const edgeMaskOf: MaskOf = (id) => byId.get(id)?.edge_mask ?? undefined
   // Entities this editor doesn't manage (legacy tileset/frame props, later
   // kinds) — kept on the preview and on save so decorating never wipes them.
   const otherEntities = useMemo(
@@ -137,7 +141,7 @@ export default function MapDecoratePage() {
     setError(null)
     setSaved(false)
     try {
-      await runEdge(MapsService.saveDecorations(slug, isMaskEmpty(collision) ? null : collision, props, otherEntities, maskOf))
+      await runEdge(MapsService.saveDecorations(slug, isMaskEmpty(collision) ? null : collision, props, otherEntities, maskOf, edgeMaskOf))
       setSaved(true)
     } catch (e) {
       setError((e as Error).message)

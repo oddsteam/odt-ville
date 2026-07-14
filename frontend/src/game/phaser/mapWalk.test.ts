@@ -5,7 +5,7 @@
 // none overrides another — so this locks all three failure modes.
 
 import { describe, expect, it } from 'vitest'
-import { mapWalkable, isMasked, entityBlockedFor } from './mapWalk.ts'
+import { mapWalkable, isMasked, entityBlockedFor, entityEdgeBlockedFor } from './mapWalk.ts'
 import type { BakedEntity } from '../../kernel/schema.ts'
 
 const SIZE = { cols: 3, rows: 3 }
@@ -83,5 +83,42 @@ describe('entityBlockedFor', () => {
     expect(blocked(2, 1)).toBe(false) // '.' overhang
     expect(blocked(1, 2)).toBe(false)
     expect(blocked(0, 0)).toBe(false) // outside footprint
+  })
+})
+
+describe('entityEdgeBlockedFor', () => {
+  it('blocks no border for entities with no edge mask (today authored maps)', () => {
+    const prop: BakedEntity = { kind: 'prop', tileset: 't', frame: 0, x: 1, y: 1 }
+    const edge = entityEdgeBlockedFor([prop])
+    expect(edge(1, 1, 2, 1)).toBe(false)
+  })
+
+  it('blocks the marked border while leaving the cell itself walkable', () => {
+    // A 1×1 fence at (1,1) whose east side is impassable (EDGE_E = 2 → hex '2').
+    const fence: BakedEntity = { kind: 'prop', tileset: 't', frame: 0, x: 1, y: 1, edge_mask: ['2'] }
+    const edge = entityEdgeBlockedFor([fence])
+    // Stepping east across the fenced border is blocked...
+    expect(edge(1, 1, 2, 1)).toBe(true)
+    // ...symmetrically, stepping west back over it is blocked too.
+    expect(edge(2, 1, 1, 1)).toBe(true)
+    // Other directions across the same cell are free (only the east side marked).
+    expect(edge(1, 1, 1, 0)).toBe(false)
+    expect(edge(1, 1, 1, 2)).toBe(false)
+    // The cell itself stays walkable — entityBlockedFor governs that, not edges.
+    expect(entityBlockedFor([fence])(1, 1)).toBe(false)
+  })
+
+  it('is symmetric when only the neighbour marks the shared side', () => {
+    // Cell (2,1) marks its west side impassable (EDGE_W = 8 → hex '8').
+    const wall: BakedEntity = { kind: 'prop', tileset: 't', frame: 0, x: 2, y: 1, edge_mask: ['8'] }
+    const edge = entityEdgeBlockedFor([wall])
+    expect(edge(1, 1, 2, 1)).toBe(true) // from-cell has no mask, to-cell's west blocks
+    expect(edge(2, 1, 1, 1)).toBe(true)
+  })
+
+  it('reads unmasked cells (space / dot) as free borders', () => {
+    const fence: BakedEntity = { kind: 'prop', tileset: 't', frame: 0, x: 0, y: 0, edge_mask: ['. '] }
+    const edge = entityEdgeBlockedFor([fence])
+    expect(edge(0, 0, 1, 0)).toBe(false)
   })
 })

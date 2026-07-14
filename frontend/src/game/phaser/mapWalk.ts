@@ -4,7 +4,7 @@
 // into the shared stepTile loop.
 
 import { TILE, PLAYER_FEET_LIFT } from '../constants.js'
-import { maskCharSolid } from '../../kernel/walkMask.ts'
+import { maskCharSolid, EDGE_N, EDGE_E, EDGE_S, EDGE_W } from '../../kernel/walkMask.ts'
 import type { Tile } from './movement.ts'
 import type { BakedEntity } from '../../kernel/schema.ts'
 
@@ -45,6 +45,44 @@ export function entityBlockedFor(
     }
   }
   return (x, y) => blocked.has(`${x},${y}`)
+}
+
+// The impassable cell borders a set of placed entities contribute, as a fast
+// transition-aware predicate (#53, #207). Each entity may carry an `edge_mask`
+// footprint anchored at its (x,y): one hex digit per cell packing the four
+// side bits (EDGE_N/E/S/W). Unlike `entityBlockedFor` (whole cells), this blocks
+// only the *border between* two otherwise-walkable cells. Transition-aware
+// companion to `entityBlockedFor`, mirroring town.ts `edgeBlocked`: the border
+// is blocked when EITHER adjacent cell's edge mask marks the shared side, so a
+// step is symmetric. Entities with no edge mask contribute nothing.
+export function entityEdgeBlockedFor(
+  entities: ReadonlyArray<BakedEntity>,
+): (fx: number, fy: number, tx: number, ty: number) => boolean {
+  // Accumulate the OR of every entity's side bits per cell — overlapping edge
+  // masks combine rather than the last one winning.
+  const bits = new Map<string, number>()
+  for (const e of entities) {
+    const mask = e.edge_mask
+    if (!mask) continue
+    for (let dy = 0; dy < mask.length; dy++) {
+      const row = mask[dy] ?? ''
+      for (let dx = 0; dx < row.length; dx++) {
+        const b = parseInt(row[dx], 16)
+        if (Number.isFinite(b) && b !== 0) {
+          const key = `${e.x + dx},${e.y + dy}`
+          bits.set(key, (bits.get(key) ?? 0) | b)
+        }
+      }
+    }
+  }
+  const sideAt = (x: number, y: number, bit: number) => ((bits.get(`${x},${y}`) ?? 0) & bit) !== 0
+  return (fx, fy, tx, ty) => {
+    const dx = tx - fx
+    const dy = ty - fy
+    const fromSide = dx === 1 ? EDGE_E : dx === -1 ? EDGE_W : dy === 1 ? EDGE_S : EDGE_N
+    const toSide = dx === 1 ? EDGE_W : dx === -1 ? EDGE_E : dy === 1 ? EDGE_N : EDGE_S
+    return sideAt(fx, fy, fromSide) || sideAt(tx, ty, toSide)
+  }
 }
 
 // Where the player appears on an authored map. The map document carries no

@@ -67,6 +67,23 @@ describe('propEntities', () => {
       { kind: 'prop', object_id: 9, x: 0, y: 0 },
     ])
   })
+
+  it('denormalizes an object\'s edge_mask onto the baked entity (#207), independent of walk_mask', () => {
+    const maskOf = (id: number) => (id === 7 ? ['##', '##'] : undefined)
+    const edgeMaskOf = (id: number) => (id === 7 ? ['22', '00'] : undefined)
+    expect(propEntities([{ object_id: 7, x: 2, y: 2 }, { object_id: 9, x: 0, y: 0 }], maskOf, edgeMaskOf)).toEqual([
+      { kind: 'prop', object_id: 7, x: 2, y: 2, walk_mask: ['##', '##'], edge_mask: ['22', '00'] },
+      // Object 9 carries neither mask → plain reference.
+      { kind: 'prop', object_id: 9, x: 0, y: 0 },
+    ])
+  })
+
+  it('carries an edge_mask even when the object has no walk_mask', () => {
+    const edgeMaskOf = (id: number) => (id === 5 ? ['2'] : undefined)
+    expect(propEntities([{ object_id: 5, x: 1, y: 1 }], undefined, edgeMaskOf)).toEqual([
+      { kind: 'prop', object_id: 5, x: 1, y: 1, edge_mask: ['2'] },
+    ])
+  })
 })
 
 describe('propsFromBaked', () => {

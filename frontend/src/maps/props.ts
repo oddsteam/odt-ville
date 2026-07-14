@@ -111,11 +111,22 @@ export function propGhost(
 // Any placed object whose `maskOf` yields a walk_mask (buildings and future
 // paintable kinds) gets it denormalized onto the entity, so runtime collision
 // (mapWalkable/entityBlockedFor read inline walk_mask) applies with no manual
-// painting. No maskOf → plain references, unchanged.
-export function propEntities(props: readonly PlacedProp[], maskOf?: MaskOf): BakedEntity[] {
+// painting. `edgeMaskOf` is the finer companion (#207): the object's edge_mask
+// (fence-style border collision, read by entityEdgeBlockedFor) — independent of
+// walk_mask, so an object may carry either, both, or neither. No lookups → plain
+// references, unchanged.
+export function propEntities(props: readonly PlacedProp[], maskOf?: MaskOf, edgeMaskOf?: MaskOf): BakedEntity[] {
   return props.map((p) => {
     const walk_mask = maskOf?.(p.object_id)
-    return { kind: 'prop', object_id: p.object_id, x: p.x, y: p.y, ...(walk_mask ? { walk_mask } : {}) }
+    const edge_mask = edgeMaskOf?.(p.object_id)
+    return {
+      kind: 'prop',
+      object_id: p.object_id,
+      x: p.x,
+      y: p.y,
+      ...(walk_mask ? { walk_mask } : {}),
+      ...(edge_mask ? { edge_mask } : {}),
+    }
   })
 }
 

@@ -115,10 +115,11 @@ export function decorationsBaked(
   props: readonly PlacedProp[],
   otherEntities: readonly BakedEntity[],
   maskOf?: MaskOf,
+  edgeMaskOf?: MaskOf,
 ) {
   return {
     collision,
-    entities: [...otherEntities, ...propEntities(props, maskOf)],
+    entities: [...otherEntities, ...propEntities(props, maskOf, edgeMaskOf)],
   }
 }
 
@@ -131,11 +132,12 @@ export const saveDecorations = (
   props: readonly PlacedProp[],
   otherEntities: readonly BakedEntity[],
   maskOf?: MaskOf,
+  edgeMaskOf?: MaskOf,
 ): Effect.Effect<BakedMap, HttpError, Http> =>
   Effect.gen(function* () {
     const http = yield* Http
     const path = `/maps/${encodeURIComponent(slug)}`
-    const raw = yield* http.patch(path, { baked: decorationsBaked(collision, props, otherEntities, maskOf) })
+    const raw = yield* http.patch(path, { baked: decorationsBaked(collision, props, otherEntities, maskOf, edgeMaskOf) })
     return yield* decode(path, decodeOne)(raw)
   })
 

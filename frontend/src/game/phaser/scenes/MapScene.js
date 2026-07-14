@@ -1,7 +1,7 @@
 import Phaser from 'phaser'
 import { preloadBakedMap, renderBakedMap } from '../../../kernel/mapRenderer.ts'
 import { MOVE_MS } from '../../constants.js'
-import { spawnTile, mapWalkable, entityBlockedFor, feetWorldXY } from '../mapWalk.ts'
+import { spawnTile, mapWalkable, entityBlockedFor, entityEdgeBlockedFor, feetWorldXY } from '../mapWalk.ts'
 import {
   CHAR_SHEET_KEY,
   preloadCharacter,
@@ -58,6 +58,11 @@ export default class MapScene extends Phaser.Scene {
     // placed entity's walk-mask (#131). Legacy maps carry no `collision` and only
     // props (no walk_mask), so this reduces to the in-bounds tracer rule for them.
     this.walkable = mapWalkable(map, map.collision, entityBlockedFor(map.entities))
+    // Fence-style border collision (#207): a placed entity's edge_mask blocks the
+    // border *between* two otherwise-walkable cells (not the cell itself), so it
+    // rides stepTile's transition-aware veto rather than `walkable`. Legacy maps
+    // carry no edge masks, so this reduces to "never blocked".
+    this.edgeBlocked = entityEdgeBlockedFor(map.entities)
     const feet = feetWorldXY(this.playerTile, this.usingManifest)
     if (this.usingManifest) {
       const render = this._charManifest.render || { originX: 0.5, originY: 1, scale: 1 }
@@ -117,6 +122,7 @@ export default class MapScene extends Phaser.Scene {
       from: this.playerTile,
       dir,
       walkable: this.walkable,
+      transitionBlocked: (from, to) => this.edgeBlocked(from.x, from.y, to.x, to.y),
       toWorldXY: (t) => feetWorldXY(t, this.usingManifest),
       duration: MOVE_MS,
       onStart: (t) => {
