@@ -88,6 +88,55 @@ for future per-map variation (per-hometown flora, admin-tuned density) is a
 **seed input threaded into `buildTown`** — until that need is real, decoration
 stays a deterministic function of map size, with no orchestration footprint.
 
+### Domain modules (2026-07-16)
+
+The codebase is a **modular monolith with mirrored module names**: a domain
+module has the same name as a frontend directory, a backend namespace, and
+(for tables created from now on) a table prefix. Rationale and conventions
+live in [ADR-0010](docs/adr/0010-mirrored-domain-modules.md); this is the
+canonical map.
+
+| Module | Frontend | Backend | Tables |
+| --- | --- | --- | --- |
+| **catalog** | `src/catalog/` | `Catalog::` | `terrains`, `tile_objects`, `ground_tiles`, `monsters` |
+| **maps** | `src/maps/` | `Maps::` | `maps` |
+| **communities** | `src/communities/` | `Communities::` | `houses`, `boards`, `content_items` |
+| **org** | *(none yet)* | `Org::` | `companies` *(future: `employees`, `teams`, `departments`)* |
+| **auth** | `src/auth/` | `Auth::` | `users` |
+| **viewer** | `src/viewer/` | `Viewer::` | `user_content_states` |
+| **game-session** | `src/game-session/` | `GameSession::` | `user_location_states` |
+| **character** | `src/character/` | `Character::` | `character_manifests` |
+| **posture** | `src/posture/` | `Posture::` | — |
+
+Frontend-only modules (no server state, no backend counterpart — legal and
+expected): `game`, `kernel`, `lib`, the three mappers
+(`tileMapper`/`groundMapper`/`spriteMapper`), `analytics`, `dev`, the admin
+pages and the shell files. Each side implements the subset it needs.
+
+**org** is the app's downstream read-model of the organization: `Company`
+is the tenant root that communities/teams/departments hang off; employee
+profiles and the org chart will sync in from an external service (plan:
+Basecamp API) through a dedicated client. Identity ≠ profile: `Auth::User`
+(Keycloak) *links to* a future `Org::Employee` — a person can exist in the
+org chart before ever logging in. Users are *assigned* to teams/departments
+(org); users *choose to follow* communities (communities). _Avoid_: treating
+`Company` as a communities concept, or mastering org data in this app.
+
+Conventions (enforced, not aspirational):
+
+- **Frontend public API is a file-pattern, not a barrel** — cross-module
+  imports may target only `schema.ts` (types), `service.ts` (reads),
+  `write.ts` (mutations), or a module-root component. No `index.ts`
+  barrels: they'd blind the path-based catalog write firewall. Checked by
+  `pnpm arch`; today's deep imports are baselined and burn down when
+  touched.
+- **DB seams stay soft** — no hard FKs across the game↔org/communities
+  seam; cross-cluster references are nullable or deliberately FK-less
+  (`users → character_manifests` nullify, `user_location_states.last_house_id`).
+  New tables carry their module prefix; existing tables are never renamed.
+- **Structure ratchets** — new code conforms; old code migrates only when
+  a feature touches it. Never a refactor sprint.
+
 ## Language
 
 Spatial primitives the town generator (`town.ts`) works in:
