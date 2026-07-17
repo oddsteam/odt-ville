@@ -21,7 +21,7 @@ module Api
           get "/api/v1/me", headers: auth_email("kc-sub-1", "newbie@odd.works")
         end
         assert_response :success
-        u = User.find_by(external_id: "kc-sub-1")
+        u = Auth::User.find_by(external_id: "kc-sub-1")
         assert_equal "newbie@odd.works", u.email
         assert_equal "branch_employee", u.role
         assert_equal @company.id, u.company_id
@@ -31,7 +31,7 @@ module Api
       test "provisioned email is lowercased" do
         get "/api/v1/me", headers: auth_email("kc-sub-2", "Mixed@ODD.works")
         assert_response :success
-        assert_equal "mixed@odd.works", User.find_by(external_id: "kc-sub-2").email
+        assert_equal "mixed@odd.works", Auth::User.find_by(external_id: "kc-sub-2").email
       end
 
       test "a token without an email provisions nothing and is unauthorized" do

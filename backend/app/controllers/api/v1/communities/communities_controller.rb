@@ -68,7 +68,7 @@ module Api
           gate = params[:entry_gate].presence
 
           if gate
-            return render json: { error: "Unknown gate: #{gate}" }, status: :unprocessable_entity unless gate == PostureController::GATE
+            return render json: { error: "Unknown gate: #{gate}" }, status: :unprocessable_entity unless gate == ::Api::V1::Posture::PostureController::GATE
             return render json: { error: "posture_set_id is required for a gate" }, status: :unprocessable_entity if params[:posture_set_id].blank?
             community.update!(entry_gate: gate, posture_set_id: params[:posture_set_id])
           else
