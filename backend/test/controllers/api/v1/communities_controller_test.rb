@@ -87,7 +87,7 @@ module Api
       end
 
       test "a non-admin is forbidden from creating a community" do
-        assert_no_difference "House.count" do
+        assert_no_difference "Communities::House.count" do
           post "/api/v1/communities", params: { title: "Nope" }, headers: auth(@user)
         end
         assert_response :forbidden
@@ -103,7 +103,7 @@ module Api
         assert_kind_of Integer, body[:id]
         assert_equal "New Hub", body[:title]
 
-        community = House.find(body[:id])
+        community = Communities::House.find(body[:id])
         assert_equal @company.id, community.company_id
         assert_equal %w[must_know nice_to_know should_know],
                      community.boards.pluck(:board_type).sort
@@ -116,7 +116,7 @@ module Api
         post "/api/v1/communities", params: {}, as: :json, headers: auth(@user, roles: ["admin"])
 
         assert_response :created
-        community = House.find(json[:id])
+        community = Communities::House.find(json[:id])
         assert_equal "New Community", community.title
         assert_equal "community", community.category_key
         assert_equal "#888888", community.color
@@ -175,15 +175,15 @@ module Api
         community = make_community(company: @company, title: "Gone")
         item = make_item(board: community.boards.find_by(board_type: "must_know"))
 
-        assert_difference -> { House.count } => -1,
-                          -> { Board.count } => -3,
-                          -> { ContentItem.count } => -1 do
+        assert_difference -> { Communities::House.count } => -1,
+                          -> { Communities::Board.count } => -3,
+                          -> { Communities::ContentItem.count } => -1 do
           delete "/api/v1/communities/#{community.id}", headers: auth(@user, roles: ["admin"])
         end
 
         assert_response :no_content
-        assert_nil House.find_by(id: community.id)
-        assert_nil ContentItem.find_by(id: item.id)
+        assert_nil Communities::House.find_by(id: community.id)
+        assert_nil Communities::ContentItem.find_by(id: item.id)
       end
 
       test "destroy 404s across companies" do
@@ -193,7 +193,7 @@ module Api
         delete "/api/v1/communities/#{foreign.id}", headers: auth(@user, roles: ["admin"])
 
         assert_response :not_found
-        assert House.exists?(foreign.id)
+        assert Communities::House.exists?(foreign.id)
       end
     end
   end

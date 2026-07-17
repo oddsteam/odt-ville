@@ -15,7 +15,7 @@ class KeycloakAuthenticatorTest < ActiveSupport::TestCase
       @load_count += 1
       { keys: [ @jwk.export ] }
     end
-    @auth = KeycloakAuthenticator.new(issuer: ISS, audience: AUD, jwks_loader: loader)
+    @auth = Auth::KeycloakAuthenticator.new(issuer: ISS, audience: AUD, jwks_loader: loader)
   end
 
   # Mint a token signed by the realm's key, with valid claims unless overridden.
@@ -34,23 +34,23 @@ class KeycloakAuthenticatorTest < ActiveSupport::TestCase
   test "rejects a token signed by an unknown key" do
     other = OpenSSL::PKey::RSA.generate(2048)
     bad = token({}, key: other, kid: "unknown-kid")
-    assert_raises(KeycloakAuthenticator::Error) { @auth.subject(bad) }
+    assert_raises(Auth::KeycloakAuthenticator::Error) { @auth.subject(bad) }
   end
 
   test "rejects an expired token" do
-    assert_raises(KeycloakAuthenticator::Error) do
+    assert_raises(Auth::KeycloakAuthenticator::Error) do
       @auth.subject(token({ exp: Time.now.to_i - 30 }))
     end
   end
 
   test "rejects a token from the wrong issuer" do
-    assert_raises(KeycloakAuthenticator::Error) do
+    assert_raises(Auth::KeycloakAuthenticator::Error) do
       @auth.subject(token({ iss: "https://evil.example/realms/odtville" }))
     end
   end
 
   test "rejects a token for the wrong audience and party" do
-    assert_raises(KeycloakAuthenticator::Error) do
+    assert_raises(Auth::KeycloakAuthenticator::Error) do
       @auth.subject(token({ aud: "some-other-client", azp: "some-other-client" }))
     end
   end
@@ -64,12 +64,12 @@ class KeycloakAuthenticatorTest < ActiveSupport::TestCase
   end
 
   test "rejects a blank or nil token" do
-    assert_raises(KeycloakAuthenticator::Error) { @auth.subject("") }
-    assert_raises(KeycloakAuthenticator::Error) { @auth.subject(nil) }
+    assert_raises(Auth::KeycloakAuthenticator::Error) { @auth.subject("") }
+    assert_raises(Auth::KeycloakAuthenticator::Error) { @auth.subject(nil) }
   end
 
   test "rejects a structurally garbage token" do
-    assert_raises(KeycloakAuthenticator::Error) { @auth.subject("not-a-jwt") }
+    assert_raises(Auth::KeycloakAuthenticator::Error) { @auth.subject("not-a-jwt") }
   end
 
   test "caches the JWKS across verifications" do

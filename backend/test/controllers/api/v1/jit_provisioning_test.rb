@@ -17,7 +17,7 @@ module Api
       end
 
       test "first login provisions a local user regardless of email domain" do
-        assert_difference -> { User.count }, 1 do
+        assert_difference -> { Auth::User.count }, 1 do
           get "/api/v1/me", headers: auth_email("kc-sub-1", "newbie@odd.works")
         end
         assert_response :success
@@ -35,7 +35,7 @@ module Api
       end
 
       test "a token without an email provisions nothing and is unauthorized" do
-        assert_no_difference -> { User.count } do
+        assert_no_difference -> { Auth::User.count } do
           get "/api/v1/me", headers: auth_email("kc-sub-3", "")
         end
         assert_response :unauthorized
@@ -44,7 +44,7 @@ module Api
       test "a returning user re-links by email when their subject changes" do
         existing = @company.users.create!(name: "Carol", role: "branch_manager",
           external_id: "old-sub", email: "carol@odds.team")
-        assert_no_difference -> { User.count } do
+        assert_no_difference -> { Auth::User.count } do
           get "/api/v1/me", headers: auth_email("new-sub", "carol@odds.team")
         end
         assert_response :success

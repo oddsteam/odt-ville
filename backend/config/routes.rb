@@ -4,16 +4,21 @@ Rails.application.routes.draw do
 
   namespace :api do
     namespace :v1 do
-      # Communities CRUD (reusable surface — no spatial / game concepts).
-      resources :communities, only: [:index, :show, :create, :update, :destroy]
+      # The Communities domain (ADR-0010) — controllers under
+      # Api::V1::Communities::, URLs unchanged (`scope module:` nests the
+      # controller, not the path).
+      scope module: :communities do
+        # Communities CRUD (reusable surface — no spatial / game concepts).
+        resources :communities, only: [:index, :show, :create, :update, :destroy]
+
+        # Content feed + per-item read/ack state.
+        get  "content_items/feed", to: "content_items#feed"
+        post "content_items/:id/open", to: "content_items#open"
+        post "content_items/:id/acknowledge", to: "content_items#acknowledge"
+      end
 
       # Current viewer (user + company).
       get "me", to: "me#show"
-
-      # Content feed + per-item read/ack state.
-      get  "content_items/feed", to: "content_items#feed"
-      post "content_items/:id/open", to: "content_items#open"
-      post "content_items/:id/acknowledge", to: "content_items#acknowledge"
 
       # Village game session — spawn point + last visited (game-only).
       get  "game/session", to: "game_sessions#show"

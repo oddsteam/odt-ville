@@ -6,7 +6,7 @@ class ApplicationController < ActionController::API
   # A class-level seam so request specs can swap in a fake resolver instead of
   # minting real Keycloak JWTs (see test/test_helper.rb) — issues #92, #94.
   class_attribute :claims_resolver, instance_writer: false,
-    default: ->(token) { KeycloakAuthenticator.instance.claims(token) }
+    default: ->(token) { Auth::KeycloakAuthenticator.instance.claims(token) }
 
   private
 
@@ -17,7 +17,7 @@ class ApplicationController < ActionController::API
 
     token = bearer_token
     @token_claims = token.blank? ? nil : self.class.claims_resolver.call(token)
-  rescue KeycloakAuthenticator::Error
+  rescue Auth::KeycloakAuthenticator::Error
     @token_claims = nil
   end
 
@@ -34,7 +34,7 @@ class ApplicationController < ActionController::API
     sub = claims&.subject
     return nil if sub.blank?
 
-    user = User.find_by(external_id: sub)
+    user = Auth::User.find_by(external_id: sub)
     return user if user
 
     # First login: provision (or re-link) by email so a later IdP swap — which
@@ -47,10 +47,10 @@ class ApplicationController < ActionController::API
     email = claims.email.to_s.downcase
     return nil if email.blank?
 
-    user = User.find_or_initialize_by(email: email)
+    user = Auth::User.find_or_initialize_by(email: email)
     user.external_id = sub
     if user.new_record?
-      user.company = Company.first
+      user.company = Org::Company.first
       user.name = email.split("@").first
       user.role = "branch_employee"
     end

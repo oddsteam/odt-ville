@@ -318,14 +318,14 @@ ActiveRecord::Base.transaction do
   puts "Clearing existing village data..."
   UserContentState.delete_all
   UserLocationState.delete_all
-  ContentItem.delete_all
-  Board.delete_all
-  House.delete_all
-  User.delete_all
-  Company.delete_all
+  Communities::ContentItem.delete_all
+  Communities::Board.delete_all
+  Communities::House.delete_all
+  Auth::User.delete_all
+  Org::Company.delete_all
   Map.delete_all
 
-  company = Company.create!(name: "ODT")
+  company = Org::Company.create!(name: "ODT")
 
   # Seeded users mirror the Keycloak realm (keycloak/realm-export.json): their
   # external_id pins to the realm's seeded subject UUIDs so a verified token for
@@ -337,7 +337,7 @@ ActiveRecord::Base.transaction do
   ].freeze
 
   SEED_USERS.each do |attrs|
-    u = User.create!(company: company, name: attrs[:name], role: attrs[:role], external_id: attrs[:external_id])
+    u = Auth::User.create!(company: company, name: attrs[:name], role: attrs[:role], external_id: attrs[:external_id])
     UserLocationState.create!(user: u, company: company, last_area: "town")
   end
 
@@ -368,7 +368,7 @@ ActiveRecord::Base.transaction do
     Catalog::Terrain.find_or_create_by!(name: name) { |t| t.priority = priority }
   end
 
-  puts "Seeded: #{Company.count} company, #{User.count} users, " \
-       "#{House.count} houses, #{Board.count} boards, #{ContentItem.count} content items, " \
+  puts "Seeded: #{Org::Company.count} company, #{Auth::User.count} users, " \
+       "#{Communities::House.count} houses, #{Communities::Board.count} boards, #{Communities::ContentItem.count} content items, " \
        "#{Map.count} authored map."
 end

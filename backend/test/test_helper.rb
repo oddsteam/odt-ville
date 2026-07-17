@@ -8,7 +8,7 @@ require "rails/test_help"
 # KeycloakAuthenticator itself is exercised directly in its own unit test.
 ApplicationController.claims_resolver = lambda do |token|
   sub, roles, email = token.split("|", 3)
-  KeycloakAuthenticator::Claims.new(
+  Auth::KeycloakAuthenticator::Claims.new(
     subject: sub,
     roles: (roles || "").split(",").reject(&:empty?),
     groups: [],
@@ -23,7 +23,7 @@ module ApiTestHelpers
   # cross-company scoping trivial to verify. Each user gets a unique external_id
   # so the stubbed resolver can authenticate it via `auth(user)`.
   def setup_company(name: "Co", user_name: "Test User", role: "branch_employee")
-    company = Company.create!(name: name)
+    company = Org::Company.create!(name: name)
     user = company.users.create!(name: user_name, role: role, external_id: SecureRandom.uuid)
     [company, user]
   end

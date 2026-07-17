@@ -1,6 +1,8 @@
 class UserLocationState < ApplicationRecord
-  belongs_to :user
-  belongs_to :company
+  # Cross-module targets are now namespaced (ADR-0010); name them explicitly
+  # since Rails can't infer Auth::User / Org::Company from :user / :company.
+  belongs_to :user, class_name: "Auth::User"
+  belongs_to :company, class_name: "Org::Company"
 
   enum :last_area, {
     town: "town",
