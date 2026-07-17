@@ -8,8 +8,8 @@ module Api
       end
 
       test "index returns roster summaries (no image blob) with computed probability" do
-        Monster.create!(name: "Slime", image: "data:img", encounter_rate: 1)
-        Monster.create!(name: "Wolf", image: "data:img", encounter_rate: 3)
+        ::Catalog::Monster.create!(name: "Slime", image: "data:img", encounter_rate: 1)
+        ::Catalog::Monster.create!(name: "Wolf", image: "data:img", encounter_rate: 3)
 
         get "/api/v1/monsters", headers: auth(@user)
 
@@ -23,8 +23,8 @@ module Api
       end
 
       test "disabled monsters are excluded from the probability denominator" do
-        Monster.create!(name: "On", image: "data:img", encounter_rate: 2)
-        Monster.create!(name: "Off", image: "data:img", encounter_rate: 8, enabled: false)
+        ::Catalog::Monster.create!(name: "On", image: "data:img", encounter_rate: 2)
+        ::Catalog::Monster.create!(name: "Off", image: "data:img", encounter_rate: 8, enabled: false)
 
         get "/api/v1/monsters", headers: auth(@user)
 
@@ -35,8 +35,8 @@ module Api
       end
 
       test "an all-disabled (zero-sum) pool yields 0 without divide-by-zero" do
-        Monster.create!(name: "A", image: "data:img", encounter_rate: 5, enabled: false)
-        Monster.create!(name: "B", image: "data:img", encounter_rate: 5, enabled: false)
+        ::Catalog::Monster.create!(name: "A", image: "data:img", encounter_rate: 5, enabled: false)
+        ::Catalog::Monster.create!(name: "B", image: "data:img", encounter_rate: 5, enabled: false)
 
         get "/api/v1/monsters", headers: auth(@user)
 
@@ -45,8 +45,8 @@ module Api
       end
 
       test "pool returns only enabled monsters with their image for the wild encounter table" do
-        Monster.create!(name: "On", image: "data:on", encounter_rate: 2, encounter_dialog: "A wild On stirs!")
-        Monster.create!(name: "Off", image: "data:off", encounter_rate: 8, enabled: false)
+        ::Catalog::Monster.create!(name: "On", image: "data:on", encounter_rate: 2, encounter_dialog: "A wild On stirs!")
+        ::Catalog::Monster.create!(name: "Off", image: "data:off", encounter_rate: 8, enabled: false)
 
         get "/api/v1/monsters/pool", headers: auth(@user)
 
@@ -60,7 +60,7 @@ module Api
       end
 
       test "a non-admin is forbidden from creating a monster" do
-        assert_no_difference -> { Monster.count } do
+        assert_no_difference -> { ::Catalog::Monster.count } do
           post "/api/v1/monsters",
                params: { name: "Nope", image: "data:img", encounter_rate: 1 },
                headers: auth(@user)
@@ -69,7 +69,7 @@ module Api
       end
 
       test "create persists a monster and returns the full record incl. image" do
-        assert_difference -> { Monster.count }, 1 do
+        assert_difference -> { ::Catalog::Monster.count }, 1 do
           post "/api/v1/monsters",
                params: { name: "Slime", image: "data:img", encounter_dialog: "A wild Slime appears!", encounter_rate: 5, enabled: true },
                headers: auth(@user, roles: ["admin"])
@@ -94,9 +94,9 @@ module Api
       end
 
       test "create rejects a duplicate name" do
-        Monster.create!(name: "Slime", image: "data:img", encounter_rate: 1)
+        ::Catalog::Monster.create!(name: "Slime", image: "data:img", encounter_rate: 1)
 
-        assert_no_difference -> { Monster.count } do
+        assert_no_difference -> { ::Catalog::Monster.count } do
           post "/api/v1/monsters",
                params: { name: "Slime", image: "data:img", encounter_rate: 2 },
                headers: auth(@user, roles: ["admin"])
@@ -107,7 +107,7 @@ module Api
       end
 
       test "create rejects a negative encounter rate" do
-        assert_no_difference -> { Monster.count } do
+        assert_no_difference -> { ::Catalog::Monster.count } do
           post "/api/v1/monsters",
                params: { name: "Bad", image: "data:img", encounter_rate: -1 },
                headers: auth(@user, roles: ["admin"])
@@ -117,7 +117,7 @@ module Api
       end
 
       test "show returns the full record incl. the image data URL" do
-        monster = Monster.create!(name: "Slime", image: "data:img", encounter_rate: 5)
+        monster = ::Catalog::Monster.create!(name: "Slime", image: "data:img", encounter_rate: 5)
 
         get "/api/v1/monsters/#{monster.id}", headers: auth(@user)
 
@@ -127,7 +127,7 @@ module Api
       end
 
       test "update edits the record and returns the full updated record" do
-        monster = Monster.create!(name: "Slime", image: "data:old", encounter_rate: 1, encounter_dialog: "Hi", enabled: true)
+        monster = ::Catalog::Monster.create!(name: "Slime", image: "data:old", encounter_rate: 1, encounter_dialog: "Hi", enabled: true)
 
         patch "/api/v1/monsters/#{monster.id}",
               params: { name: "Slime King", image: "data:new", encounter_dialog: "Bow!", encounter_rate: 4, enabled: false },
@@ -146,7 +146,7 @@ module Api
       end
 
       test "update leaves the image unchanged when none is supplied" do
-        monster = Monster.create!(name: "Slime", image: "data:keep", encounter_rate: 1)
+        monster = ::Catalog::Monster.create!(name: "Slime", image: "data:keep", encounter_rate: 1)
 
         patch "/api/v1/monsters/#{monster.id}",
               params: { encounter_rate: 9 },
@@ -158,8 +158,8 @@ module Api
       end
 
       test "saving an edited rate recomputes probabilities across the pool" do
-        slime = Monster.create!(name: "Slime", image: "data:img", encounter_rate: 1)
-        Monster.create!(name: "Wolf", image: "data:img", encounter_rate: 1)
+        slime = ::Catalog::Monster.create!(name: "Slime", image: "data:img", encounter_rate: 1)
+        ::Catalog::Monster.create!(name: "Wolf", image: "data:img", encounter_rate: 1)
 
         patch "/api/v1/monsters/#{slime.id}",
               params: { encounter_rate: 3 },
@@ -175,15 +175,15 @@ module Api
       end
 
       test "destroy removes the monster and recomputes the remaining pool" do
-        slime = Monster.create!(name: "Slime", image: "data:img", encounter_rate: 1)
-        Monster.create!(name: "Wolf", image: "data:img", encounter_rate: 1)
+        slime = ::Catalog::Monster.create!(name: "Slime", image: "data:img", encounter_rate: 1)
+        ::Catalog::Monster.create!(name: "Wolf", image: "data:img", encounter_rate: 1)
 
-        assert_difference -> { Monster.count }, -1 do
+        assert_difference -> { ::Catalog::Monster.count }, -1 do
           delete "/api/v1/monsters/#{slime.id}", headers: auth(@user, roles: ["admin"])
         end
 
         assert_response :no_content
-        assert_not Monster.exists?(slime.id)
+        assert_not ::Catalog::Monster.exists?(slime.id)
 
         get "/api/v1/monsters", headers: auth(@user)
         by_name = json.index_by { _1[:name] }
@@ -192,8 +192,8 @@ module Api
       end
 
       test "update rejects a duplicate name" do
-        Monster.create!(name: "Slime", image: "data:img", encounter_rate: 1)
-        wolf = Monster.create!(name: "Wolf", image: "data:img", encounter_rate: 1)
+        ::Catalog::Monster.create!(name: "Slime", image: "data:img", encounter_rate: 1)
+        wolf = ::Catalog::Monster.create!(name: "Wolf", image: "data:img", encounter_rate: 1)
 
         patch "/api/v1/monsters/#{wolf.id}",
               params: { name: "Slime" },

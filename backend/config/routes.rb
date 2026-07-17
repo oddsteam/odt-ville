@@ -37,31 +37,35 @@ Rails.application.routes.draw do
         post :select, on: :member
       end
 
-      # Tile objects — trees/props cropped from an atlas in the tile-object
-      # mapper, rendered on the town map. `active?kind=` is the live one.
-      resources :tile_objects, only: [:index, :create, :show, :destroy] do
-        get :active, on: :collection
-        post :activate, on: :member
-        post :deactivate, on: :member
+      # The Catalog domain (ADR-0010) — controllers under Api::V1::Catalog::,
+      # URLs unchanged (`scope module:` nests the controller, not the path).
+      scope module: :catalog do
+        # Tile objects — trees/props cropped from an atlas in the tile-object
+        # mapper, rendered on the town map. `active?kind=` is the live one.
+        resources :tile_objects, only: [:index, :create, :show, :destroy] do
+          get :active, on: :collection
+          post :activate, on: :member
+          post :deactivate, on: :member
+        end
+
+        # Monsters — the weighted wild-encounter pool, authored in the monster
+        # admin. Probability per monster = its rate / sum(enabled rates).
+        resources :monsters, only: [:index, :show, :create, :update, :destroy] do
+          # The live wild-encounter pool: enabled monsters with their sprite image,
+          # for the in-game grass roll (the roster `index` omits the heavy blob).
+          get :pool, on: :collection
+        end
+
+        # Ground tiles — grass/road/… cells tagged in the ground-tile mapper by
+        # their atlas coordinate, drawn via the tilemap renderer. A flat catalog
+        # (no single-active); edge/corner autotiling comes later.
+        resources :ground_tiles, only: [:index, :create, :destroy]
+
+        # Terrains — per-terrain stack priority (#120). Read the seam-ownership
+        # order both ground producers resolve against; `order` reorders it (admin).
+        get "terrains", to: "terrains#index"
+        put "terrains/order", to: "terrains#reorder"
       end
-
-      # Monsters — the weighted wild-encounter pool, authored in the monster
-      # admin. Probability per monster = its rate / sum(enabled rates).
-      resources :monsters, only: [:index, :show, :create, :update, :destroy] do
-        # The live wild-encounter pool: enabled monsters with their sprite image,
-        # for the in-game grass roll (the roster `index` omits the heavy blob).
-        get :pool, on: :collection
-      end
-
-      # Ground tiles — grass/road/… cells tagged in the ground-tile mapper by
-      # their atlas coordinate, drawn via the tilemap renderer. A flat catalog
-      # (no single-active); edge/corner autotiling comes later.
-      resources :ground_tiles, only: [:index, :create, :destroy]
-
-      # Terrains — per-terrain stack priority (#120). Read the seam-ownership
-      # order both ground producers resolve against; `order` reorders it (admin).
-      get "terrains", to: "terrains#index"
-      put "terrains/order", to: "terrains#reorder"
 
       # Maps — the authored-map contract (ADR-0004). `:slug` loads a baked map
       # for play; `index`/`create`/`update` are the editor's write half (#105),

@@ -8,8 +8,8 @@ module Api
       end
 
       test "index returns roster summaries (no image blob), optionally filtered by kind" do
-        TileObject.create!(name: "Clump", kind: "flower-group", image: "data:img", footprint_w: 2, footprint_h: 2, active: true)
-        TileObject.create!(name: "Oak", kind: "tree", image: "data:img", active: true)
+        ::Catalog::TileObject.create!(name: "Clump", kind: "flower-group", image: "data:img", footprint_w: 2, footprint_h: 2, active: true)
+        ::Catalog::TileObject.create!(name: "Oak", kind: "tree", image: "data:img", active: true)
 
         get "/api/v1/tile_objects", params: { kind: "flower-group" }, headers: auth(@user)
 
@@ -22,9 +22,9 @@ module Api
       # object a map references in one request, images included. A play-path
       # read, so any authenticated user — like show/active.
       test "index with ids returns the full objects (incl. image) for those ids, skipping unknown ids" do
-        oak = TileObject.create!(name: "Oak", kind: "tree", image: "data:oak", active: true)
-        bush = TileObject.create!(name: "Bush", kind: "prop", image: "data:bush", active: true)
-        TileObject.create!(name: "Unwanted", kind: "prop", image: "data:no", active: false)
+        oak = ::Catalog::TileObject.create!(name: "Oak", kind: "tree", image: "data:oak", active: true)
+        bush = ::Catalog::TileObject.create!(name: "Bush", kind: "prop", image: "data:bush", active: true)
+        ::Catalog::TileObject.create!(name: "Unwanted", kind: "prop", image: "data:no", active: false)
 
         get "/api/v1/tile_objects", params: { ids: "#{oak.id},#{bush.id},999999" }, headers: auth(@user)
 
@@ -34,7 +34,7 @@ module Api
       end
 
       test "a non-admin is forbidden from creating a tile object" do
-        assert_no_difference -> { TileObject.count } do
+        assert_no_difference -> { ::Catalog::TileObject.count } do
           post "/api/v1/tile_objects",
                params: { name: "Nope", kind: "tree", image: "data:img" },
                headers: auth(@user)
@@ -43,8 +43,8 @@ module Api
       end
 
       test "activate makes the object the only active one of its kind" do
-        a = TileObject.create!(name: "A", kind: "flower-group", image: "i", footprint_w: 2, footprint_h: 2, active: true)
-        b = TileObject.create!(name: "B", kind: "flower-group", image: "i", footprint_w: 2, footprint_h: 2, active: false)
+        a = ::Catalog::TileObject.create!(name: "A", kind: "flower-group", image: "i", footprint_w: 2, footprint_h: 2, active: true)
+        b = ::Catalog::TileObject.create!(name: "B", kind: "flower-group", image: "i", footprint_w: 2, footprint_h: 2, active: false)
 
         post "/api/v1/tile_objects/#{b.id}/activate", headers: auth(@user, roles: ["admin"])
 
@@ -111,7 +111,7 @@ module Api
       end
 
       test "show returns the full object including the image blob, for editing" do
-        obj = TileObject.create!(name: "Cottage", kind: "building", image: "data:img", footprint_w: 3, footprint_h: 4, door_dx: 1, door_dy: 3, walk_mask: "###\n#.#\n#.#\n#.#", active: true)
+        obj = ::Catalog::TileObject.create!(name: "Cottage", kind: "building", image: "data:img", footprint_w: 3, footprint_h: 4, door_dx: 1, door_dy: 3, walk_mask: "###\n#.#\n#.#\n#.#", active: true)
 
         get "/api/v1/tile_objects/#{obj.id}", headers: auth(@user)
 
@@ -123,23 +123,23 @@ module Api
       end
 
       test "deactivate turns the object off so its kind has no active object" do
-        a = TileObject.create!(name: "A", kind: "flower-group", image: "i", footprint_w: 2, footprint_h: 2, active: true)
+        a = ::Catalog::TileObject.create!(name: "A", kind: "flower-group", image: "i", footprint_w: 2, footprint_h: 2, active: true)
 
         post "/api/v1/tile_objects/#{a.id}/deactivate", headers: auth(@user, roles: ["admin"])
 
         assert_response :success
         assert_not a.reload.active
-        assert_nil TileObject.current("flower-group"), "no active object of the kind remains"
+        assert_nil ::Catalog::TileObject.current("flower-group"), "no active object of the kind remains"
       end
 
       test "destroy removes the object, leaving its kind with no active object" do
-        a = TileObject.create!(name: "Oak", kind: "tree", image: "i", footprint_w: 2, footprint_h: 2, active: true)
+        a = ::Catalog::TileObject.create!(name: "Oak", kind: "tree", image: "i", footprint_w: 2, footprint_h: 2, active: true)
 
         delete "/api/v1/tile_objects/#{a.id}", headers: auth(@user, roles: ["admin"])
 
         assert_response :no_content
-        assert_not TileObject.exists?(a.id), "the object is gone"
-        assert_nil TileObject.current("tree"), "the kind falls back to the procedural default"
+        assert_not ::Catalog::TileObject.exists?(a.id), "the object is gone"
+        assert_nil ::Catalog::TileObject.current("tree"), "the kind falls back to the procedural default"
       end
     end
   end

@@ -365,7 +365,7 @@ ActiveRecord::Base.transaction do
   # hardcoded stack. Upserted so a re-seed keeps any author reorder intact for
   # already-present names while filling in the canonical defaults.
   %w[water road sand dirt grass].each_with_index do |name, priority|
-    Terrain.find_or_create_by!(name: name) { |t| t.priority = priority }
+    Catalog::Terrain.find_or_create_by!(name: name) { |t| t.priority = priority }
   end
 
   puts "Seeded: #{Company.count} company, #{User.count} users, " \

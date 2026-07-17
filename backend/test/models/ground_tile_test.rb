@@ -5,7 +5,7 @@ require "test_helper"
 # diagonal side.
 class GroundTileTest < ActiveSupport::TestCase
   def build(**overrides)
-    GroundTile.new({
+    Catalog::GroundTile.new({
       tile_type: "grass", tileset: "Terrains", col: 1, row: 2, cell: 32
     }.merge(overrides))
   end
@@ -21,6 +21,6 @@ class GroundTileTest < ActiveSupport::TestCase
   end
 
   test "inner is an accepted role" do
-    assert_includes GroundTile::ROLES, "inner"
+    assert_includes Catalog::GroundTile::ROLES, "inner"
   end
 end

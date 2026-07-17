@@ -19,24 +19,24 @@ module Api
       end
 
       test "an admin can create a ground tile" do
-        assert_difference "GroundTile.count", 1 do
+        assert_difference "::Catalog::GroundTile.count", 1 do
           post "/api/v1/ground_tiles", params: tile_params, headers: auth(@user, roles: ["admin"])
         end
         assert_response :success
       end
 
       test "a non-admin is forbidden from creating a ground tile" do
-        assert_no_difference "GroundTile.count" do
+        assert_no_difference "::Catalog::GroundTile.count" do
           post "/api/v1/ground_tiles", params: tile_params, headers: auth(@user)
         end
         assert_response :forbidden
       end
 
       test "a non-admin is forbidden from deleting a ground tile" do
-        tile = GroundTile.create!(tile_type: "grass", tileset: "Terrains", col: 3, row: 4, cell: 32, role: "fill")
+        tile = ::Catalog::GroundTile.create!(tile_type: "grass", tileset: "Terrains", col: 3, row: 4, cell: 32, role: "fill")
         delete "/api/v1/ground_tiles/#{tile.id}", headers: auth(@user)
         assert_response :forbidden
-        assert GroundTile.exists?(tile.id)
+        assert ::Catalog::GroundTile.exists?(tile.id)
       end
     end
   end
