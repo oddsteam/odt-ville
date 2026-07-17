@@ -91,6 +91,24 @@ const GAME = '^src/game/'
 // The shell: composes everything; nothing may depend on it.
 const SHELL = '^src/(App|RootLayout|VillagePage|MapPage|main)\\.tsx$'
 
+// The shared src/lib grab-bag: like the kernel, it exists to be imported
+// broadly, so (with the kernel) it is exempt as a cross-module import TARGET.
+const LIB = '^src/lib/'
+
+// Every domain module's PUBLIC SURFACE (ADR-0010): the only files another
+// module may import. Deliberately a file-pattern, NOT an index.ts barrel — a
+// barrel would collapse a module's reads and writes into one import edge and
+// blind the map-authoring-never-writes-the-catalog firewall above. The triad
+// is schema.ts (types), service.ts (reads), write.ts (mutations); a
+// module-root component (`<Module>/<Name>.tsx`) is public too. The catalog
+// exposes its surface one level down, per nested submodule
+// (catalog/<sub>/{schema,service,write}.ts), so it earns its own pattern.
+const PUBLIC_SURFACE = [
+  '^src/[^/]+/(schema|service|write)\\.ts$',
+  '^src/[^/]+/[^/]+\\.tsx$',
+  '^src/catalog/[^/]+/(schema|service|write)\\.ts$',
+]
+
 module.exports = {
   forbidden: [
     {
@@ -155,6 +173,30 @@ module.exports = {
       severity: 'error',
       from: { path: CATALOG },
       to: { path: '^src/', pathNot: [CATALOG, '^src/lib/'] },
+    },
+    {
+      name: 'cross-module-imports-target-public-surface-only',
+      comment:
+        'ADR-0010: a module\'s public API is a file-pattern, not a barrel. A ' +
+        'cross-module import may reach only another module\'s public surface — ' +
+        'schema.ts (types), service.ts (reads), write.ts (mutations) or a ' +
+        'module-root component (*.tsx); the catalog exposes the triad per ' +
+        'nested submodule (catalog/<sub>/{schema,service,write}.ts). ' +
+        'Everything else is module-internal. No index.ts barrels — a barrel ' +
+        'collapses reads and writes into one edge and would blind the ' +
+        'map-authoring-never-writes-the-catalog firewall. kernel and lib are ' +
+        'exempt as targets: shared infrastructure whose job is to be imported ' +
+        'broadly (ADR-0004: the kernel sits beneath everything). Today\'s deep ' +
+        'imports are baselined and burn down when touched.',
+      severity: 'error',
+      from: { path: '^src/([^/]+)/' },
+      to: {
+        path: '^src/[^/]+/',
+        // `$1` back-references the source module captured in `from.path`, so a
+        // module's own internal imports are unrestricted; only reaching INTO
+        // another module past its public surface is forbidden.
+        pathNot: ['^src/$1/', KERNEL, LIB, ...PUBLIC_SURFACE],
+      },
     },
     {
       name: 'communities-reusable-from-any-shell',

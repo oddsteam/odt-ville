@@ -1,1 +1,142 @@
-[]
+[
+  {
+    "type": "dependency",
+    "from": "src/admin/mapCatalog.ts",
+    "to": "src/catalog/groundTiles/tilesets.js",
+    "unresolvedTo": "../catalog/groundTiles/tilesets.js",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "cross-module-imports-target-public-surface-only"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/admin/MapDecoratePage.tsx",
+    "to": "src/maps/props.ts",
+    "unresolvedTo": "../maps/props.ts",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "cross-module-imports-target-public-surface-only"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/admin/MapEditorPage.tsx",
+    "to": "src/maps/tiledImport.ts",
+    "unresolvedTo": "../maps/tiledImport.ts",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "cross-module-imports-target-public-surface-only"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/admin/MonstersAdminPage.tsx",
+    "to": "src/catalog/monsters/pngAlpha.ts",
+    "unresolvedTo": "../catalog/monsters/pngAlpha.ts",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "cross-module-imports-target-public-surface-only"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/communities/CommunitiesAdminPanel.tsx",
+    "to": "src/tileMapper/styles.css",
+    "unresolvedTo": "../tileMapper/styles.css",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "cross-module-imports-target-public-surface-only"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/groundMapper/GroundTileMapper.tsx",
+    "to": "src/catalog/groundTiles/tilesets.js",
+    "unresolvedTo": "../catalog/groundTiles/tilesets.js",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "cross-module-imports-target-public-surface-only"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/groundMapper/GroundTileMapper.tsx",
+    "to": "src/tileMapper/styles.css",
+    "unresolvedTo": "../tileMapper/styles.css",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "cross-module-imports-target-public-surface-only"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/spriteMapper/CharacterRoster.tsx",
+    "to": "src/character/manifest.js",
+    "unresolvedTo": "../character/manifest.js",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "cross-module-imports-target-public-surface-only"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/spriteMapper/PosturePanel.tsx",
+    "to": "src/character/manifest.js",
+    "unresolvedTo": "../character/manifest.js",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "cross-module-imports-target-public-surface-only"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "src/spriteMapper/SpriteMapper.tsx",
+    "to": "src/character/manifest.js",
+    "unresolvedTo": "../character/manifest.js",
+    "dependencyTypes": [
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "cross-module-imports-target-public-surface-only"
+    }
+  }
+]
