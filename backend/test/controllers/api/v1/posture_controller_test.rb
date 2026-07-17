@@ -11,7 +11,7 @@ module Api
 
       # A fake posture-login Client: records what it was asked to start and
       # replays a canned result, so the controller is tested without the
-      # service. Swapped in for PostureLogin::Client.from_env via stub.
+      # service. Swapped in for Posture::Client.from_env via stub.
       class FakeClient
         attr_reader :started
         def initialize(result: nil, sets: [])
@@ -35,11 +35,11 @@ module Api
       # Swap the controller's client for our fake by overriding the from_env
       # factory for the block, then restoring the real one.
       def with_client(client)
-        original = PostureLogin::Client.method(:from_env)
-        PostureLogin::Client.define_singleton_method(:from_env) { |*| client }
+        original = ::Posture::Client.method(:from_env)
+        ::Posture::Client.define_singleton_method(:from_env) { |*| client }
         yield
       ensure
-        PostureLogin::Client.define_singleton_method(:from_env, original)
+        ::Posture::Client.define_singleton_method(:from_env, original)
       end
 
       test "sets proxies the posture-login catalog of id+name pairs" do

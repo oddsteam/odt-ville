@@ -1,6 +1,6 @@
 require "test_helper"
 
-module PostureLogin
+module Posture
   class ClientTest < ActiveSupport::TestCase
     # A stub transport: records the last call and replays a canned response.
     # Lets us drive the glue (request body, result parsing, gate decision)

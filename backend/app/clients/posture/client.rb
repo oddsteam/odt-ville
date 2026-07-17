@@ -8,7 +8,11 @@ require "cgi"
 # its result server-to-server, holding the client_secret here on the backend.
 # The HTTP transport is injectable so the glue is testable with the service
 # stubbed at the boundary.
-module PostureLogin
+#
+# Lives under the Posture domain module (ADR-0010); the client directory was
+# renamed from `posture_login/` to `posture/` so the namespace mirrors the
+# other modules.
+module Posture
   class Client
     Error = Class.new(StandardError)
 

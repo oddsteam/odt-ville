@@ -17,29 +17,45 @@ Rails.application.routes.draw do
         post "content_items/:id/acknowledge", to: "content_items#acknowledge"
       end
 
-      # Current viewer (user + company).
-      get "me", to: "me#show"
+      # The Viewer domain (ADR-0010) — the `me` controller under
+      # Api::V1::Viewer::, URL unchanged (`scope module:` nests the controller).
+      scope module: :viewer do
+        # Current viewer (user + company).
+        get "me", to: "me#show"
+      end
 
-      # Village game session — spawn point + last visited (game-only).
-      get  "game/session", to: "game_sessions#show"
-      put  "game/session", to: "game_sessions#update"
+      # The GameSession domain (ADR-0010) — controller under
+      # Api::V1::GameSession::, URLs unchanged.
+      scope module: :game_session do
+        # Village game session — spawn point + last visited (game-only).
+        get  "game/session", to: "game_sessions#show"
+        put  "game/session", to: "game_sessions#update"
+      end
 
-      # Posture-login entry gate (issue #24). start kicks off a Verification for
-      # a gated house; confirm reads its result server-to-server to open the door.
-      post "game/posture/start", to: "posture#start"
-      post "game/posture/confirm", to: "posture#confirm"
-      # Admin proxy (issue #38): the live posture-set catalog for the gate picker.
-      # client_secret stays server-side; the browser only sees [{ id, name }].
-      get  "game/posture/sets", to: "posture#sets"
+      # The Posture domain (ADR-0010) — controller under Api::V1::Posture::,
+      # URLs unchanged.
+      scope module: :posture do
+        # Posture-login entry gate (issue #24). start kicks off a Verification for
+        # a gated house; confirm reads its result server-to-server to open the door.
+        post "game/posture/start", to: "posture#start"
+        post "game/posture/confirm", to: "posture#confirm"
+        # Admin proxy (issue #38): the live posture-set catalog for the gate picker.
+        # client_secret stays server-side; the browser only sees [{ id, name }].
+        get  "game/posture/sets", to: "posture#sets"
+      end
 
-      # Character sprite manifests — saved by the sprite-mapper tool, read by
-      # the game/preview. `active` is the single live character.
-      resources :character_manifests, only: [:index, :create, :show] do
-        get :active, on: :collection
-        # Per-user selection (#155, ADR-0009): for_me resolves the caller's
-        # pick -> global active; select persists the caller's pick.
-        get :for_me, on: :collection
-        post :select, on: :member
+      # The Character domain (ADR-0010) — controller under Api::V1::Character::,
+      # URLs unchanged.
+      scope module: :character do
+        # Character sprite manifests — saved by the sprite-mapper tool, read by
+        # the game/preview. `active` is the single live character.
+        resources :character_manifests, only: [:index, :create, :show] do
+          get :active, on: :collection
+          # Per-user selection (#155, ADR-0009): for_me resolves the caller's
+          # pick -> global active; select persists the caller's pick.
+          get :for_me, on: :collection
+          post :select, on: :member
+        end
       end
 
       # The Catalog domain (ADR-0010) — controllers under Api::V1::Catalog::,
@@ -72,14 +88,18 @@ Rails.application.routes.draw do
         put "terrains/order", to: "terrains#reorder"
       end
 
-      # Maps — the authored-map contract (ADR-0004). `:slug` loads a baked map
-      # for play; `index`/`create`/`update` are the editor's write half (#105),
-      # admin-gated. `index` powers the map picker that decouples collision
-      # painting from create; `update` saves a re-painted collision mask.
-      get "maps", to: "maps#index"
-      get "maps/:slug", to: "maps#show"
-      post "maps", to: "maps#create"
-      patch "maps/:slug", to: "maps#update"
+      # The Maps domain (ADR-0010) — controllers under Api::V1::Maps::, URLs
+      # unchanged (`scope module:` nests the controller, not the path).
+      scope module: :maps do
+        # Maps — the authored-map contract (ADR-0004). `:slug` loads a baked map
+        # for play; `index`/`create`/`update` are the editor's write half (#105),
+        # admin-gated. `index` powers the map picker that decouples collision
+        # painting from create; `update` saves a re-painted collision mask.
+        get "maps", to: "maps#index"
+        get "maps/:slug", to: "maps#show"
+        post "maps", to: "maps#create"
+        patch "maps/:slug", to: "maps#update"
+      end
     end
   end
 end

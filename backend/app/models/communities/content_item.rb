@@ -1,10 +1,11 @@
 module Communities
   class ContentItem < ApplicationRecord
-    # board / house are same-module; user_content_states resolves to the
-    # (still flat) UserContentState via Rails' top-level fallback (#219 nests it).
+    # board / house are same-module; user_content_states is cross-module
+    # (Viewer::UserContentState, ADR-0010), named explicitly since Rails can't
+    # infer the namespace from the association.
     belongs_to :board
     has_one :house, through: :board
-    has_many :user_content_states, dependent: :destroy
+    has_many :user_content_states, class_name: "Viewer::UserContentState", dependent: :destroy
 
     enum :priority, {
       normal: "normal",

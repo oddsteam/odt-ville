@@ -11,7 +11,7 @@ module Api
       # seed fixture's shape so the request spec pins the contract MapSerializer
       # publishes.
       def make_map(slug: "atrium", title: "The Atrium")
-        Map.create!(
+        ::Maps::Map.create!(
           slug: slug,
           title: title,
           cols: 1,
@@ -97,7 +97,7 @@ module Api
       # that ground and lift its tilesets to the top-level list the runtime
       # preloads (the runtime blits whichever shape the producer supplied).
       def make_painted_map(slug: "grove")
-        Map.create!(
+        ::Maps::Map.create!(
           slug: slug,
           title: "The Grove",
           cols: 1,
@@ -157,7 +157,7 @@ module Api
       end
 
       test "an admin creates a map and gets it back serialized (201)" do
-        assert_difference "Map.count", 1 do
+        assert_difference "::Maps::Map.count", 1 do
           post "/api/v1/maps", params: create_params, headers: auth(@user, roles: ["admin"]), as: :json
         end
 
@@ -180,7 +180,7 @@ module Api
       end
 
       test "a non-admin is forbidden from creating a map" do
-        assert_no_difference "Map.count" do
+        assert_no_difference "::Maps::Map.count" do
           post "/api/v1/maps", params: create_params, headers: auth(@user), as: :json
         end
         assert_response :forbidden
@@ -189,7 +189,7 @@ module Api
       test "a duplicate slug is rejected with 422" do
         make_map(slug: "atrium")
 
-        assert_no_difference "Map.count" do
+        assert_no_difference "::Maps::Map.count" do
           post "/api/v1/maps", params: create_params(slug: "atrium"), headers: auth(@user, roles: ["admin"]), as: :json
         end
         assert_response :unprocessable_entity
@@ -197,7 +197,7 @@ module Api
       end
 
       test "non-positive dimensions are rejected with 422" do
-        assert_no_difference "Map.count" do
+        assert_no_difference "::Maps::Map.count" do
           post "/api/v1/maps", params: create_params(cols: 0, rows: -1), headers: auth(@user, roles: ["admin"]), as: :json
         end
         assert_response :unprocessable_entity
@@ -205,7 +205,7 @@ module Api
       end
 
       test "a blank title is rejected with 422" do
-        assert_no_difference "Map.count" do
+        assert_no_difference "::Maps::Map.count" do
           post "/api/v1/maps", params: create_params(title: ""), headers: auth(@user, roles: ["admin"]), as: :json
         end
         assert_response :unprocessable_entity
@@ -369,7 +369,7 @@ module Api
 
         assert_response :success
         assert_equal [], json[:entities]
-        assert_not_includes Map.find_by!(slug: "grove").baked.keys, "entities"
+        assert_not_includes ::Maps::Map.find_by!(slug: "grove").baked.keys, "entities"
       end
 
       test "updating an unknown slug returns 404" do
@@ -381,7 +381,7 @@ module Api
       end
 
       test "a malformed slug is rejected with 422" do
-        assert_no_difference "Map.count" do
+        assert_no_difference "::Maps::Map.count" do
           post "/api/v1/maps", params: create_params(slug: "Not A Slug"), headers: auth(@user, roles: ["admin"]), as: :json
         end
         assert_response :unprocessable_entity

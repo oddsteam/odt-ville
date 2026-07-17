@@ -316,14 +316,14 @@ MAP_FIXTURE = {
 
 ActiveRecord::Base.transaction do
   puts "Clearing existing village data..."
-  UserContentState.delete_all
-  UserLocationState.delete_all
+  Viewer::UserContentState.delete_all
+  GameSession::UserLocationState.delete_all
   Communities::ContentItem.delete_all
   Communities::Board.delete_all
   Communities::House.delete_all
   Auth::User.delete_all
   Org::Company.delete_all
-  Map.delete_all
+  Maps::Map.delete_all
 
   company = Org::Company.create!(name: "ODT")
 
@@ -338,7 +338,7 @@ ActiveRecord::Base.transaction do
 
   SEED_USERS.each do |attrs|
     u = Auth::User.create!(company: company, name: attrs[:name], role: attrs[:role], external_id: attrs[:external_id])
-    UserLocationState.create!(user: u, company: company, last_area: "town")
+    GameSession::UserLocationState.create!(user: u, company: company, last_area: "town")
   end
 
   HOUSES.each_with_index do |house_data, index|
@@ -357,7 +357,7 @@ ActiveRecord::Base.transaction do
     end
   end
 
-  Map.create!(MAP_FIXTURE)
+  Maps::Map.create!(MAP_FIXTURE)
 
   # Terrain stack priority (#120), low→high: the higher-priority terrain owns a
   # shared seam. This is the order both ground producers (the generated town and
@@ -370,5 +370,5 @@ ActiveRecord::Base.transaction do
 
   puts "Seeded: #{Org::Company.count} company, #{Auth::User.count} users, " \
        "#{Communities::House.count} houses, #{Communities::Board.count} boards, #{Communities::ContentItem.count} content items, " \
-       "#{Map.count} authored map."
+       "#{Maps::Map.count} authored map."
 end
