@@ -1,0 +1,45 @@
+# Architecture conformance — the enforcement foundation for ADR-0010.
+#
+# Runs the frontend dependency-cruiser check (`pnpm arch`, which ignores the
+# baselined known-violations and fails only on NEW divergences) on every pull
+# request AND on every push to `main`. The push trigger is deliberate: the
+# Sandcastle AFK loop merges locally and pushes to `main` without opening PRs,
+# so a PR-only trigger would never see that code. Branch protection is
+# intentionally NOT enabled (issue #215 / PRD #214) — it would block those
+# direct pushes and break the loop.
+#
+# Later ADR-0010 slices add backend jobs (structure check, test suite) to this
+# same workflow.
+name: Architecture
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  frontend-arch:
+    name: Frontend architecture check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      # pnpm must be installed before setup-node so `cache: pnpm` resolves the
+      # pnpm store. Version is read from the root package.json packageManager
+      # field (pnpm@11.5.0).
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run architecture check
+        run: pnpm arch
