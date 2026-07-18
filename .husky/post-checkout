@@ -1,0 +1,6 @@
+# Refresh the local code-review-graph after a branch switch ($3=1; skip file
+# checkouts). No-op for anyone without the CLI or a built graph, backgrounded.
+[ "${3:-0}" = "1" ] || exit 0
+command -v code-review-graph >/dev/null 2>&1 || exit 0
+[ -f .code-review-graph/graph.db ] || exit 0
+(code-review-graph update >/dev/null 2>&1 &)

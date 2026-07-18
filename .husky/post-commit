@@ -1,0 +1,5 @@
+# Refresh the local code-review-graph after each commit. No-op for anyone
+# without the CLI or a built graph, and backgrounded so commits never block.
+command -v code-review-graph >/dev/null 2>&1 || exit 0
+[ -f .code-review-graph/graph.db ] || exit 0
+(code-review-graph update >/dev/null 2>&1 &)
