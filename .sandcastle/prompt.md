@@ -31,13 +31,19 @@ Pick the highest-priority open issue that is not blocked by another open issue.
 2. **Plan** — decide what to change and why. Keep the change as small as possible.
 3. **Execute** — use RGR (Red → Green → Repeat → Refactor): write a failing test first, then write the implementation to pass it.
 4. **Verify** — run `pnpm run typecheck` and `pnpm run test` before committing. Fix any failures before proceeding.
-5. **Commit** — make a single git commit. The message MUST:
+5. **Architecture gate (before committing)** — the loop merges to `main` and pushes directly, so these checks are the gate that fires *before* merge; the push-triggered CI (`.github/workflows/arch.yml`) is only the backstop. Run all three and confirm they pass in the run log:
+   - Frontend architecture check: `cd frontend && pnpm arch`
+   - Backend schema lint: `cd backend && bash script/schema-lint.sh`
+   - Backend structure lint: `cd backend && bash script/structure-lint.sh`
+
+   On failure: if the violation is your own change, **fix it** and re-run. If the failure is pre-existing and unrelated to your change, **abort the issue** — leave a comment on the issue and move on. **Never merge red.**
+6. **Commit** — make a single git commit. The message MUST:
    - Start with `RALPH:` prefix
    - Include the task completed and any PRD reference
    - List key decisions made
    - List files changed
    - Note any blockers for the next iteration
-6. **Close** — close the issue with `gh issue close <ID> --comment "Completed by Sandcastle"` explaining what was done.
+7. **Close** — close the issue with `gh issue close <ID> --comment "Completed by Sandcastle"` explaining what was done.
 
 ## Rules
 
