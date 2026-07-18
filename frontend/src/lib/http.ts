@@ -32,17 +32,23 @@ export class RequestError extends Data.TaggedError('RequestError')<{
   readonly path: string
   readonly status: number
   readonly body: string
-}> {}
+}> {
+  override readonly message: string = `request to ${this.path} failed with status ${this.status}`
+}
 
 export class NetworkError extends Data.TaggedError('NetworkError')<{
   readonly path: string
   readonly reason: string
-}> {}
+}> {
+  override readonly message: string = `network error for ${this.path}: ${this.reason}`
+}
 
 export class DecodeError extends Data.TaggedError('DecodeError')<{
   readonly path: string
   readonly reason: string
-}> {}
+}> {
+  override readonly message: string = `invalid response from ${this.path}: ${this.reason}`
+}
 
 export type HttpError = RequestError | NetworkError | DecodeError
 
