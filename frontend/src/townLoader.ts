@@ -6,6 +6,7 @@
 
 import * as Effect from 'effect/Effect'
 
+import { NetworkError, RequestError } from './lib/http.ts'
 import { CommunitiesService } from './communities/service.ts'
 import { GameSessionService } from './game-session/service.ts'
 import { TileObjectsService } from './catalog/tileObjects/service.ts'
@@ -35,6 +36,22 @@ export const resolveHometownPolicy = () =>
     },
     { concurrency: 'unbounded' },
   )
+
+// User-facing copy for a failed town load (issue #226). Auth failures are an
+// access problem (in dev: no DEV user picked yet; in prod: not authorized),
+// 5xx/network failures mean the backend is down or warming up; anything else
+// keeps its own message.
+const UNAVAILABLE = 'THE VILLAGE IS TEMPORARILY UNAVAILABLE — TRY AGAIN IN A MOMENT'
+
+export const townErrorMessage = (e: unknown): string => {
+  if (e instanceof RequestError) {
+    if (e.status === 401 || e.status === 403) return "YOU DON'T HAVE ACCESS TO ENTER THE VILLAGE"
+    if (e.status >= 500) return UNAVAILABLE
+  }
+  if (e instanceof NetworkError) return UNAVAILABLE
+  if (e instanceof Error && e.message) return e.message
+  return 'CAN’T REACH THE VILLAGE'
+}
 
 export const loadTown = () =>
   Effect.all(

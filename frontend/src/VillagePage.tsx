@@ -6,7 +6,7 @@ import { startPosture, confirmPosture } from './posture/client.ts'
 import { runPostureGate } from './posture/runGate.ts'
 import { openGatePopup, awaitGateResult } from './posture/popup.ts'
 import { CALLBACK_PATH } from './posture/callback.ts'
-import { loadTown as loadTownData } from './townLoader.ts'
+import { loadTown as loadTownData, townErrorMessage } from './townLoader.ts'
 import { runEdge } from './lib/runEdge.ts'
 import { subscribeAuthToken } from './lib/authToken.ts'
 import { trackEnterDoor, trackInteractBoard, trackEncounter } from './analytics/events.ts'
@@ -81,7 +81,7 @@ export default function VillagePage() {
     let active = true
     setLoading(true)
     loadTown()
-      .catch((e) => active && setError(e.message))
+      .catch((e) => active && setError(townErrorMessage(e)))
       .finally(() => active && setLoading(false))
     return () => {
       active = false
@@ -90,7 +90,7 @@ export default function VillagePage() {
 
   // Re-run the town load whenever the active user changes (dev switcher). The
   // first paint happens before a user is picked, so its fetches 401 and stick
-  // on "CAN'T REACH THE VILLAGE"; switching users must recover, not just the
+  // on the no-access screen; switching users must recover, not just the
   // header. No-op in prod where the token is set once before render.
   useEffect(
     () =>
@@ -98,7 +98,7 @@ export default function VillagePage() {
         setError(null)
         setLoading(true)
         loadTown()
-          .catch((e) => setError(e.message))
+          .catch((e) => setError(townErrorMessage(e)))
           .finally(() => setLoading(false))
       }),
     [loadTown],
@@ -193,7 +193,7 @@ export default function VillagePage() {
   )
 
   const handleDailyBriefClose = useCallback(() => {
-    loadTown().catch((e) => setError(e.message))
+    loadTown().catch((e) => setError(townErrorMessage(e)))
   }, [loadTown])
 
   // ---- Render states ------------------------------------------------
@@ -210,8 +210,7 @@ export default function VillagePage() {
   if (error && !communities) {
     return (
       <div className="error-card">
-        <h2>CAN'T REACH THE VILLAGE</h2>
-        <p className="error-detail">{error}</p>
+        <h2>{error}</h2>
         <button type="button" onClick={() => window.location.reload()}>
           RETRY
         </button>
