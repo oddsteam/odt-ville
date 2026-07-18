@@ -4,7 +4,7 @@ import { openItem, acknowledgeItem } from './client.js'
 import { formatDate, formatExpiry } from './format.js'
 import PriorityChip from './PriorityChip.tsx'
 import StateBadge from './StateBadge.tsx'
-import type { FeedItem } from './schema.ts'
+import type { FeedItem, ItemStateResponse } from './schema.ts'
 
 // A single brief row — ContentCard-like but flattened for the list modal.
 function BriefRow({
@@ -12,7 +12,7 @@ function BriefRow({
   onItemUpdate,
 }: {
   item: FeedItem
-  onItemUpdate: (res: FeedItem) => void
+  onItemUpdate: (res: ItemStateResponse) => void
 }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -129,7 +129,9 @@ export default function DailyBriefShortcut({
     if (onClose) onClose()
   }
 
-  function handleItemUpdate(res: FeedItem) {
+  // Merge the decoded state shape into the row we already hold. res's keys are
+  // a subset of FeedItem with matching types, so the spread is honest.
+  function handleItemUpdate(res: ItemStateResponse) {
     setBriefItems((prev) =>
       prev.map((it) => (it.id === res.id ? { ...it, ...res } : it)),
     )

@@ -6,9 +6,8 @@
 // JSX call sites (VillagePage, DailyBriefShortcut). `/admin/communities`
 // invokes the service directly via `runEdge`.
 //
-// The remaining helpers (getCommunity, openItem, acknowledgeItem) are still
-// untyped fetch — they'll be migrated to the Effect pattern in follow-up
-// slices once this architecture gate is signed off.
+// The remaining helper (getCommunity) is still untyped fetch — it'll be
+// migrated to the Effect pattern in a follow-up slice.
 
 import { runEdge } from '../lib/runEdge.ts'
 import { CommunitiesService } from './service.ts'
@@ -32,8 +31,6 @@ async function request(path, options = {}) {
   return text ? JSON.parse(text) : null
 }
 
-const jsonHeaders = { 'Content-Type': 'application/json' }
-
 export function listCommunities() {
   return runEdge(CommunitiesService.list())
 }
@@ -55,18 +52,12 @@ export function getCommunity(id) {
   return request(`/communities/${id}`)
 }
 
-// POST /content_items/:id/open
+// POST /content_items/:id/open -> decoded { id, state, opened_at, acknowledged_at }
 export function openItem(id) {
-  return request(`/content_items/${id}/open`, {
-    method: 'POST',
-    headers: jsonHeaders,
-  })
+  return runEdge(CommunitiesService.open(id))
 }
 
-// POST /content_items/:id/acknowledge
+// POST /content_items/:id/acknowledge -> decoded state shape
 export function acknowledgeItem(id) {
-  return request(`/content_items/${id}/acknowledge`, {
-    method: 'POST',
-    headers: jsonHeaders,
-  })
+  return runEdge(CommunitiesService.acknowledge(id))
 }
