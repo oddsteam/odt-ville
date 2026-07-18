@@ -8,8 +8,8 @@
 # intentionally NOT enabled (issue #215 / PRD #214) — it would block those
 # direct pushes and break the loop.
 #
-# Later ADR-0010 slices add backend jobs (structure check, test suite) to this
-# same workflow.
+# Backend jobs live here too: `schema-lint` enforces ADR-0010's DB conventions
+# (issue #220). Later slices add the structure check and test suite.
 name: Architecture
 
 on:
@@ -43,3 +43,17 @@ jobs:
 
       - name: Run architecture check
         run: pnpm arch
+
+  schema-lint:
+    name: Schema lint (ADR-0010)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pure-bash lint of db/schema.rb — no Ruby, gems, or database needed.
+      # Enforces the FK allowlist and module-prefix rules from ADR-0010.
+      - name: Run schema lint
+        run: bash script/schema-lint.sh
