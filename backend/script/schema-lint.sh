@@ -49,6 +49,8 @@ fk_allowlist=(
   "boards|houses"
   "content_items|boards"
   "houses|companies"
+  "maps_map_memberships|maps"
+  "maps_map_memberships|users"
   "user_content_states|content_items"
   "user_content_states|users"
   "user_location_states|companies"

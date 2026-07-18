@@ -3,28 +3,32 @@ module Api
     module Maps
       # Read side of the map contract (ADR-0004). The runtime loads a map by slug
       # and renders the baked artifact; there is no per-map branching here either,
-      # this controller just returns "the map for this slug". Author CRUD and
-      # access-policy gating arrive with the editor + Keycloak slices (#80+).
+      # this controller just returns "the map for this slug". List and load are
+      # gated by the map's access policy (#83) — server-side, no client hiding.
       #
       # Leading-colon `::Maps::` refs jump to the domain module — inside
       # Api::V1::Maps a bare `Maps` would resolve to this controller namespace.
       class MapsController < BaseController
         # Authoring writes require the `admin` realm role (#100), as the other
-        # mapper endpoints do; the play `show` stays open to any authenticated user.
-        before_action -> { require_role!("admin") }, only: %i[index create update]
+        # mapper endpoints do; the reads are per-user via the access policy.
+        before_action -> { require_role!("admin") }, only: %i[create update]
 
-        # GET /api/v1/maps — identity-only list for the admin map picker (the author
-        # picks a saved map to paint collision on). Deliberately omits the heavy
-        # baked/source jsonb; the editor loads those per-map via `show`.
+        # GET /api/v1/maps — identity-only list of the maps this user may access
+        # (map picker, portal targets). Deliberately omits the heavy baked/source
+        # jsonb; the editor loads those per-map via `show`.
         def index
-          maps = ::Maps::Map.order(:title).pluck(:slug, :title, :cols, :rows)
-          render json: maps.map { |slug, title, cols, rows| { slug:, title:, cols:, rows: } }
+          maps = ::Maps::Map.order(:title)
+            .select(:id, :slug, :title, :cols, :rows, :access_policy)
+            .select { |m| accessible?(m) }
+          render json: maps.map { |m| { slug: m.slug, title: m.title, cols: m.cols, rows: m.rows } }
         end
 
         # GET /api/v1/maps/:slug — the baked map for play. Unknown slug → 404,
-        # surfaced by ApplicationController#render_not_found.
+        # surfaced by ApplicationController#render_not_found; gated slug → 403.
         def show
           map = ::Maps::Map.find_by!(slug: params[:slug])
+          return render json: { error: "Forbidden" }, status: :forbidden unless accessible?(map)
+
           render json: ::Maps::MapSerializer.call(map)
         end
 
@@ -54,6 +58,11 @@ module Api
         end
 
         private
+
+        # The access gate (#83) — also the future multiplayer room-join gate.
+        def accessible?(map)
+          map.accessible_to?(current_user, roles: current_roles, groups: current_groups)
+        end
 
         # Whitelist only the map's own columns; `source`/`baked` are opaque author
         # documents stored as jsonb, so permit their nested structure wholesale.

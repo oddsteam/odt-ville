@@ -10,10 +10,11 @@ module Api
       # A minimal baked authored map: a 1x1 grass grid plus one prop. Mirrors the
       # seed fixture's shape so the request spec pins the contract MapSerializer
       # publishes.
-      def make_map(slug: "atrium", title: "The Atrium")
+      def make_map(slug: "atrium", title: "The Atrium", policy: nil)
         ::Maps::Map.create!(
           slug: slug,
           title: title,
+          access_policy: policy || { "kind" => "public" },
           cols: 1,
           rows: 1,
           baked: {
@@ -86,10 +87,72 @@ module Api
         assert_not_includes json.first.keys, :source
       end
 
-      test "a non-admin is forbidden from listing maps" do
+      # Access policy (#83): list and load are gated server-side — no
+      # client-side hiding. The list is per-user, so it is no longer
+      # admin-only (supersedes the #100 gate on index).
+      test "index lists public maps for any authenticated user" do
         make_map
+
         get "/api/v1/maps", headers: auth(@user)
+
+        assert_response :success
+        assert_equal ["atrium"], json.map { |m| m[:slug] }
+      end
+
+      test "index omits maps the user cannot access" do
+        make_map(slug: "open")
+        make_map(slug: "staff-room", policy: { "kind" => "claim", "role" => "staff" })
+        make_map(slug: "clubhouse", policy: { "kind" => "members" })
+
+        get "/api/v1/maps", headers: auth(@user)
+
+        assert_equal ["open"], json.map { |m| m[:slug] }
+      end
+
+      test "index includes a claim-gated map for a user with the matching role" do
+        make_map(slug: "staff-room", policy: { "kind" => "claim", "role" => "staff" })
+
+        get "/api/v1/maps", headers: auth(@user, roles: ["staff"])
+
+        assert_equal ["staff-room"], json.map { |m| m[:slug] }
+      end
+
+      test "index includes a members map for a member" do
+        map = make_map(slug: "clubhouse", policy: { "kind" => "members" })
+        ::Maps::MapMembership.create!(map: map, user: @user)
+
+        get "/api/v1/maps", headers: auth(@user)
+
+        assert_equal ["clubhouse"], json.map { |m| m[:slug] }
+      end
+
+      test "show returns 403 for a map the user cannot access" do
+        make_map(slug: "staff-room", policy: { "kind" => "claim", "role" => "staff" })
+
+        get "/api/v1/maps/staff-room", headers: auth(@user)
+
         assert_response :forbidden
+        assert json[:error].present?
+      end
+
+      test "show loads a claim-gated map for a user with the matching role" do
+        make_map(slug: "staff-room", policy: { "kind" => "claim", "role" => "staff" })
+
+        get "/api/v1/maps/staff-room", headers: auth(@user, roles: ["staff"])
+
+        assert_response :success
+        assert_equal "staff-room", json[:slug]
+      end
+
+      test "show returns 403 for a members map until the user is a member" do
+        map = make_map(slug: "clubhouse", policy: { "kind" => "members" })
+
+        get "/api/v1/maps/clubhouse", headers: auth(@user)
+        assert_response :forbidden
+
+        ::Maps::MapMembership.create!(map: map, user: @user)
+        get "/api/v1/maps/clubhouse", headers: auth(@user)
+        assert_response :success
       end
 
       # A painted authored map (#106/#107) bakes to a `ground` — per-cell layer
