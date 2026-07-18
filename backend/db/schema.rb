@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_07_18_000002) do
+ActiveRecord::Schema[8.1].define(version: 2026_07_19_000001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -86,6 +86,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_18_000002) do
   end
 
   create_table "maps", force: :cascade do |t|
+    t.jsonb "access_policy", default: {"kind" => "public"}, null: false
     t.jsonb "baked", default: {}, null: false
     t.integer "cols", null: false
     t.datetime "created_at", null: false
@@ -95,6 +96,16 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_18_000002) do
     t.string "title", default: "", null: false
     t.datetime "updated_at", null: false
     t.index ["slug"], name: "index_maps_on_slug", unique: true
+  end
+
+  create_table "maps_map_memberships", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.bigint "map_id", null: false
+    t.datetime "updated_at", null: false
+    t.bigint "user_id", null: false
+    t.index ["map_id", "user_id"], name: "index_maps_map_memberships_on_map_id_and_user_id", unique: true
+    t.index ["map_id"], name: "index_maps_map_memberships_on_map_id"
+    t.index ["user_id"], name: "index_maps_map_memberships_on_user_id"
   end
 
   create_table "monsters", force: :cascade do |t|
@@ -179,6 +190,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_18_000002) do
   add_foreign_key "boards", "houses"
   add_foreign_key "content_items", "boards"
   add_foreign_key "houses", "companies"
+  add_foreign_key "maps_map_memberships", "maps"
+  add_foreign_key "maps_map_memberships", "users"
   add_foreign_key "user_content_states", "content_items"
   add_foreign_key "user_content_states", "users"
   add_foreign_key "user_location_states", "companies"
