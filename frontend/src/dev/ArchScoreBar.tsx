@@ -32,6 +32,7 @@ export default function ArchScoreBar() {
   const [data, setData] = useState<Score | null>(null)
   const [failed, setFailed] = useState(false)
   const [open, setOpen] = useState(false)
+  const [stale, setStale] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -48,7 +49,25 @@ export default function ArchScoreBar() {
     }
   }, [])
 
-  if (failed) return null
+  // Backend staleness (issue #225): the dev backend keeps serving boot-time
+  // code after merges/pulls for restart-sensitive paths, so poll the dev-only
+  // signal and flag loudly when HEAD has moved since the backend booted.
+  useEffect(() => {
+    let active = true
+    const check = () =>
+      fetch('/api/v1/dev/staleness')
+        .then((r) => r.json())
+        .then((d: { stale: boolean }) => active && setStale(d.stale))
+        .catch(() => {})
+    check()
+    const id = setInterval(check, 30_000)
+    return () => {
+      active = false
+      clearInterval(id)
+    }
+  }, [])
+
+  if (failed && !stale) return null
 
   const pct = data ? data.score : null
 
@@ -70,6 +89,19 @@ export default function ArchScoreBar() {
         overflow: 'hidden',
       }}
     >
+      {stale && (
+        <div
+          title="HEAD moved since the backend booted — it may serve pre-merge code"
+          style={{
+            padding: '6px 10px',
+            background: '#f85149',
+            color: '#fff',
+            fontWeight: 700,
+          }}
+        >
+          BACKEND STALE — docker compose restart backend
+        </div>
+      )}
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}

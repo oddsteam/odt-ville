@@ -8,6 +8,11 @@ services:
   backend:
     ports:
       - "3190:3190"
+    volumes:
+      # Read-only view of the repo's git dir so the dev staleness signal
+      # (issue #225) can compare the sha captured at boot with the working
+      # tree's current HEAD. See backend/config/initializers/dev_staleness.rb.
+      - ./.git:/repo.git:ro
     environment:
       # Local posture-login (issue #24) runs on the host at :3000; the backend
       # reaches it for the server-to-server gate calls via host.docker.internal,
