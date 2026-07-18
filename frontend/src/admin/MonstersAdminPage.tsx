@@ -3,7 +3,7 @@ import { MonstersService } from '../catalog/monsters/service.ts'
 import { MonstersWrite } from '../catalog/monsters/write.ts'
 import type { MonsterSummary, UpdateMonster } from '../catalog/monsters/schema.ts'
 import { runEdge } from '../lib/runEdge.ts'
-import { pngHasAlpha } from '../catalog/monsters/pngAlpha.ts'
+import { pngHasAlpha } from '../catalog/monsters/service.ts'
 import './admin.css'
 
 // Soft warning shown when a picked PNG has no alpha channel — it bakes a

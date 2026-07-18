@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom'
 // from the sprite mapper rather than duplicated. No arch edge is crossed —
 // authoring may be imported by the shell-side picker, never the reverse.
 import AnimPreview from '../spriteMapper/AnimPreview.tsx'
-import { POSTURE_KEYS, normalizeManifest, resolveSheetSrc } from './manifest.js'
+import { POSTURE_KEYS, normalizeManifest, resolveSheetSrc } from '../kernel/characterManifest.js'
 import { CharacterService } from './service.ts'
 import { runEdge } from '../lib/runEdge.ts'
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { normalizeManifest } from '../src/character/manifest.js'
+import { normalizeManifest } from '../src/kernel/characterManifest.js'
 import { buildCharacterRig, applyFacing } from '../src/game/phaser/characterRig.js'
 
 // The rig compiles a climb anim per direction (#54/#55). When the manifest has

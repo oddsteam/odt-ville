@@ -8,9 +8,9 @@ import {
   POSTURE_SLOTS,
   emptyPostures,
   normalizeManifest,
-  downloadManifest,
-  loadActiveManifest,
-} from '../character/manifest.js'
+} from '../kernel/characterManifest.js'
+import { downloadManifest } from './downloadManifest.js'
+import { loadActiveManifest } from '../character/service.ts'
 import { CharacterService } from '../character/service.ts'
 import { runEdge } from '../lib/runEdge.ts'
 

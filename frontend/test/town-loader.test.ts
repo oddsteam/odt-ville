@@ -9,7 +9,8 @@ import { Http, RequestError, type HttpError } from '../src/lib/http.ts'
 // The character branch keeps loadMyManifest's own resolution chain (for_me
 // -> committed default), which bypasses the injected Http layer.
 // Stub it so these tests exercise only the Effect.all orchestration.
-vi.mock('../src/character/manifest.js', () => ({
+vi.mock('../src/character/service.ts', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   loadMyManifest: vi.fn(async () => ({ name: 'scout' })),
 }))
 

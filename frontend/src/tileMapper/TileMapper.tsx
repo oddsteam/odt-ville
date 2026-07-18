@@ -4,7 +4,7 @@ import { TileObjectsWrite } from '../catalog/tileObjects/write.ts'
 import type { TileObject, TileObjectSummary } from '../catalog/tileObjects/schema.ts'
 import { runEdge } from '../lib/runEdge.ts'
 import { validateWalkMask, EDGE_N, EDGE_E, EDGE_S, EDGE_W } from '../kernel/walkMask.ts'
-import './styles.css'
+import '../lib/mapperChrome.css'
 
 type Atlas = { img: HTMLImageElement; src: string; width: number; height: number }
 type Sel = { c0: number; r0: number; c1: number; r1: number }

@@ -6,7 +6,7 @@ import {
   emptyManifest,
   framesForFacing,
   normalizeManifest,
-} from '../src/character/manifest.js'
+} from '../src/kernel/characterManifest.js'
 
 // Climb postures (#55): per-direction climb slots authored in the sprite-mapper
 // and played on a ladder cell (#54). They round-trip through the manifest like

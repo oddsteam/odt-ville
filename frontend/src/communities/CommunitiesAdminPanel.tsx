@@ -5,7 +5,7 @@ import type { Community } from './schema.ts'
 import { PostureService } from '../posture/service.ts'
 import type { PostureSet } from '../posture/schema.ts'
 import { runEdge } from '../lib/runEdge.ts'
-import '../tileMapper/styles.css'
+import '../lib/mapperChrome.css'
 import './admin.css'
 
 const CATEGORIES = [

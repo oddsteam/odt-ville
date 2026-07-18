@@ -9,7 +9,7 @@
 // it in as `priority` and the stack (palette order + seam ownership) is derived
 // from it — no hardcoded order here.
 
-import { tilesetUrl } from '../catalog/groundTiles/tilesets.js'
+import { tilesetUrl } from '../catalog/groundTiles/service.ts'
 import type { GroundTile } from '../catalog/groundTiles/schema.ts'
 
 // The catalog assembly itself lives in the kernel (#171) — the live hometown

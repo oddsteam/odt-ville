@@ -7,7 +7,7 @@ import { TileObjectsService } from './catalog/tileObjects/service.ts'
 import { objectIdsFrom } from './maps/props.ts'
 import { runEdge } from './lib/runEdge.ts'
 import { subscribeAuthToken } from './lib/authToken.ts'
-import { loadMyManifest } from './character/manifest.js'
+import { loadMyManifest } from './character/service.ts'
 import type { BakedMap } from './kernel/schema.ts'
 
 // Play surface for an authored map (ADR-0004). It loads a baked map by slug and

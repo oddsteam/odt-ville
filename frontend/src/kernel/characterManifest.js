@@ -1,9 +1,9 @@
 // Pure character-manifest shape logic (ADR-0004 kernel: sits beneath both the
 // producers and the game runtime, depends on nobody). No I/O, no React, no
-// Effect — just the posture-slot vocabulary and frame math shared by the
-// sprite-mapper, roster, picker and the game's character rig. The data-service
-// side of the manifest (fetch/persist) stays in src/character/manifest.js,
-// which re-exports these for its existing callers.
+// Effect — just the posture-slot vocabulary, manifest shape and frame math
+// shared by the sprite-mapper, roster, picker and the game's character rig.
+// The data-service side of the manifest (fetch/persist) lives in
+// src/character/service.ts.
 
 // Posture slot keys in display order, grouped idle/walk per direction, plus the
 // climb slots (#55). Climb is optional: a character without climb frames falls
@@ -53,4 +53,37 @@ export function framesForFacing(m, dir, kind) {
 
 function cap(s) {
   return s.charAt(0).toUpperCase() + s.slice(1)
+}
+
+export function emptyPostures() {
+  return POSTURE_KEYS.reduce((acc, k) => {
+    acc[k] = []
+    return acc
+  }, {})
+}
+
+export function emptyManifest() {
+  return {
+    version: 1,
+    name: 'untitled',
+    sheet: { path: '', width: 0, height: 0 },
+    grid: { frameWidth: 32, frameHeight: 64 },
+    render: { originX: 0.5, originY: 1, scale: 1 },
+    frameRate: 9,
+    postures: emptyPostures(),
+  }
+}
+
+// Fill in any missing fields so a partial/old manifest still works.
+export function normalizeManifest(m) {
+  const base = emptyManifest()
+  if (!m || typeof m !== 'object') return base
+  return {
+    ...base,
+    ...m,
+    sheet: { ...base.sheet, ...(m.sheet || {}) },
+    grid: { ...base.grid, ...(m.grid || {}) },
+    render: { ...base.render, ...(m.render || {}) },
+    postures: { ...base.postures, ...(m.postures || {}) },
+  }
 }

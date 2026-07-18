@@ -2,14 +2,14 @@ import { describe, expect, it, afterEach, vi } from 'vitest'
 import * as Cause from 'effect/Cause'
 import * as Exit from 'effect/Exit'
 
-import { CharacterService } from '../src/character/service.ts'
-import { runEdge } from '../src/lib/runEdge.ts'
-import { AppRuntime } from '../src/lib/runtime.ts'
 import {
+  CharacterService,
   loadActiveManifest,
   loadMyManifest,
-  normalizeManifest,
-} from '../src/character/manifest.js'
+} from '../src/character/service.ts'
+import { runEdge } from '../src/lib/runEdge.ts'
+import { AppRuntime } from '../src/lib/runtime.ts'
+import { normalizeManifest } from '../src/kernel/characterManifest.js'
 
 // Route a fetch mock by URL substring -> Response, so a single call can serve
 // both /character_manifests/active and the committed-default file.

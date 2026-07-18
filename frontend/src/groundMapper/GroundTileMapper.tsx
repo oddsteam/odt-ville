@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { TILESETS, tilesetUrl } from '../catalog/groundTiles/tilesets.js'
+import { TILESETS, tilesetUrl } from '../catalog/groundTiles/service.ts'
 import { GroundTilesService } from '../catalog/groundTiles/service.ts'
 import { GroundTilesWrite } from '../catalog/groundTiles/write.ts'
 import type { GroundTile } from '../catalog/groundTiles/schema.ts'
@@ -8,7 +8,7 @@ import { TerrainsWrite } from '../catalog/terrains/write.ts'
 import { priorityOrder } from '../catalog/terrains/schema.ts'
 import { movedOrder } from './priorityMove.ts'
 import { runEdge } from '../lib/runEdge.ts'
-import '../tileMapper/styles.css'
+import '../lib/mapperChrome.css'
 import './styles.css'
 
 // Ground-Tile Mapper — admins pick a bundled tileset, click a single cell, and
