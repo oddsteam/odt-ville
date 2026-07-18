@@ -10,16 +10,16 @@ describe('BakedMap schema', () => {
     title: 'The Atrium',
     cols: 2,
     rows: 2,
-    tilesets: [{ name: '1_Terrains_and_Fences_32x32', cell: 32 }],
+    tilesets: [{ name: 'terrain/1_Terrains_and_Fences_32x32', cell: 32 }],
     tiles: [
       [
-        { tileset: '1_Terrains_and_Fences_32x32', frame: 0 },
-        { tileset: '1_Terrains_and_Fences_32x32', frame: 0 },
+        { tileset: 'terrain/1_Terrains_and_Fences_32x32', frame: 0 },
+        { tileset: 'terrain/1_Terrains_and_Fences_32x32', frame: 0 },
       ],
-      [{ tileset: '1_Terrains_and_Fences_32x32', frame: 0 }, null],
+      [{ tileset: 'terrain/1_Terrains_and_Fences_32x32', frame: 0 }, null],
     ],
     entities: [
-      { kind: 'prop', tileset: '1_Terrains_and_Fences_32x32', frame: 5, x: 1, y: 0 },
+      { kind: 'prop', tileset: 'terrain/1_Terrains_and_Fences_32x32', frame: 5, x: 1, y: 0 },
     ],
   }
 

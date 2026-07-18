@@ -15,8 +15,8 @@
  "tilesets": [
   {
    "firstgid": 1,
-   "name": "1_Terrains_and_Fences_32x32",
-   "image": "tilesets/1_Terrains_and_Fences_32x32.png",
+   "name": "terrain/1_Terrains_and_Fences_32x32",
+   "image": "tilesets/terrain/1_Terrains_and_Fences_32x32.png",
    "imagewidth": 1024,
    "imageheight": 2368,
    "tilewidth": 32,
@@ -28,8 +28,8 @@
   },
   {
    "firstgid": 2369,
-   "name": "2_City_Terrains_32x32",
-   "image": "tilesets/2_City_Terrains_32x32.png",
+   "name": "terrain/2_City_Terrains_32x32",
+   "image": "tilesets/terrain/2_City_Terrains_32x32.png",
    "imagewidth": 1888,
    "imageheight": 3296,
    "tilewidth": 32,
@@ -41,8 +41,8 @@
   },
   {
    "firstgid": 8446,
-   "name": "5_Floor_Modular_Buildings_32x32",
-   "image": "tilesets/5_Floor_Modular_Buildings_32x32.png",
+   "name": "buildings/5_Floor_Modular_Buildings_32x32",
+   "image": "tilesets/buildings/5_Floor_Modular_Buildings_32x32.png",
    "imagewidth": 1024,
    "imageheight": 8288,
    "tilewidth": 32,
@@ -54,8 +54,8 @@
   },
   {
    "firstgid": 16734,
-   "name": "4_Generic_Buildings_32x32",
-   "image": "tilesets/4_Generic_Buildings_32x32.png",
+   "name": "buildings/4_Generic_Buildings_32x32",
+   "image": "tilesets/buildings/4_Generic_Buildings_32x32.png",
    "imagewidth": 1024,
    "imageheight": 6400,
    "tilewidth": 32,
@@ -67,8 +67,8 @@
   },
   {
    "firstgid": 23134,
-   "name": "10_Vehicles_32x32",
-   "image": "tilesets/10_Vehicles_32x32.png",
+   "name": "vehicles/10_Vehicles_32x32",
+   "image": "tilesets/vehicles/10_Vehicles_32x32.png",
    "imagewidth": 1024,
    "imageheight": 5376,
    "tilewidth": 32,
@@ -80,8 +80,8 @@
   },
   {
    "firstgid": 28510,
-   "name": "Interiors_free_32x32",
-   "image": "tilesets/Interiors_free_32x32.png",
+   "name": "interiors/Interiors_free_32x32",
+   "image": "tilesets/interiors/Interiors_free_32x32.png",
    "imagewidth": 512,
    "imageheight": 2848,
    "tilewidth": 32,

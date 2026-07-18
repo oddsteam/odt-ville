@@ -7,13 +7,13 @@
 // The catalog here is plain *data* — terrains, their stack order, and the atlas
 // coordinates of their art — so adding a terrain is a data edit, not a code
 // change (the autotile engine reads it as-is). It references the bundled
-// 1_Terrains_and_Fences_32x32 sheet (32 columns).
+// terrain/1_Terrains_and_Fences_32x32 sheet (32 columns).
 
 import { makeCatalog } from '../../kernel/tileCatalog.ts'
 import type { TileCatalog } from '../../kernel/tileCatalog.ts'
 import type { SourceMap } from '../../kernel/baker.ts'
 
-const SHEET = '1_Terrains_and_Fences_32x32'
+const SHEET = 'terrain/1_Terrains_and_Fences_32x32'
 
 // road (opaque base) < dirt < grass (top, owns seams). grass + dirt autotile.
 // Art coordinates are illustrative atlas cells on the bundled terrain sheet.

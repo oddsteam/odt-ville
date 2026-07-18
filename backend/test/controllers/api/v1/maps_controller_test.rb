@@ -17,10 +17,10 @@ module Api
           cols: 1,
           rows: 1,
           baked: {
-            "tilesets" => [{ "name" => "1_Terrains_and_Fences_32x32", "cell" => 32 }],
-            "tiles" => [[{ "tileset" => "1_Terrains_and_Fences_32x32", "frame" => 0 }]],
+            "tilesets" => [{ "name" => "terrain/1_Terrains_and_Fences_32x32", "cell" => 32 }],
+            "tiles" => [[{ "tileset" => "terrain/1_Terrains_and_Fences_32x32", "frame" => 0 }]],
             "entities" => [
-              { "kind" => "prop", "tileset" => "1_Terrains_and_Fences_32x32", "frame" => 5, "x" => 0, "y" => 0 }
+              { "kind" => "prop", "tileset" => "terrain/1_Terrains_and_Fences_32x32", "frame" => 5, "x" => 0, "y" => 0 }
             ]
           }
         )
@@ -37,8 +37,8 @@ module Api
         assert_equal "The Atrium", body[:title]
         assert_equal 1, body[:cols]
         assert_equal 1, body[:rows]
-        assert_equal [{ name: "1_Terrains_and_Fences_32x32", cell: 32 }], body[:tilesets]
-        assert_equal [[{ tileset: "1_Terrains_and_Fences_32x32", frame: 0 }]], body[:tiles]
+        assert_equal [{ name: "terrain/1_Terrains_and_Fences_32x32", cell: 32 }], body[:tilesets]
+        assert_equal [[{ tileset: "terrain/1_Terrains_and_Fences_32x32", frame: 0 }]], body[:tiles]
         assert_equal 1, body[:entities].length
         assert_equal "prop", body[:entities].first[:kind]
       end
@@ -106,8 +106,8 @@ module Api
             "ground" => {
               "cols" => 1,
               "rows" => 1,
-              "tilesets" => [{ "name" => "1_Terrains_and_Fences_32x32", "cell" => 32 }],
-              "cells" => [[[{ "tileset" => "1_Terrains_and_Fences_32x32", "frame" => 2, "depth" => 0.2 }]]]
+              "tilesets" => [{ "name" => "terrain/1_Terrains_and_Fences_32x32", "cell" => 32 }],
+              "cells" => [[[{ "tileset" => "terrain/1_Terrains_and_Fences_32x32", "frame" => 2, "depth" => 0.2 }]]]
             }
           }
         )
@@ -122,7 +122,7 @@ module Api
         body = json
         assert_equal 1, body[:ground][:cols]
         assert_equal(
-          [[[{ tileset: "1_Terrains_and_Fences_32x32", frame: 2, depth: 0.2 }]]],
+          [[[{ tileset: "terrain/1_Terrains_and_Fences_32x32", frame: 2, depth: 0.2 }]]],
           body[:ground][:cells]
         )
       end
@@ -134,7 +134,7 @@ module Api
 
         assert_response :success
         # No flat `tiles`, so the runtime learns which sheets to load from ground.
-        assert_equal [{ name: "1_Terrains_and_Fences_32x32", cell: 32 }], json[:tilesets]
+        assert_equal [{ name: "terrain/1_Terrains_and_Fences_32x32", cell: 32 }], json[:tilesets]
       end
 
       # A create payload mirroring what the editor POSTs (#105): identity, size,
@@ -149,8 +149,8 @@ module Api
           rows: rows,
           source: { "terrain" => [["grass"]] },
           baked: {
-            "tilesets" => [{ "name" => "1_Terrains_and_Fences_32x32", "cell" => 32 }],
-            "tiles" => [[{ "tileset" => "1_Terrains_and_Fences_32x32", "frame" => 0 }]],
+            "tilesets" => [{ "name" => "terrain/1_Terrains_and_Fences_32x32", "cell" => 32 }],
+            "tiles" => [[{ "tileset" => "terrain/1_Terrains_and_Fences_32x32", "frame" => 0 }]],
             "entities" => []
           }
         }
@@ -167,7 +167,7 @@ module Api
         assert_equal "The Atrium", body[:title]
         # The opaque baked jsonb survived strong params and round-trips through
         # the serializer — nested arrays and all.
-        assert_equal [[{ tileset: "1_Terrains_and_Fences_32x32", frame: 0 }]], body[:tiles]
+        assert_equal [[{ tileset: "terrain/1_Terrains_and_Fences_32x32", frame: 0 }]], body[:tiles]
       end
 
       test "the created map is immediately readable at its slug" do
@@ -216,8 +216,8 @@ module Api
           baked: {
             "ground" => {
               "cols" => 1, "rows" => 1,
-              "tilesets" => [{ "name" => "1_Terrains_and_Fences_32x32", "cell" => 32 }],
-              "cells" => [[[{ "tileset" => "1_Terrains_and_Fences_32x32", "frame" => 2, "depth" => 0.2 }]]]
+              "tilesets" => [{ "name" => "terrain/1_Terrains_and_Fences_32x32", "cell" => 32 }],
+              "cells" => [[[{ "tileset" => "terrain/1_Terrains_and_Fences_32x32", "frame" => 2, "depth" => 0.2 }]]]
             }
           }
         )
@@ -226,7 +226,7 @@ module Api
 
         get "/api/v1/maps/grove", headers: auth(@user)
         assert_equal(
-          [[[{ tileset: "1_Terrains_and_Fences_32x32", frame: 2, depth: 0.2 }]]],
+          [[[{ tileset: "terrain/1_Terrains_and_Fences_32x32", frame: 2, depth: 0.2 }]]],
           json[:ground][:cells]
         )
       end
@@ -240,8 +240,8 @@ module Api
             "producer" => "tiled",
             "ground" => {
               "cols" => 1, "rows" => 1,
-              "tilesets" => [{ "name" => "1_Terrains_and_Fences_32x32", "cell" => 32 }],
-              "cells" => [[[{ "tileset" => "1_Terrains_and_Fences_32x32", "frame" => 2, "depth" => 0 }]]]
+              "tilesets" => [{ "name" => "terrain/1_Terrains_and_Fences_32x32", "cell" => 32 }],
+              "cells" => [[[{ "tileset" => "terrain/1_Terrains_and_Fences_32x32", "frame" => 2, "depth" => 0 }]]]
             }
           }
         )
@@ -268,7 +268,7 @@ module Api
           baked: {
             "ground" => {
               "cols" => 2, "rows" => 1,
-              "tilesets" => [{ "name" => "1_Terrains_and_Fences_32x32", "cell" => 32 }],
+              "tilesets" => [{ "name" => "terrain/1_Terrains_and_Fences_32x32", "cell" => 32 }],
               "cells" => [[[], []]]
             },
             "collision" => [[true, false]]

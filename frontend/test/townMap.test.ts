@@ -54,7 +54,7 @@ describe('bakeTownGround — runtime map shape via the shared engine', () => {
 
   it('only references the bundled terrain sheet it actually used', () => {
     const ground = bakeTownGround(buildTown(1), HOMETOWN_CATALOG)
-    expect(ground.tilesets).toEqual([{ name: '1_Terrains_and_Fences_32x32', cell: 32 }])
+    expect(ground.tilesets).toEqual([{ name: 'terrain/1_Terrains_and_Fences_32x32', cell: 32 }])
   })
 
   it('bakes plain open ground to a single grass fill', () => {
@@ -73,7 +73,7 @@ describe('bakeTownGround — runtime map shape via the shared engine', () => {
     })
     const ground = bakeTownGround(town, HOMETOWN_CATALOG)
     expect(ground.cells[at.y][at.x]).toEqual([
-      { tileset: '1_Terrains_and_Fences_32x32', frame: f(2, 0), depth: 0.2 },
+      { tileset: 'terrain/1_Terrains_and_Fences_32x32', frame: f(2, 0), depth: 0.2 },
     ])
   })
 
@@ -93,8 +93,8 @@ describe('bakeTownGround — runtime map shape via the shared engine', () => {
     })
     const ground = bakeTownGround(town, HOMETOWN_CATALOG)
     expect(ground.cells[at.y][at.x]).toEqual([
-      { tileset: '1_Terrains_and_Fences_32x32', frame: f(1, 0), depth: 0.1 }, // dirt coverage
-      { tileset: '1_Terrains_and_Fences_32x32', frame: f(2, 1), depth: 0.2 }, // grass S edge
+      { tileset: 'terrain/1_Terrains_and_Fences_32x32', frame: f(1, 0), depth: 0.1 }, // dirt coverage
+      { tileset: 'terrain/1_Terrains_and_Fences_32x32', frame: f(2, 1), depth: 0.2 }, // grass S edge
     ])
   })
 })

@@ -17,8 +17,9 @@ tiled/
 ## Adding a tileset
 
 1. Copy the atlas PNG into a category folder under
-   `frontend/public/maps/tilesets/` — `buildings/`, `props/`, `terrain/`, or a
-   new one. Only atlases you actually place in a map belong in the repo; keep
+   `frontend/public/maps/tilesets/` — `buildings/`, `interiors/`, `props/`,
+   `terrain/`, `vehicles/`, or a new one. Only atlases you actually place in a
+   map belong in the repo; keep
    full asset packs (loose singles, animations, 16x16 variants) outside it.
 2. In Tiled: New Tileset → point at that PNG → **32x32, margin 0, spacing 0**.
 3. **Set the tileset name to `<category>/<png basename>`** — e.g.
@@ -41,9 +42,8 @@ copy in step 1 surfaces as a clear error, never as a broken map at play time.
 
 Never rename a PNG independently of its tileset name — they must stay in lockstep.
 
-Six tilesets sit **flat** at the top of `frontend/public/maps/tilesets/` rather
-than in a category folder: `1_Terrains_and_Fences_32x32`, `2_City_Terrains_32x32`,
-`4_Generic_Buildings_32x32`, `5_Floor_Modular_Buildings_32x32`, `10_Vehicles_32x32`,
-`Interiors_free_32x32`. Their names are already stored in the `ground_tiles` table
-and in baked map data, so renaming them means a data migration. Leave them alone;
-everything new goes in a category folder.
+Every tileset lives in a category folder; nothing sits flat at the top of
+`frontend/public/maps/tilesets/`. Because a tileset's name is persisted in the
+`ground_tiles` table and in baked map data, moving one (its name changes with its
+folder) means shipping a data migration that rewrites both stores — see
+`Tilesets.rename` and `db/migrate/*_rename_grandfathered_tilesets.rb` (#230).

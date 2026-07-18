@@ -13,8 +13,8 @@ const BAKED = {
   title: 'The Atrium',
   cols: 1,
   rows: 1,
-  tilesets: [{ name: '1_Terrains_and_Fences_32x32', cell: 32 }],
-  tiles: [[{ tileset: '1_Terrains_and_Fences_32x32', frame: 0 }]],
+  tilesets: [{ name: 'terrain/1_Terrains_and_Fences_32x32', cell: 32 }],
+  tiles: [[{ tileset: 'terrain/1_Terrains_and_Fences_32x32', frame: 0 }]],
   entities: [],
 }
 
@@ -41,7 +41,7 @@ describe('MapsService.get', () => {
     expect(Exit.isSuccess(exit)).toBe(true)
     if (Exit.isSuccess(exit)) {
       expect(exit.value.slug).toBe('atrium')
-      expect(exit.value.tiles[0][0]).toEqual({ tileset: '1_Terrains_and_Fences_32x32', frame: 0 })
+      expect(exit.value.tiles[0][0]).toEqual({ tileset: 'terrain/1_Terrains_and_Fences_32x32', frame: 0 })
     }
   })
 

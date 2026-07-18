@@ -22,27 +22,27 @@ describe('bakeGround', () => {
   it('bakes plain interior grass to one fill layer', () => {
     const g = bakeGround(MEADOW_SOURCE, MEADOW_CATALOG)
     // (1,0): grass with no lower-terrain neighbour -> a single grass fill.
-    expect(g.cells[0][1]).toEqual([{ tileset: '1_Terrains_and_Fences_32x32', frame: f(2, 0), depth: 0.2 }])
+    expect(g.cells[0][1]).toEqual([{ tileset: 'terrain/1_Terrains_and_Fences_32x32', frame: f(2, 0), depth: 0.2 }])
   })
 
   it('owns the grass/dirt seam from the grass side: dirt coverage + grass edge', () => {
     const g = bakeGround(MEADOW_SOURCE, MEADOW_CATALOG)
     // (1,1): grass directly above the dirt path -> dirt coverage then grass S edge.
     expect(g.cells[1][1]).toEqual([
-      { tileset: '1_Terrains_and_Fences_32x32', frame: f(1, 0), depth: 0.1 }, // dirt fill (coverage)
-      { tileset: '1_Terrains_and_Fences_32x32', frame: f(2, 1), depth: 0.2 }, // grass S edge
+      { tileset: 'terrain/1_Terrains_and_Fences_32x32', frame: f(1, 0), depth: 0.1 }, // dirt fill (coverage)
+      { tileset: 'terrain/1_Terrains_and_Fences_32x32', frame: f(2, 1), depth: 0.2 }, // grass S edge
     ])
   })
 
   it('leaves the lower terrain as plain fill — it never owns the seam', () => {
     const g = bakeGround(MEADOW_SOURCE, MEADOW_CATALOG)
     // (2,2): dirt in the path, grass above/below -> a single dirt fill.
-    expect(g.cells[2][2]).toEqual([{ tileset: '1_Terrains_and_Fences_32x32', frame: f(1, 0), depth: 0.1 }])
+    expect(g.cells[2][2]).toEqual([{ tileset: 'terrain/1_Terrains_and_Fences_32x32', frame: f(1, 0), depth: 0.1 }])
   })
 
   it('only references the tilesets it actually used', () => {
     const g = bakeGround(MEADOW_SOURCE, MEADOW_CATALOG)
-    expect(g.tilesets).toEqual([{ name: '1_Terrains_and_Fences_32x32', cell: 32 }])
+    expect(g.tilesets).toEqual([{ name: 'terrain/1_Terrains_and_Fences_32x32', cell: 32 }])
   })
 
   it('resolves a corner where the higher terrain meets a lower one on two sides', () => {
@@ -59,8 +59,8 @@ describe('bakeGround', () => {
     const g = bakeGround(source, MEADOW_CATALOG)
     // (0,0): grass with dirt to the E and S -> dirt coverage + grass SE corner.
     expect(g.cells[0][0]).toEqual([
-      { tileset: '1_Terrains_and_Fences_32x32', frame: f(1, 0), depth: 0.1 }, // dirt coverage
-      { tileset: '1_Terrains_and_Fences_32x32', frame: f(3, 2), depth: 0.2 }, // grass SE corner
+      { tileset: 'terrain/1_Terrains_and_Fences_32x32', frame: f(1, 0), depth: 0.1 }, // dirt coverage
+      { tileset: 'terrain/1_Terrains_and_Fences_32x32', frame: f(3, 2), depth: 0.2 }, // grass SE corner
     ])
   })
 
@@ -97,8 +97,8 @@ describe('groundDrawList (runtime render, no autotiling)', () => {
     // (1,1) contributed two layers (coverage + edge); they keep their depths.
     const at11 = draws.filter((d) => d.x === 1 && d.y === 1)
     expect(at11).toEqual([
-      { x: 1, y: 1, key: 'bake.1_Terrains_and_Fences_32x32', frame: f(1, 0), depth: 0.1 },
-      { x: 1, y: 1, key: 'bake.1_Terrains_and_Fences_32x32', frame: f(2, 1), depth: 0.2 },
+      { x: 1, y: 1, key: 'bake.terrain/1_Terrains_and_Fences_32x32', frame: f(1, 0), depth: 0.1 },
+      { x: 1, y: 1, key: 'bake.terrain/1_Terrains_and_Fences_32x32', frame: f(2, 1), depth: 0.2 },
     ])
   })
 })
