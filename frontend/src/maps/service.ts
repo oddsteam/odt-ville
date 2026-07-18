@@ -146,3 +146,15 @@ export const saveDecorations = (
   })
 
 export const MapsService = { get, create, list, saveDecorations } as const
+
+// Pure map-authoring reads re-exposed on the read surface (ADR-0010):
+// cross-module callers reach them here, not via ./props.ts / ./tiledImport.ts.
+export {
+  placeProp,
+  erasePropAt,
+  propEntities,
+  propsFromBaked,
+  propGhost,
+} from './props.ts'
+export type { PlacedProp, SizeOf, MaskOf, DoorOf } from './props.ts'
+export { importTiledMap, TiledImportError } from './tiledImport.ts'

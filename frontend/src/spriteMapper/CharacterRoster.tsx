@@ -4,7 +4,7 @@ import {
   POSTURE_KEYS,
   normalizeManifest,
   resolveSheetSrc,
-} from '../character/manifest.js'
+} from '../kernel/characterManifest.js'
 import { CharacterService } from '../character/service.ts'
 import { runEdge } from '../lib/runEdge.ts'
 

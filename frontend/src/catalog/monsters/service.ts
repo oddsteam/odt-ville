@@ -55,3 +55,7 @@ export const get = (id: number): Effect.Effect<Monster, HttpError, Http> =>
   })
 
 export const MonstersService = { list, pool, get } as const
+
+// Part of the read surface (ADR-0010): cross-module callers reach the PNG
+// alpha check here, not via ./pngAlpha.ts directly.
+export { pngHasAlpha } from './pngAlpha.ts'

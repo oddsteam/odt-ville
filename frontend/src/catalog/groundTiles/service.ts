@@ -39,3 +39,7 @@ export const list = (
   })
 
 export const GroundTilesService = { list } as const
+
+// The bundled tileset vocabulary is part of the read surface (ADR-0010):
+// cross-module callers reach it here, not via ./tilesets.js directly.
+export { TILESETS, tilesetUrl } from './tilesets.js'

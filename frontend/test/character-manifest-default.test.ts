@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import sharp from 'sharp'
 
 import manifest from '../public/maps/characters/scout.json'
-import { POSTURE_KEYS } from '../src/character/manifest.js'
+import { POSTURE_KEYS } from '../src/kernel/characterManifest.js'
 
 // Regression guard for the committed default character (#151). This file is the
 // fallback the game loads for a fresh user with no server-side active

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { POSTURE_SLOTS } from '../character/manifest.js'
+import { POSTURE_SLOTS } from '../kernel/characterManifest.js'
 import { useImage } from './useImage.js'
 
 type FrameRect = { x: number; y: number; w: number; h: number }

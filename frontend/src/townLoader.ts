@@ -12,7 +12,7 @@ import { GameSessionService } from './game-session/service.ts'
 import { TileObjectsService } from './catalog/tileObjects/service.ts'
 import { GroundTilesService } from './catalog/groundTiles/service.ts'
 import { MonstersService } from './catalog/monsters/service.ts'
-import { loadMyManifest } from './character/manifest.js'
+import { loadMyManifest } from './character/service.ts'
 
 // The Hometown Policy resolution point (CONTEXT.md 2026-07-07, #173): the one
 // place the generated producer's authored inputs — the active object per
