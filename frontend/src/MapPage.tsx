@@ -8,7 +8,21 @@ import { objectIdsFrom } from './maps/props.ts'
 import { runEdge } from './lib/runEdge.ts'
 import { subscribeAuthToken } from './lib/authToken.ts'
 import { loadMyManifest } from './character/service.ts'
-import type { BakedMap } from './kernel/schema.ts'
+import type { BakedMap, Zone } from './kernel/schema.ts'
+
+// The shell's side of the one onZone channel (#85): a fired zone is dispatched
+// on `payload.kind`, the way `house.type` maps to a detail component
+// (ADR-0004/0005). The switch is the kind → behaviour map, exhaustive by type;
+// today each behaviour is a HUD notice naming what fired — travel replaces
+// `portal` (#84) and open-URL replaces `link` (#110).
+function zoneBehaviour(zone: Zone): string {
+  switch (zone.payload.kind) {
+    case 'portal':
+      return `PORTAL → ${zone.payload.targetNode}`
+    case 'link':
+      return `LINK → ${zone.payload.label ?? zone.payload.url}`
+  }
+}
 
 // Play surface for an authored map (ADR-0004). It loads a baked map by slug and
 // boots Phaser with the map-agnostic MapScene — the runtime renders "the
@@ -19,6 +33,8 @@ export default function MapPage() {
   const hostRef = useRef<HTMLDivElement>(null)
   const [map, setMap] = useState<BakedMap | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // The last fired zone's behaviour notice (#85) — sticky until the next fire.
+  const [zoneNotice, setZoneNotice] = useState<string | null>(null)
   // Bumped by the dev switcher so the load re-runs after the active user
   // changes — the first paint fetches before a user is picked and 401s.
   const [reloadKey, setReloadKey] = useState(0)
@@ -78,6 +94,11 @@ export default function MapPage() {
     game.registry.set('bakedMap', map)
     game.registry.set('bakedObjects', objectsRef.current)
     game.registry.set('characterManifest', manifestRef.current)
+    // The one event channel out of the game (#85): the scene fires every zone
+    // event through here; the shell dispatches on payload.kind.
+    game.registry.set('onZone', (_trigger: Zone['trigger'], zone: Zone) =>
+      setZoneNotice(zoneBehaviour(zone)),
+    )
     return () => {
       game.destroy(true)
     }
@@ -103,6 +124,7 @@ export default function MapPage() {
         <div className="gb-screen">
           <div className="phaser-host" ref={hostRef} />
         </div>
+        {zoneNotice && <div className="gb-topbar">{zoneNotice}</div>}
       </div>
     </div>
   )

@@ -51,6 +51,18 @@ describe('bakedDraws fg overlay', () => {
     expect(base?.fgDepth).toBeUndefined()
   })
 
+  it('carries ambient animation frames through for an animated prop (#85)', () => {
+    // The billboard: a Prop the renderer animates entirely by itself — it is
+    // not a Zone, so it never reaches the onZone channel.
+    const draws = bakedDraws(
+      mapWith([{ kind: 'prop', tileset: 't', frame: 3, frames: [3, 4], fps: 2, x: 1, y: 0 }]),
+      OBJECTS,
+    )
+    const billboard = draws.find((d) => d.key === 'bake.t')
+    expect(billboard?.frames).toEqual([3, 4])
+    expect(billboard?.fps).toBe(2)
+  })
+
   it('carries no overlay for legacy tileset entities', () => {
     const draws = bakedDraws(mapWith([{ kind: 'prop', tileset: 't', frame: 3, x: 0, y: 0 }]), OBJECTS)
     const entity = draws.find((d) => d.key === 'bake.t')

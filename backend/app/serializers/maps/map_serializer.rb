@@ -31,6 +31,9 @@ module Maps
       # Terrain producer (`painted`/`tiled`, ADR-0007). The runtime ignores it; the
       # editor reads it to lock the paint tools for an imported map.
       payload[:producer] = baked[:producer] if baked[:producer]
+      # Interactive zones (#85, ADR-0005): trigger + payload regions the runtime's
+      # detector fires through the one onZone channel. Absent when none authored.
+      payload[:zones] = baked[:zones] if baked[:zones]
       payload
     end
   end

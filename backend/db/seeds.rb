@@ -306,10 +306,20 @@ MAP_FIXTURE = {
     "tiles" => Array.new(MAP_ROWS) {
       Array.new(MAP_COLS) { { "tileset" => MAP_TILESET, "frame" => MAP_GRASS_FRAME } }
     },
-    # A couple of hand-placed props to prove placement renders over the ground.
+    # A couple of hand-placed props to prove placement renders over the ground,
+    # plus an ambient animated billboard (#85): a Prop cycling two frames,
+    # handled entirely by the renderer — it never reaches the event channel.
     "entities" => [
       { "kind" => "prop", "tileset" => MAP_TILESET, "frame" => 41, "x" => 2, "y" => 2 },
-      { "kind" => "prop", "tileset" => MAP_TILESET, "frame" => 41, "x" => 5, "y" => 3 }
+      { "kind" => "prop", "tileset" => MAP_TILESET, "frame" => 41, "x" => 5, "y" => 3 },
+      { "kind" => "prop", "tileset" => MAP_TILESET, "frame" => 41, "frames" => [41, 43], "fps" => 2, "x" => 1, "y" => 4 }
+    ],
+    # One on_enter zone (#85, ADR-0005): stepping onto it fires the single
+    # onZone event the shell dispatches on payload.kind. The portal payload is
+    # the demo tracer — actual travel to the target node lands with #84.
+    "zones" => [
+      { "trigger" => "on_enter", "x" => 6, "y" => 1,
+        "payload" => { "kind" => "portal", "targetNode" => "plaza" } }
     ]
   }
 }.freeze
