@@ -112,8 +112,8 @@ export function catalogFromArt(
 // never at runtime. grass owns every seam in the town (it ranks highest and the
 // field is grass-margined), so dirt/road need only a flat fill. Atlas
 // coordinates mirror the meadow fixture's illustrative cells on the bundled
-// 1_Terrains_and_Fences_32x32 sheet (32 columns).
-const HOMETOWN_SHEET = '1_Terrains_and_Fences_32x32'
+// terrain/1_Terrains_and_Fences_32x32 sheet (32 columns).
+const HOMETOWN_SHEET = 'terrain/1_Terrains_and_Fences_32x32'
 const HOMETOWN_TILESETS: CatalogTileset[] = [{ name: HOMETOWN_SHEET, cell: 32, cols: 32 }]
 const HOMETOWN_TILES: CatalogArtTile[] = [
   { tile_type: 'road', tileset: HOMETOWN_SHEET, col: 0, row: 0, role: 'fill', side: null },

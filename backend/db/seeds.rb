@@ -289,9 +289,9 @@ HOUSES = [
 # of props, baked (ADR-0003) so the runtime blits it with no autotiling. This is
 # the second producer of the runtime map shape (ADR-0004); it is fetched at
 # GET /api/v1/maps/atrium and rendered at /maps/atrium in the app. The grass
-# cell and prop frames reference the bundled `1_Terrains_and_Fences_32x32`
+# cell and prop frames reference the bundled `terrain/1_Terrains_and_Fences_32x32`
 # tileset served from public/maps/tilesets.
-MAP_TILESET = "1_Terrains_and_Fences_32x32".freeze
+MAP_TILESET = "terrain/1_Terrains_and_Fences_32x32".freeze
 MAP_GRASS_FRAME = 0 # top-left grass cell of the terrain tileset
 MAP_COLS = 8
 MAP_ROWS = 6
