@@ -9,7 +9,8 @@
 # direct pushes and break the loop.
 #
 # Backend jobs live here too: `schema-lint` enforces ADR-0010's DB conventions
-# (issue #220). Later slices add the structure check and test suite.
+# (issue #220) and `structure-lint` enforces its file layout — no flat files
+# outside a domain namespace (issue #221). Later slices add the test suite.
 name: Architecture
 
 on:
@@ -57,3 +58,18 @@ jobs:
       # Enforces the FK allowlist and module-prefix rules from ADR-0010.
       - name: Run schema lint
         run: bash script/schema-lint.sh
+
+  structure-lint:
+    name: Structure lint (ADR-0010)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pure-bash check of the app tree — no Ruby, gems, or database needed.
+      # Fails any .rb file that lands flat outside a domain namespace in
+      # app/models, app/controllers/api/v1, or app/serializers (ADR-0010).
+      - name: Run structure lint
+        run: bash script/structure-lint.sh
