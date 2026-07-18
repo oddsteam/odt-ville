@@ -2,6 +2,16 @@ Rails.application.routes.draw do
   # Reveal health status on /up that returns 200 if the app boots with no exceptions, otherwise 500.
   get "up" => "rails/health#show", as: :rails_health_check
 
+  # Dev-only staleness signal (issue #225): has HEAD moved since this server
+  # booted? Surfaced on the frontend ArchScoreBar. See the dev_staleness
+  # initializer. Under /api so the Vite proxy reaches it; no auth — dev env
+  # only, and it exposes nothing but commit shas.
+  if Rails.env.development?
+    get "api/v1/dev/staleness", to: ->(_env) {
+      [200, { "content-type" => "application/json" }, [DevStaleness.report.to_json]]
+    }
+  end
+
   namespace :api do
     namespace :v1 do
       # The Communities domain (ADR-0010) — controllers under
