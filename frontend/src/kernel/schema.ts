@@ -54,6 +54,12 @@ export const BakedEntity = Schema.Struct({
   // always-walkable door. Only a building carries one, so optional.
   door_dx: Schema.optional(Schema.Number),
   door_dy: Schema.optional(Schema.Number),
+  // Ambient animation (#85): the spritesheet frames a Prop cycles (e.g. a
+  // billboard) at `fps`, handled entirely by the renderer — a Prop is not a
+  // Zone and never reaches the event channel. Only meaningful on tileset+frame
+  // art (a catalog object is a single image). Absent = static, so optional.
+  frames: Schema.optional(Schema.Array(Schema.Number)),
+  fps: Schema.optional(Schema.Number),
 })
 export type BakedEntity = Schema.Schema.Type<typeof BakedEntity>
 
@@ -81,6 +87,43 @@ export const BakedGround = Schema.Struct({
 })
 export type BakedGround = Schema.Schema.Type<typeof BakedGround>
 
+// How a Zone fires (#85, ADR-0005): a closed enum, extended as mechanics land —
+// `on_enter` steps onto the region, `on_sight` is the facing cone (#86),
+// `interact` is press-to-activate while on/facing it (#110).
+export const ZoneTrigger = Schema.Literal('on_enter', 'on_sight', 'interact')
+export type ZoneTrigger = Schema.Schema.Type<typeof ZoneTrigger>
+
+// What a fired Zone means, dispatched by the shell on `kind` (ADR-0005): travel
+// (`portal`, #84) and an external page (`link`, #110) are the first kinds.
+export const ZonePayload = Schema.Union(
+  Schema.Struct({
+    kind: Schema.Literal('portal'),
+    targetNode: Schema.String,
+    entrySpawnId: Schema.optional(Schema.String),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal('link'),
+    url: Schema.String,
+    label: Schema.optional(Schema.String),
+  }),
+)
+export type ZonePayload = Schema.Schema.Type<typeof ZonePayload>
+
+// An interactive region placed on the map (ADR-0004's third placed kind): a
+// w×h tile rect anchored at (x,y) — absent w/h mean one tile — carrying how it
+// fires (`trigger`) and what firing means (`payload`). Zones live apart from
+// `entities` (which the decorate editor rewrites wholesale) so a decoration
+// save never wipes them; a Prop stays in `entities` and never fires.
+export const Zone = Schema.Struct({
+  trigger: ZoneTrigger,
+  x: Schema.Number,
+  y: Schema.Number,
+  w: Schema.optional(Schema.Number),
+  h: Schema.optional(Schema.Number),
+  payload: ZonePayload,
+})
+export type Zone = Schema.Schema.Type<typeof Zone>
+
 export const BakedMap = Schema.Struct({
   slug: Schema.String,
   title: Schema.String,
@@ -106,5 +149,7 @@ export const BakedMap = Schema.Struct({
   // path); the editor reads it to lock the paint tools for a tiled map. Absent
   // on seed/legacy maps, so optional.
   producer: Schema.optional(Schema.String),
+  // Interactive zones (#85). Absent on maps that author none, so optional.
+  zones: Schema.optional(Schema.Array(Zone)),
 })
 export type BakedMap = Schema.Schema.Type<typeof BakedMap>

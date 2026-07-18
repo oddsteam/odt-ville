@@ -344,6 +344,32 @@ module Api
         assert_equal [[true, false]], json[:collision]
       end
 
+      test "show publishes the baked zones with trigger and payload" do
+        # Zones (#85, ADR-0005): interactive regions on the baked document —
+        # a trigger enum + a payload keyed by kind, republished verbatim so the
+        # runtime's detector can fire onZone.
+        map = make_map
+        map.update!(baked: map.baked.merge(
+          "zones" => [{ "trigger" => "on_enter", "x" => 0, "y" => 0,
+                        "payload" => { "kind" => "portal", "targetNode" => "plaza" } }]
+        ))
+
+        get "/api/v1/maps/atrium", headers: auth(@user)
+
+        assert_response :success
+        assert_equal(
+          [{ trigger: "on_enter", x: 0, y: 0, payload: { kind: "portal", targetNode: "plaza" } }],
+          json[:zones]
+        )
+      end
+
+      test "a map with no zones omits the zones key entirely" do
+        make_map
+
+        get "/api/v1/maps/atrium", headers: auth(@user)
+        assert_not_includes json.keys, :zones
+      end
+
       test "a map with nothing masked omits the collision key entirely" do
         make_painted_map
 

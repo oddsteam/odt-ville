@@ -10,6 +10,7 @@ import {
   applyFacing,
 } from '../characterRig.js'
 import { resolveDirection, stepTile } from '../movement.ts'
+import { zoneEvents } from '../../../kernel/zones.ts'
 import downStill from '../../assets/character/rpg-char-01/r0-c0.png'
 import leftStill from '../../assets/character/rpg-char-01/r1-c0.png'
 import rightStill from '../../assets/character/rpg-char-01/r2-c0.png'
@@ -151,6 +152,7 @@ export default class MapScene extends Phaser.Scene {
 
   step(dir) {
     this.facing = dir
+    const from = { ...this.playerTile }
     const result = stepTile({
       scene: this,
       target: this.player,
@@ -181,6 +183,15 @@ export default class MapScene extends Phaser.Scene {
         this.movingTween = null
         if (this.usingManifest && !this.activeDirection()) {
           applyFacing(this.player, this.charDir, this.facing, false)
+        }
+        // The Zone/Trigger channel (#85): once the step lands, the pure detector
+        // maps it against the map's zones and every fired event goes out through
+        // the one onZone callback the shell registered. Edge-triggered in the
+        // detector, so walking within (or outside) a zone emits nothing.
+        const onZone = this.registry.get('onZone')
+        if (!onZone) return
+        for (const ev of zoneEvents(from, this.playerTile, this._bakedMap?.zones)) {
+          onZone(ev.trigger, ev.zone)
         }
       },
     })

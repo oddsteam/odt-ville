@@ -36,6 +36,10 @@ export interface BakedDraw {
   h?: number
   fgMaskKey?: string
   fgDepth?: number
+  // Ambient animation (#85): a Prop cycling these spritesheet frames at `fps`
+  // is stamped as a looping sprite instead of a static image.
+  frames?: readonly number[]
+  fps?: number
 }
 
 // Texture key for a baked tileset spritesheet. The frame index addresses the
@@ -120,7 +124,17 @@ export function bakedDraws(
           : {}),
       })
     } else if (e.tileset != null && e.frame != null) {
-      entities.push({ x: e.x, y: e.y, key: bakedTextureKey(e.tileset), frame: e.frame, depth: MAP_ENTITY_DEPTH, w: 1, h: 1 })
+      entities.push({
+        x: e.x,
+        y: e.y,
+        key: bakedTextureKey(e.tileset),
+        frame: e.frame,
+        depth: MAP_ENTITY_DEPTH,
+        w: 1,
+        h: 1,
+        // An ambient animated prop (#85) carries its frame cycle to the stamp.
+        ...(e.frames ? { frames: e.frames, fps: e.fps } : {}),
+      })
     }
   }
   return [...ground, ...entities]
@@ -169,7 +183,8 @@ export function renderBakedMap(scene: Scene) {
   )
 
   for (const d of bakedDraws(map, objects)) {
-    stampEntity(scene, d)
+    if (d.frames && d.frames.length > 1) stampAnimated(scene, d)
+    else stampEntity(scene, d)
     // A second, mask-clipped copy of the object art over the avatar's band (#168)
     // — WebGL-only; on the Canvas renderer stampForeground drops it cleanly.
     if (d.fgMaskKey) stampForeground(scene, d)
@@ -180,6 +195,28 @@ export function renderBakedMap(scene: Scene) {
   const worldH = map.rows * TILE
   scene.cameras?.main?.setBounds(0, 0, worldW, worldH)
   scene.cameras?.main?.centerOn(worldW / 2, worldH / 2)
+}
+
+// Stamp an ambient animated prop (#85): a looping sprite cycling the draw's
+// spritesheet frames — the renderer-only billboard. The anim key is per
+// (sheet, cycle) so two billboards sharing art share one animation; `create`
+// is a no-op when the key already exists. Nothing to draw when the texture
+// never loaded, same as stampEntity.
+function stampAnimated(scene: Scene, d: BakedDraw & { depth: number }) {
+  if (!scene.textures.exists(d.key) || !d.frames) return
+  const animKey = `ambient.${d.key}.${d.frames.join('-')}`
+  scene.anims.create({
+    key: animKey,
+    frames: d.frames.map((frame) => ({ key: d.key, frame })),
+    frameRate: d.fps ?? 2,
+    repeat: -1,
+  })
+  scene.add
+    .sprite(d.x * TILE, d.y * TILE, d.key, d.frames[0])
+    .setOrigin(0, 0)
+    .setDepth(d.depth)
+    .setDisplaySize((d.w ?? 1) * TILE, (d.h ?? 1) * TILE)
+    .play(animKey)
 }
 
 // Stamp an object's foreground overlay (#168): a second copy of its art clipped
