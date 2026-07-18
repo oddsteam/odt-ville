@@ -12,14 +12,17 @@ import type { HttpError } from '../lib/http.ts'
 import {
   CommunitiesResponse,
   FeedResponse,
+  ItemStateResponse,
   type Community,
   type CommunityGate,
   type FeedItem,
+  type ItemStateResponse as ItemStateResponseType,
   type NewCommunity,
 } from './schema.ts'
 
 const decodeCommunities = Schema.decodeUnknown(CommunitiesResponse)
 const decodeFeed = Schema.decodeUnknown(FeedResponse)
+const decodeItemState = Schema.decodeUnknown(ItemStateResponse)
 
 function decode<A>(
   path: string,
@@ -83,4 +86,34 @@ export const getFeed = (): Effect.Effect<readonly FeedItem[], HttpError, Http> =
     return payload.items
   })
 
-export const CommunitiesService = { list, create, update, remove, getFeed } as const
+// POST /content_items/:id/open -> the partial state shape (not a FeedItem)
+export const open = (
+  id: number,
+): Effect.Effect<ItemStateResponseType, HttpError, Http> =>
+  Effect.gen(function* () {
+    const http = yield* Http
+    const path = `/content_items/${id}/open`
+    const raw = yield* http.post(path)
+    return yield* decode(path, decodeItemState)(raw)
+  })
+
+// POST /content_items/:id/acknowledge -> the partial state shape
+export const acknowledge = (
+  id: number,
+): Effect.Effect<ItemStateResponseType, HttpError, Http> =>
+  Effect.gen(function* () {
+    const http = yield* Http
+    const path = `/content_items/${id}/acknowledge`
+    const raw = yield* http.post(path)
+    return yield* decode(path, decodeItemState)(raw)
+  })
+
+export const CommunitiesService = {
+  list,
+  create,
+  update,
+  remove,
+  getFeed,
+  open,
+  acknowledge,
+} as const

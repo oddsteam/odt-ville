@@ -67,6 +67,17 @@ export const FeedResponse = Schema.Struct({
 })
 export type FeedResponse = Schema.Schema.Type<typeof FeedResponse>
 
+// The partial state shape open/acknowledge return (content_items_controller's
+// state_json) — NOT a full FeedItem. The Daily Brief merges these fields into
+// the row it already holds. Every key is a subset of FeedItem's, same types.
+export const ItemStateResponse = Schema.Struct({
+  id: Schema.Number,
+  state: ItemState,
+  opened_at: Schema.NullOr(Schema.String),
+  acknowledged_at: Schema.NullOr(Schema.String),
+})
+export type ItemStateResponse = Schema.Schema.Type<typeof ItemStateResponse>
+
 // Body the admin panel POSTs when creating a community. Echoes the Rails
 // `community_params` permit list. Kept as a separate type so callers can't
 // accidentally pass server-side fields like id / position_order.
