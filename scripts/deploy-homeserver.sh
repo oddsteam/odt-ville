@@ -47,7 +47,8 @@ echo "==> Applying prod stack"
 # Code lives on bind mounts, so changed source needs the boot commands to re-run:
 #   backend  -> bundle install && rails db:prepare (migrations) && rails server
 #   frontend -> pnpm install && pnpm run build (prod build) && pnpm run preview
-# `restart` re-runs those even when `up` saw no config change.
+# 'restart' re-runs those even when 'up' saw no config change.
+# (No backticks in this heredoc — it's unquoted, so backticks EXECUTE locally.)
 echo "==> Restarting backend + frontend to apply code/migrations + rebuild"
 \$DC restart backend frontend
 
