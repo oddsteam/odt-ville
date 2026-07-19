@@ -9,8 +9,8 @@ import {
   characterScale,
   applyFacing,
 } from '../characterRig.js'
-import { resolveDirection, stepTile } from '../movement.ts'
-import { zoneEvents } from '../../../kernel/zones.ts'
+import { deltaFor, resolveDirection, stepTile } from '../movement.ts'
+import { interactZoneEvents, zoneEvents } from '../../../kernel/zones.ts'
 import downStill from '../../assets/character/rpg-char-01/r0-c0.png'
 import leftStill from '../../assets/character/rpg-char-01/r1-c0.png'
 import rightStill from '../../assets/character/rpg-char-01/r2-c0.png'
@@ -128,6 +128,17 @@ export default class MapScene extends Phaser.Scene {
       right: Phaser.Input.Keyboard.KeyCodes.D,
     })
 
+    // The interact affordance (#110): ENTER/SPACE — the same pressA keys the
+    // interior scene binds — fire interact zones covering the avatar's tile or
+    // the tile it faces. A press, never a step; keydown only, so holding the
+    // key doesn't re-fire every frame.
+    this.input.keyboard.on('keydown-ENTER', this.pressA, this)
+    this.input.keyboard.on('keydown-SPACE', this.pressA, this)
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.input.keyboard.off('keydown-ENTER', this.pressA, this)
+      this.input.keyboard.off('keydown-SPACE', this.pressA, this)
+    })
+
     this.cameras.main.startFollow(this.player, true)
 
     // Test API — same shape the town/interior scenes publish, so the walking
@@ -150,6 +161,19 @@ export default class MapScene extends Phaser.Scene {
 
   activeDirection() {
     return resolveDirection({ dpadDir: null, cursors: this.cursors, wasd: this.wasd })
+  }
+
+  // Press A — fire interact zones under or in front of the avatar (#110)
+  // through the same onZone channel steps use; the shell dispatches on
+  // payload.kind and never learns which input fired.
+  pressA() {
+    const onZone = this.registry.get('onZone')
+    if (!onZone) return
+    const { dx, dy } = deltaFor(this.facing)
+    const faced = { x: this.playerTile.x + dx, y: this.playerTile.y + dy }
+    for (const ev of interactZoneEvents(this.playerTile, faced, this._bakedMap?.zones)) {
+      onZone(ev.trigger, ev.zone)
+    }
   }
 
   step(dir) {

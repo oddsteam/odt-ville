@@ -97,8 +97,8 @@ export default function MapPage() {
     // `portal` is travel (#84): the target is loaded before leaving, then the
     // route change tears this game down and boots the next map — exactly one
     // loaded at a time. A denied target refuses via the notice bar and the
-    // avatar (and the portal) stay where they are. `link` opens a page (#110);
-    // until then it's a HUD notice.
+    // avatar (and the portal) stay where they are. `link` (#110) opens the
+    // external page in a new tab — the game keeps running behind it.
     game.registry.set('onZone', (_trigger: Zone['trigger'], zone: Zone) => {
       const p = zone.payload
       switch (p.kind) {
@@ -110,7 +110,7 @@ export default function MapPage() {
           })
           return
         case 'link':
-          setZoneNotice(`LINK → ${p.label ?? p.url}`)
+          window.open(p.url, '_blank', 'noopener')
       }
     })
     return () => {
