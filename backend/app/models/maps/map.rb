@@ -13,6 +13,7 @@ module Maps
     validates :title, presence: true
     validates :cols, :rows, numericality: { only_integer: true, greater_than: 0 }
     validate :access_policy_permitted
+    validate :document_playable
 
     # The stored jsonb, wrapped in its value object (#83).
     def access_policy
@@ -27,6 +28,12 @@ module Maps
     end
 
     private
+
+    # Playability (#82): each reason is its own error so the editor can list
+    # every problem in one rejected save.
+    def document_playable
+      DocumentValidator.reasons_for(self).each { |reason| errors.add(:base, reason) }
+    end
 
     def access_policy_permitted
       policy = access_policy
