@@ -5,8 +5,8 @@
 
 import { describe, expect, it } from 'vitest'
 import * as Schema from 'effect/Schema'
-import { BakedMap, type Zone } from './schema.ts'
-import { interactZoneEvents, sightZoneEvents, zoneEvents } from './zones.ts'
+import { BakedMap, type SightZone, type Zone } from './schema.ts'
+import { interactZoneEvents, sightCells, sightZoneEvents, zoneEvents } from './zones.ts'
 
 const decode = Schema.decodeUnknownSync(BakedMap)
 
@@ -164,6 +164,39 @@ describe('sightZoneEvents (the trainer sight cone, #86)', () => {
 
   it('handles maps with no zones', () => {
     expect(sightZoneEvents({ x: 0, y: 0 }, { x: 1, y: 0 }, undefined)).toEqual([])
+  })
+})
+
+// The cells the predicate tests against, exported so the decorate editor can
+// draw the same cone the runtime fires on (#256).
+describe('sightCells', () => {
+  it('lists the tiles ahead, nearest first, never the trainer’s own', () => {
+    expect(sightCells(sightZone as SightZone)).toEqual([
+      { x: 5, y: 4 },
+      { x: 5, y: 5 },
+      { x: 5, y: 6 },
+    ])
+  })
+
+  it('aims each facing', () => {
+    const at = (facing: SightZone['facing']) =>
+      sightCells({ ...(sightZone as SightZone), facing, range: 2 })
+    expect(at('up')).toEqual([
+      { x: 5, y: 2 },
+      { x: 5, y: 1 },
+    ])
+    expect(at('left')).toEqual([
+      { x: 4, y: 3 },
+      { x: 3, y: 3 },
+    ])
+    expect(at('right')).toEqual([
+      { x: 6, y: 3 },
+      { x: 7, y: 3 },
+    ])
+  })
+
+  it('sees one tile ahead when no range is authored', () => {
+    expect(sightCells({ ...(sightZone as SightZone), range: undefined })).toEqual([{ x: 5, y: 4 }])
   })
 })
 

@@ -7,6 +7,7 @@ import { TileObjectsService } from '../catalog/tileObjects/service.ts'
 import type { TileObject } from '../catalog/tileObjects/schema.ts'
 import { makeMask, setMaskCell, resizeMask, isMaskEmpty, type Mask } from './maskPaint.ts'
 import { groupPalette } from './paletteGroups.ts'
+import { zoneRects as buildZoneRects, ZONE_COLORS } from './zoneRects.ts'
 import { placeProp, erasePropAt, propEntities, propsFromBaked, propGhost, newZone, retrigger, zoneIndexAt, eraseZoneAt, replaceZone, type PlacedProp, type SizeOf, type MaskOf, type DoorOf, type ZoneKind } from '../maps/service.ts'
 import MapPreview from './MapPreview.tsx'
 import { runEdge } from '../lib/runEdge.ts'
@@ -20,14 +21,9 @@ import './admin.css'
 // authored footprint in the WYSIWYG preview. Save PATCHes props + mask in one
 // write (MapsService.saveDecorations). Terrain is fixed at create; this page
 // never re-bakes it. ADR-0004 boundary: data services + shared preview only.
-// One tint per payload kind, so the zones overlay reads at a glance:
-// portal = blue (travel), link = amber (external page). The palette offers
-// exactly what the runtime consumes — `encounter` (#87) joins with its
-// behaviour; until then an author can't place a zone nothing fires.
-const ZONE_COLORS: Record<ZoneKind, string> = {
-  portal: '#3b82f6',
-  link: '#f59e0b',
-}
+// The palette offers exactly what the runtime consumes — `encounter` (#87)
+// joins with its behaviour; until then an author can't place a zone nothing
+// fires. Its tints and the overlay's rects live in ./zoneRects.ts.
 const TRIGGERS: readonly ZoneTrigger[] = ['on_enter', 'interact', 'on_sight']
 const FACINGS: readonly ZoneFacing[] = ['up', 'down', 'left', 'right']
 
@@ -188,18 +184,7 @@ export default function MapDecoratePage() {
   // The zones overlay (#90): every authored zone as a tinted, labeled rect —
   // shown only in zones mode, with the selected one highlighted for editing.
   const zoneRects = useMemo(
-    () =>
-      mode === 'zones'
-        ? zones.map((z, i) => ({
-            x: z.x,
-            y: z.y,
-            w: z.w ?? 1,
-            h: z.h ?? 1,
-            color: ZONE_COLORS[z.payload.kind],
-            label: z.payload.kind,
-            selected: i === selectedZone,
-          }))
-        : undefined,
+    () => (mode === 'zones' ? buildZoneRects(zones, selectedZone) : undefined),
     [mode, zones, selectedZone],
   )
 
