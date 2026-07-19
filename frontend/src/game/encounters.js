@@ -21,26 +21,45 @@ const ENCOUNTER_TABLE = [
   { id: 'mr-p',         name: 'MR.P',          level: 99, sprite: mrP,         weight: 1 },
 ]
 
-// The gate trainer — stationed at the south end of the entrance stem, facing
-// across the road. Walking into his line of sight starts a duel that, like
-// the wild encounters, currently only supports RUN. See <Trainer />.
+// The gate trainer's bundled identity — who challenges you at the entrance
+// stem. Where he stands and what he sees live on the on_sight Zone buildTown
+// emits (#255); this is only the name/sprite/level the duel launches with.
 export const GATE_TRAINER = {
   id: 'boss-k',
   kind: 'trainer',
   name: 'THE BOSS',
   level: 99,
   sprite: bossK,
-  // Where the trainer stands relative to the town. Resolved against the
-  // generated town in <VillageGame>; see resolveTrainer().
-  positionFrom: 'entrance',
-  // Five-tile line of sight along the trainer's facing direction.
-  sightRange: 5,
-  facing: 'left',
+}
+
+// The hometown duel's #69-style fallback (#255): when the NPC catalog can't
+// resolve the trainer zone's npcId (unseeded DB, failed fetch), the gate is
+// still guarded by the bundled boss — same shape trainerOpponent returns.
+export function gateTrainerOpponent() {
+  return { ...GATE_TRAINER }
 }
 
 // The authentic GB per-step roll: random 0–254 vs the grass encounter rate.
 export function rollEncounter(rate = ENCOUNTER_RATE) {
   return Math.random() * 255 < rate
+}
+
+// The stateful half of the wild roll (#255), shared by the shell dispatchers:
+// every fired encounter-zone step calls the gate, which rolls the per-step
+// rate and — on a hit — arms GRACE_STEPS of quiet so the player can walk back
+// out of the grass. Steps can't happen while the encounter runs, so arming at
+// launch equals arming at close.
+export function wildStepGate(roll = rollEncounter) {
+  let grace = 0
+  return () => {
+    if (grace > 0) {
+      grace -= 1
+      return false
+    }
+    if (!roll()) return false
+    grace = GRACE_STEPS
+    return true
+  }
 }
 
 // Cumulative-weight pick from an authored pool (GET /api/v1/monsters/pool rows:
@@ -85,36 +104,4 @@ export function pickWildPokemon() {
   }
   // Float-rounding fallback.
   return { ...ENCOUNTER_TABLE[ENCOUNTER_TABLE.length - 1], kind: 'wild' }
-}
-
-// The trainer stands one tile east of the entrance, on the row just inside
-// the south margin — close enough to the gate to read as "stationed at the
-// entrance", far enough up that the player has to take a step before they
-// land in sight.
-export function resolveTrainerStart(town) {
-  return {
-    x: town.entrance.x + 1,
-    y: town.entrance.y - 1,
-    facing: GATE_TRAINER.facing,
-    sightRange: GATE_TRAINER.sightRange,
-  }
-}
-
-// Cells the trainer can see, in tile coordinates. A straight line in the
-// facing direction up to `sightRange` tiles ahead, stopping early if the
-// line walks off the map. (Buildings / signs don't block sight for now —
-// the trainer is on the south side of the village where the road is open.)
-export function trainerSightCells(trainer, town) {
-  const dx =
-    trainer.facing === 'left' ? -1 : trainer.facing === 'right' ? 1 : 0
-  const dy =
-    trainer.facing === 'up' ? -1 : trainer.facing === 'down' ? 1 : 0
-  const cells = []
-  for (let i = 1; i <= trainer.sightRange; i++) {
-    const x = trainer.x + dx * i
-    const y = trainer.y + dy * i
-    if (x < 0 || y < 0 || x >= town.cols || y >= town.rows) break
-    cells.push({ x, y })
-  }
-  return cells
 }

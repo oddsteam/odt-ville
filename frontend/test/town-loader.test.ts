@@ -40,7 +40,7 @@ function fakeHttp(routes: Record<string, unknown>) {
   return Layer.succeed(Http, client as never)
 }
 
-const POOL = [{ id: 1, name: 'Slime', encounter_dialog: 'A wild Slime appears!', encounter_rate: 3, image: 'data:slime' }]
+const NPCS = [{ id: 7, name: 'THE BOSS', level: 99, enabled: true, image: 'data:boss' }]
 
 const OK_ROUTES = {
   '/communities': { communities: [] },
@@ -48,7 +48,7 @@ const OK_ROUTES = {
   '/content_items/feed': { items: [] },
   '/tile_objects/active': 'fail',
   '/ground_tiles': 'fail',
-  '/monsters/pool': POOL,
+  '/npcs': NPCS,
 }
 
 const run = (routes: Record<string, unknown>) =>
@@ -62,17 +62,27 @@ describe('loadTown orchestration', () => {
       expect(exit.value.communities).toEqual([])
       expect(exit.value.session).toEqual(SESSION)
       expect(exit.value.feed).toEqual([])
-      expect(exit.value.policy).toEqual({ tree: null, flowerGroup: null, flowerSingle: null })
+      // The policy carries the producer's encounter inputs (#255): the global
+      // wild pool and the gate NPC resolved from the catalog by the boss's name.
+      expect(exit.value.policy).toEqual({
+        tree: null,
+        flowerGroup: null,
+        flowerSingle: null,
+        wildPool: '',
+        gateNpcId: 7,
+      })
       expect(exit.value.groundTiles).toEqual([])
       expect(exit.value.characterManifest).toEqual({ name: 'scout' })
-      expect(exit.value.monsterPool).toEqual(POOL)
     }
   })
 
-  it('falls the monster pool back to [] when its endpoint errors', async () => {
-    const exit = await run({ ...OK_ROUTES, '/monsters/pool': 'fail' })
+  it('falls the gate NPC back to the unset sentinel when the catalog errors', async () => {
+    const exit = await run({ ...OK_ROUTES, '/npcs': 'fail' })
     expect(Exit.isSuccess(exit)).toBe(true)
-    if (Exit.isSuccess(exit)) expect(exit.value.monsterPool).toEqual([])
+    if (Exit.isSuccess(exit)) {
+      expect(exit.value.npcs).toEqual([])
+      expect(exit.value.policy.gateNpcId).toBe(0)
+    }
   })
 
   it('surfaces a required-resource failure as an error', async () => {

@@ -11,9 +11,9 @@ import { CommunitiesService } from './communities/service.ts'
 import { GameSessionService } from './game-session/service.ts'
 import { TileObjectsService } from './catalog/tileObjects/service.ts'
 import { GroundTilesService } from './catalog/groundTiles/service.ts'
-import { MonstersService } from './catalog/monsters/service.ts'
 import { NpcsService } from './catalog/npcs/service.ts'
 import { loadMyManifest } from './character/service.ts'
+import { GATE_TRAINER } from './game/encounters.js'
 
 // The Hometown Policy resolution point (CONTEXT.md 2026-07-07, #173): the one
 // place the generated producer's authored inputs — the active object per
@@ -66,13 +66,9 @@ export const loadTown = () =>
       // plot and supplies the door anchor. Absent → bundled buildings.
       building: Effect.orElseSucceed(TileObjectsService.getActive('building'), () => null),
       groundTiles: Effect.orElseSucceed(GroundTilesService.list(), () => []),
-      // Authored wild-encounter pool (#69). Best-effort: a missing/erroring
-      // endpoint falls back to [] and TownScene rolls the built-in table, so
-      // the grass is never dead.
-      monsterPool: Effect.orElseSucceed(MonstersService.pool(), () => []),
-      // The NPC catalog (#259) for trainer-Zone duels on authored interiors.
-      // Best-effort like the monster pool: a missing/erroring endpoint falls
-      // back to [] and a trainer zone simply challenges nobody.
+      // The NPC catalog (#259) for trainer-Zone duels. Best-effort: a
+      // missing/erroring endpoint falls back to [] and a trainer zone simply
+      // challenges nobody (the hometown gate keeps its bundled fallback).
       npcs: Effect.orElseSucceed(NpcsService.list(), () => []),
       // The current user's character (#155): pick -> global active -> default.
       // loadMyManifest owns its own fallback chain and never throws; mirror
@@ -80,4 +76,18 @@ export const loadTown = () =>
       characterManifest: Effect.promise(() => loadMyManifest().catch(() => null)),
     },
     { concurrency: 'unbounded' },
+  ).pipe(
+    // Complete the policy with the producer's encounter inputs (#255): the
+    // wild pool the field zone names ('' — the global pool — until a
+    // generation-settings admin names one) and the gate trainer's Catalog::Npc
+    // row, matched by the bundled boss's name (#259 seeds it; 0 when absent →
+    // the shell's bundled fallback guards the gate).
+    Effect.map((town) => ({
+      ...town,
+      policy: {
+        ...town.policy,
+        wildPool: '',
+        gateNpcId: town.npcs.find((n) => n.name === GATE_TRAINER.name)?.id ?? 0,
+      },
+    })),
   )
