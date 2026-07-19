@@ -64,6 +64,15 @@ describe('newZone', () => {
     })
   })
 
+  it('seeds an encounter as an on_enter grass patch rolling the global pool (#87)', () => {
+    expect(newZone('encounter', 6, 7)).toEqual({
+      trigger: 'on_enter',
+      x: 6,
+      y: 7,
+      payload: { kind: 'encounter', pool: '' },
+    })
+  })
+
   it('seeds a link as press-to-open', () => {
     expect(newZone('link', 0, 0)).toEqual({
       trigger: 'interact',

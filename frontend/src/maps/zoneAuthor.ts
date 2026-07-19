@@ -20,6 +20,11 @@ const seeds: Record<ZoneKind, { trigger: 'on_enter' | 'interact'; payload: ZoneP
   // adds the facing. npcId 0 is the unset sentinel the inspector's NPC dropdown
   // replaces with a real catalog row before the map is worth saving (#259).
   trainer: { trigger: 'on_enter', payload: { kind: 'trainer', npcId: 0 } },
+  // An encounter fires when the avatar steps onto it (on_enter), rolling a wild
+  // from the named pool. The empty pool seed rolls the whole global pool — a
+  // valid save from the first click (like portal's reserved town target); the
+  // inspector names a specific group from there (#87).
+  encounter: { trigger: 'on_enter', payload: { kind: 'encounter', pool: '' } },
 }
 
 export function newZone(kind: ZoneKind, x: number, y: number): Zone {

@@ -17,9 +17,15 @@ module Api
         # GET /api/v1/monsters/pool — the live wild-encounter pool: enabled
         # monsters only, each with its sprite image, for the in-game grass roll.
         # Disabled monsters never spawn, so they're excluded here.
+        #
+        # An optional `pool` filter (#87) narrows to one named group — the pool an
+        # authored map's `encounter` Zone names — so different zones spawn
+        # different sets. Absent, the response is today's single global pool,
+        # byte-for-byte (the `pool` column is just not consulted).
         def pool
-          monsters = ::Catalog::Monster.where(enabled: true).order(:name)
-          render json: monsters.map { |m| ::Catalog::MonsterSerializer.pool_entry(m) }
+          monsters = ::Catalog::Monster.where(enabled: true)
+          monsters = monsters.where(pool: params[:pool]) if params.key?(:pool)
+          render json: monsters.order(:name).map { |m| ::Catalog::MonsterSerializer.pool_entry(m) }
         end
 
         # POST /api/v1/monsters — author a new monster from the admin form.

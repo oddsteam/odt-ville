@@ -365,6 +365,16 @@ export default function MapDecoratePage() {
                     </select>
                   </label>
                 )}
+                {p.kind === 'encounter' && (
+                  <label>Pool{' '}
+                    {/* The named wild-encounter group this grass rolls (#87).
+                        A slug (like portal's target), not a catalog id — it
+                        names a group of monsters, resolved server-side at roll
+                        time. Empty = the whole global pool (#69 fallback). */}
+                    <input type="text" placeholder="(global pool)" value={p.pool}
+                      onChange={(e) => editZone({ ...zone, payload: { ...p, pool: e.target.value } })} />
+                  </label>
+                )}
                 {p.kind === 'link' && (
                   <>
                     <label>URL{' '}

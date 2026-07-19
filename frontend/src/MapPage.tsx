@@ -6,7 +6,9 @@ import EncounterScene from './game/phaser/scenes/EncounterScene.js'
 import { trainerOpponent } from './game/phaser/trainerDuel.ts'
 import { MapsService, travel } from './maps/service.ts'
 import { TileObjectsService } from './catalog/tileObjects/service.ts'
+import { MonstersService } from './catalog/monsters/service.ts'
 import { NpcsService } from './catalog/npcs/service.ts'
+import { pickWild } from './game/encounters.js'
 import { objectIdsFrom } from './maps/props.ts'
 import { runEdge } from './lib/runEdge.ts'
 import { subscribeAuthToken } from './lib/authToken.ts'
@@ -135,6 +137,22 @@ export default function MapPage() {
           if (!mapScene) return
           mapScene.scene.pause()
           mapScene.scene.launch('Encounter', { opponent, worldScene: 'Map' })
+          return
+        }
+        case 'encounter': {
+          // Stepping onto the grass (#87): fetch the named pool live and roll a
+          // wild through the shared pickWild (its #69 fallback keeps the grass
+          // alive when the pool is empty). The fetch is the shell's job — the
+          // game never imports a data service (ADR-0004) — so an empty slug asks
+          // for the whole global pool. A failed fetch quietly rolls nothing.
+          void runEdge(MonstersService.pool(p.pool || undefined))
+            .then((rows) => {
+              const mapScene = game.scene.getScene('Map')
+              if (!mapScene) return
+              mapScene.scene.pause()
+              mapScene.scene.launch('Encounter', { opponent: pickWild(rows), worldScene: 'Map' })
+            })
+            .catch(() => {})
         }
       }
     })

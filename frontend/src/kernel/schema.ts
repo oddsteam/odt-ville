@@ -95,8 +95,9 @@ export type ZoneTrigger = Schema.Schema.Type<typeof ZoneTrigger>
 
 // What a fired Zone means, dispatched by the shell on `kind` (ADR-0005): travel
 // (`portal`, #84) and an external page (`link`, #110) are the first kinds;
-// `trainer` (#259) starts a duel with the referenced NPC. The union grows one
-// member per landed mechanic, never ahead of it.
+// `trainer` (#259) starts a duel with the referenced NPC; `encounter` (#87)
+// rolls a wild monster from a named pool. The union grows one member per landed
+// mechanic, never ahead of it.
 export const ZonePayload = Schema.Union(
   Schema.Struct({
     kind: Schema.Literal('portal'),
@@ -115,6 +116,16 @@ export const ZonePayload = Schema.Union(
   Schema.Struct({
     kind: Schema.Literal('trainer'),
     npcId: Schema.Number,
+  }),
+  // The wild-encounter roll (#87, ADR-0005): stepping onto the Zone rolls a wild
+  // monster from the named `pool` (GET /monsters/pool?pool=…) through `onZone`.
+  // `pool` is a slug naming a *group* — asymmetric with trainer's `npcId`, which
+  // points at a single catalog row (ADR-0008) — because a pool is the weighted
+  // wild set, this codebase's existing word for it (`pickWild(pool)`). An empty
+  // slug names the whole global pool, so the grass is never dead (#69 fallback).
+  Schema.Struct({
+    kind: Schema.Literal('encounter'),
+    pool: Schema.String,
   }),
 )
 export type ZonePayload = Schema.Schema.Type<typeof ZonePayload>

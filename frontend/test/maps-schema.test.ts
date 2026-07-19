@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import * as Schema from 'effect/Schema'
 import { Either } from 'effect'
 
-import { BakedMap } from '../src/kernel/schema.ts'
+import { BakedMap, ZonePayload } from '../src/kernel/schema.ts'
 
 describe('BakedMap schema', () => {
   const valid = {
@@ -45,5 +45,23 @@ describe('BakedMap schema', () => {
 
   it('rejects when rows is the wrong type', () => {
     expect(Either.isLeft(Schema.decodeUnknownEither(BakedMap)({ ...valid, rows: '2' }))).toBe(true)
+  })
+})
+
+describe('ZonePayload encounter member (#87)', () => {
+  it('decodes an encounter payload naming a pool', () => {
+    const decoded = Schema.decodeUnknownEither(ZonePayload)({ kind: 'encounter', pool: 'cave' })
+    expect(Either.isRight(decoded)).toBe(true)
+    if (Either.isRight(decoded) && decoded.right.kind === 'encounter') {
+      expect(decoded.right.pool).toBe('cave')
+    }
+  })
+
+  it('accepts the empty slug (the whole global pool, #69 fallback)', () => {
+    expect(Either.isRight(Schema.decodeUnknownEither(ZonePayload)({ kind: 'encounter', pool: '' }))).toBe(true)
+  })
+
+  it('rejects an encounter payload with no pool field', () => {
+    expect(Either.isLeft(Schema.decodeUnknownEither(ZonePayload)({ kind: 'encounter' }))).toBe(true)
   })
 })

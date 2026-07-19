@@ -24,11 +24,15 @@ const decodeMonster = decodeWith(Monster)
 const decodePool = decodeWith(Schema.Array(MonsterPoolEntry))
 
 // GET /monsters/pool -> the live wild-encounter pool (enabled monsters with
-// their sprite image), for the in-game grass roll.
-export const pool = (): Effect.Effect<readonly MonsterPoolEntry[], HttpError, Http> =>
+// their sprite image), for the in-game grass roll. An optional `name` narrows
+// to one named pool (#87) — the group an authored map's `encounter` Zone rolls
+// against; omitted, it's today's single global pool, unchanged.
+export const pool = (
+  name?: string,
+): Effect.Effect<readonly MonsterPoolEntry[], HttpError, Http> =>
   Effect.gen(function* () {
     const http = yield* Http
-    const path = '/monsters/pool'
+    const path = name === undefined ? '/monsters/pool' : `/monsters/pool?pool=${encodeURIComponent(name)}`
     const raw = yield* http.get(path)
     return yield* decodePool(path)(raw)
   })
