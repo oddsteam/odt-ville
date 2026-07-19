@@ -7,6 +7,9 @@ import { runPostureGate } from './posture/runGate.ts'
 import { openGatePopup, awaitGateResult } from './posture/popup.ts'
 import { CALLBACK_PATH } from './posture/callback.ts'
 import { loadTown as loadTownData, townErrorMessage } from './townLoader.ts'
+import { MapsService } from './maps/service.ts'
+import { TileObjectsService } from './catalog/tileObjects/service.ts'
+import { objectIdsFrom } from './maps/props.ts'
 import { runEdge } from './lib/runEdge.ts'
 import { subscribeAuthToken } from './lib/authToken.ts'
 import { trackEnterDoor, trackInteractBoard, trackEncounter } from './analytics/events.ts'
@@ -149,6 +152,24 @@ export default function VillagePage() {
     [],
   )
 
+  // A door with an authored interior Node asked to travel (#111). Load the
+  // target before leaving (#84): the baked map plus the tile objects its
+  // entities reference, the same bundle MapPage assembles. Null (with the
+  // error banner as the refusal notice) releases the avatar at the door.
+  const handlePortal = useCallback(
+    async ({ portal }: { communityId: number; portal: { targetNode: string } }) => {
+      try {
+        const map = await runEdge(MapsService.get(portal.targetNode))
+        const objects = await runEdge(TileObjectsService.getMany(objectIdsFrom(map.entities)))
+        return { map, objects }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e))
+        return null
+      }
+    },
+    [],
+  )
+
   // Each board's "open content list" action — for the demo every board
   // points at the same external URL. The game module knows nothing about
   // this; it just emits the board id and the page decides.
@@ -248,6 +269,7 @@ export default function VillagePage() {
         onOpenBoard={handleOpenBoard}
         onEncounter={handleEncounter}
         onRequestEntry={handleRequestEntry}
+        onPortal={handlePortal}
         trainerDefeated={trainerDefeated}
         onTrainerDefeated={() => setTrainerDefeated(true)}
       />
