@@ -363,6 +363,20 @@ module Api
         )
       end
 
+      test "show publishes the baked spawns so a portal can land on a named entry point" do
+        # Named entry spawns (#84): where a portal's entrySpawnId places the
+        # avatar on this map, republished verbatim like zones.
+        map = make_map
+        map.update!(baked: map.baked.merge(
+          "spawns" => [{ "id" => "from-plaza", "x" => 1, "y" => 4 }]
+        ))
+
+        get "/api/v1/maps/atrium", headers: auth(@user)
+
+        assert_response :success
+        assert_equal [{ id: "from-plaza", x: 1, y: 4 }], json[:spawns]
+      end
+
       test "a map with no zones omits the zones key entirely" do
         make_map
 

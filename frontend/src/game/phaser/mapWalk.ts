@@ -200,11 +200,17 @@ export function entityDoorCells(
   return (x, y) => doors.has(`${x},${y}`)
 }
 
-// Where the player appears on an authored map. The map document carries no
-// spawn point yet, so the tracer starts at the grid centre (flooring keeps it
-// on-grid for even sizes: 8×6 → (4,3)).
-export function spawnTile({ cols, rows }: GridSize): Tile {
-  return { x: Math.floor(cols / 2), y: Math.floor(rows / 2) }
+// Where the player appears on an authored map. A portal names the target's
+// entry spawn (#84) — resolved from the map's authored `spawns`; an unknown or
+// absent id falls back to the grid centre (flooring keeps it on-grid for even
+// sizes: 8×6 → (4,3)) so direct navigation to a spawn-less map still works.
+export function spawnTile(
+  map: GridSize & { spawns?: ReadonlyArray<{ id: string; x: number; y: number }> },
+  spawnId?: string,
+): Tile {
+  const spawn = spawnId ? map.spawns?.find((s) => s.id === spawnId) : undefined
+  if (spawn) return { x: spawn.x, y: spawn.y }
+  return { x: Math.floor(map.cols / 2), y: Math.floor(map.rows / 2) }
 }
 
 // The tracer walkability rule: any cell inside the authored grid. Terrain-aware

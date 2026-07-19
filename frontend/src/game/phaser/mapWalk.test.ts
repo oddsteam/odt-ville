@@ -15,6 +15,7 @@ import {
   entityOverhangFor,
   entityForegroundFor,
   mapPlayerDepth,
+  spawnTile,
   MAP_PLAYER_DEPTH,
   MAP_PLAYER_OVERHANG_DEPTH,
   MAP_PLAYER_FOREGROUND_DEPTH,
@@ -319,5 +320,21 @@ describe('entityDoorCells', () => {
     const door = entityDoorCells([a, b])
     expect(door(0, 1)).toBe(true)
     expect(door(7, 5)).toBe(true)
+  })
+})
+
+// Named entry spawns (#84): a portal lands the avatar at the target map's
+// authored spawn point; unknown/absent ids keep the grid-centre fallback so
+// direct navigation to a spawn-less map still works.
+describe('spawnTile', () => {
+  const map = { cols: 8, rows: 6, spawns: [{ id: 'from-atrium', x: 1, y: 4 }] }
+
+  it('resolves a named entry spawn', () => {
+    expect(spawnTile(map, 'from-atrium')).toEqual({ x: 1, y: 4 })
+  })
+
+  it('falls back to the grid centre for an unknown or absent spawn id', () => {
+    expect(spawnTile(map, 'nope')).toEqual({ x: 4, y: 3 })
+    expect(spawnTile({ cols: 8, rows: 6 })).toEqual({ x: 4, y: 3 })
   })
 })

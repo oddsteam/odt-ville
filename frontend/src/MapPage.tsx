@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import Phaser from 'phaser'
 import MapScene from './game/phaser/scenes/MapScene.js'
-import { MapsService } from './maps/service.ts'
+import { MapsService, travel } from './maps/service.ts'
 import { TileObjectsService } from './catalog/tileObjects/service.ts'
 import { objectIdsFrom } from './maps/props.ts'
 import { runEdge } from './lib/runEdge.ts'
@@ -10,26 +10,19 @@ import { subscribeAuthToken } from './lib/authToken.ts'
 import { loadMyManifest } from './character/service.ts'
 import type { BakedMap, Zone } from './kernel/schema.ts'
 
-// The shell's side of the one onZone channel (#85): a fired zone is dispatched
-// on `payload.kind`, the way `house.type` maps to a detail component
-// (ADR-0004/0005). The switch is the kind → behaviour map, exhaustive by type;
-// today each behaviour is a HUD notice naming what fired — travel replaces
-// `portal` (#84) and open-URL replaces `link` (#110).
-function zoneBehaviour(zone: Zone): string {
-  switch (zone.payload.kind) {
-    case 'portal':
-      return `PORTAL → ${zone.payload.targetNode}`
-    case 'link':
-      return `LINK → ${zone.payload.label ?? zone.payload.url}`
-  }
-}
-
 // Play surface for an authored map (ADR-0004). It loads a baked map by slug and
 // boots Phaser with the map-agnostic MapScene — the runtime renders "the
 // current map" without knowing which one. This is the same black-box discipline
 // as the village page; the only producer-specific thing is the loader.
 export default function MapPage() {
   const { slug } = useParams<{ slug: string }>()
+  const navigate = useNavigate()
+  // A portal arrival names its entry spawn via route state (#84); direct
+  // navigation carries none and the scene falls back to the grid centre. A ref
+  // (like the manifest/objects below) so the boot effect keys on the loaded map
+  // alone — route state flips before the target map arrives.
+  const entrySpawnIdRef = useRef<string | undefined>(undefined)
+  entrySpawnIdRef.current = (useLocation().state as { entrySpawnId?: string } | null)?.entrySpawnId
   const hostRef = useRef<HTMLDivElement>(null)
   const [map, setMap] = useState<BakedMap | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -49,6 +42,9 @@ export default function MapPage() {
 
   useEffect(() => {
     if (!slug) return
+    // Arriving on a map (portal travel included) starts with a clean notice bar;
+    // a refusal never navigates, so its notice survives this.
+    setZoneNotice(null)
     let active = true
     Promise.all([
       runEdge(MapsService.get(slug)),
@@ -94,15 +90,33 @@ export default function MapPage() {
     game.registry.set('bakedMap', map)
     game.registry.set('bakedObjects', objectsRef.current)
     game.registry.set('characterManifest', manifestRef.current)
+    game.registry.set('entrySpawnId', entrySpawnIdRef.current)
     // The one event channel out of the game (#85): the scene fires every zone
-    // event through here; the shell dispatches on payload.kind.
-    game.registry.set('onZone', (_trigger: Zone['trigger'], zone: Zone) =>
-      setZoneNotice(zoneBehaviour(zone)),
-    )
+    // event through here; the shell dispatches on payload.kind — exhaustive by
+    // type, the way `house.type` maps to a detail component (ADR-0004/0005).
+    // `portal` is travel (#84): the target is loaded before leaving, then the
+    // route change tears this game down and boots the next map — exactly one
+    // loaded at a time. A denied target refuses via the notice bar and the
+    // avatar (and the portal) stay where they are. `link` opens a page (#110);
+    // until then it's a HUD notice.
+    game.registry.set('onZone', (_trigger: Zone['trigger'], zone: Zone) => {
+      const p = zone.payload
+      switch (p.kind) {
+        case 'portal':
+          void travel(p, {
+            load: (s) => runEdge(MapsService.get(s)),
+            go: (s, spawn) => navigate(`/maps/${s}`, { state: { entrySpawnId: spawn } }),
+            refuse: setZoneNotice,
+          })
+          return
+        case 'link':
+          setZoneNotice(`LINK → ${p.label ?? p.url}`)
+      }
+    })
     return () => {
       game.destroy(true)
     }
-  }, [map])
+  }, [map, navigate])
 
   if (error) {
     return (
