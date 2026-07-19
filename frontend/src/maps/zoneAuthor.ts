@@ -10,13 +10,28 @@ import type { Zone, ZonePayload, ZoneTrigger } from '../kernel/schema.ts'
 
 export type ZoneKind = ZonePayload['kind']
 
-const seeds: Record<ZoneKind, { trigger: ZoneTrigger; payload: ZonePayload }> = {
+// Placement never seeds an aiming zone — a cone needs a direction the click
+// can't know, so an author picks `on_sight` from the inspector (retrigger).
+const seeds: Record<ZoneKind, { trigger: 'on_enter' | 'interact'; payload: ZonePayload }> = {
   portal: { trigger: 'on_enter', payload: { kind: 'portal', targetNode: 'town' } },
   link: { trigger: 'interact', payload: { kind: 'link', url: '' } },
 }
 
 export function newZone(kind: ZoneKind, x: number, y: number): Zone {
   return { ...seeds[kind], x, y }
+}
+
+// Switch a zone's trigger, keeping the shape legal (#86). The schema union
+// ties `facing` to `on_sight`, so the switch has to carry the aim across:
+// start aiming and the zone gets a default facing (already-aiming keeps its
+// own), stop aiming and the cone fields go with it rather than lingering as
+// dead data on a portal.
+export function retrigger(zone: Zone, trigger: ZoneTrigger): Zone {
+  if (trigger === 'on_sight') {
+    return zone.trigger === 'on_sight' ? zone : { ...zone, trigger, facing: 'down' }
+  }
+  const { x, y, w, h, payload } = zone
+  return { trigger, x, y, w, h, payload }
 }
 
 // Point-in-rect over the zone's w×h footprint (absent w/h mean one tile) —

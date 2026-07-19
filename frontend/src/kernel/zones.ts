@@ -6,7 +6,7 @@
 // other inputs, so a step never fires them — and a Prop is not a Zone, so an
 // ambient billboard can never reach this channel at all.
 
-import type { Zone, ZoneTrigger } from './schema.ts'
+import type { SightZone, Zone, ZoneTrigger } from './schema.ts'
 
 export interface ZoneEvent {
   trigger: ZoneTrigger
@@ -27,6 +27,31 @@ export function zoneEvents(
 ): ZoneEvent[] {
   return zones
     .filter((z) => z.trigger === 'on_enter' && inZone(z, to.x, to.y) && !inZone(z, from.x, from.y))
+    .map((zone) => ({ trigger: zone.trigger, zone }))
+}
+
+// The trainer's line of sight (#86): `range` tiles straight ahead of (x,y) in
+// `facing`, never the trainer's own tile. The schema union guarantees a sight
+// zone has a facing, so there is no blind case to defend against here.
+const inSight = (z: SightZone, x: number, y: number) => {
+  const dx = z.facing === 'left' ? -1 : z.facing === 'right' ? 1 : 0
+  const dy = z.facing === 'up' ? -1 : z.facing === 'down' ? 1 : 0
+  for (let i = 1; i <= (z.range ?? 1); i++) {
+    if (x === z.x + dx * i && y === z.y + dy * i) return true
+  }
+  return false
+}
+
+// `on_sight` is edge-triggered like `on_enter`: it fires the step that walks
+// into the cone, so crossing it in front of the trainer challenges once and
+// walking on within it stays quiet.
+export function sightZoneEvents(
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  zones: readonly Zone[] = [],
+): ZoneEvent[] {
+  return zones
+    .filter((z) => z.trigger === 'on_sight' && inSight(z, to.x, to.y) && !inSight(z, from.x, from.y))
     .map((zone) => ({ trigger: zone.trigger, zone }))
 }
 

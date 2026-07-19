@@ -13,7 +13,27 @@ module Maps
       unknown_object_reasons(baked["entities"] || []) +
         unknown_terrain_reasons(source["terrain"]) +
         portal_reasons(map, baked["zones"] || []) +
+        sight_reasons(baked["zones"] || []) +
         unreachable_door_reasons(map, baked)
+    end
+
+    FACINGS = %w[up down left right].freeze
+
+    # An `on_sight` zone aims (#86), and the client schema makes `facing` part
+    # of what an on_sight zone *is* — a cone without one fails to decode and
+    # takes the whole map down at load. The other triggers don't aim, so this
+    # only ever looks at on_sight.
+    def sight_reasons(zones)
+      zones.filter_map do |zone|
+        next unless zone["trigger"] == "on_sight"
+
+        at = "sight zone at (#{zone['x']}, #{zone['y']})"
+        facing = zone["facing"]
+        next "#{at} has no facing — a sight cone must aim somewhere" if facing.blank?
+        next if FACINGS.include?(facing)
+
+        "#{at} faces #{facing.inspect}, which is not one of #{FACINGS.join(', ')}"
+      end
     end
 
     # Every placed door must be reachable from an arrival point — an authored
