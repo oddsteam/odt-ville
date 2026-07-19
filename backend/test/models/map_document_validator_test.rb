@@ -43,6 +43,36 @@ class MapDocumentValidatorTest < ActiveSupport::TestCase
     { "trigger" => "on_enter", "x" => x, "y" => y, "payload" => payload }
   end
 
+  # The sight cone (#86) is the one trigger carrying geometry of its own: the
+  # client schema ties `facing` to `on_sight`, so a cone saved without one
+  # would break the map at load. Refuse it at the boundary instead.
+  test "a sight cone with no facing is rejected with a reason" do
+    error = assert_raises(ActiveRecord::RecordInvalid) do
+      make_map(baked: { "zones" => [
+        { "trigger" => "on_sight", "x" => 2, "y" => 3, "range" => 3,
+          "payload" => { "kind" => "link", "url" => "https://d.x" } }
+      ] })
+    end
+    assert_match(/sight zone at \(2, 3\) has no facing/, error.message)
+  end
+
+  test "a sight cone with an unknown facing is rejected with a reason" do
+    error = assert_raises(ActiveRecord::RecordInvalid) do
+      make_map(baked: { "zones" => [
+        { "trigger" => "on_sight", "x" => 2, "y" => 3, "facing" => "sideways",
+          "payload" => { "kind" => "link", "url" => "https://d.x" } }
+      ] })
+    end
+    assert_match(/sight zone at \(2, 3\) faces "sideways"/, error.message)
+  end
+
+  test "a sight cone facing a known direction is accepted" do
+    assert make_map(baked: { "zones" => [
+      { "trigger" => "on_sight", "x" => 2, "y" => 3, "facing" => "up", "range" => 3,
+        "payload" => { "kind" => "link", "url" => "https://d.x" } }
+    ] })
+  end
+
   test "a portal targeting a map that does not exist is rejected with a reason" do
     error = assert_raises(ActiveRecord::RecordInvalid) do
       make_map(baked: { "zones" => [portal("nowhere")] })

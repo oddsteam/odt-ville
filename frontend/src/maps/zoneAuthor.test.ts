@@ -4,8 +4,46 @@
 // lookup/erase hit any cell of a zone's w×h rect, topmost (last placed) first.
 
 import { describe, expect, it } from 'vitest'
-import { newZone, zoneIndexAt, eraseZoneAt, replaceZone } from './zoneAuthor.ts'
+import { newZone, retrigger, zoneIndexAt, eraseZoneAt, replaceZone } from './zoneAuthor.ts'
 import type { Zone } from '../kernel/schema.ts'
+
+describe('retrigger (the inspector’s trigger switch, #86)', () => {
+  const portal: Zone = { trigger: 'on_enter', x: 1, y: 1, payload: { kind: 'portal', targetNode: 'town' } }
+  const cone: Zone = {
+    trigger: 'on_sight',
+    x: 1,
+    y: 1,
+    facing: 'left',
+    range: 4,
+    payload: { kind: 'portal', targetNode: 'town' },
+  }
+
+  it('supplies a default facing when a zone starts aiming', () => {
+    expect(retrigger(portal, 'on_sight')).toEqual({ ...portal, trigger: 'on_sight', facing: 'down' })
+  })
+
+  it('keeps the aim it already has rather than resetting it', () => {
+    expect(retrigger(cone, 'on_sight')).toEqual(cone)
+  })
+
+  it('drops facing and range when a zone stops aiming', () => {
+    expect(retrigger(cone, 'interact')).toEqual({
+      trigger: 'interact',
+      x: 1,
+      y: 1,
+      payload: { kind: 'portal', targetNode: 'town' },
+    })
+  })
+
+  it('leaves a non-aiming switch alone', () => {
+    expect(retrigger(portal, 'interact')).toEqual({ ...portal, trigger: 'interact' })
+  })
+
+  it('preserves the rect and payload across the switch', () => {
+    const wide: Zone = { ...portal, w: 3, h: 2 }
+    expect(retrigger(wide, 'on_sight')).toMatchObject({ w: 3, h: 2, payload: wide.payload })
+  })
+})
 
 describe('newZone', () => {
   it('seeds a portal as an on_enter door to the reserved town node', () => {

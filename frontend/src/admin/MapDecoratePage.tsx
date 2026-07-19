@@ -2,12 +2,12 @@ import { useEffect, useMemo, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { MapsService } from '../maps/service.ts'
 import type { MapSummary } from '../maps/service.ts'
-import type { BakedMap, Zone, ZoneTrigger } from '../kernel/schema.ts'
+import type { BakedMap, Zone, ZoneFacing, ZoneTrigger } from '../kernel/schema.ts'
 import { TileObjectsService } from '../catalog/tileObjects/service.ts'
 import type { TileObject } from '../catalog/tileObjects/schema.ts'
 import { makeMask, setMaskCell, resizeMask, isMaskEmpty, type Mask } from './maskPaint.ts'
 import { groupPalette } from './paletteGroups.ts'
-import { placeProp, erasePropAt, propEntities, propsFromBaked, propGhost, newZone, zoneIndexAt, eraseZoneAt, replaceZone, type PlacedProp, type SizeOf, type MaskOf, type DoorOf, type ZoneKind } from '../maps/service.ts'
+import { placeProp, erasePropAt, propEntities, propsFromBaked, propGhost, newZone, retrigger, zoneIndexAt, eraseZoneAt, replaceZone, type PlacedProp, type SizeOf, type MaskOf, type DoorOf, type ZoneKind } from '../maps/service.ts'
 import MapPreview from './MapPreview.tsx'
 import { runEdge } from '../lib/runEdge.ts'
 import './admin.css'
@@ -23,13 +23,13 @@ import './admin.css'
 // One tint per payload kind, so the zones overlay reads at a glance:
 // portal = blue (travel), link = amber (external page). The palette offers
 // exactly what the runtime consumes — `encounter` (#87) joins with its
-// behaviour, as does the `on_sight` trigger (#86); until then an author can't
-// place a zone nothing fires.
+// behaviour; until then an author can't place a zone nothing fires.
 const ZONE_COLORS: Record<ZoneKind, string> = {
   portal: '#3b82f6',
   link: '#f59e0b',
 }
-const TRIGGERS: readonly ZoneTrigger[] = ['on_enter', 'interact']
+const TRIGGERS: readonly ZoneTrigger[] = ['on_enter', 'interact', 'on_sight']
+const FACINGS: readonly ZoneFacing[] = ['up', 'down', 'left', 'right']
 
 export default function MapDecoratePage() {
   const { slug = '' } = useParams<{ slug: string }>()
@@ -315,14 +315,28 @@ export default function MapDecoratePage() {
               <div className="admin-field" style={{ display: 'grid', gap: 6 }}>
                 <strong>{p.kind} at ({zone.x}, {zone.y})</strong>
                 <label>Trigger{' '}
-                  {/* A loaded zone may carry a trigger the palette doesn't
-                      offer yet (seeded on_sight, #86) — keep it selectable so
-                      the select never misreports what's saved. */}
+                  {/* retrigger carries the aim across the switch, because the
+                      schema ties `facing` to on_sight (#86) — picking it here
+                      seeds a facing rather than producing an illegal zone. */}
                   <select value={zone.trigger}
-                    onChange={(e) => editZone({ ...zone, trigger: e.target.value as ZoneTrigger })}>
+                    onChange={(e) => editZone(retrigger(zone, e.target.value as ZoneTrigger))}>
                     {[...new Set([...TRIGGERS, zone.trigger])].map((t) => <option key={t} value={t}>{t}</option>)}
                   </select>
                 </label>
+                {zone.trigger === 'on_sight' && (
+                  <>
+                    <label>Faces{' '}
+                      <select value={zone.facing}
+                        onChange={(e) => editZone({ ...zone, facing: e.target.value as ZoneFacing })}>
+                        {FACINGS.map((f) => <option key={f} value={f}>{f}</option>)}
+                      </select>
+                    </label>
+                    <label>Sees (tiles){' '}
+                      <input type="number" min={1} max={Math.max(baked.cols, baked.rows)} value={zone.range ?? 1}
+                        onChange={(e) => editZone({ ...zone, range: Math.max(1, Number(e.target.value) || 1) })} />
+                    </label>
+                  </>
+                )}
                 <label>Width{' '}
                   <input type="number" min={1} max={baked.cols} value={zone.w ?? 1}
                     onChange={(e) => editZone({ ...zone, w: Math.max(1, Number(e.target.value) || 1) })} />

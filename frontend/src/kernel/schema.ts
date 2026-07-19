@@ -111,20 +111,41 @@ export const ZonePayload = Schema.Union(
 )
 export type ZonePayload = Schema.Schema.Type<typeof ZonePayload>
 
-// An interactive region placed on the map (ADR-0004's third placed kind): a
-// w×h tile rect anchored at (x,y) — absent w/h mean one tile — carrying how it
-// fires (`trigger`) and what firing means (`payload`). Zones live apart from
-// `entities` (which the decorate editor rewrites wholesale) so a decoration
-// save never wipes them; a Prop stays in `entities` and never fires.
-export const Zone = Schema.Struct({
-  trigger: ZoneTrigger,
+// Which way an aiming zone looks (#86).
+export const ZoneFacing = Schema.Literal('up', 'down', 'left', 'right')
+export type ZoneFacing = Schema.Schema.Type<typeof ZoneFacing>
+
+// Every zone is a w×h tile rect anchored at (x,y) — absent w/h mean one tile.
+const zoneRect = {
   x: Schema.Number,
   y: Schema.Number,
   w: Schema.optional(Schema.Number),
   h: Schema.optional(Schema.Number),
   payload: ZonePayload,
-})
+}
+
+// An interactive region placed on the map (ADR-0004's third placed kind),
+// discriminated on `trigger` so each trigger carries exactly the geometry it
+// fires from — and no more. `on_sight` (#86) aims, so `facing` is required:
+// a blind cone is unrepresentable rather than defended against at runtime.
+// The stepped and pressed triggers don't aim, so they can't carry a direction
+// they'd never read. Zones live apart from `entities` (which the decorate
+// editor rewrites wholesale) so a decoration save never wipes them; a Prop
+// stays in `entities` and never fires.
+export const Zone = Schema.Union(
+  Schema.Struct({ trigger: Schema.Literal('on_enter', 'interact'), ...zoneRect }),
+  Schema.Struct({
+    trigger: Schema.Literal('on_sight'),
+    facing: ZoneFacing,
+    // How many tiles ahead it sees; absent means the tile directly in front.
+    range: Schema.optional(Schema.Number),
+    ...zoneRect,
+  }),
+)
 export type Zone = Schema.Schema.Type<typeof Zone>
+
+// The aiming member, for the detector that reads facing/range off it.
+export type SightZone = Extract<Zone, { trigger: 'on_sight' }>
 
 export const BakedMap = Schema.Struct({
   slug: Schema.String,

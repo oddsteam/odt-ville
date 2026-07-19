@@ -11,7 +11,7 @@ import {
 } from '../characterRig.js'
 import bus from '../bus.js'
 import { deltaFor, resolveDirection, stepTile } from '../movement.ts'
-import { interactZoneEvents, zoneEvents } from '../../../kernel/zones.ts'
+import { interactZoneEvents, sightZoneEvents, zoneEvents } from '../../../kernel/zones.ts'
 import downStill from '../../assets/character/rpg-char-01/r0-c0.png'
 import leftStill from '../../assets/character/rpg-char-01/r1-c0.png'
 import rightStill from '../../assets/character/rpg-char-01/r2-c0.png'
@@ -201,6 +201,14 @@ export default class MapScene extends Phaser.Scene {
     }
   }
 
+  // Stop the avatar where it stands: forget the held D-pad direction and reset
+  // the keyboard keys, so a key still physically down reads as up until it is
+  // released and pressed again.
+  halt() {
+    this.dpadDir = null
+    this.input.keyboard.resetKeys()
+  }
+
   step(dir) {
     this.facing = dir
     const from = { ...this.playerTile }
@@ -242,6 +250,14 @@ export default class MapScene extends Phaser.Scene {
         const onZone = this.registry.get('onZone')
         if (!onZone) return
         for (const ev of zoneEvents(from, this.playerTile, this._bakedMap?.zones)) {
+          onZone(ev.trigger, ev.zone)
+        }
+        // A trainer's sight cone (#86) rides the same channel, but the step
+        // that walks into it also stops the avatar: held input is dropped so
+        // the walk doesn't carry on through the challenge, and moving again
+        // needs a fresh press.
+        for (const ev of sightZoneEvents(from, this.playerTile, this._bakedMap?.zones)) {
+          this.halt()
           onZone(ev.trigger, ev.zone)
         }
       },

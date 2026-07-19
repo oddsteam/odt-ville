@@ -326,7 +326,8 @@ MAP_FIXTURES = [
         { "kind" => "prop", "tileset" => MAP_TILESET, "frame" => 41, "x" => 2, "y" => 2 },
         { "kind" => "prop", "tileset" => MAP_TILESET, "frame" => 41, "frames" => [41, 43], "fps" => 2, "x" => 1, "y" => 4 },
         { "kind" => "prop", "tileset" => MAP_TILESET, "frame" => 41, "x" => 6, "y" => 1 },
-        { "kind" => "prop", "tileset" => MAP_TILESET, "frame" => 41, "x" => 1, "y" => 1 }
+        { "kind" => "prop", "tileset" => MAP_TILESET, "frame" => 41, "x" => 1, "y" => 1 },
+        { "kind" => "prop", "tileset" => MAP_TILESET, "frame" => 41, "x" => 5, "y" => 5 }
       ],
       "zones" => [
         { "trigger" => "on_enter", "x" => 6, "y" => 1,
@@ -337,7 +338,13 @@ MAP_FIXTURES = [
         # marker prop at (2,2) and the shell opens the external URL. The URL
         # lives on the Zone payload, not a column (ADR-0005).
         { "trigger" => "interact", "x" => 2, "y" => 2,
-          "payload" => { "kind" => "link", "url" => "https://github.com/oddsteam/odt-ville/issues", "label" => "The Board" } }
+          "payload" => { "kind" => "link", "url" => "https://github.com/oddsteam/odt-ville/issues", "label" => "The Board" } },
+        # The trainer (#86): stands at (5,5) looking up, seeing (5,4)..(5,2).
+        # Crossing that line challenges you and stops you where you stand;
+        # walking past at (4,y) or behind at (5,6) never does. The payload is a
+        # link until the encounter payload lands (#87).
+        { "trigger" => "on_sight", "x" => 5, "y" => 5, "facing" => "up", "range" => 3,
+          "payload" => { "kind" => "link", "url" => "https://github.com/oddsteam/odt-ville/issues/86", "label" => "Trainer challenge" } }
       ],
       # Where plaza's return portal lands, just off the outbound portal cell so
       # arriving never stands inside a zone.
