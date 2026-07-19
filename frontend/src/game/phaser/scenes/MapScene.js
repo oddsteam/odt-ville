@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
 import { preloadBakedMap, renderBakedMap } from '../../../kernel/mapRenderer.ts'
-import { MOVE_MS } from '../../constants.js'
+import { MOVE_MS, TILE } from '../../constants.js'
+import { cameraBounds } from '../canvasLayout.ts'
 import { spawnTile, mapWalkable, entityBlockedFor, entityEdgeBlockedFor, entityDoorCells, entityLadderFor, entityOverhangFor, entityForegroundFor, mapPlayerDepth, feetWorldXY } from '../mapWalk.ts'
 import {
   CHAR_SHEET_KEY,
@@ -164,7 +165,20 @@ export default class MapScene extends Phaser.Scene {
       bus.off('aButton', this._onABtn)
     })
 
-    this.cameras.main.startFollow(this.player, true)
+    // The camera inside a building behaves exactly as outside (#261): 1:1
+    // pixels at the town's tile scale, clamped follow. A map smaller than the
+    // viewport sits centred via widened bounds instead of floating loose in a
+    // corner of the canvas.
+    const cam = this.cameras.main
+    const fit = () => {
+      const b = cameraBounds(this.scale.width, this.scale.height, map.cols * TILE, map.rows * TILE)
+      cam.setBounds(b.x, b.y, b.width, b.height)
+    }
+    fit()
+    this.scale.on('resize', fit)
+    // The scale manager outlives the scene (stop/start swaps maps, #249).
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.scale.off('resize', fit))
+    cam.startFollow(this.player, true)
 
     // Test API — same shape the town/interior scenes publish, so the walking
     // e2e scripts can read state off the canvas.
