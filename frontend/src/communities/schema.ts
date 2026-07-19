@@ -92,10 +92,12 @@ export const NewCommunity = Schema.Struct({
 })
 export type NewCommunity = Schema.Schema.Type<typeof NewCommunity>
 
-// Body the admin PATCHes to set/clear a house's entry gate (issue #38).
+// Body the admin PATCHes for a community's door Portal (#38 gate, #113 node).
 // entry_gate null clears the gate; 'posture-login' requires a posture_set_id.
+// interior_node_slug null falls the door back to the default interior.
 // Plain type, not a Schema: it's a request body, never decoded from the wire.
-export type CommunityGate = {
+export type CommunityDoor = {
   readonly entry_gate: string | null
   readonly posture_set_id: string | null
+  readonly interior_node_slug: string | null
 }

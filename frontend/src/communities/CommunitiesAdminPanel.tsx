@@ -4,6 +4,7 @@ import { CommunitiesService } from './service.ts'
 import type { Community } from './schema.ts'
 import { PostureService } from '../posture/service.ts'
 import type { PostureSet } from '../posture/schema.ts'
+import { MapsService, type MapSummary } from '../maps/service.ts'
 import { runEdge } from '../lib/runEdge.ts'
 import '../lib/mapperChrome.css'
 import './admin.css'
@@ -23,21 +24,25 @@ const COLOURS = [
 
 const POSTURE_GATE = 'posture-login'
 
-// Per-house entry-gate editor (issue #38): pick "No gate" or "Posture-login +
-// <set>" and save. The posture set comes from the live catalog; the current
-// set isn't shown because posture_set_id is server-only (never in the index),
-// so editing a gated house re-picks the set.
-function HouseGate({
+// Per-house door-Portal editor (ADR-0005): the interior Node the door travels
+// to (#113) and its gate — "No gate" or "Posture-login + <set>" (#38). The
+// posture set comes from the live catalog; the current set isn't shown because
+// posture_set_id is server-only (never in the index), so editing a gated house
+// re-picks the set.
+function HouseDoor({
   house,
   sets,
+  nodes,
   onSaved,
 }: {
   house: Community
   sets: readonly PostureSet[]
+  nodes: readonly MapSummary[]
   onSaved?: () => void | Promise<void>
 }) {
   const [gate, setGate] = useState(house.entry_gate === POSTURE_GATE ? POSTURE_GATE : '')
   const [setId, setSetId] = useState('')
+  const [nodeSlug, setNodeSlug] = useState(house.interior_node_slug ?? '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -54,6 +59,7 @@ function HouseGate({
         CommunitiesService.update(house.id, {
           entry_gate: gate || null,
           posture_set_id: gate === POSTURE_GATE ? setId : null,
+          interior_node_slug: nodeSlug || null,
         }),
       )
       if (onSaved) await onSaved()
@@ -66,6 +72,20 @@ function HouseGate({
 
   return (
     <div className="comm-gate">
+      <select
+        aria-label={`Interior node for ${house.title}`}
+        value={nodeSlug}
+        onChange={(e) => setNodeSlug(e.target.value)}
+        disabled={busy}
+      >
+        <option value="">Default interior</option>
+        {nodes.map((n) => (
+          <option key={n.slug} value={n.slug}>
+            {n.title || n.slug}
+          </option>
+        ))}
+      </select>
+
       <select
         aria-label={`Entry gate for ${house.title}`}
         value={gate}
@@ -117,6 +137,7 @@ export default function CommunitiesAdminPanel({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [sets, setSets] = useState<readonly PostureSet[]>([])
+  const [nodes, setNodes] = useState<readonly MapSummary[]>([])
 
   // The posture-set catalog for the gate picker. Empty if posture-login is
   // unreachable — the picker just shows no sets and a gate can't be saved.
@@ -124,6 +145,14 @@ export default function CommunitiesAdminPanel({
     runEdge(PostureService.listSets())
       .then(setSets)
       .catch(() => setSets([]))
+  }, [])
+
+  // The authored maps for the interior-node picker (#113). Empty on error —
+  // the picker offers only "Default interior".
+  useEffect(() => {
+    runEdge(MapsService.list())
+      .then(setNodes)
+      .catch(() => setNodes([]))
   }, [])
 
   const used = communities.length
@@ -197,7 +226,7 @@ export default function CommunitiesAdminPanel({
                     ×
                   </button>
                 </div>
-                <HouseGate house={c} sets={sets} onSaved={onChanged} />
+                <HouseDoor house={c} sets={sets} nodes={nodes} onSaved={onChanged} />
               </li>
             ))}
             {used === 0 && <li className="hint">No communities yet.</li>}

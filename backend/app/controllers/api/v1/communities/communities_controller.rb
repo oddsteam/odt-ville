@@ -60,21 +60,34 @@ module Api
           render json: { id: community.id, title: community.title }, status: :created
         end
 
-        # PATCH /api/v1/communities/:id — admin: set or clear the entry gate
-        # (issue #38). A posture-login gate requires a posture_set_id; "No gate"
-        # (blank entry_gate) clears both columns.
+        # PATCH /api/v1/communities/:id — admin: the door-Portal editor (ADR-0005).
+        # Each field acts only when its key is sent, so gate and node saves can't
+        # clobber each other. `entry_gate` (#38): posture-login needs a
+        # posture_set_id, blank clears both columns. `interior_node_slug` (#113):
+        # must name an existing map, blank clears (door falls back to the
+        # hardcoded InteriorScene).
         def update
           community = current_user.company.houses.find(params[:id])
-          gate = params[:entry_gate].presence
+          attrs = {}
 
-          if gate
-            return render json: { error: "Unknown gate: #{gate}" }, status: :unprocessable_entity unless gate == ::Api::V1::Posture::PostureController::GATE
-            return render json: { error: "posture_set_id is required for a gate" }, status: :unprocessable_entity if params[:posture_set_id].blank?
-            community.update!(entry_gate: gate, posture_set_id: params[:posture_set_id])
-          else
-            community.update!(entry_gate: nil, posture_set_id: nil)
+          if params.key?(:interior_node_slug)
+            slug = params[:interior_node_slug].presence
+            return render json: { error: "Unknown node: #{slug}" }, status: :unprocessable_entity if slug && !::Maps::Map.exists?(slug: slug)
+            attrs[:interior_node_slug] = slug
           end
 
+          if params.key?(:entry_gate)
+            gate = params[:entry_gate].presence
+            if gate
+              return render json: { error: "Unknown gate: #{gate}" }, status: :unprocessable_entity unless gate == ::Api::V1::Posture::PostureController::GATE
+              return render json: { error: "posture_set_id is required for a gate" }, status: :unprocessable_entity if params[:posture_set_id].blank?
+              attrs.merge!(entry_gate: gate, posture_set_id: params[:posture_set_id])
+            else
+              attrs.merge!(entry_gate: nil, posture_set_id: nil)
+            end
+          end
+
+          community.update!(attrs) if attrs.any?
           head :no_content
         end
 
