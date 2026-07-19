@@ -9,6 +9,7 @@ import PerfStallNotice from '../PerfStallNotice.tsx'
 import bus from './bus.js'
 import { villageZone } from './villageZone.ts'
 import { trainerOpponent } from './trainerDuel.ts'
+import { pickWild } from '../encounters.js'
 import type { Community } from '../../communities/schema.ts'
 import type { GameSession } from '../../game-session/schema.ts'
 import type { TileObject } from '../../catalog/tileObjects/schema.ts'
@@ -74,6 +75,11 @@ export type PhaserGameProps = {
   // duel-start to resolve a fired trainer Zone's npcId. Like monsterPool, a
   // shell-fetched black-box input; empty means no trainer zone can duel.
   npcs: readonly Npc[]
+  // Fetch the wild pool an encounter Zone names (#87). A prop rather than a
+  // direct call because the game never imports a data service (ADR-0004) — the
+  // same reason `onPortal` loads a target map for us. An empty slug means the
+  // whole global pool; a rejected promise rolls nothing.
+  onEncounterPool: (pool: string) => Promise<readonly MonsterPoolEntry[]>
   dailyBrief: ReactNode
   activeCommunityId: number | null
   onEnterCommunity: (id: number) => void
@@ -107,6 +113,7 @@ export default function PhaserGame({
   characterManifest,
   monsterPool,
   npcs,
+  onEncounterPool,
   dailyBrief,
   activeCommunityId,
   onEnterCommunity,
@@ -135,6 +142,8 @@ export default function PhaserGame({
   requestEntryRef.current = onRequestEntry
   const portalRef = useRef(onPortal)
   portalRef.current = onPortal
+  const encounterPoolRef = useRef(onEncounterPool)
+  encounterPoolRef.current = onEncounterPool
   const trainerDefeatedRef = useRef(onTrainerDefeated)
   trainerDefeatedRef.current = onTrainerDefeated
 
@@ -223,6 +232,23 @@ export default function PhaserGame({
       mapScene.scene.launch('Encounter', { opponent, worldScene: 'Map' })
     }
 
+    // Roll a wild from an authored interior's encounter Zone (#87), the counterpart
+    // of startDuel. The shell fetches the named pool (ADR-0004 keeps the fetch out
+    // of the game) and pickWild's #69 fallback keeps the grass alive when that pool
+    // is empty. A failed fetch rolls nothing rather than surfacing an error mid-step.
+    const startEncounter = (pool: string) => {
+      void encounterPoolRef.current?.(pool)
+        .then((rows) => {
+          const mapScene = game.scene.getScene('Map')
+          if (!mapScene) return
+          const opponent = pickWild(rows)
+          bus.emit('encounter', { kind: 'wild', name: opponent.name })
+          mapScene.scene.pause()
+          mapScene.scene.launch('Encounter', { opponent, worldScene: 'Map' })
+        })
+        .catch(() => {})
+    }
+
     // The one event channel out of an authored interior Node (#85, #111, #249).
     game.registry.set(
       'onZone',
@@ -238,6 +264,7 @@ export default function PhaserGame({
         },
         openLink: (url) => window.open(url, '_blank', 'noopener'),
         startDuel,
+        startEncounter,
       }),
     )
 

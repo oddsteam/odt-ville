@@ -17,6 +17,7 @@ function spyDeps() {
         calls.push(['travel', p.targetNode, p.entrySpawnId]),
       openLink: (url: string) => calls.push(['link', url]),
       startDuel: (npcId: number) => calls.push(['duel', npcId]),
+      startEncounter: (pool: string) => calls.push(['encounter', pool]),
     },
   }
 }
@@ -44,5 +45,21 @@ describe('villageZone', () => {
     const { calls, deps } = spyDeps()
     villageZone(deps)('on_sight', { trigger: 'on_sight', x: 0, y: 0, facing: 'down', payload: { kind: 'trainer', npcId: 7 } })
     expect(calls).toEqual([['duel', 7]])
+  })
+
+  // The bug this guards: #259 wired `trainer` into both this dispatch and
+  // MapPage's, but #87 wired `encounter` into MapPage only — so the same map
+  // rolled a wild on /maps/:slug and silently did nothing behind a community
+  // door. The event fired, the switch matched no case, and nothing threw.
+  it('rolls a wild from the pool an encounter payload names (#87)', () => {
+    const { calls, deps } = spyDeps()
+    villageZone(deps)('on_enter', zone({ kind: 'encounter', pool: 'hometown-wild' }))
+    expect(calls).toEqual([['encounter', 'hometown-wild']])
+  })
+
+  it('treats an empty pool slug as the global pool', () => {
+    const { calls, deps } = spyDeps()
+    villageZone(deps)('on_enter', zone({ kind: 'encounter', pool: '' }))
+    expect(calls).toEqual([['encounter', '']])
   })
 })

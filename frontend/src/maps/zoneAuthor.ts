@@ -31,6 +31,18 @@ export function newZone(kind: ZoneKind, x: number, y: number): Zone {
   return { ...seeds[kind], x, y }
 }
 
+const ALL_TRIGGERS: readonly ZoneTrigger[] = ['on_enter', 'interact', 'on_sight']
+
+// Which triggers a payload kind can legally carry, for the inspector's picker.
+// An encounter is a stepped mechanic — the runtime rolls a wild when the avatar
+// walks onto the region, and there is no press-to-roll or roll-across-a-cone —
+// so offering the other two would author a zone that can never fire (#87).
+// Every other kind stays open: a portal or link reads fine stepped or pressed,
+// and a trainer aims.
+export function triggersFor(kind: ZoneKind): readonly ZoneTrigger[] {
+  return kind === 'encounter' ? ['on_enter'] : ALL_TRIGGERS
+}
+
 // Switch a zone's trigger, keeping the shape legal (#86). The schema union
 // ties `facing` to `on_sight`, so the switch has to carry the aim across:
 // start aiming and the zone gets a default facing (already-aiming keeps its

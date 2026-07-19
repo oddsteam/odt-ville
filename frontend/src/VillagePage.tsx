@@ -19,6 +19,7 @@ import type { TileObject } from './catalog/tileObjects/schema.ts'
 import type { HometownPolicy } from './game/town.ts'
 import type { GroundTile } from './catalog/groundTiles/schema.ts'
 import type { MonsterPoolEntry } from './catalog/monsters/schema.ts'
+import { MonstersService } from './catalog/monsters/service.ts'
 import type { Npc } from './catalog/npcs/schema.ts'
 
 // Demo target for every board's "open content list" action. Replaced in a
@@ -266,6 +267,9 @@ export default function VillagePage() {
         characterManifest={characterManifest}
         monsterPool={monsterPool}
         npcs={npcs}
+        // The shell owns the fetch (ADR-0004): an encounter Zone names a pool and
+        // this resolves it; an empty slug asks for the whole global pool.
+        onEncounterPool={(pool) => runEdge(MonstersService.pool(pool || undefined))}
         dailyBrief={
           <DailyBriefShortcut items={feed} onClose={handleDailyBriefClose} />
         }

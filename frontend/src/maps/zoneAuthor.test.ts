@@ -4,7 +4,7 @@
 // lookup/erase hit any cell of a zone's w×h rect, topmost (last placed) first.
 
 import { describe, expect, it } from 'vitest'
-import { newZone, retrigger, zoneIndexAt, eraseZoneAt, replaceZone } from './zoneAuthor.ts'
+import { newZone, retrigger, triggersFor, zoneIndexAt, eraseZoneAt, replaceZone } from './zoneAuthor.ts'
 import type { Zone } from '../kernel/schema.ts'
 
 describe('retrigger (the inspector’s trigger switch, #86)', () => {
@@ -121,5 +121,21 @@ describe('replaceZone', () => {
     ]
     const edited: Zone = { ...zones[1], payload: { kind: 'link', url: 'https://odds.team' } }
     expect(replaceZone(zones, 1, edited)).toEqual([zones[0], edited])
+  })
+})
+
+describe('triggersFor', () => {
+  // An encounter is a stepped mechanic: the runtime rolls a wild when the
+  // avatar walks onto the region. There is no press-to-roll and no roll across
+  // a sight cone, so offering those triggers would author a zone that never
+  // fires (#87).
+  it('offers only on_enter for an encounter payload', () => {
+    expect(triggersFor('encounter')).toEqual(['on_enter'])
+  })
+
+  it('leaves the other kinds free to pick any trigger', () => {
+    for (const kind of ['portal', 'link', 'trainer'] as const) {
+      expect(triggersFor(kind)).toEqual(['on_enter', 'interact', 'on_sight'])
+    }
   })
 })

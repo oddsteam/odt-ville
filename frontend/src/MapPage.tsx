@@ -153,6 +153,15 @@ export default function MapPage() {
               mapScene.scene.launch('Encounter', { opponent: pickWild(rows), worldScene: 'Map' })
             })
             .catch(() => {})
+          return
+        }
+        // Mirrors villageZone's guard: the two shells dispatch the same
+        // ZonePayload contract, so a new kind must fail the build in both
+        // rather than land in one and go quiet in the other (#87 did exactly
+        // that — `encounter` here, nothing in the village).
+        default: {
+          const unhandled: never = p
+          return unhandled
         }
       }
     })

@@ -10,7 +10,7 @@ import type { Npc } from '../catalog/npcs/schema.ts'
 import { makeMask, setMaskCell, resizeMask, isMaskEmpty, type Mask } from './maskPaint.ts'
 import { groupPalette } from './paletteGroups.ts'
 import { zoneRects as buildZoneRects, ZONE_COLORS } from './zoneRects.ts'
-import { placeProp, erasePropAt, propEntities, propsFromBaked, propGhost, newZone, retrigger, zoneIndexAt, eraseZoneAt, replaceZone, type PlacedProp, type SizeOf, type MaskOf, type DoorOf, type ZoneKind } from '../maps/service.ts'
+import { placeProp, erasePropAt, propEntities, propsFromBaked, propGhost, newZone, retrigger, triggersFor, zoneIndexAt, eraseZoneAt, replaceZone, type PlacedProp, type SizeOf, type MaskOf, type DoorOf, type ZoneKind } from '../maps/service.ts'
 import MapPreview from './MapPreview.tsx'
 import { runEdge } from '../lib/runEdge.ts'
 import './admin.css'
@@ -27,7 +27,6 @@ import './admin.css'
 // joined with its duel; `encounter` (#87) lands next. Each kind arrives with
 // its behaviour, so an author can never place a zone nothing fires. Its tints
 // and the overlay's rects live in ./zoneRects.ts.
-const TRIGGERS: readonly ZoneTrigger[] = ['on_enter', 'interact', 'on_sight']
 const FACINGS: readonly ZoneFacing[] = ['up', 'down', 'left', 'right']
 
 export default function MapDecoratePage() {
@@ -314,7 +313,7 @@ export default function MapDecoratePage() {
                       seeds a facing rather than producing an illegal zone. */}
                   <select value={zone.trigger}
                     onChange={(e) => editZone(retrigger(zone, e.target.value as ZoneTrigger))}>
-                    {[...new Set([...TRIGGERS, zone.trigger])].map((t) => <option key={t} value={t}>{t}</option>)}
+                    {[...new Set([...triggersFor(p.kind), zone.trigger])].map((t) => <option key={t} value={t}>{t}</option>)}
                   </select>
                 </label>
                 {zone.trigger === 'on_sight' && (
