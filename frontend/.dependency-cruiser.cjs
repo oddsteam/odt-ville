@@ -3,9 +3,9 @@
 // This file IS the target architecture in machine-readable form: the intended
 // module graph from ADR-0004 (one map shape, two producers, shared kernel) and
 // PRD #169, declared as rules; dependency-cruiser extracts the actual import
-// graph and reports the divergences. Today's divergences are recorded in
-// .dependency-cruiser-known-violations.json (the baseline) and burn down via
-// #171/#173/#177/#178 — `pnpm arch` fails only on NEW violations.
+// graph and reports the divergences. Divergences awaiting a fix are recorded
+// in .dependency-cruiser-known-violations.json (the baseline); that list is
+// now EMPTY, so `pnpm arch` fails on ANY violation, not merely new ones.
 //
 //   pnpm arch            # check (ignores baselined violations)
 //   pnpm arch:baseline   # re-record the baseline (only when a violation is
@@ -15,14 +15,23 @@
 // docs/adr/0004. A divergence means either the code is wrong (fix the code) or
 // the model is wrong (change this file + say why in the PR) — never ignore one.
 //
-// Baseline as of 2026-07-11 (2 violations) and what deletes them:
-//   characterRig -> character: the last black-box data edge. townLoader's five
-//     edges are gone — #185 moved that shell-side data orchestration out of
-//     src/game/ to src/townLoader.ts (its only caller, VillagePage, drives it
-//     and hands the bundle to the game as props). characterRig resolution
-//     belongs to the per-user-character work (#155). The kernel -> game and
-//     MapPreview -> game/constants edges are GONE — #178 extracted src/kernel/
-//     (TILE moved into it).
+// Baseline EMPTY as of 2026-07-19 (#238). Keep it that way: a new entry means
+// either the code is wrong (fix the code) or the model is wrong (change this
+// file + say why in the PR) — re-baselining is for a violation accepted
+// deliberately, not a shortcut past a red check.
+//
+// What the baseline used to hold, and what deleted each entry:
+//   the 10 grandfathered ADR-0010 deep cross-module imports are GONE — #238
+//     resolved every one rather than widening the rule (see #216, which
+//     introduced it with the grandfather list).
+//   characterRig -> character was the last black-box data edge, GONE with the
+//     same #238 pass: the manifest shape helpers moved into
+//     src/kernel/characterManifest.js and the promise-level load moved onto
+//     character/service.ts, called from src/townLoader.ts — shell-side, outside
+//     the black box. townLoader's own five edges went earlier via the same move
+//     (#185): VillagePage drives it and hands the bundle to the game as props.
+//     The kernel -> game and MapPreview -> game/constants edges are GONE — #178
+//     extracted src/kernel/ (TILE moved into it).
 //   maps/MapPage.tsx -> MapScene is GONE — #203 confirmed the MODEL refinement:
 //     MapPage is the player-facing play route (#128), not authoring, so it moved
 //     to src/MapPage.tsx and joined the SHELL group beside VillagePage.
