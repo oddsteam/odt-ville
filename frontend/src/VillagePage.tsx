@@ -157,7 +157,7 @@ export default function VillagePage() {
   // entities reference, the same bundle MapPage assembles. Null (with the
   // error banner as the refusal notice) releases the avatar at the door.
   const handlePortal = useCallback(
-    async ({ portal }: { communityId: number; portal: { targetNode: string } }) => {
+    async ({ portal }: { communityId: number | null; portal: { targetNode: string } }) => {
       try {
         const map = await runEdge(MapsService.get(portal.targetNode))
         const objects = await runEdge(TileObjectsService.getMany(objectIdsFrom(map.entities)))
