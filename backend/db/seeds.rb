@@ -285,44 +285,88 @@ HOUSES = [
   }
 ].freeze
 
-# A trivial authored map fixture (issue #78) — a fixed grass grid plus a couple
-# of props, baked (ADR-0003) so the runtime blits it with no autotiling. This is
-# the second producer of the runtime map shape (ADR-0004); it is fetched at
-# GET /api/v1/maps/atrium and rendered at /maps/atrium in the app. The grass
-# cell and prop frames reference the bundled `terrain/1_Terrains_and_Fences_32x32`
-# tileset served from public/maps/tilesets.
+# Authored map fixtures (issues #78/#84) — fixed grass grids, baked (ADR-0003)
+# so the runtime blits them with no autotiling; fetched at GET /api/v1/maps/:slug
+# and rendered at /maps/:slug in the app. The grass cell and prop frames
+# reference the bundled `terrain/1_Terrains_and_Fences_32x32` tileset served
+# from public/maps/tilesets.
 MAP_TILESET = "terrain/1_Terrains_and_Fences_32x32".freeze
 MAP_GRASS_FRAME = 0 # top-left grass cell of the terrain tileset
 MAP_COLS = 8
 MAP_ROWS = 6
-MAP_FIXTURE = {
-  slug: "atrium",
-  title: "The Atrium",
-  cols: MAP_COLS,
-  rows: MAP_ROWS,
-  baked: {
-    "tilesets" => [{ "name" => MAP_TILESET, "cell" => 32 }],
-    # Row-major grid, every cell the same baked grass tile.
-    "tiles" => Array.new(MAP_ROWS) {
-      Array.new(MAP_COLS) { { "tileset" => MAP_TILESET, "frame" => MAP_GRASS_FRAME } }
-    },
-    # A couple of hand-placed props to prove placement renders over the ground,
-    # plus an ambient animated billboard (#85): a Prop cycling two frames,
-    # handled entirely by the renderer — it never reaches the event channel.
-    "entities" => [
-      { "kind" => "prop", "tileset" => MAP_TILESET, "frame" => 41, "x" => 2, "y" => 2 },
-      { "kind" => "prop", "tileset" => MAP_TILESET, "frame" => 41, "x" => 5, "y" => 3 },
-      { "kind" => "prop", "tileset" => MAP_TILESET, "frame" => 41, "frames" => [41, 43], "fps" => 2, "x" => 1, "y" => 4 }
-    ],
-    # One on_enter zone (#85, ADR-0005): stepping onto it fires the single
-    # onZone event the shell dispatches on payload.kind. The portal payload is
-    # the demo tracer — actual travel to the target node lands with #84.
-    "zones" => [
-      { "trigger" => "on_enter", "x" => 6, "y" => 1,
-        "payload" => { "kind" => "portal", "targetNode" => "plaza" } }
-    ]
-  }
+# Every seeded map shares the same flat grass grid; the interesting part is the
+# graph between them (#84, ADR-0005).
+MAP_GRASS_TILES = Array.new(MAP_ROWS) {
+  Array.new(MAP_COLS) { { "tileset" => MAP_TILESET, "frame" => MAP_GRASS_FRAME } }
 }.freeze
+
+# Three Nodes demoing portal travel (#84): atrium → plaza and plaza → atrium are
+# two independently authored directed Portals (deleting one would not remove the
+# other — A→B never implies B→A), each landing on the target's named entry
+# spawn. Atrium also has a portal into the members-only vault, which has no
+# members — the gate refuses everyone with a reason while the portal (marked by
+# its prop, like the others) stays visible. Zones themselves draw nothing, so
+# each portal cell carries a marker prop.
+MAP_FIXTURES = [
+  {
+    slug: "atrium",
+    title: "The Atrium",
+    cols: MAP_COLS,
+    rows: MAP_ROWS,
+    baked: {
+      "tilesets" => [{ "name" => MAP_TILESET, "cell" => 32 }],
+      "tiles" => MAP_GRASS_TILES,
+      # A couple of hand-placed props, an ambient animated billboard (#85 —
+      # renderer-only, never reaches the event channel), and a marker prop on
+      # each portal cell so the portals are visible.
+      "entities" => [
+        { "kind" => "prop", "tileset" => MAP_TILESET, "frame" => 41, "x" => 2, "y" => 2 },
+        { "kind" => "prop", "tileset" => MAP_TILESET, "frame" => 41, "frames" => [41, 43], "fps" => 2, "x" => 1, "y" => 4 },
+        { "kind" => "prop", "tileset" => MAP_TILESET, "frame" => 41, "x" => 6, "y" => 1 },
+        { "kind" => "prop", "tileset" => MAP_TILESET, "frame" => 41, "x" => 1, "y" => 1 }
+      ],
+      "zones" => [
+        { "trigger" => "on_enter", "x" => 6, "y" => 1,
+          "payload" => { "kind" => "portal", "targetNode" => "plaza", "entrySpawnId" => "from-atrium" } },
+        { "trigger" => "on_enter", "x" => 1, "y" => 1,
+          "payload" => { "kind" => "portal", "targetNode" => "vault" } }
+      ],
+      # Where plaza's return portal lands, just off the outbound portal cell so
+      # arriving never stands inside a zone.
+      "spawns" => [{ "id" => "from-plaza", "x" => 6, "y" => 2 }]
+    }
+  },
+  {
+    slug: "plaza",
+    title: "The Plaza",
+    cols: MAP_COLS,
+    rows: MAP_ROWS,
+    baked: {
+      "tilesets" => [{ "name" => MAP_TILESET, "cell" => 32 }],
+      "tiles" => MAP_GRASS_TILES,
+      "entities" => [
+        { "kind" => "prop", "tileset" => MAP_TILESET, "frame" => 41, "x" => 0, "y" => 1 }
+      ],
+      "zones" => [
+        { "trigger" => "on_enter", "x" => 0, "y" => 1,
+          "payload" => { "kind" => "portal", "targetNode" => "atrium", "entrySpawnId" => "from-plaza" } }
+      ],
+      "spawns" => [{ "id" => "from-atrium", "x" => 1, "y" => 1 }]
+    }
+  },
+  {
+    slug: "vault",
+    title: "The Vault",
+    cols: MAP_COLS,
+    rows: MAP_ROWS,
+    access_policy: { "kind" => "members" },
+    baked: {
+      "tilesets" => [{ "name" => MAP_TILESET, "cell" => 32 }],
+      "tiles" => MAP_GRASS_TILES,
+      "entities" => []
+    }
+  }
+].freeze
 
 ActiveRecord::Base.transaction do
   puts "Clearing existing village data..."
@@ -367,7 +411,7 @@ ActiveRecord::Base.transaction do
     end
   end
 
-  Maps::Map.create!(MAP_FIXTURE)
+  MAP_FIXTURES.each { |m| Maps::Map.create!(m) }
 
   # Terrain stack priority (#120), low→high: the higher-priority terrain owns a
   # shared seam. This is the order both ground producers (the generated town and
@@ -380,5 +424,5 @@ ActiveRecord::Base.transaction do
 
   puts "Seeded: #{Org::Company.count} company, #{Auth::User.count} users, " \
        "#{Communities::House.count} houses, #{Communities::Board.count} boards, #{Communities::ContentItem.count} content items, " \
-       "#{Maps::Map.count} authored map."
+       "#{Maps::Map.count} authored maps."
 end

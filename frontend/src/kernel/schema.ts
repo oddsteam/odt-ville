@@ -151,5 +151,10 @@ export const BakedMap = Schema.Struct({
   producer: Schema.optional(Schema.String),
   // Interactive zones (#85). Absent on maps that author none, so optional.
   zones: Schema.optional(Schema.Array(Zone)),
+  // Named entry spawn points (#84): where a portal's `entrySpawnId` lands the
+  // avatar on this map. Absent on maps that author none (grid-centre fallback).
+  spawns: Schema.optional(
+    Schema.Array(Schema.Struct({ id: Schema.String, x: Schema.Number, y: Schema.Number })),
+  ),
 })
 export type BakedMap = Schema.Schema.Type<typeof BakedMap>

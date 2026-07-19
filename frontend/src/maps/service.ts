@@ -158,3 +158,4 @@ export {
 } from './props.ts'
 export type { PlacedProp, SizeOf, MaskOf, DoorOf } from './props.ts'
 export { importTiledMap, TiledImportError } from './tiledImport.ts'
+export { travel } from './travel.ts'

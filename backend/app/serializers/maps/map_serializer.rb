@@ -34,6 +34,9 @@ module Maps
       # Interactive zones (#85, ADR-0005): trigger + payload regions the runtime's
       # detector fires through the one onZone channel. Absent when none authored.
       payload[:zones] = baked[:zones] if baked[:zones]
+      # Named entry spawns (#84): where a portal's entrySpawnId lands the avatar
+      # on this map. Absent when none authored (runtime falls back to centre).
+      payload[:spawns] = baked[:spawns] if baked[:spawns]
       payload
     end
   end
