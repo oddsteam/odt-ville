@@ -329,7 +329,12 @@ MAP_FIXTURES = [
         { "trigger" => "on_enter", "x" => 6, "y" => 1,
           "payload" => { "kind" => "portal", "targetNode" => "plaza", "entrySpawnId" => "from-atrium" } },
         { "trigger" => "on_enter", "x" => 1, "y" => 1,
-          "payload" => { "kind" => "portal", "targetNode" => "vault" } }
+          "payload" => { "kind" => "portal", "targetNode" => "vault" } },
+        # The board (#110): the first non-travel Zone — press A on/next to the
+        # marker prop at (2,2) and the shell opens the external URL. The URL
+        # lives on the Zone payload, not a column (ADR-0005).
+        { "trigger" => "interact", "x" => 2, "y" => 2,
+          "payload" => { "kind" => "link", "url" => "https://github.com/oddsteam/odt-ville/issues", "label" => "The Board" } }
       ],
       # Where plaza's return portal lands, just off the outbound portal cell so
       # arriving never stands inside a zone.

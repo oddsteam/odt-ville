@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest'
 import * as Schema from 'effect/Schema'
 import { BakedMap, type Zone } from './schema.ts'
-import { zoneEvents } from './zones.ts'
+import { interactZoneEvents, zoneEvents } from './zones.ts'
 
 const decode = Schema.decodeUnknownSync(BakedMap)
 
@@ -87,5 +87,34 @@ describe('zoneEvents (the pure detector)', () => {
 
   it('handles maps with no zones', () => {
     expect(zoneEvents({ x: 0, y: 0 }, { x: 1, y: 0 }, undefined)).toEqual([])
+  })
+})
+
+describe('interactZoneEvents (the key-press detector, #110)', () => {
+  it('fires when standing on the zone', () => {
+    const events = interactZoneEvents({ x: 4, y: 4 }, { x: 4, y: 5 }, [interactZone])
+    expect(events).toEqual([{ trigger: 'interact', zone: interactZone }])
+  })
+
+  it('fires when facing the zone from an adjacent tile', () => {
+    const events = interactZoneEvents({ x: 3, y: 4 }, { x: 4, y: 4 }, [interactZone])
+    expect(events).toEqual([{ trigger: 'interact', zone: interactZone }])
+  })
+
+  it('does not fire when adjacent but facing away', () => {
+    expect(interactZoneEvents({ x: 3, y: 4 }, { x: 2, y: 4 }, [interactZone])).toEqual([])
+  })
+
+  it('never fires an on_enter zone (press is not a step)', () => {
+    expect(interactZoneEvents({ x: 2, y: 2 }, { x: 3, y: 2 }, [enterZone])).toEqual([])
+  })
+
+  it('fires once when standing on and facing the same w×h zone', () => {
+    const wide: Zone = { ...interactZone, w: 2 }
+    expect(interactZoneEvents({ x: 4, y: 4 }, { x: 5, y: 4 }, [wide])).toHaveLength(1)
+  })
+
+  it('handles maps with no zones', () => {
+    expect(interactZoneEvents({ x: 0, y: 0 }, { x: 1, y: 0 }, undefined)).toEqual([])
   })
 })

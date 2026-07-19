@@ -29,3 +29,16 @@ export function zoneEvents(
     .filter((z) => z.trigger === 'on_enter' && inZone(z, to.x, to.y) && !inZone(z, from.x, from.y))
     .map((zone) => ({ trigger: zone.trigger, zone }))
 }
+
+// `interact` fires only from a key-press (#110): the caller invokes this on the
+// press, against the tile the avatar stands on and the one it faces — a zone
+// covering either fires once, and walking past never calls this at all.
+export function interactZoneEvents(
+  at: { x: number; y: number },
+  faced: { x: number; y: number },
+  zones: readonly Zone[] = [],
+): ZoneEvent[] {
+  return zones
+    .filter((z) => z.trigger === 'interact' && (inZone(z, at.x, at.y) || inZone(z, faced.x, faced.y)))
+    .map((zone) => ({ trigger: zone.trigger, zone }))
+}
