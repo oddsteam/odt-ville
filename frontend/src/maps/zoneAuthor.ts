@@ -15,6 +15,11 @@ export type ZoneKind = ZonePayload['kind']
 const seeds: Record<ZoneKind, { trigger: 'on_enter' | 'interact'; payload: ZonePayload }> = {
   portal: { trigger: 'on_enter', payload: { kind: 'portal', targetNode: 'town' } },
   link: { trigger: 'interact', payload: { kind: 'link', url: '' } },
+  // A trainer is conceptually an aiming zone, but placement can't seed a cone
+  // (see above) — the author switches to on_sight from the inspector, which
+  // adds the facing. npcId 0 is the unset sentinel the inspector's NPC dropdown
+  // replaces with a real catalog row before the map is worth saving (#259).
+  trainer: { trigger: 'on_enter', payload: { kind: 'trainer', npcId: 0 } },
 }
 
 export function newZone(kind: ZoneKind, x: number, y: number): Zone {

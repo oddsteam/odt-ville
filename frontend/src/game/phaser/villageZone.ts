@@ -15,9 +15,13 @@ export interface VillageZoneDeps {
   exitToTown: () => void
   travel: (portal: { kind: 'portal'; targetNode: string; entrySpawnId?: string }) => void
   openLink: (url: string) => void
+  // Start a duel with the NPC the trainer payload names (#259). The shell
+  // resolves the id against the loaded catalog and launches EncounterScene over
+  // the interior; a dangling/unset id starts nothing (trainerOpponent → null).
+  startDuel: (npcId: number) => void
 }
 
-export function villageZone({ exitToTown, travel, openLink }: VillageZoneDeps) {
+export function villageZone({ exitToTown, travel, openLink, startDuel }: VillageZoneDeps) {
   return (_trigger: Zone['trigger'], zone: Zone) => {
     const p = zone.payload
     switch (p.kind) {
@@ -27,6 +31,9 @@ export function villageZone({ exitToTown, travel, openLink }: VillageZoneDeps) {
         return
       case 'link':
         openLink(p.url)
+        return
+      case 'trainer':
+        startDuel(p.npcId)
     }
   }
 }

@@ -16,6 +16,7 @@ function spyDeps() {
       travel: (p: { targetNode: string; entrySpawnId?: string }) =>
         calls.push(['travel', p.targetNode, p.entrySpawnId]),
       openLink: (url: string) => calls.push(['link', url]),
+      startDuel: (npcId: number) => calls.push(['duel', npcId]),
     },
   }
 }
@@ -37,5 +38,11 @@ describe('villageZone', () => {
     const { calls, deps } = spyDeps()
     villageZone(deps)('on_enter', zone({ kind: 'link', url: 'https://example.test' }))
     expect(calls).toEqual([['link', 'https://example.test']])
+  })
+
+  it('starts a duel with the NPC a trainer payload names (#259)', () => {
+    const { calls, deps } = spyDeps()
+    villageZone(deps)('on_sight', { trigger: 'on_sight', x: 0, y: 0, facing: 'down', payload: { kind: 'trainer', npcId: 7 } })
+    expect(calls).toEqual([['duel', 7]])
   })
 })

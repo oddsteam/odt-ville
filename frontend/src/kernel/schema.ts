@@ -94,8 +94,8 @@ export const ZoneTrigger = Schema.Literal('on_enter', 'on_sight', 'interact')
 export type ZoneTrigger = Schema.Schema.Type<typeof ZoneTrigger>
 
 // What a fired Zone means, dispatched by the shell on `kind` (ADR-0005): travel
-// (`portal`, #84) and an external page (`link`, #110) are the first kinds.
-// `encounter` (#87) arrives with its runtime behaviour — the union grows one
+// (`portal`, #84) and an external page (`link`, #110) are the first kinds;
+// `trainer` (#259) starts a duel with the referenced NPC. The union grows one
 // member per landed mechanic, never ahead of it.
 export const ZonePayload = Schema.Union(
   Schema.Struct({
@@ -107,6 +107,14 @@ export const ZonePayload = Schema.Union(
     kind: Schema.Literal('link'),
     url: Schema.String,
     label: Schema.optional(Schema.String),
+  }),
+  // The trainer duel (#259, ADR-0008): the payload holds only the *mechanic* —
+  // which NPC challenges you, by catalog-row id (like a Prop's `object_id`). Who
+  // they are (name, sprite, level) lives on the Catalog::Npc row; where they
+  // look (`facing`/`range`) lives on the on_sight Zone — never duplicated here.
+  Schema.Struct({
+    kind: Schema.Literal('trainer'),
+    npcId: Schema.Number,
   }),
 )
 export type ZonePayload = Schema.Schema.Type<typeof ZonePayload>

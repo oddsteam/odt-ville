@@ -35,6 +35,7 @@ export default function VillageGame({
   groundTiles,
   characterManifest,
   monsterPool,
+  npcs,
   dailyBrief,
   activeCommunityId,
   onEnterCommunity,
@@ -55,6 +56,7 @@ export default function VillageGame({
       groundTiles={groundTiles}
       characterManifest={characterManifest}
       monsterPool={monsterPool}
+      npcs={npcs}
       dailyBrief={dailyBrief}
       activeCommunityId={activeCommunityId}
       onEnterCommunity={onEnterCommunity}

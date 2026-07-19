@@ -55,6 +55,15 @@ describe('newZone', () => {
     })
   })
 
+  it('seeds a trainer as an unset-npc on_enter zone the inspector then aims (#259)', () => {
+    expect(newZone('trainer', 4, 5)).toEqual({
+      trigger: 'on_enter',
+      x: 4,
+      y: 5,
+      payload: { kind: 'trainer', npcId: 0 },
+    })
+  })
+
   it('seeds a link as press-to-open', () => {
     expect(newZone('link', 0, 0)).toEqual({
       trigger: 'interact',

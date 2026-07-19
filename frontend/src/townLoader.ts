@@ -12,6 +12,7 @@ import { GameSessionService } from './game-session/service.ts'
 import { TileObjectsService } from './catalog/tileObjects/service.ts'
 import { GroundTilesService } from './catalog/groundTiles/service.ts'
 import { MonstersService } from './catalog/monsters/service.ts'
+import { NpcsService } from './catalog/npcs/service.ts'
 import { loadMyManifest } from './character/service.ts'
 
 // The Hometown Policy resolution point (CONTEXT.md 2026-07-07, #173): the one
@@ -69,6 +70,10 @@ export const loadTown = () =>
       // endpoint falls back to [] and TownScene rolls the built-in table, so
       // the grass is never dead.
       monsterPool: Effect.orElseSucceed(MonstersService.pool(), () => []),
+      // The NPC catalog (#259) for trainer-Zone duels on authored interiors.
+      // Best-effort like the monster pool: a missing/erroring endpoint falls
+      // back to [] and a trainer zone simply challenges nobody.
+      npcs: Effect.orElseSucceed(NpcsService.list(), () => []),
       // The current user's character (#155): pick -> global active -> default.
       // loadMyManifest owns its own fallback chain and never throws; mirror
       // today's `.catch(() => null)` for parity.

@@ -87,6 +87,11 @@ Rails.application.routes.draw do
           get :pool, on: :collection
         end
 
+        # NPCs — the catalog of placed characters (#259, ADR-0008): identity a
+        # trainer Zone payload resolves by id. Read-only for now (no admin CRUD
+        # page yet); the list feeds the decorate editor's picker and the runtime.
+        resources :npcs, only: [:index]
+
         # Ground tiles — grass/road/… cells tagged in the ground-tile mapper by
         # their atlas coordinate, drawn via the tilemap renderer. A flat catalog
         # (no single-active); edge/corner autotiling comes later.
