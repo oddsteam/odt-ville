@@ -9,7 +9,7 @@ import PerfStallNotice from '../PerfStallNotice.tsx'
 import bus from './bus.js'
 import { villageZone } from './villageZone.ts'
 import { trainerOpponent } from './trainerDuel.ts'
-import { pickWild } from '../encounters.js'
+import { gateTrainerOpponent, pickWild, wildStepGate } from '../encounters.js'
 import type { Community } from '../../communities/schema.ts'
 import type { GameSession } from '../../game-session/schema.ts'
 import type { TileObject } from '../../catalog/tileObjects/schema.ts'
@@ -70,10 +70,9 @@ export type PhaserGameProps = {
   building: TileObject | null
   groundTiles: readonly GroundTile[]
   characterManifest: object | null
-  monsterPool: readonly MonsterPoolEntry[]
   // The NPC catalog (#259) — identity + sprite for placed characters, read at
-  // duel-start to resolve a fired trainer Zone's npcId. Like monsterPool, a
-  // shell-fetched black-box input; empty means no trainer zone can duel.
+  // duel-start to resolve a fired trainer Zone's npcId. A shell-fetched
+  // black-box input; empty means no trainer zone can duel.
   npcs: readonly Npc[]
   // Fetch the wild pool an encounter Zone names (#87). A prop rather than a
   // direct call because the game never imports a data service (ADR-0004) — the
@@ -111,7 +110,6 @@ export default function PhaserGame({
   building,
   groundTiles,
   characterManifest,
-  monsterPool,
   npcs,
   onEncounterPool,
   dailyBrief,
@@ -185,10 +183,8 @@ export default function PhaserGame({
     // construction — Phaser defers boot, so this lands before TownScene's
     // preload() reads it (same timing the hometown policy relies on).
     game.registry.set('characterManifest', characterManifest || null)
-    // Authored wild-encounter pool (#69) — read at roll time in TownScene.
-    game.registry.set('monsterPool', monsterPool || [])
-    // NPC catalog (#259) — read live at duel-start (like monsterPool), so a
-    // late-arriving fetch still resolves a trainer's sprite on the next fire.
+    // NPC catalog (#259) — read live at duel-start, so a late-arriving fetch
+    // still resolves a trainer's sprite on the next fire.
     game.registry.set('npcs', npcs || [])
     game.registry.set('trainerDefeated', Boolean(trainerDefeated))
 
@@ -216,35 +212,46 @@ export default function PhaserGame({
       return true
     }
 
-    // Start a trainer duel from an authored interior (#259): resolve the payload's
-    // npcId against the live NPC catalog, then launch EncounterScene over the
-    // paused Map (it resumes 'Map' on RUN AWAY). A dangling/unset id resolves to
-    // null and starts nothing — a quiet no-op, not a crash.
+    // Which world scene fired the zone — the village runs one world at a time
+    // (TownScene for the generated hometown, MapScene for an authored Node).
+    // EncounterScene resumes whichever launched it (#259).
+    const worldKey = () => (game.scene.isActive('Town') ? 'Town' : 'Map')
+
+    // Start a trainer duel from a fired trainer Zone (#259/#255): resolve the
+    // payload's npcId against the live NPC catalog, then launch EncounterScene
+    // over the paused world. In the hometown an unresolved id falls back to the
+    // bundled gate trainer — the #69 move, so the gate is never unguarded by an
+    // unseeded catalog — while an authored map keeps the quiet no-op.
     const startDuel = (npcId: number) => {
-      const opponent = trainerOpponent((game.registry.get('npcs') as readonly Npc[]) || [], npcId)
+      const world = worldKey()
+      const opponent =
+        trainerOpponent((game.registry.get('npcs') as readonly Npc[]) || [], npcId) ??
+        (world === 'Town' ? gateTrainerOpponent() : null)
       if (!opponent) return
-      const mapScene = game.scene.getScene('Map')
-      if (!mapScene) return
+      const worldScene = game.scene.getScene(world)
+      if (!worldScene) return
       bus.emit('encounter', { kind: 'trainer', name: opponent.name })
-      // Pause the interior and overlay the duel, the same ScenePlugin dance
-      // TownScene.launchEncounter runs; EncounterScene resumes 'Map' on close.
-      mapScene.scene.pause()
-      mapScene.scene.launch('Encounter', { opponent, worldScene: 'Map' })
+      worldScene.scene.pause()
+      worldScene.scene.launch('Encounter', { opponent, worldScene: world })
     }
 
-    // Roll a wild from an authored interior's encounter Zone (#87), the counterpart
-    // of startDuel. The shell fetches the named pool (ADR-0004 keeps the fetch out
-    // of the game) and pickWild's #69 fallback keeps the grass alive when that pool
-    // is empty. A failed fetch rolls nothing rather than surfacing an error mid-step.
+    // Roll a wild from a fired encounter Zone (#87/#255), the counterpart of
+    // startDuel. The per-step gate owns the GB rate + grace rhythm; on a hit the
+    // shell fetches the named pool (ADR-0004 keeps the fetch out of the game)
+    // and pickWild's #69 fallback keeps the grass alive when that pool is
+    // empty. A failed fetch rolls nothing rather than surfacing an error mid-step.
+    const grassGate = wildStepGate()
     const startEncounter = (pool: string) => {
+      if (!grassGate()) return
+      const world = worldKey()
       void encounterPoolRef.current?.(pool)
         .then((rows) => {
-          const mapScene = game.scene.getScene('Map')
-          if (!mapScene) return
+          const worldScene = game.scene.getScene(world)
+          if (!worldScene) return
           const opponent = pickWild(rows)
           bus.emit('encounter', { kind: 'wild', name: opponent.name })
-          mapScene.scene.pause()
-          mapScene.scene.launch('Encounter', { opponent, worldScene: 'Map' })
+          worldScene.scene.pause()
+          worldScene.scene.launch('Encounter', { opponent, worldScene: world })
         })
         .catch(() => {})
     }
@@ -363,14 +370,6 @@ export default function PhaserGame({
     if (!game) return
     game.registry.set('characterManifest', characterManifest || null)
   }, [characterManifest])
-
-  // Authored wild-encounter pool — refreshed when the admin edits it and the
-  // town reloads; TownScene reads it live at each grass roll.
-  useEffect(() => {
-    const game = gameRef.current
-    if (!game) return
-    game.registry.set('monsterPool', monsterPool || [])
-  }, [monsterPool])
 
   // NPC catalog — refreshed when the admin edits it and the town reloads; the
   // duel-start reads it live from the registry at each trainer fire.

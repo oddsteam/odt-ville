@@ -8,7 +8,7 @@ import { MapsService, travel } from './maps/service.ts'
 import { TileObjectsService } from './catalog/tileObjects/service.ts'
 import { MonstersService } from './catalog/monsters/service.ts'
 import { NpcsService } from './catalog/npcs/service.ts'
-import { pickWild } from './game/encounters.js'
+import { pickWild, wildStepGate } from './game/encounters.js'
 import { objectIdsFrom } from './maps/props.ts'
 import { runEdge } from './lib/runEdge.ts'
 import { subscribeAuthToken } from './lib/authToken.ts'
@@ -106,6 +106,9 @@ export default function MapPage() {
     game.registry.set('characterManifest', manifestRef.current)
     game.registry.set('entrySpawnId', entrySpawnIdRef.current)
     game.registry.set('npcs', npcsRef.current)
+    // Encounter zones fire per landing step (#255); this gate owns the roll
+    // rate and the post-encounter grace for this game's lifetime.
+    const grassGate = wildStepGate()
     // The one event channel out of the game (#85): the scene fires every zone
     // event through here; the shell dispatches on payload.kind — exhaustive by
     // type, the way `house.type` maps to a detail component (ADR-0004/0005).
@@ -140,11 +143,13 @@ export default function MapPage() {
           return
         }
         case 'encounter': {
-          // Stepping onto the grass (#87): fetch the named pool live and roll a
-          // wild through the shared pickWild (its #69 fallback keeps the grass
-          // alive when the pool is empty). The fetch is the shell's job — the
-          // game never imports a data service (ADR-0004) — so an empty slug asks
-          // for the whole global pool. A failed fetch quietly rolls nothing.
+          // A grass step (#87/#255): the shared per-step gate rolls the GB rate
+          // (+ grace after a launch); on a hit, fetch the named pool live and
+          // roll a wild through the shared pickWild (its #69 fallback keeps the
+          // grass alive when the pool is empty). The fetch is the shell's job —
+          // the game never imports a data service (ADR-0004) — so an empty slug
+          // asks for the whole global pool. A failed fetch quietly rolls nothing.
+          if (!grassGate()) return
           void runEdge(MonstersService.pool(p.pool || undefined))
             .then((rows) => {
               const mapScene = game.scene.getScene('Map')

@@ -13,16 +13,9 @@ import {
 import bus from '../bus.js'
 import { resolveDirection, stepTile } from '../movement.ts'
 import { initialPerfStallState, observeFrame } from '../perfStall.ts'
-import { townInteractionsAt, interiorPortal } from '../townInteractions.ts'
+import { interiorPortal } from '../townInteractions.ts'
 import { render, setupDevTools, preloadAssets, tilesetColumns } from '../townRenderer.ts'
-import {
-  GATE_TRAINER,
-  resolveTrainerStart,
-  trainerSightCells,
-  rollEncounter,
-  pickWild,
-  GRACE_STEPS,
-} from '../../encounters.js'
+import { sightCells, sightZoneEvents, zoneEvents } from '../../../kernel/zones.ts'
 
 // Asset URLs are imported by PhaserGame and pushed into the registry so a
 // scene doesn't need to know module paths. The registry shape:
@@ -62,17 +55,15 @@ export default class TownScene extends Phaser.Scene {
     // the player lands on the community they just left, not whatever the
     // session last persisted.
     this.exitedCommunityId = null
-    // Gate-trainer state. The trainer is a single sprite at a tile near
-    // the entrance, with a `sightCells` line in front of him; stepping
-    // into any of those cells fires a trainer encounter. After the
-    // player runs away once, `defeated` flips on and the markers hide.
-    this.trainer = null // { x, y, facing, sightRange }
+    // Gate-trainer presentation state, read off the town's on_sight zone
+    // (#255): a single sprite at the zone's tile, with the kernel's sight
+    // cells drawn in front of him. Stepping into the cone fires the zone
+    // through `onZone`; after the player runs away once, `defeated` flips on
+    // and the markers hide.
+    this.trainer = null // { x, y }
     this.trainerSprite = null
     this.sightCells = []
     this.sightGraphics = null // pulsing red markers
-    // Wild-encounter rate limiting — N grace steps after each encounter
-    // before another can fire, so leaving the grass is reliable.
-    this.graceSteps = 0
   }
 
   init(data) {
@@ -85,7 +76,6 @@ export default class TownScene extends Phaser.Scene {
     // the next return to Town.
     this.movingTween = null
     this.dpadDir = null
-    this.graceSteps = 0
     this.perfStall = initialPerfStallState()
   }
 
@@ -111,9 +101,9 @@ export default class TownScene extends Phaser.Scene {
     // empty or names a community that no longer exists.
     this.spawnPlayer(this.registry.get('session') || null)
 
-    // Gate trainer (PR-D) — derived from the town's entrance via
-    // resolveTrainerStart() so position follows the entrance even when
-    // the town reshapes. Defeated state is read from the registry.
+    // Gate trainer (PR-D) — presentation for the producer's on_sight zone
+    // (#255), so position follows the entrance even when the town reshapes.
+    // Defeated state is read from the registry.
     this.addGateTrainer()
 
     // Keyboard + overlay D-pad, both feeding activeDirection().
@@ -365,10 +355,13 @@ export default class TownScene extends Phaser.Scene {
   // wired in here as callbacks.
   step(dir) {
     this.facing = dir
+    // Where the step began — the zone detectors are edge-aware, so arrival
+    // needs the previous tile after onStart has advanced playerTile.
+    const from = { ...this.playerTile }
     const result = stepTile({
       scene: this,
       target: this.player,
-      from: this.playerTile,
+      from,
       dir,
       walkable: (x, y) => this.walkable(x, y),
       // #53: refuse a step across an authored impassable cell border, even when
@@ -404,9 +397,9 @@ export default class TownScene extends Phaser.Scene {
         } else {
           this.player.setTexture(`player.${this.facing}.0`)
         }
-        // Arrival interactions (door / trainer / wild) come from the
-        // declarative townInteractions list, resolved in order.
-        this.handleArrival(t)
+        // Arrival interactions: the door first (it short-circuits), then the
+        // town's zones through the one onZone channel (#255).
+        this.handleArrival(from, t)
       },
     })
     this.movingTween = result.tween
@@ -427,62 +420,47 @@ export default class TownScene extends Phaser.Scene {
     }
   }
 
-  // Run the arrival interactions for a tile in declared order: a door enters
-  // the community (and stops there); otherwise a trainer sight cell starts the
-  // duel before — and instead of — the wild-grass roll on the same tile.
-  handleArrival(t) {
-    const sightCells =
-      this.trainer && !this.registry.get('trainerDefeated') ? this.sightCells : []
-    const ctx = { town: this.town, buildings: this.buildings, sightCells }
-    for (const it of townInteractionsAt(ctx, t)) {
-      if (it.kind === 'enterCommunity') {
-        if (it.gate) {
-          // Gated door: stop at the doorway (already depth-elevated + facing up),
-          // freeze the world, and hand the gate off to the shell. The shell runs
-          // it and resumes us on pass / release on fail (issue #24). Dormant until
-          // a community carries entryGate, so no resumer is needed yet.
-          this.scene.pause()
-          bus.emit('requestEntry', { communityId: it.community.id, gate: it.gate })
-        } else {
-          this.enterHouse(it.community)
-        }
-        return
+  // Run the arrival interactions for a tile: a door enters the community (and
+  // stops there); otherwise the step runs against the town's zones through the
+  // same pure detectors + `onZone` channel MapScene uses (#255). The shell
+  // dispatches the payloads — the grass roll, its grace steps, and the duel
+  // all live there now.
+  handleArrival(from, t) {
+    const door = this.buildings.find((b) => b.doorCol === t.x && b.doorRow === t.y)
+    if (door) {
+      const gate = door.community.entry_gate ?? null
+      if (gate) {
+        // Gated door: stop at the doorway (already depth-elevated + facing up),
+        // freeze the world, and hand the gate off to the shell. The shell runs
+        // it and resumes us on pass / release on fail (issue #24). Dormant until
+        // a community carries entryGate, so no resumer is needed yet.
+        this.scene.pause()
+        bus.emit('requestEntry', { communityId: door.community.id, gate })
+      } else {
+        this.enterHouse(door.community)
       }
-      if (it.kind === 'startDuel') {
-        this.launchEncounter({ ...GATE_TRAINER })
-        return
-      }
-      if (it.kind === 'maybeWild') this.resolveWild()
-    }
-  }
-
-  // The stateful half of the wild interaction: burn a grace step, else roll.
-  // Only reached on a tall-grass tile (townInteractions already checked).
-  resolveWild() {
-    if (this.graceSteps > 0) {
-      this.graceSteps -= 1
       return
     }
-    // Roll a wild monster from the admin-authored pool (#69), weighted by
-    // encounter_rate; an empty/absent pool falls back to the built-in table.
-    if (rollEncounter()) this.launchEncounter(pickWild(this.registry.get('monsterPool') || []))
+
+    const onZone = this.registry.get('onZone')
+    if (!onZone) return
+    const zones = this.activeZones()
+    for (const ev of zoneEvents(from, t, zones)) onZone(ev.trigger, ev.zone)
+    for (const ev of sightZoneEvents(from, t, zones)) onZone(ev.trigger, ev.zone)
   }
 
-  launchEncounter(opponent) {
-    // Announce the encounter to the shell (issue #103) — one event per start,
-    // for both the wild-grass roll and the gate-trainer duel. Pure data only:
-    // the scene stays analytics-free, the shell decides what to do with it.
-    bus.emit('encounter', { kind: opponent.kind, name: opponent.name })
-    // Pause this scene so its update() loop (and the world) freeze
-    // while the duel runs; EncounterScene resumes us on close.
-    this.scene.pause()
-    this.scene.launch('Encounter', { opponent })
+  // The zones a step can fire: all of them, minus the trainer's cone once he
+  // is defeated — defeated trainers still stand there, but challenge nobody.
+  activeZones() {
+    const zones = this.town.zones || []
+    return this.registry.get('trainerDefeated')
+      ? zones.filter((z) => z.payload.kind !== 'trainer')
+      : zones
   }
 
-  handleResume(_sys, data) {
-    // EncounterScene exited. Wild → arm grace steps. Trainer →
-    // trainerDefeated already flipped via the bus; refresh visuals.
-    if (data?.ranFrom === 'wild') this.graceSteps = GRACE_STEPS
+  handleResume() {
+    // EncounterScene exited. trainerDefeated may have flipped via the bus;
+    // refresh visuals (the wild grace steps are the shell gate's business).
     this.refreshTrainerVisuals()
   }
 
@@ -495,13 +473,16 @@ export default class TownScene extends Phaser.Scene {
     return isWalkable(this.town, this.buildings, blockers, x, y)
   }
 
-  // Place the gate trainer + render his line-of-sight markers. Called
-  // once on scene boot, after the buildings + player are positioned so
-  // depth-sorting comes out right.
+  // Place the gate trainer + render his line-of-sight markers, both read off
+  // the producer's on_sight zone (#255) — the kernel's sightCells are the very
+  // cells the detector fires on. Called once on scene boot, after the
+  // buildings + player are positioned so depth-sorting comes out right.
   addGateTrainer() {
-    const start = resolveTrainerStart(this.town)
+    const zone = (this.town.zones || []).find((z) => z.trigger === 'on_sight')
+    if (!zone) return
+    const start = { x: zone.x, y: zone.y }
     this.trainer = start
-    this.sightCells = trainerSightCells(start, this.town)
+    this.sightCells = sightCells(zone)
 
     // The trainer sprite is portrait-aspect (taller than wide); same
     // trick the buildings use — overflow the tile upward, ground the

@@ -115,7 +115,7 @@ describe('buildTownMap', () => {
     const map = buildTownMap(6, HOMETOWN_CATALOG)
     // Geometry is byte-identical to buildTown (the golden net guards this); the
     // baked ground is added alongside as the runtime map shape.
-    expect({ cols: map.cols, rows: map.rows, map: map.map, plots: map.plots, entrance: map.entrance, entities: map.entities }).toEqual(town)
+    expect({ cols: map.cols, rows: map.rows, map: map.map, plots: map.plots, entrance: map.entrance, entities: map.entities, zones: map.zones }).toEqual(town)
     expect(map.ground).toEqual(bakeTownGround(town, HOMETOWN_CATALOG))
   })
 })

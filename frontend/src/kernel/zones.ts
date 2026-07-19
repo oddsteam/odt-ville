@@ -18,15 +18,23 @@ const inZone = (z: Zone, x: number, y: number) =>
   x >= z.x && x < z.x + (z.w ?? 1) && y >= z.y && y < z.y + (z.h ?? 1)
 
 // `on_enter` is edge-triggered: it fires only when the step crosses from
-// outside the zone to inside, so standing or walking within it never re-fires
-// and a step elsewhere never false-fires.
+// outside the zone to inside, so walking within it never re-fires a portal or
+// a link. The one exception is an `encounter` payload (#255): grass rolls
+// every step — the GB rhythm — so it is level-triggered, firing on each step
+// that lands inside; the shell's rate/grace gate owns how often that becomes
+// an actual encounter.
 export function zoneEvents(
   from: { x: number; y: number },
   to: { x: number; y: number },
   zones: readonly Zone[] = [],
 ): ZoneEvent[] {
   return zones
-    .filter((z) => z.trigger === 'on_enter' && inZone(z, to.x, to.y) && !inZone(z, from.x, from.y))
+    .filter(
+      (z) =>
+        z.trigger === 'on_enter' &&
+        inZone(z, to.x, to.y) &&
+        (z.payload.kind === 'encounter' || !inZone(z, from.x, from.y)),
+    )
     .map((zone) => ({ trigger: zone.trigger, zone }))
 }
 

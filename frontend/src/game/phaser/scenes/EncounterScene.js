@@ -33,11 +33,19 @@ export default class EncounterScene extends Phaser.Scene {
     this.phase = 'flash'
   }
 
+  // The opponent's texture key. Scoped by kind because ids come from two
+  // independent tables — a Catalog::Npc and a Catalog::Monster can share the
+  // same small integer id (#255: npc 1 vs monster 1) — and Phaser dedupes by
+  // key, so a bare id would show whichever art happened to load first.
+  opponentKey() {
+    return `opponent.${this.opponent.kind}.${this.opponent.id || this.opponent.name}`
+  }
+
   preload() {
     if (this.opponent?.sprite) {
       // Each opponent's URL is a Vite-imported asset URL; load it once
       // per scene boot (Phaser dedupes by key on later visits).
-      this.load.image(`opponent.${this.opponent.id || this.opponent.name}`, this.opponent.sprite)
+      this.load.image(this.opponentKey(), this.opponent.sprite)
     }
   }
 
@@ -139,7 +147,7 @@ export default class EncounterScene extends Phaser.Scene {
     // Scale to fit a centred box without distorting.
     const targetH = isTrainer ? Math.round(fieldH * 0.85) : Math.round(fieldH * 0.7)
     const sprite = this.add
-      .image(width / 2, fieldH / 2, `opponent.${o.id || o.name}`)
+      .image(width / 2, fieldH / 2, this.opponentKey())
       .setDepth(3)
     const scale = targetH / sprite.height
     sprite.setScale(scale)

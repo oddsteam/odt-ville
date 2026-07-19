@@ -254,6 +254,31 @@ describe('zoneEvents (the pure detector)', () => {
   it('handles maps with no zones', () => {
     expect(zoneEvents({ x: 0, y: 0 }, { x: 1, y: 0 }, undefined)).toEqual([])
   })
+
+  // Grass rolls every step (#255): an encounter zone is level-triggered, so
+  // each step landing inside re-fires and the shell's rate/grace gate decides.
+  describe('encounter zones fire per landing step', () => {
+    const grass: Zone = {
+      trigger: 'on_enter',
+      x: 2,
+      y: 2,
+      w: 3,
+      h: 2,
+      payload: { kind: 'encounter', pool: '' },
+    }
+
+    it('fires on the step that enters', () => {
+      expect(zoneEvents({ x: 1, y: 2 }, { x: 2, y: 2 }, [grass])).toHaveLength(1)
+    })
+
+    it('re-fires while moving inside the zone', () => {
+      expect(zoneEvents({ x: 2, y: 2 }, { x: 3, y: 2 }, [grass])).toHaveLength(1)
+    })
+
+    it('does not fire on the step that leaves', () => {
+      expect(zoneEvents({ x: 2, y: 2 }, { x: 1, y: 2 }, [grass])).toEqual([])
+    })
+  })
 })
 
 describe('interactZoneEvents (the key-press detector, #110)', () => {

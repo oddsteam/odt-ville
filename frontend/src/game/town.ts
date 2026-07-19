@@ -2,6 +2,7 @@
 // lets the generator invariants run in Node without booting Vite or Phaser.
 
 import { maskCharWalkable, walkMaskConnected, EDGE_N, EDGE_E, EDGE_S, EDGE_W } from '../kernel/walkMask.ts'
+import type { Zone } from '../kernel/schema.ts'
 
 export interface Plot {
   col: number
@@ -26,6 +27,10 @@ export interface Town extends TileGrid {
   plots: Plot[]
   entrance: { x: number; y: number }
   entities: PlacedEntity[]
+  // The generated producer's interactive regions (#255): the same Zone shape
+  // an authored map carries, computed here instead of placed by hand — the
+  // tall-grass encounter field and the gate trainer's sight cone.
+  zones: Zone[]
 }
 
 // A placed-entity reference (ADR-0008): the shape both producers emit, resolved
@@ -47,6 +52,13 @@ export interface HometownPolicy {
   tree: { id: number; footprint_w?: number | null; footprint_h?: number | null } | null
   flowerGroup: { id: number; footprint_w?: number | null; footprint_h?: number | null } | null
   flowerSingle: { id: number } | null
+  // The wild-encounter pool the tall-grass field rolls (#255): a pool slug for
+  // the field zone's `encounter` payload; absent/'' names the whole global pool.
+  wildPool?: string | null
+  // The gate trainer's Catalog::Npc row (#259/#255), referenced by the trainer
+  // zone's payload; absent → the unset sentinel 0 (the village shell falls back
+  // to the bundled gate trainer so the gate is never unguarded).
+  gateNpcId?: number | null
 }
 
 // A placed building footprint. The renderer adds sprite/community fields; the
@@ -272,7 +284,36 @@ export function buildTown(
   }
 
   const grid = { cols, rows, map }
-  return { ...grid, plots, entrance: { x: entranceCol, y: rows - 2 }, entities: placeFoliage(grid, policy) }
+  const entrance = { x: entranceCol, y: rows - 2 }
+
+  // The interactive regions (#255), payloads from policy. The tall-grass field
+  // is two encounter zones flanking the entrance avenue — the road column cuts
+  // through the field rect and must stay a safe corridor, and a Zone is a rect.
+  // The gate trainer stands one tile east of the entrance, on the row just
+  // inside the south margin, looking left across the road — five tiles,
+  // clipped to the map because the kernel cone is unclipped.
+  const grass = (left: number, right: number): Zone => ({
+    trigger: 'on_enter',
+    x: left,
+    y: fieldTop,
+    w: right - left + 1,
+    h: FIELD_H,
+    payload: { kind: 'encounter', pool: policy?.wildPool ?? '' },
+  })
+  const zones: Zone[] = [
+    grass(fieldLeft, entranceCol - 1),
+    grass(entranceCol + 1, fieldRight),
+    {
+      trigger: 'on_sight',
+      x: entrance.x + 1,
+      y: entrance.y - 1,
+      facing: 'left',
+      range: Math.min(5, entrance.x + 1),
+      payload: { kind: 'trainer', npcId: policy?.gateNpcId ?? 0 },
+    },
+  ]
+
+  return { ...grid, plots, entrance, entities: placeFoliage(grid, policy), zones }
 }
 
 // Resolve the policy's active kinds to placed-entity references (#173): one
