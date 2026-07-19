@@ -50,9 +50,9 @@ module Api
         def update
           map = ::Maps::Map.find_by!(slug: params[:slug])
           baked = (map.baked.is_a?(Hash) ? map.baked : {}).merge(update_params["baked"] || {})
-          # Blank authored layers (cleared mask, no props) drop out so an
-          # undecorated map's document stays clean.
-          %w[collision entities].each { |k| baked.delete(k) if baked[k].blank? }
+          # Blank authored layers (cleared mask, no props, no zones) drop out so
+          # an undecorated map's document stays clean.
+          %w[collision entities zones].each { |k| baked.delete(k) if baked[k].blank? }
           map.update!(baked: baked)
           render json: ::Maps::MapSerializer.call(map)
         end

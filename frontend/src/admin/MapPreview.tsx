@@ -31,6 +31,7 @@ export default function MapPreview({
   onTileHover,
   onTileHoverEnd,
   overlay,
+  zoneRects,
   ghost,
   fill,
 }: {
@@ -61,6 +62,10 @@ export default function MapPreview({
   // The collision mask to draw as a red overlay over the map art (#145); null
   // hides it. Semi-transparent so the terrain beneath stays visible.
   overlay?: Mask | null
+  // Authored zones to draw as labeled tinted rects over the map art (#90) —
+  // pure presentation like `overlay`: the zones-mode editing surface shows
+  // where each trigger region sits and which one is selected.
+  zoneRects?: readonly { x: number; y: number; w: number; h: number; color: string; label: string; selected?: boolean }[]
   // The footprint ghost to preview under the cursor (#144): a tile rect the size
   // of the acted-on footprint. `image` (place mode) draws the object art semi-
   // transparent; `refused` tints it red (placement would hang off the edge);
@@ -219,6 +224,27 @@ export default function MapPreview({
           ))}
         </div>
       )}
+      {zoneRects?.map((z, i) => (
+        <div
+          key={i}
+          style={{
+            position: 'absolute',
+            pointerEvents: 'none',
+            left: `${(z.x / baked.cols) * 100}%`,
+            top: `${(z.y / baked.rows) * 100}%`,
+            width: `${(z.w / baked.cols) * 100}%`,
+            height: `${(z.h / baked.rows) * 100}%`,
+            background: z.color,
+            opacity: z.selected ? 0.75 : 0.45,
+            outline: z.selected ? '2px solid #ffffff' : `1px solid ${z.color}`,
+            color: '#fff',
+            fontSize: 10,
+            overflow: 'hidden',
+          }}
+        >
+          {z.label}
+        </div>
+      ))}
       {ghost && (
         <div
           style={{

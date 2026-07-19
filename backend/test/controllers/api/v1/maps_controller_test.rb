@@ -501,6 +501,37 @@ module Api
         assert_not_includes ::Maps::Map.find_by!(slug: "grove").baked.keys, "entities"
       end
 
+      # Zones (#90, ADR-0005): the decorate editor PATCHes the authored zones —
+      # trigger + payload regions — as full desired state under the same baked
+      # jsonb, alongside collision and entities.
+      test "an admin saves authored zones onto a map" do
+        make_painted_map(slug: "grove")
+
+        patch "/api/v1/maps/grove",
+          params: { baked: { zones: [{ trigger: "interact", x: 0, y: 0,
+                                       payload: { kind: "link", url: "https://odds.team" } }] } },
+          headers: auth(@user, roles: ["admin"]), as: :json
+
+        assert_response :success
+        get "/api/v1/maps/grove", headers: auth(@user)
+        assert_equal "https://odds.team", json[:zones].first[:payload][:url]
+      end
+
+      test "clearing all zones drops the zones key entirely" do
+        map = make_painted_map(slug: "grove")
+        map.update!(baked: map.baked.merge(
+          "zones" => [{ "trigger" => "on_enter", "x" => 0, "y" => 0,
+                        "payload" => { "kind" => "portal", "targetNode" => "town" } }]
+        ))
+
+        patch "/api/v1/maps/grove",
+          params: { baked: { zones: [] } },
+          headers: auth(@user, roles: ["admin"]), as: :json
+
+        assert_response :success
+        assert_not_includes ::Maps::Map.find_by!(slug: "grove").baked.keys, "zones"
+      end
+
       test "updating an unknown slug returns 404" do
         patch "/api/v1/maps/does-not-exist",
           params: { baked: { collision: [[true]] } },

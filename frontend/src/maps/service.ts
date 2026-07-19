@@ -9,7 +9,7 @@ import * as Schema from 'effect/Schema'
 import { DecodeError, Http } from '../lib/http.ts'
 import type { HttpError } from '../lib/http.ts'
 import { BakedMap } from '../kernel/schema.ts'
-import type { BakedEntity, BakedGround } from '../kernel/schema.ts'
+import type { BakedEntity, BakedGround, Zone } from '../kernel/schema.ts'
 import { bakeSourceMap } from '../kernel/baker.ts'
 import type { SourceMap } from '../kernel/baker.ts'
 import { propEntities } from './props.ts'
@@ -105,15 +105,17 @@ export const list = (): Effect.Effect<readonly MapSummary[], HttpError, Http> =>
   })
 
 // The baked-document patch the decorate editor sends for a saved map (#139,
-// ADR-0008): its collision mask AND placed props (object references), as full
-// desired state — plus `otherEntities`, the loaded entities the editor doesn't
-// manage (legacy tileset/frame props), preserved so a save never wipes them.
-// Blank layers (null mask, no entities) are sent null/empty so the backend
-// drops the keys. Pure, so it's unit-testable apart from the request.
+// ADR-0008): its collision mask, placed props (object references) AND authored
+// zones (#90, ADR-0005), as full desired state — plus `otherEntities`, the
+// loaded entities the editor doesn't manage (legacy tileset/frame props),
+// preserved so a save never wipes them. Blank layers (null mask, no entities,
+// no zones) are sent null/empty so the backend drops the keys. Pure, so it's
+// unit-testable apart from the request.
 export function decorationsBaked(
   collision: ReadonlyArray<ReadonlyArray<boolean>> | null,
   props: readonly PlacedProp[],
   otherEntities: readonly BakedEntity[],
+  zones: readonly Zone[],
   maskOf?: MaskOf,
   edgeMaskOf?: MaskOf,
   doorOf?: DoorOf,
@@ -121,6 +123,7 @@ export function decorationsBaked(
   return {
     collision,
     entities: [...otherEntities, ...propEntities(props, maskOf, edgeMaskOf, doorOf)],
+    zones,
   }
 }
 
@@ -132,6 +135,7 @@ export const saveDecorations = (
   collision: ReadonlyArray<ReadonlyArray<boolean>> | null,
   props: readonly PlacedProp[],
   otherEntities: readonly BakedEntity[],
+  zones: readonly Zone[],
   maskOf?: MaskOf,
   edgeMaskOf?: MaskOf,
   doorOf?: DoorOf,
@@ -140,7 +144,7 @@ export const saveDecorations = (
     const http = yield* Http
     const path = `/maps/${encodeURIComponent(slug)}`
     const raw = yield* http.patch(path, {
-      baked: decorationsBaked(collision, props, otherEntities, maskOf, edgeMaskOf, doorOf),
+      baked: decorationsBaked(collision, props, otherEntities, zones, maskOf, edgeMaskOf, doorOf),
     })
     return yield* decode(path, decodeOne)(raw)
   })
@@ -157,5 +161,7 @@ export {
   propGhost,
 } from './props.ts'
 export type { PlacedProp, SizeOf, MaskOf, DoorOf } from './props.ts'
+export { newZone, zoneIndexAt, eraseZoneAt, replaceZone } from './zoneAuthor.ts'
+export type { ZoneKind } from './zoneAuthor.ts'
 export { importTiledMap, TiledImportError } from './tiledImport.ts'
 export { travel } from './travel.ts'
