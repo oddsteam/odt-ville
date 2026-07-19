@@ -5,10 +5,12 @@ import type { MapSummary } from '../maps/service.ts'
 import type { BakedMap, Zone, ZoneFacing, ZoneTrigger } from '../kernel/schema.ts'
 import { TileObjectsService } from '../catalog/tileObjects/service.ts'
 import type { TileObject } from '../catalog/tileObjects/schema.ts'
+import { NpcsService } from '../catalog/npcs/service.ts'
+import type { Npc } from '../catalog/npcs/schema.ts'
 import { makeMask, setMaskCell, resizeMask, isMaskEmpty, type Mask } from './maskPaint.ts'
 import { groupPalette } from './paletteGroups.ts'
 import { zoneRects as buildZoneRects, ZONE_COLORS } from './zoneRects.ts'
-import { placeProp, erasePropAt, propEntities, propsFromBaked, propGhost, newZone, retrigger, zoneIndexAt, eraseZoneAt, replaceZone, type PlacedProp, type SizeOf, type MaskOf, type DoorOf, type ZoneKind } from '../maps/service.ts'
+import { placeProp, erasePropAt, propEntities, propsFromBaked, propGhost, newZone, retrigger, triggersFor, zoneIndexAt, eraseZoneAt, replaceZone, type PlacedProp, type SizeOf, type MaskOf, type DoorOf, type ZoneKind } from '../maps/service.ts'
 import MapPreview from './MapPreview.tsx'
 import { runEdge } from '../lib/runEdge.ts'
 import './admin.css'
@@ -21,10 +23,10 @@ import './admin.css'
 // authored footprint in the WYSIWYG preview. Save PATCHes props + mask in one
 // write (MapsService.saveDecorations). Terrain is fixed at create; this page
 // never re-bakes it. ADR-0004 boundary: data services + shared preview only.
-// The palette offers exactly what the runtime consumes — `encounter` (#87)
-// joins with its behaviour; until then an author can't place a zone nothing
-// fires. Its tints and the overlay's rects live in ./zoneRects.ts.
-const TRIGGERS: readonly ZoneTrigger[] = ['on_enter', 'interact', 'on_sight']
+// The palette offers exactly what the runtime consumes — `trainer` (#259)
+// joined with its duel; `encounter` (#87) lands next. Each kind arrives with
+// its behaviour, so an author can never place a zone nothing fires. Its tints
+// and the overlay's rects live in ./zoneRects.ts.
 const FACINGS: readonly ZoneFacing[] = ['up', 'down', 'left', 'right']
 
 export default function MapDecoratePage() {
@@ -48,6 +50,8 @@ export default function MapDecoratePage() {
   const [selectedZone, setSelectedZone] = useState<number | null>(null)
   // Saved maps, for a portal payload's target picker (plus the reserved town hub).
   const [mapList, setMapList] = useState<readonly MapSummary[]>([])
+  // The NPC catalog (#259), for a trainer payload's NPC picker.
+  const [npcs, setNpcs] = useState<readonly Npc[]>([])
   // Search box over the palette — filters objects by name/kind (#165).
   const [query, setQuery] = useState('')
   // The tile the cursor is over, driving the footprint ghost (#144); null off-map.
@@ -113,8 +117,11 @@ export default function MapDecoratePage() {
         runEdge(TileObjectsService.getMany(roster.map((o) => o.id))),
       ),
       runEdge(MapsService.list()),
+      // Best-effort: the trainer picker is empty if the catalog is unreachable,
+      // but props/collision/portal authoring still works.
+      runEdge(NpcsService.list()).catch(() => [] as readonly Npc[]),
     ])
-      .then(([m, objects, maps]) => {
+      .then(([m, objects, maps, npcList]) => {
         if (!live) return
         setBaked(m)
         setCollision(resizeMask(m.collision ?? [], m.cols, m.rows))
@@ -122,6 +129,7 @@ export default function MapDecoratePage() {
         setZones([...(m.zones ?? [])])
         setPalette(objects)
         setMapList(maps)
+        setNpcs(npcList)
         setPropTool((t) => t ?? objects[0]?.id ?? null)
       })
       .catch((e) => live && setError((e as Error).message))
@@ -305,7 +313,7 @@ export default function MapDecoratePage() {
                       seeds a facing rather than producing an illegal zone. */}
                   <select value={zone.trigger}
                     onChange={(e) => editZone(retrigger(zone, e.target.value as ZoneTrigger))}>
-                    {[...new Set([...TRIGGERS, zone.trigger])].map((t) => <option key={t} value={t}>{t}</option>)}
+                    {[...new Set([...triggersFor(p.kind), zone.trigger])].map((t) => <option key={t} value={t}>{t}</option>)}
                   </select>
                 </label>
                 {zone.trigger === 'on_sight' && (
@@ -343,6 +351,28 @@ export default function MapDecoratePage() {
                         onChange={(e) => editZone({ ...zone, payload: { ...p, entrySpawnId: opt(e.target.value) } })} />
                     </label>
                   </>
+                )}
+                {p.kind === 'trainer' && (
+                  <label>NPC{' '}
+                    {/* Identity comes from the catalog row (#259); the payload
+                        holds only which one duels you. facing/range are the
+                        on_sight fields above, not duplicated here. */}
+                    <select value={p.npcId}
+                      onChange={(e) => editZone({ ...zone, payload: { ...p, npcId: Number(e.target.value) } })}>
+                      <option value={0}>(pick an NPC)</option>
+                      {npcs.map((n) => <option key={n.id} value={n.id}>{n.name}</option>)}
+                    </select>
+                  </label>
+                )}
+                {p.kind === 'encounter' && (
+                  <label>Pool{' '}
+                    {/* The named wild-encounter group this grass rolls (#87).
+                        A slug (like portal's target), not a catalog id — it
+                        names a group of monsters, resolved server-side at roll
+                        time. Empty = the whole global pool (#69 fallback). */}
+                    <input type="text" placeholder="(global pool)" value={p.pool}
+                      onChange={(e) => editZone({ ...zone, payload: { ...p, pool: e.target.value } })} />
+                  </label>
                 )}
                 {p.kind === 'link' && (
                   <>

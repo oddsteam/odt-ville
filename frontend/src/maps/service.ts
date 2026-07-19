@@ -161,7 +161,7 @@ export {
   propGhost,
 } from './props.ts'
 export type { PlacedProp, SizeOf, MaskOf, DoorOf } from './props.ts'
-export { newZone, retrigger, zoneIndexAt, eraseZoneAt, replaceZone } from './zoneAuthor.ts'
+export { newZone, retrigger, triggersFor, zoneIndexAt, eraseZoneAt, replaceZone } from './zoneAuthor.ts'
 export type { ZoneKind } from './zoneAuthor.ts'
 export { importTiledMap, TiledImportError } from './tiledImport.ts'
 export { travel } from './travel.ts'

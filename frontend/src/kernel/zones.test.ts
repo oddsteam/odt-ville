@@ -34,6 +34,35 @@ describe('Zone in the map document', () => {
     expect(map.zones?.[1].payload.kind).toBe('link')
   })
 
+  it('decodes an on_sight trainer payload carrying an npcId (#259)', () => {
+    const map = decode({
+      ...baseMap,
+      zones: [
+        {
+          trigger: 'on_sight',
+          x: 5,
+          y: 5,
+          facing: 'up',
+          range: 3,
+          payload: { kind: 'trainer', npcId: 7 },
+        },
+      ],
+    })
+    const payload = map.zones?.[0].payload
+    expect(payload).toEqual({ kind: 'trainer', npcId: 7 })
+    // facing/range live on the Zone, never on the payload (#259 decision 4).
+    expect(map.zones?.[0]).toMatchObject({ facing: 'up', range: 3 })
+  })
+
+  it('rejects a trainer payload with no npcId', () => {
+    expect(() =>
+      decode({
+        ...baseMap,
+        zones: [{ trigger: 'on_enter', x: 0, y: 0, payload: { kind: 'trainer' } }],
+      }),
+    ).toThrow()
+  })
+
   it('decodes a sight cone’s facing and range (#86)', () => {
     const map = decode({
       ...baseMap,

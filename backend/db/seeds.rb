@@ -6,6 +6,8 @@
 #
 #   bin/rails db:seed
 
+require "base64"
+
 now = Time.current
 
 # House blueprints. position_order is assigned automatically from array order;
@@ -341,8 +343,9 @@ MAP_FIXTURES = [
           "payload" => { "kind" => "link", "url" => "https://github.com/oddsteam/odt-ville/issues", "label" => "The Board" } },
         # The trainer (#86): stands at (5,5) looking up, seeing (5,4)..(5,2).
         # Crossing that line challenges you and stops you where you stand;
-        # walking past at (4,y) or behind at (5,6) never does. The payload is a
-        # link until the encounter payload lands (#87).
+        # walking past at (4,y) or behind at (5,6) never does. This demo keeps a
+        # link payload; the `trainer` payload (#259) that starts a real duel is
+        # wired onto the hometown's gate trainer by #255.
         { "trigger" => "on_sight", "x" => 5, "y" => 5, "facing" => "up", "range" => 3,
           "payload" => { "kind" => "link", "url" => "https://github.com/oddsteam/odt-ville/issues/86", "label" => "Trainer challenge" } }
       ],
@@ -480,6 +483,21 @@ ActiveRecord::Base.transaction do
   # already-present names while filling in the canonical defaults.
   %w[water road sand dirt grass].each_with_index do |name, priority|
     Catalog::Terrain.find_or_create_by!(name: name) { |t| t.priority = priority }
+  end
+
+  # The NPC catalog (#259, ADR-0008): identity for placed characters, resolved by
+  # a trainer Zone payload's `npcId` the way a Prop resolves `object_id`. Seed the
+  # gate trainer (#86's GATE_TRAINER) so #255 has a referent — same "THE BOSS"
+  # name and level 99, sharing the boss-k sprite the frontend bundles, inlined
+  # here as a data URL. Guarded so a backend-only checkout without the frontend
+  # assets still seeds cleanly. find_or_create keeps an admin-edited row intact.
+  boss_k_png = Rails.root.join("../frontend/src/game/assets/character/boss-k.png")
+  if File.exist?(boss_k_png)
+    data_url = "data:image/png;base64,#{Base64.strict_encode64(File.binread(boss_k_png))}"
+    Catalog::Npc.find_or_create_by!(name: "THE BOSS") do |npc|
+      npc.image_data_url = data_url
+      npc.level = 99
+    end
   end
 
   puts "Seeded: #{Org::Company.count} company, #{Auth::User.count} users, " \

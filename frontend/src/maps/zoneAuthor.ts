@@ -15,10 +15,32 @@ export type ZoneKind = ZonePayload['kind']
 const seeds: Record<ZoneKind, { trigger: 'on_enter' | 'interact'; payload: ZonePayload }> = {
   portal: { trigger: 'on_enter', payload: { kind: 'portal', targetNode: 'town' } },
   link: { trigger: 'interact', payload: { kind: 'link', url: '' } },
+  // A trainer is conceptually an aiming zone, but placement can't seed a cone
+  // (see above) — the author switches to on_sight from the inspector, which
+  // adds the facing. npcId 0 is the unset sentinel the inspector's NPC dropdown
+  // replaces with a real catalog row before the map is worth saving (#259).
+  trainer: { trigger: 'on_enter', payload: { kind: 'trainer', npcId: 0 } },
+  // An encounter fires when the avatar steps onto it (on_enter), rolling a wild
+  // from the named pool. The empty pool seed rolls the whole global pool — a
+  // valid save from the first click (like portal's reserved town target); the
+  // inspector names a specific group from there (#87).
+  encounter: { trigger: 'on_enter', payload: { kind: 'encounter', pool: '' } },
 }
 
 export function newZone(kind: ZoneKind, x: number, y: number): Zone {
   return { ...seeds[kind], x, y }
+}
+
+const ALL_TRIGGERS: readonly ZoneTrigger[] = ['on_enter', 'interact', 'on_sight']
+
+// Which triggers a payload kind can legally carry, for the inspector's picker.
+// An encounter is a stepped mechanic — the runtime rolls a wild when the avatar
+// walks onto the region, and there is no press-to-roll or roll-across-a-cone —
+// so offering the other two would author a zone that can never fire (#87).
+// Every other kind stays open: a portal or link reads fine stepped or pressed,
+// and a trainer aims.
+export function triggersFor(kind: ZoneKind): readonly ZoneTrigger[] {
+  return kind === 'encounter' ? ['on_enter'] : ALL_TRIGGERS
 }
 
 // Switch a zone's trigger, keeping the shape legal (#86). The schema union

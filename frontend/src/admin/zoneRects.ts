@@ -11,10 +11,13 @@ import { sightCells } from '../kernel/zones.ts'
 import type { ZoneKind } from '../maps/service.ts'
 
 // One tint per payload kind, so the overlay reads at a glance:
-// portal = blue (travel), link = amber (external page).
+// portal = blue (travel), link = amber (external page), trainer = red (a duel),
+// encounter = green (wild grass).
 export const ZONE_COLORS: Record<ZoneKind, string> = {
   portal: '#3b82f6',
   link: '#f59e0b',
+  trainer: '#ef4444',
+  encounter: '#22c55e',
 }
 
 export type ZoneRect = {

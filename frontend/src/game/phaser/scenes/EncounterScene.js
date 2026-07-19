@@ -8,7 +8,9 @@ import bus from '../bus.js'
 //
 // Init data:
 //   { opponent: { kind: 'wild'|'trainer', name, level, sprite (URL),
-//                 encounter_dialog? } }
+//                 encounter_dialog? },
+//     worldScene?: 'Town' | 'Map' }  // which world scene to resume on close;
+//                                     // defaults to 'Town' (the town roll/duel).
 //
 // Bus events emitted:
 //   'trainerDefeated' — when RUN AWAY closes a trainer duel (so the
@@ -23,6 +25,10 @@ export default class EncounterScene extends Phaser.Scene {
 
   init(data) {
     this.opponent = data?.opponent || null
+    // The world scene that launched us, resumed on close. A trainer duel fired
+    // from an authored map (#259) resumes 'Map'; the town roll/duel resumes
+    // 'Town'. Default 'Town' so TownScene's launch stays unchanged.
+    this.worldScene = data?.worldScene || 'Town'
     this.phase = 'flash'
   }
 
@@ -213,6 +219,6 @@ export default class EncounterScene extends Phaser.Scene {
     if (this._restoreGameApi) this._restoreGameApi()
 
     this.scene.stop()
-    this.scene.resume('Town', { ranFrom: wasTrainer ? 'trainer' : 'wild' })
+    this.scene.resume(this.worldScene, { ranFrom: wasTrainer ? 'trainer' : 'wild' })
   }
 }

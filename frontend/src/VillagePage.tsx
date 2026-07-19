@@ -19,6 +19,8 @@ import type { TileObject } from './catalog/tileObjects/schema.ts'
 import type { HometownPolicy } from './game/town.ts'
 import type { GroundTile } from './catalog/groundTiles/schema.ts'
 import type { MonsterPoolEntry } from './catalog/monsters/schema.ts'
+import { MonstersService } from './catalog/monsters/service.ts'
+import type { Npc } from './catalog/npcs/schema.ts'
 
 // Demo target for every board's "open content list" action. Replaced in a
 // follow-up by per-board content-list views (see issue #15 follow-ups).
@@ -62,6 +64,9 @@ export default function VillagePage() {
   // Admin-authored wild-encounter pool (#69) — enabled monsters with sprites.
   // Best-effort: empty array falls back to the built-in encounter table.
   const [monsterPool, setMonsterPool] = useState<readonly MonsterPoolEntry[]>([])
+  // The NPC catalog (#259) — identity + sprite for trainer-Zone duels on
+  // authored interiors. Best-effort: empty means a trainer zone duels nobody.
+  const [npcs, setNpcs] = useState<readonly Npc[]>([])
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -78,6 +83,7 @@ export default function VillagePage() {
     setGroundTiles(town.groundTiles)
     setCharacterManifest(town.characterManifest)
     setMonsterPool(town.monsterPool)
+    setNpcs(town.npcs)
   }, [])
 
   useEffect(() => {
@@ -260,6 +266,10 @@ export default function VillagePage() {
         groundTiles={groundTiles}
         characterManifest={characterManifest}
         monsterPool={monsterPool}
+        npcs={npcs}
+        // The shell owns the fetch (ADR-0004): an encounter Zone names a pool and
+        // this resolves it; an empty slug asks for the whole global pool.
+        onEncounterPool={(pool) => runEdge(MonstersService.pool(pool || undefined))}
         dailyBrief={
           <DailyBriefShortcut items={feed} onClose={handleDailyBriefClose} />
         }

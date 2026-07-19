@@ -59,6 +59,38 @@ module Api
         assert entry.key?(:id) && entry.key?(:name)
       end
 
+      test "an unfiltered pool ignores the pool column — every enabled monster spawns (#87)" do
+        ::Catalog::Monster.create!(name: "Grass", image: "data:g", encounter_rate: 1, pool: nil)
+        ::Catalog::Monster.create!(name: "Cave", image: "data:c", encounter_rate: 1, pool: "cave")
+
+        get "/api/v1/monsters/pool", headers: auth(@user)
+
+        assert_response :success
+        assert_equal %w[Cave Grass], json.map { _1[:name] }, "absent filter is today's global pool, byte-for-byte"
+      end
+
+      test "the pool filter narrows to one named group (#87)" do
+        ::Catalog::Monster.create!(name: "Global", image: "data:x", encounter_rate: 1, pool: nil)
+        ::Catalog::Monster.create!(name: "CaveBat", image: "data:b", encounter_rate: 1, pool: "cave")
+        ::Catalog::Monster.create!(name: "PlazaRare", image: "data:r", encounter_rate: 1, pool: "plaza")
+        ::Catalog::Monster.create!(name: "CaveOff", image: "data:o", encounter_rate: 1, pool: "cave", enabled: false)
+
+        get "/api/v1/monsters/pool", params: { pool: "cave" }, headers: auth(@user)
+
+        assert_response :success
+        assert_equal %w[CaveBat], json.map { _1[:name] },
+                     "only enabled monsters carrying the named pool spawn there"
+      end
+
+      test "a named pool with no monsters is empty, not the global pool (#87)" do
+        ::Catalog::Monster.create!(name: "Global", image: "data:x", encounter_rate: 1, pool: nil)
+
+        get "/api/v1/monsters/pool", params: { pool: "ghosts" }, headers: auth(@user)
+
+        assert_response :success
+        assert_equal [], json, "a named-but-unpopulated pool spawns nothing (the grass fallback is the game's job)"
+      end
+
       test "a non-admin is forbidden from creating a monster" do
         assert_no_difference -> { ::Catalog::Monster.count } do
           post "/api/v1/monsters",

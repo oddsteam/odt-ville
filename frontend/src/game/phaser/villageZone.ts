@@ -15,9 +15,23 @@ export interface VillageZoneDeps {
   exitToTown: () => void
   travel: (portal: { kind: 'portal'; targetNode: string; entrySpawnId?: string }) => void
   openLink: (url: string) => void
+  // Start a duel with the NPC the trainer payload names (#259). The shell
+  // resolves the id against the loaded catalog and launches EncounterScene over
+  // the interior; a dangling/unset id starts nothing (trainerOpponent → null).
+  startDuel: (npcId: number) => void
+  // Roll a wild from the named pool (#87). The shell owns the fetch — the game
+  // never imports a data service (ADR-0004) — so an empty slug means the whole
+  // global pool, and a failed fetch rolls nothing.
+  startEncounter: (pool: string) => void
 }
 
-export function villageZone({ exitToTown, travel, openLink }: VillageZoneDeps) {
+export function villageZone({
+  exitToTown,
+  travel,
+  openLink,
+  startDuel,
+  startEncounter,
+}: VillageZoneDeps) {
   return (_trigger: Zone['trigger'], zone: Zone) => {
     const p = zone.payload
     switch (p.kind) {
@@ -27,6 +41,22 @@ export function villageZone({ exitToTown, travel, openLink }: VillageZoneDeps) {
         return
       case 'link':
         openLink(p.url)
+        return
+      case 'trainer':
+        startDuel(p.npcId)
+        return
+      case 'encounter':
+        startEncounter(p.pool)
+        return
+      // The switch claims to be exhaustive over ZonePayload; this makes the
+      // compiler hold it to that. Without it #87 added `encounter` to MapPage
+      // alone and this dispatch went on silently ignoring it — the same map
+      // rolled a wild by URL and did nothing behind a community door. A new
+      // payload kind now fails the build here instead of failing in play.
+      default: {
+        const unhandled: never = p
+        return unhandled
+      }
     }
   }
 }

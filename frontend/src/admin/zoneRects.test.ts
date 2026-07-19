@@ -47,4 +47,11 @@ describe('zoneRects', () => {
   it('leaves non-aiming zones without a cone', () => {
     expect(zoneRects([portal], 0)).toHaveLength(1)
   })
+
+  it('tints an encounter zone by its own kind, labelled by kind (#87)', () => {
+    const grass: Zone = { trigger: 'on_enter', x: 2, y: 2, payload: { kind: 'encounter', pool: 'cave' } }
+    expect(zoneRects([grass], null)).toEqual([
+      { x: 2, y: 2, w: 1, h: 1, color: ZONE_COLORS.encounter, label: 'encounter', selected: false },
+    ])
+  })
 })

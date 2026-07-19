@@ -8,12 +8,15 @@ import MobileDpad from '../MobileDpad.tsx'
 import PerfStallNotice from '../PerfStallNotice.tsx'
 import bus from './bus.js'
 import { villageZone } from './villageZone.ts'
+import { trainerOpponent } from './trainerDuel.ts'
+import { pickWild } from '../encounters.js'
 import type { Community } from '../../communities/schema.ts'
 import type { GameSession } from '../../game-session/schema.ts'
 import type { TileObject } from '../../catalog/tileObjects/schema.ts'
 import type { HometownPolicy } from '../town.ts'
 import type { GroundTile } from '../../catalog/groundTiles/schema.ts'
 import type { MonsterPoolEntry } from '../../catalog/monsters/schema.ts'
+import type { Npc } from '../../catalog/npcs/schema.ts'
 
 // Player walks — rpg-char-01 sprite sheet from the pokemon-js external
 // assets. 32×32 PNGs, rows = direction (r0 down, r1 left, r2 right,
@@ -68,6 +71,15 @@ export type PhaserGameProps = {
   groundTiles: readonly GroundTile[]
   characterManifest: object | null
   monsterPool: readonly MonsterPoolEntry[]
+  // The NPC catalog (#259) — identity + sprite for placed characters, read at
+  // duel-start to resolve a fired trainer Zone's npcId. Like monsterPool, a
+  // shell-fetched black-box input; empty means no trainer zone can duel.
+  npcs: readonly Npc[]
+  // Fetch the wild pool an encounter Zone names (#87). A prop rather than a
+  // direct call because the game never imports a data service (ADR-0004) — the
+  // same reason `onPortal` loads a target map for us. An empty slug means the
+  // whole global pool; a rejected promise rolls nothing.
+  onEncounterPool: (pool: string) => Promise<readonly MonsterPoolEntry[]>
   dailyBrief: ReactNode
   activeCommunityId: number | null
   onEnterCommunity: (id: number) => void
@@ -100,6 +112,8 @@ export default function PhaserGame({
   groundTiles,
   characterManifest,
   monsterPool,
+  npcs,
+  onEncounterPool,
   dailyBrief,
   activeCommunityId,
   onEnterCommunity,
@@ -128,6 +142,8 @@ export default function PhaserGame({
   requestEntryRef.current = onRequestEntry
   const portalRef = useRef(onPortal)
   portalRef.current = onPortal
+  const encounterPoolRef = useRef(onEncounterPool)
+  encounterPoolRef.current = onEncounterPool
   const trainerDefeatedRef = useRef(onTrainerDefeated)
   trainerDefeatedRef.current = onTrainerDefeated
 
@@ -171,6 +187,9 @@ export default function PhaserGame({
     game.registry.set('characterManifest', characterManifest || null)
     // Authored wild-encounter pool (#69) — read at roll time in TownScene.
     game.registry.set('monsterPool', monsterPool || [])
+    // NPC catalog (#259) — read live at duel-start (like monsterPool), so a
+    // late-arriving fetch still resolves a trainer's sprite on the next fire.
+    game.registry.set('npcs', npcs || [])
     game.registry.set('trainerDefeated', Boolean(trainerDefeated))
 
     // Load a target Node in the shell and swap the map-agnostic MapScene onto
@@ -197,6 +216,39 @@ export default function PhaserGame({
       return true
     }
 
+    // Start a trainer duel from an authored interior (#259): resolve the payload's
+    // npcId against the live NPC catalog, then launch EncounterScene over the
+    // paused Map (it resumes 'Map' on RUN AWAY). A dangling/unset id resolves to
+    // null and starts nothing — a quiet no-op, not a crash.
+    const startDuel = (npcId: number) => {
+      const opponent = trainerOpponent((game.registry.get('npcs') as readonly Npc[]) || [], npcId)
+      if (!opponent) return
+      const mapScene = game.scene.getScene('Map')
+      if (!mapScene) return
+      bus.emit('encounter', { kind: 'trainer', name: opponent.name })
+      // Pause the interior and overlay the duel, the same ScenePlugin dance
+      // TownScene.launchEncounter runs; EncounterScene resumes 'Map' on close.
+      mapScene.scene.pause()
+      mapScene.scene.launch('Encounter', { opponent, worldScene: 'Map' })
+    }
+
+    // Roll a wild from an authored interior's encounter Zone (#87), the counterpart
+    // of startDuel. The shell fetches the named pool (ADR-0004 keeps the fetch out
+    // of the game) and pickWild's #69 fallback keeps the grass alive when that pool
+    // is empty. A failed fetch rolls nothing rather than surfacing an error mid-step.
+    const startEncounter = (pool: string) => {
+      void encounterPoolRef.current?.(pool)
+        .then((rows) => {
+          const mapScene = game.scene.getScene('Map')
+          if (!mapScene) return
+          const opponent = pickWild(rows)
+          bus.emit('encounter', { kind: 'wild', name: opponent.name })
+          mapScene.scene.pause()
+          mapScene.scene.launch('Encounter', { opponent, worldScene: 'Map' })
+        })
+        .catch(() => {})
+    }
+
     // The one event channel out of an authored interior Node (#85, #111, #249).
     game.registry.set(
       'onZone',
@@ -211,6 +263,8 @@ export default function PhaserGame({
           void enterPortal(portal, (game.registry.get('portalCommunityId') as number | undefined) ?? null)
         },
         openLink: (url) => window.open(url, '_blank', 'noopener'),
+        startDuel,
+        startEncounter,
       }),
     )
 
@@ -317,6 +371,14 @@ export default function PhaserGame({
     if (!game) return
     game.registry.set('monsterPool', monsterPool || [])
   }, [monsterPool])
+
+  // NPC catalog — refreshed when the admin edits it and the town reloads; the
+  // duel-start reads it live from the registry at each trainer fire.
+  useEffect(() => {
+    const game = gameRef.current
+    if (!game) return
+    game.registry.set('npcs', npcs || [])
+  }, [npcs])
 
   useEffect(() => {
     const game = gameRef.current

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_07_19_000002) do
+ActiveRecord::Schema[8.1].define(version: 2026_07_19_000004) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -21,6 +21,16 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_19_000002) do
     t.datetime "updated_at", null: false
     t.index ["house_id", "board_type"], name: "index_boards_on_house_id_and_board_type", unique: true
     t.index ["house_id"], name: "index_boards_on_house_id"
+  end
+
+  create_table "catalog_npcs", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.boolean "enabled", default: true, null: false
+    t.text "image", null: false
+    t.integer "level"
+    t.string "name", null: false
+    t.datetime "updated_at", null: false
+    t.index ["name"], name: "index_catalog_npcs_on_name", unique: true
   end
 
   create_table "character_manifests", force: :cascade do |t|
@@ -116,6 +126,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_19_000002) do
     t.integer "encounter_rate", default: 0, null: false
     t.text "image", null: false
     t.string "name", null: false
+    t.string "pool"
     t.datetime "updated_at", null: false
     t.index ["name"], name: "index_monsters_on_name", unique: true
   end
