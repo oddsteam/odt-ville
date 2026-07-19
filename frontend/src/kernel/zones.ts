@@ -31,16 +31,23 @@ export function zoneEvents(
 }
 
 // The trainer's line of sight (#86): `range` tiles straight ahead of (x,y) in
-// `facing`, never the trainer's own tile. The schema union guarantees a sight
-// zone has a facing, so there is no blind case to defend against here.
-const inSight = (z: SightZone, x: number, y: number) => {
+// `facing`, nearest first, never the trainer's own tile. The schema union
+// guarantees a sight zone has a facing, so there is no blind case to defend
+// against here. Exported because the decorate editor draws the same cells the
+// runtime fires on (#256) — the geometry lives here once, not per caller.
+// ponytail: unclipped; the map-bounds clip belongs to whoever has the map
+// (the hometown generator, #255), not to every caller.
+export function sightCells(z: SightZone): { x: number; y: number }[] {
   const dx = z.facing === 'left' ? -1 : z.facing === 'right' ? 1 : 0
   const dy = z.facing === 'up' ? -1 : z.facing === 'down' ? 1 : 0
-  for (let i = 1; i <= (z.range ?? 1); i++) {
-    if (x === z.x + dx * i && y === z.y + dy * i) return true
-  }
-  return false
+  return Array.from({ length: z.range ?? 1 }, (_, i) => ({
+    x: z.x + dx * (i + 1),
+    y: z.y + dy * (i + 1),
+  }))
 }
+
+const inSight = (z: SightZone, x: number, y: number) =>
+  sightCells(z).some((c) => c.x === x && c.y === y)
 
 // `on_sight` is edge-triggered like `on_enter`: it fires the step that walks
 // into the cone, so crossing it in front of the trainer challenges once and
