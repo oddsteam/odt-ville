@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import bus from '../bus.js'
+import { encounterLayout } from '../canvasLayout.ts'
 
 // Phaser-side equivalent of <EncounterScreen>. Launched as a parallel
 // overlay on top of TownScene when a wild encounter rolls or the gate
@@ -41,6 +42,12 @@ export default class EncounterScene extends Phaser.Scene {
   }
 
   create() {
+    // Render above whichever world launched us. The village shell registers
+    // MapScene after this scene, so without this a duel in an authored
+    // interior runs invisibly UNDER the paused map — frozen keys, no overlay
+    // (#261). The launch order can't guarantee stacking; the overlay does.
+    this.scene.bringToTop()
+
     const { width, height } = this.scale
     const isTrainer = this.opponent?.kind === 'trainer'
 
@@ -112,8 +119,12 @@ export default class EncounterScene extends Phaser.Scene {
     const o = this.opponent
     if (!o) return
 
+    // Every size is a fraction of the canvas (#261) — this scene overlays both
+    // the town and authored maps, whose canvases differ.
+    const l = encounterLayout(width, height)
+
     // Field — a dark arena behind the opponent.
-    const fieldH = Math.round(height * 0.6)
+    const fieldH = l.fieldH
     this.add
       .rectangle(0, 0, width, fieldH, 0x404858, 1)
       .setOrigin(0, 0)
@@ -145,14 +156,13 @@ export default class EncounterScene extends Phaser.Scene {
     })
 
     // Dialogue box — paper background at the bottom 40% of the screen.
-    const boxY = fieldH
-    const boxH = height - fieldH
+    const { boxY, boxH } = l
     this.add
       .rectangle(0, boxY, width, boxH, 0xf8f8e8, 1)
       .setOrigin(0, 0)
       .setDepth(4)
     this.add
-      .rectangle(0, boxY, width, 4, 0x1b241b, 1)
+      .rectangle(0, boxY, width, l.ruleH, 0x1b241b, 1)
       .setOrigin(0, 0)
       .setDepth(5)
 
@@ -162,9 +172,9 @@ export default class EncounterScene extends Phaser.Scene {
       o.encounter_dialog ||
       (isTrainer ? `${o.name} wants to duel!` : `A wild ${o.name} appeared!`)
     this.add
-      .text(36, boxY + 28, text, {
+      .text(l.padX, boxY + l.textY, text, {
         fontFamily: 'monospace',
-        fontSize: '22px',
+        fontSize: `${l.mainFont}px`,
         color: '#1b241b',
         fontStyle: 'bold',
       })
@@ -173,9 +183,9 @@ export default class EncounterScene extends Phaser.Scene {
     // line rather than render "Lv. undefined".
     if (o.level != null) {
       this.add
-        .text(36, boxY + 64, `Lv. ${o.level}`, {
+        .text(l.padX, boxY + l.levelY, `Lv. ${o.level}`, {
           fontFamily: 'monospace',
-          fontSize: '18px',
+          fontSize: `${l.levelFont}px`,
           color: '#3f9c33',
           fontStyle: 'bold',
         })
@@ -185,9 +195,9 @@ export default class EncounterScene extends Phaser.Scene {
     // RUN button — bottom right. Phaser doesn't ship HTML buttons; we
     // make a rectangle + label and wire pointer + keyboard.
     const btnLabel = isTrainer ? 'RUN AWAY' : 'RUN'
-    const btnW = isTrainer ? 200 : 140
-    const btnH = 60
-    const btnX = width - 36 - btnW
+    const btnW = isTrainer ? l.btnW.trainer : l.btnW.wild
+    const btnH = l.btnH
+    const btnX = width - l.padX - btnW
     const btnY = boxY + boxH / 2 - btnH / 2
     const btn = this.add
       .rectangle(btnX, btnY, btnW, btnH, 0xe23a2c, 1)
@@ -198,7 +208,7 @@ export default class EncounterScene extends Phaser.Scene {
     this.add
       .text(btnX + btnW / 2, btnY + btnH / 2, btnLabel, {
         fontFamily: 'monospace',
-        fontSize: '20px',
+        fontSize: `${l.btnFont}px`,
         color: '#f8f8e8',
         fontStyle: 'bold',
       })
