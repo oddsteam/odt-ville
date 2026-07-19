@@ -456,7 +456,15 @@ ActiveRecord::Base.transaction do
     end
   end
 
-  MAP_FIXTURES.each { |m| Maps::Map.create!(m) }
+  # Two passes: the playability validator (#82) requires a portal's target map
+  # to exist at save, and atrium ↔ plaza reference each other — so every map is
+  # created zone-less first, then the zones land once all targets exist.
+  MAP_FIXTURES.each { |m| Maps::Map.create!(m.merge(baked: m[:baked].except("zones"))) }
+  MAP_FIXTURES.each do |m|
+    next unless m[:baked]["zones"]
+
+    Maps::Map.find_by!(slug: m[:slug]).update!(baked: m[:baked])
+  end
 
   # Terrain stack priority (#120), low→high: the higher-priority terrain owns a
   # shared seam. This is the order both ground producers (the generated town and

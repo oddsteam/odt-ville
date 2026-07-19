@@ -5,6 +5,9 @@ module Api
     class MapsControllerTest < ActionDispatch::IntegrationTest
       setup do
         @company, @user = setup_company
+        # The playability validator (#82) checks painted terrain against the
+        # catalog; every create_params document paints grass.
+        ::Catalog::Terrain.register!("grass")
       end
 
       # A minimal baked authored map: a 1x1 grass grid plus one prop. Mirrors the
@@ -274,6 +277,21 @@ module Api
         assert_response :unprocessable_entity
       end
 
+      test "an unplayable document is rejected with 422 and an actionable reason" do
+        # The playability validator (#82): a dangling portal is one of its
+        # rejects; the reason names the zone and target so the author can fix it.
+        unplayable = create_params.merge(baked: create_params[:baked].merge(
+          "zones" => [{ "trigger" => "on_enter", "x" => 0, "y" => 0,
+                        "payload" => { "kind" => "portal", "targetNode" => "nowhere" } }]
+        ))
+
+        assert_no_difference "::Maps::Map.count" do
+          post "/api/v1/maps", params: unplayable, headers: auth(@user, roles: ["admin"]), as: :json
+        end
+        assert_response :unprocessable_entity
+        assert_match(/portal at \(0, 0\) targets unknown map "nowhere"/, json[:error])
+      end
+
       test "a posted painted map round-trips its deep ground.cells through strong params" do
         painted = create_params(slug: "grove", title: "The Grove").merge(
           baked: {
@@ -348,6 +366,7 @@ module Api
         # Zones (#85, ADR-0005): interactive regions on the baked document —
         # a trigger enum + a payload keyed by kind, republished verbatim so the
         # runtime's detector can fire onZone.
+        make_map(slug: "plaza", title: "The Plaza")
         map = make_map
         map.update!(baked: map.baked.merge(
           "zones" => [{ "trigger" => "on_enter", "x" => 0, "y" => 0,
@@ -445,25 +464,32 @@ module Api
       # Props (#139, ADR-0008): the decorate editor PATCHes placed props as
       # *object references* — `{kind:"prop", object_id, x, y}`, art fetched by
       # id at play — under the same opaque baked jsonb the collision patch uses.
+      # A saved catalog object placed props may reference — the playability
+      # validator (#82) rejects a dangling object_id.
+      def make_object
+        ::Catalog::TileObject.create!(name: "Marker", kind: "prop", image: "marker.png")
+      end
+
       test "an admin saves placed props onto a map as object references" do
         make_painted_map(slug: "grove")
+        object = make_object
 
         patch "/api/v1/maps/grove",
-          params: { baked: { entities: [{ kind: "prop", object_id: 7, x: 0, y: 0 }] } },
+          params: { baked: { entities: [{ kind: "prop", object_id: object.id, x: 0, y: 0 }] } },
           headers: auth(@user, roles: ["admin"]), as: :json
 
         assert_response :success
         assert_equal 1, json[:entities].length
-        assert_equal 7, json[:entities].first[:object_id]
+        assert_equal object.id, json[:entities].first[:object_id]
 
         get "/api/v1/maps/grove", headers: auth(@user)
-        assert_equal 7, json[:entities].first[:object_id]
+        assert_equal object.id, json[:entities].first[:object_id]
       end
 
       test "clearing all props drops the entities key entirely" do
         map = make_painted_map(slug: "grove")
         map.update!(baked: map.baked.merge(
-          "entities" => [{ "kind" => "prop", "object_id" => 7, "x" => 0, "y" => 0 }]
+          "entities" => [{ "kind" => "prop", "object_id" => make_object.id, "x" => 0, "y" => 0 }]
         ))
 
         patch "/api/v1/maps/grove",
