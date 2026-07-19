@@ -7,13 +7,13 @@ import MapScene from './scenes/MapScene.js'
 import MobileDpad from '../MobileDpad.tsx'
 import PerfStallNotice from '../PerfStallNotice.tsx'
 import bus from './bus.js'
+import { villageZone } from './villageZone.ts'
 import type { Community } from '../../communities/schema.ts'
 import type { GameSession } from '../../game-session/schema.ts'
 import type { TileObject } from '../../catalog/tileObjects/schema.ts'
 import type { HometownPolicy } from '../town.ts'
 import type { GroundTile } from '../../catalog/groundTiles/schema.ts'
 import type { MonsterPoolEntry } from '../../catalog/monsters/schema.ts'
-import type { Zone } from '../../kernel/schema.ts'
 
 // Player walks — rpg-char-01 sprite sheet from the pokemon-js external
 // assets. 32×32 PNGs, rows = direction (r0 down, r1 left, r2 right,
@@ -84,7 +84,8 @@ export type PhaserGameProps = {
   // Node; the shell loads the target before leaving (#84) and resolves to the
   // baked map bundle (enter) or null (release). PhaserGame swaps to MapScene.
   onPortal: (payload: {
-    communityId: number
+    // Null on an onward hop fired from a Node the shell reached without a door.
+    communityId: number | null
     portal: { kind: 'portal'; targetNode: string; entrySpawnId?: string }
   }) => Promise<{ map: unknown; objects: unknown } | null>
   trainerDefeated: boolean
@@ -172,22 +173,46 @@ export default function PhaserGame({
     game.registry.set('monsterPool', monsterPool || [])
     game.registry.set('trainerDefeated', Boolean(trainerDefeated))
 
-    // The one event channel out of an authored interior Node (#85, #111):
-    // MapScene fires every zone event through here. `portal` back to the
-    // reserved `town` slug is the interior's exit — the town hub is not an
-    // authored Node yet, so the shell swaps scenes instead of loading a map.
-    // Onward Portals between Nodes inside the village game are a later slice.
-    game.registry.set('onZone', (_trigger: Zone['trigger'], zone: Zone) => {
-      const p = zone.payload
-      if (p.kind === 'portal' && p.targetNode === 'town') {
-        const id = (game.registry.get('portalCommunityId') as number | undefined) ?? null
-        bus.emit('exitCommunity', id)
-        game.scene.stop('Map')
-        game.scene.start('Town', { exitedCommunityId: id })
-        return
-      }
-      if (p.kind === 'link') window.open(p.url, '_blank', 'noopener')
-    })
+    // Load a target Node in the shell and swap the map-agnostic MapScene onto
+    // it, setting the same registry keys MapPage sets. Shared by the two ways
+    // into a Node: a door in the town (#111) and an onward Portal from another
+    // Node (#249). A failed / forbidden load returns false and starts nothing —
+    // the avatar stays where it is and the shell's banner is the notice (#84).
+    // Stopping both scenes covers either origin; stopping an idle one is a no-op.
+    const enterPortal = async (
+      portal: { kind: 'portal'; targetNode: string; entrySpawnId?: string },
+      communityId: number | null,
+    ) => {
+      const loaded = await portalRef.current?.({ communityId, portal })
+      if (!loaded) return false
+      game.registry.set('bakedMap', loaded.map)
+      game.registry.set('bakedObjects', loaded.objects)
+      game.registry.set('entrySpawnId', portal.entrySpawnId)
+      // Keep the community that owns this chain: an onward hop stays inside the
+      // community it entered, so exit-to-town still reports the right door.
+      game.registry.set('portalCommunityId', communityId)
+      game.scene.stop('Town')
+      game.scene.stop('Map')
+      game.scene.start('Map')
+      return true
+    }
+
+    // The one event channel out of an authored interior Node (#85, #111, #249).
+    game.registry.set(
+      'onZone',
+      villageZone({
+        exitToTown: () => {
+          const id = (game.registry.get('portalCommunityId') as number | undefined) ?? null
+          bus.emit('exitCommunity', id)
+          game.scene.stop('Map')
+          game.scene.start('Town', { exitedCommunityId: id })
+        },
+        travel: (portal) => {
+          void enterPortal(portal, (game.registry.get('portalCommunityId') as number | undefined) ?? null)
+        },
+        openLink: (url) => window.open(url, '_blank', 'noopener'),
+      }),
+    )
 
     gameRef.current = game
 
@@ -204,25 +229,15 @@ export default function PhaserGame({
       bus.emit('entryResolved', { communityId: payload.communityId, granted: Boolean(granted) })
     }
     // Door-as-Portal travel (#111): load the interior Node in the shell while
-    // TownScene sits paused at the door, then swap to the map-agnostic
-    // MapScene with the baked map as its boot input (the same registry keys
-    // MapPage sets). A failed load releases the scene — gated refusal, #84.
+    // TownScene sits paused at the door, then swap to MapScene. A failed load
+    // releases the scene — gated refusal, #84.
     const onPortalRequest = async (payload: {
       communityId: number
       portal: { kind: 'portal'; targetNode: string; entrySpawnId?: string }
     }) => {
-      const loaded = await portalRef.current?.(payload)
-      if (!loaded) {
-        bus.emit('portalResolved', { granted: false })
-        return
-      }
-      game.registry.set('bakedMap', loaded.map)
-      game.registry.set('bakedObjects', loaded.objects)
-      game.registry.set('entrySpawnId', payload.portal.entrySpawnId)
-      game.registry.set('portalCommunityId', payload.communityId)
-      enterCommunityRef.current?.(payload.communityId)
-      game.scene.stop('Town')
-      game.scene.start('Map')
+      const granted = await enterPortal(payload.portal, payload.communityId)
+      if (granted) enterCommunityRef.current?.(payload.communityId)
+      else bus.emit('portalResolved', { granted: false })
     }
     bus.on('enterCommunity', onEnter)
     bus.on('exitCommunity', onExit)

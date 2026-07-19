@@ -48,6 +48,12 @@ export default class MapScene extends Phaser.Scene {
   }
 
   create() {
+    // Phaser reuses the scene instance across stop/start, so the constructor
+    // does not re-run on a restart — which is how an onward Portal hop swaps
+    // maps (#249). Clear the movement state here or a tween still in flight
+    // when the swap landed leaves `movingTween` set on the fresh map and
+    // update() refuses every input: an avatar frozen on arrival.
+    this.movingTween = null
     renderBakedMap(this)
     const map = this._bakedMap
     if (!map) return
