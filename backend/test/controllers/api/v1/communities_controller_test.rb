@@ -173,6 +173,56 @@ module Api
         assert_nil community.reload.entry_gate
       end
 
+      test "update sets the door's interior node to an existing map slug" do
+        ::Maps::Map.create!(slug: "compliance-hq", title: "Compliance HQ", cols: 2, rows: 2)
+        community = make_community(company: @company, title: "Housed")
+
+        patch "/api/v1/communities/#{community.id}",
+              params: { interior_node_slug: "compliance-hq" },
+              as: :json, headers: auth(@user, roles: ["admin"])
+
+        assert_response :success
+        assert_equal "compliance-hq", community.reload.interior_node_slug
+      end
+
+      test "update 422s on an unknown interior node slug" do
+        community = make_community(company: @company, title: "Housed")
+
+        patch "/api/v1/communities/#{community.id}",
+              params: { interior_node_slug: "no-such-node" },
+              as: :json, headers: auth(@user, roles: ["admin"])
+
+        assert_response :unprocessable_entity
+        assert_nil community.reload.interior_node_slug
+      end
+
+      test "update with a blank interior node slug clears it" do
+        community = make_community(company: @company, title: "Housed")
+        community.update!(interior_node_slug: "compliance-hq")
+
+        patch "/api/v1/communities/#{community.id}",
+              params: { interior_node_slug: nil },
+              as: :json, headers: auth(@user, roles: ["admin"])
+
+        assert_response :success
+        assert_nil community.reload.interior_node_slug
+      end
+
+      test "update without gate params leaves the gate untouched" do
+        ::Maps::Map.create!(slug: "compliance-hq", title: "Compliance HQ", cols: 2, rows: 2)
+        community = make_community(company: @company, title: "Gated")
+        community.update!(entry_gate: "posture-login", posture_set_id: "set-9")
+
+        patch "/api/v1/communities/#{community.id}",
+              params: { interior_node_slug: "compliance-hq" },
+              as: :json, headers: auth(@user, roles: ["admin"])
+
+        assert_response :success
+        community.reload
+        assert_equal "posture-login", community.entry_gate
+        assert_equal "set-9", community.posture_set_id
+      end
+
       test "update 404s across companies" do
         other_company, _ = setup_company(name: "Other Co")
         foreign = make_community(company: other_company, title: "Theirs")

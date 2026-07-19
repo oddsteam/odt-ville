@@ -14,7 +14,7 @@ import {
   FeedResponse,
   ItemStateResponse,
   type Community,
-  type CommunityGate,
+  type CommunityDoor,
   type FeedItem,
   type ItemStateResponse as ItemStateResponseType,
   type NewCommunity,
@@ -57,15 +57,16 @@ export const create = (
     return yield* http.post('/communities', attrs)
   })
 
-// PATCH /communities/:id -> set/clear the entry gate (issue #38). Rails
-// `update` answers PUT too, so reuse http.put — no new verb on the Http layer.
+// PATCH /communities/:id -> the door Portal: gate (#38) + interior node
+// (#113). Rails `update` answers PUT too, so reuse http.put — no new verb on
+// the Http layer.
 export const update = (
   id: number,
-  gate: CommunityGate,
+  door: CommunityDoor,
 ): Effect.Effect<null, HttpError, Http> =>
   Effect.gen(function* () {
     const http = yield* Http
-    yield* http.put(`/communities/${id}`, gate)
+    yield* http.put(`/communities/${id}`, door)
     return null
   })
 
