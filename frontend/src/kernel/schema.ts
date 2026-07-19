@@ -95,6 +95,8 @@ export type ZoneTrigger = Schema.Schema.Type<typeof ZoneTrigger>
 
 // What a fired Zone means, dispatched by the shell on `kind` (ADR-0005): travel
 // (`portal`, #84) and an external page (`link`, #110) are the first kinds.
+// `encounter` (#87) arrives with its runtime behaviour — the union grows one
+// member per landed mechanic, never ahead of it.
 export const ZonePayload = Schema.Union(
   Schema.Struct({
     kind: Schema.Literal('portal'),

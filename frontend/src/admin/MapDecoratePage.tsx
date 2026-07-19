@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { MapsService } from '../maps/service.ts'
-import type { BakedMap } from '../kernel/schema.ts'
+import type { MapSummary } from '../maps/service.ts'
+import type { BakedMap, Zone, ZoneTrigger } from '../kernel/schema.ts'
 import { TileObjectsService } from '../catalog/tileObjects/service.ts'
 import type { TileObject } from '../catalog/tileObjects/schema.ts'
 import { makeMask, setMaskCell, resizeMask, isMaskEmpty, type Mask } from './maskPaint.ts'
 import { groupPalette } from './paletteGroups.ts'
-import { placeProp, erasePropAt, propEntities, propsFromBaked, propGhost, type PlacedProp, type SizeOf, type MaskOf, type DoorOf } from '../maps/service.ts'
+import { placeProp, erasePropAt, propEntities, propsFromBaked, propGhost, newZone, zoneIndexAt, eraseZoneAt, replaceZone, type PlacedProp, type SizeOf, type MaskOf, type DoorOf, type ZoneKind } from '../maps/service.ts'
 import MapPreview from './MapPreview.tsx'
 import { runEdge } from '../lib/runEdge.ts'
 import './admin.css'
@@ -19,6 +20,17 @@ import './admin.css'
 // authored footprint in the WYSIWYG preview. Save PATCHes props + mask in one
 // write (MapsService.saveDecorations). Terrain is fixed at create; this page
 // never re-bakes it. ADR-0004 boundary: data services + shared preview only.
+// One tint per payload kind, so the zones overlay reads at a glance:
+// portal = blue (travel), link = amber (external page). The palette offers
+// exactly what the runtime consumes — `encounter` (#87) joins with its
+// behaviour, as does the `on_sight` trigger (#86); until then an author can't
+// place a zone nothing fires.
+const ZONE_COLORS: Record<ZoneKind, string> = {
+  portal: '#3b82f6',
+  link: '#f59e0b',
+}
+const TRIGGERS: readonly ZoneTrigger[] = ['on_enter', 'interact']
+
 export default function MapDecoratePage() {
   const { slug = '' } = useParams<{ slug: string }>()
   const [baked, setBaked] = useState<BakedMap | null>(null)
@@ -28,9 +40,18 @@ export default function MapDecoratePage() {
   // and the preview textures). Includes buildings (#166) — placing one bakes
   // its authoring walk_mask onto the entity so collision applies automatically.
   const [palette, setPalette] = useState<readonly TileObject[]>([])
-  // What a grid click does: place/erase a prop, or paint/erase the collision mask.
-  const [mode, setMode] = useState<'props' | 'collision'>('props')
+  // What a grid click does: place/erase a prop, place/select/erase a zone, or
+  // paint/erase the collision mask.
+  const [mode, setMode] = useState<'props' | 'zones' | 'collision'>('props')
   const [propTool, setPropTool] = useState<number | 'erase' | null>(null)
+  // The authored zones (#90, ADR-0005) — trigger + payload regions, edited as
+  // full desired state like props. A click places the picked kind (or selects
+  // the zone already there); the inspector edits the selected one.
+  const [zones, setZones] = useState<Zone[]>([])
+  const [zoneTool, setZoneTool] = useState<ZoneKind | 'erase'>('portal')
+  const [selectedZone, setSelectedZone] = useState<number | null>(null)
+  // Saved maps, for a portal payload's target picker (plus the reserved town hub).
+  const [mapList, setMapList] = useState<readonly MapSummary[]>([])
   // Search box over the palette — filters objects by name/kind (#165).
   const [query, setQuery] = useState('')
   // The tile the cursor is over, driving the footprint ghost (#144); null off-map.
@@ -95,13 +116,16 @@ export default function MapDecoratePage() {
       runEdge(TileObjectsService.list()).then((roster) =>
         runEdge(TileObjectsService.getMany(roster.map((o) => o.id))),
       ),
+      runEdge(MapsService.list()),
     ])
-      .then(([m, objects]) => {
+      .then(([m, objects, maps]) => {
         if (!live) return
         setBaked(m)
         setCollision(resizeMask(m.collision ?? [], m.cols, m.rows))
         setProps(propsFromBaked(m.entities))
+        setZones([...(m.zones ?? [])])
         setPalette(objects)
+        setMapList(maps)
         setPropTool((t) => t ?? objects[0]?.id ?? null)
       })
       .catch((e) => live && setError((e as Error).message))
@@ -110,10 +134,28 @@ export default function MapDecoratePage() {
     }
   }, [slug])
 
-  // A press on the preview: paint the collision cell, or place/erase a prop.
+  // A press on the preview: paint the collision cell, place/select/erase a
+  // zone, or place/erase a prop.
   const down = (x: number, y: number) => {
     if (mode === 'collision') {
       setCollision((m) => setMaskCell(m, x, y, maskTool === 'paint'))
+      return
+    }
+    if (mode === 'zones') {
+      if (zoneTool === 'erase') {
+        setZones((zs) => eraseZoneAt(zs, x, y))
+        setSelectedZone(null)
+        return
+      }
+      // A click on an existing zone selects it for the inspector; an empty
+      // cell stamps a fresh 1×1 zone of the picked kind and selects that.
+      const hit = zoneIndexAt(zones, x, y)
+      if (hit >= 0) {
+        setSelectedZone(hit)
+        return
+      }
+      setZones((zs) => [...zs, newZone(zoneTool, x, y)])
+      setSelectedZone(zones.length)
       return
     }
     if (propTool == null || !baked) return
@@ -143,12 +185,45 @@ export default function MapDecoratePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, propTool, hover, baked, props, byId])
 
+  // The zones overlay (#90): every authored zone as a tinted, labeled rect —
+  // shown only in zones mode, with the selected one highlighted for editing.
+  const zoneRects = useMemo(
+    () =>
+      mode === 'zones'
+        ? zones.map((z, i) => ({
+            x: z.x,
+            y: z.y,
+            w: z.w ?? 1,
+            h: z.h ?? 1,
+            color: ZONE_COLORS[z.payload.kind],
+            label: z.payload.kind,
+            selected: i === selectedZone,
+          }))
+        : undefined,
+    [mode, zones, selectedZone],
+  )
+
+  // The zone under edit and its inspector write-back.
+  const zone = selectedZone != null ? zones[selectedZone] : null
+  const editZone = (next: Zone) => {
+    if (selectedZone != null) setZones((zs) => replaceZone(zs, selectedZone, next))
+  }
+  // Optional payload fields ('' from a cleared input) drop off the document.
+  const opt = (v: string) => (v === '' ? undefined : v)
+  // Portal targets: the reserved town hub plus every saved map — and the
+  // current value even if it dangles, so the select never shows a lie.
+  const portalTargets = useMemo(() => {
+    const known = ['town', ...mapList.map((m) => m.slug)]
+    const current = zone?.payload.kind === 'portal' ? [zone.payload.targetNode] : []
+    return [...new Set([...known, ...current])]
+  }, [mapList, zone])
+
   const save = async () => {
     setBusy(true)
     setError(null)
     setSaved(false)
     try {
-      await runEdge(MapsService.saveDecorations(slug, isMaskEmpty(collision) ? null : collision, props, otherEntities, maskOf, edgeMaskOf, doorOf))
+      await runEdge(MapsService.saveDecorations(slug, isMaskEmpty(collision) ? null : collision, props, otherEntities, zones, maskOf, edgeMaskOf, doorOf))
       setSaved(true)
     } catch (e) {
       setError((e as Error).message)
@@ -169,6 +244,7 @@ export default function MapDecoratePage() {
 
       <div className="admin-field-inline" style={{ marginBottom: 4 }}>
         <button onClick={() => setMode('props')} disabled={mode === 'props'}>Props</button>
+        <button onClick={() => setMode('zones')} disabled={mode === 'zones'}>Zones</button>
         <button onClick={() => setMode('collision')} disabled={mode === 'collision'}>Collision</button>
         {mode === 'collision' && (
           <>
@@ -213,6 +289,80 @@ export default function MapDecoratePage() {
           </div>
         )}
 
+        {/* Zone palette + inspector (#90, ADR-0005): pick a payload kind and
+            click the preview to place a 1×1 zone (or select the one already
+            there); the inspector edits the selected zone's trigger, footprint
+            and payload. Erase removes the zone under a click. */}
+        {mode === 'zones' && (
+          <div className="decorate-palette">
+            <div className="admin-field-inline">
+              {(Object.keys(ZONE_COLORS) as ZoneKind[]).map((k) => (
+                <button key={k} onClick={() => setZoneTool(k)}
+                  style={{ outline: zoneTool === k ? '2px solid #fff' : 'none', borderLeft: `4px solid ${ZONE_COLORS[k]}` }}>
+                  {k}
+                </button>
+              ))}
+              <button onClick={() => setZoneTool('erase')}
+                style={{ outline: zoneTool === 'erase' ? '2px solid #fff' : 'none' }}>Erase</button>
+            </div>
+            {zones.length > 0 && <span className="admin-hint">{zones.length} placed</span>}
+            {!zone && <p className="admin-hint">Click the map to place a {zoneTool === 'erase' ? '…' : zoneTool} zone, or click a placed zone to edit it.</p>}
+            {zone && (() => {
+              // Const alias so the payload's kind-narrowing survives into the
+              // onChange closures (property narrowing resets there).
+              const p = zone.payload
+              return (
+              <div className="admin-field" style={{ display: 'grid', gap: 6 }}>
+                <strong>{p.kind} at ({zone.x}, {zone.y})</strong>
+                <label>Trigger{' '}
+                  {/* A loaded zone may carry a trigger the palette doesn't
+                      offer yet (seeded on_sight, #86) — keep it selectable so
+                      the select never misreports what's saved. */}
+                  <select value={zone.trigger}
+                    onChange={(e) => editZone({ ...zone, trigger: e.target.value as ZoneTrigger })}>
+                    {[...new Set([...TRIGGERS, zone.trigger])].map((t) => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </label>
+                <label>Width{' '}
+                  <input type="number" min={1} max={baked.cols} value={zone.w ?? 1}
+                    onChange={(e) => editZone({ ...zone, w: Math.max(1, Number(e.target.value) || 1) })} />
+                </label>
+                <label>Height{' '}
+                  <input type="number" min={1} max={baked.rows} value={zone.h ?? 1}
+                    onChange={(e) => editZone({ ...zone, h: Math.max(1, Number(e.target.value) || 1) })} />
+                </label>
+                {p.kind === 'portal' && (
+                  <>
+                    <label>Target map{' '}
+                      <select value={p.targetNode}
+                        onChange={(e) => editZone({ ...zone, payload: { ...p, targetNode: e.target.value } })}>
+                        {portalTargets.map((s) => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </label>
+                    <label>Entry spawn{' '}
+                      <input type="text" placeholder="(map centre)" value={p.entrySpawnId ?? ''}
+                        onChange={(e) => editZone({ ...zone, payload: { ...p, entrySpawnId: opt(e.target.value) } })} />
+                    </label>
+                  </>
+                )}
+                {p.kind === 'link' && (
+                  <>
+                    <label>URL{' '}
+                      <input type="url" placeholder="https://…" value={p.url}
+                        onChange={(e) => editZone({ ...zone, payload: { ...p, url: e.target.value } })} />
+                    </label>
+                    <label>Label{' '}
+                      <input type="text" value={p.label ?? ''}
+                        onChange={(e) => editZone({ ...zone, payload: { ...p, label: opt(e.target.value) } })} />
+                    </label>
+                  </>
+                )}
+              </div>
+              )
+            })()}
+          </div>
+        )}
+
         {/* One direct surface for both modes (#143/#145): the WYSIWYG preview
             *is* the editor. Props mode stamps/erases at the clicked tile;
             collision mode paints blocked cells (drawn back as the red overlay)
@@ -220,7 +370,7 @@ export default function MapDecoratePage() {
             fill the width the fixed palette leaves (#165). */}
         <div className="decorate-preview">
           <p className="admin-hint">
-            {mode === 'props' ? 'Preview — click to place' : 'Preview — drag to paint collision'}
+            {mode === 'collision' ? 'Preview — drag to paint collision' : 'Preview — click to place'}
           </p>
           <div style={{ flex: 1, minHeight: 0 }}>
             <MapPreview
@@ -231,6 +381,7 @@ export default function MapDecoratePage() {
               onTileHover={(x, y) => setHover({ x, y })}
               onTileHoverEnd={() => setHover(null)}
               overlay={mode === 'collision' && showMask ? collision : null}
+              zoneRects={zoneRects}
               ghost={ghost}
               fill
             />
