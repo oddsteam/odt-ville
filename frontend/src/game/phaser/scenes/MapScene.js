@@ -9,6 +9,7 @@ import {
   characterScale,
   applyFacing,
 } from '../characterRig.js'
+import bus from '../bus.js'
 import { deltaFor, resolveDirection, stepTile } from '../movement.ts'
 import { interactZoneEvents, zoneEvents } from '../../../kernel/zones.ts'
 import downStill from '../../assets/character/rpg-char-01/r0-c0.png'
@@ -35,6 +36,7 @@ export default class MapScene extends Phaser.Scene {
     this.playerTile = { x: 0, y: 0 }
     this.facing = 'down'
     this.movingTween = null
+    this.dpadDir = null
   }
 
   preload() {
@@ -134,9 +136,26 @@ export default class MapScene extends Phaser.Scene {
     // key doesn't re-fire every frame.
     this.input.keyboard.on('keydown-ENTER', this.pressA, this)
     this.input.keyboard.on('keydown-SPACE', this.pressA, this)
+    // Overlay D-pad + A over the bus — same pattern as Town/InteriorScene, so
+    // an authored interior Node inside the village game (#111) keeps working
+    // on mobile. Standalone MapPage has no overlay, so nothing ever emits.
+    this.dpadDir = null
+    this._onDpadPress = (d) => {
+      this.dpadDir = d
+    }
+    this._onDpadRelease = (d) => {
+      if (this.dpadDir === d) this.dpadDir = null
+    }
+    this._onABtn = () => this.pressA()
+    bus.on('dpadPress', this._onDpadPress)
+    bus.on('dpadRelease', this._onDpadRelease)
+    bus.on('aButton', this._onABtn)
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.input.keyboard.off('keydown-ENTER', this.pressA, this)
       this.input.keyboard.off('keydown-SPACE', this.pressA, this)
+      bus.off('dpadPress', this._onDpadPress)
+      bus.off('dpadRelease', this._onDpadRelease)
+      bus.off('aButton', this._onABtn)
     })
 
     this.cameras.main.startFollow(this.player, true)
@@ -160,7 +179,7 @@ export default class MapScene extends Phaser.Scene {
   }
 
   activeDirection() {
-    return resolveDirection({ dpadDir: null, cursors: this.cursors, wasd: this.wasd })
+    return resolveDirection({ dpadDir: this.dpadDir, cursors: this.cursors, wasd: this.wasd })
   }
 
   // Press A — fire interact zones under or in front of the avatar (#110)

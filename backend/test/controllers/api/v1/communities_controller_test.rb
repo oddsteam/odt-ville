@@ -49,6 +49,19 @@ module Api
         assert_not by_title["Gated"].key?(:posture_set_id)
       end
 
+      test "index exposes each community's interior node slug (null without one)" do
+        housed = make_community(company: @company, title: "Housed")
+        housed.update!(interior_node_slug: "compliance-hq")
+        make_community(company: @company, title: "Roomless")
+
+        get "/api/v1/communities", headers: auth(@user)
+
+        assert_response :success
+        by_title = json[:communities].index_by { _1[:title] }
+        assert_equal "compliance-hq", by_title["Housed"][:interior_node_slug]
+        assert_nil by_title["Roomless"][:interior_node_slug]
+      end
+
       test "index excludes other companies' communities" do
         make_community(company: @company, title: "Mine")
         other_company, _ = setup_company(name: "Other Co")

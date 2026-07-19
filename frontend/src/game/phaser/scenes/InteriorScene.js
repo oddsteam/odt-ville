@@ -34,7 +34,15 @@ const BOARD_COLORS = {
   nice_to_know: 0xc6e8b8,
 }
 
-// The community interior scene. Mounted by Phaser when the town scene
+// The community interior scene — the v0 Node on a path to deletion
+// (ADR-0005, #111). A community whose door carries an authored interior Node
+// (`interior_node_slug`) never reaches this scene: TownScene.enterHouse
+// travels into the authored map via MapScene instead. This hardcoded room
+// remains only for communities without one; once every community has an
+// authored interior (assignment UI: #113), delete this scene, its
+// tileTextures, and the 'Interior' entry in PhaserGame's scene list.
+//
+// Mounted by Phaser when the town scene
 // detects a door entry. Owns its own player, walk loop, A-press handling,
 // and exit detection. Emits three bus events to the React shell:
 //

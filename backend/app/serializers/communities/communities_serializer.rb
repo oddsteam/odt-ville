@@ -25,6 +25,9 @@ module Communities
         position_order: community.position_order,
         # Gate type only (issue #24) — the door's posture_set_id stays server-side.
         entry_gate: community.entry_gate,
+        # The authored interior Node the door portals into (#111); null = the
+        # hardcoded InteriorScene.
+        interior_node_slug: community.interior_node_slug,
         badges: {
           unread: all_items.count { |ci| state_of(ci, user) == "unread" },
           urgent: urgent_signage_count(effective_by_board, user),

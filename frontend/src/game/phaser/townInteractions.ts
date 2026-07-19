@@ -43,6 +43,17 @@ export type TownInteraction =
   | { kind: 'startDuel' }
   | { kind: 'maybeWild' }
 
+// The door as a Portal (#111, ADR-0005): a community carrying an authored
+// interior Node makes its door travel — the same `portal` payload #84's travel
+// dispatches. `entry` is the conventional id of an interior's entry spawn.
+// Null (no authored interior) keeps the hardcoded InteriorScene, the v0 Node.
+export function interiorPortal(community: {
+  interior_node_slug?: string | null
+}): { kind: 'portal'; targetNode: string; entrySpawnId: string } | null {
+  const slug = community.interior_node_slug
+  return slug ? { kind: 'portal', targetNode: slug, entrySpawnId: 'entry' } : null
+}
+
 export function townInteractionsAt(ctx: TownContext, tile: Tile): TownInteraction[] {
   const door = ctx.buildings.find((b) => b.doorCol === tile.x && b.doorRow === tile.y)
   if (door) {

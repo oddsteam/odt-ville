@@ -15,6 +15,9 @@ HOUSES = [
     title: "Compliance House",
     color: "#C0392B",
     category_key: "compliance",
+    # The door is a Portal into this authored interior Node (#111, ADR-0005);
+    # houses without one keep the hardcoded InteriorScene (the v0 Node).
+    interior_node_slug: "compliance-hq",
     boards: {
       must_know: [
         {
@@ -370,6 +373,42 @@ MAP_FIXTURES = [
       "tiles" => MAP_GRASS_TILES,
       "entities" => []
     }
+  },
+  # Compliance House's authored interior Node (#111, ADR-0005): a 9×7 stone
+  # room replacing the hardcoded InteriorScene for that community. The border
+  # is a collision-masked wall ring; the gap at (4,6) is the exit — an
+  # `on_enter` portal Zone back to the town (the reserved v0 town-hub slug,
+  # dispatched by the village shell, never loaded by slug). Arrivals land on
+  # the `entry` spawn just inside the exit.
+  {
+    slug: "compliance-hq",
+    title: "Compliance HQ",
+    cols: 9,
+    rows: 7,
+    baked: {
+      "tilesets" => [{ "name" => MAP_TILESET, "cell" => 32 }],
+      # Cobblestone floor, pavement-tile wall ring (frames from the terrain
+      # sheet's stone block), with the exit gap left as floor.
+      "tiles" => Array.new(7) { |y|
+        Array.new(9) { |x|
+          wall = (y.zero? || y == 6 || x.zero? || x == 8) && !(x == 4 && y == 6)
+          { "tileset" => MAP_TILESET, "frame" => wall ? 314 : 313 }
+        }
+      },
+      "collision" => Array.new(7) { |y|
+        Array.new(9) { |x| (y.zero? || y == 6 || x.zero? || x == 8) && !(x == 4 && y == 6) }
+      },
+      # One placed object proving the authored path — the same marker prop the
+      # other fixture maps use.
+      "entities" => [
+        { "kind" => "prop", "tileset" => MAP_TILESET, "frame" => 41, "x" => 2, "y" => 2 }
+      ],
+      "zones" => [
+        { "trigger" => "on_enter", "x" => 4, "y" => 6,
+          "payload" => { "kind" => "portal", "targetNode" => "town" } }
+      ],
+      "spawns" => [{ "id" => "entry", "x" => 4, "y" => 5 }]
+    }
   }
 ].freeze
 
@@ -407,7 +446,8 @@ ActiveRecord::Base.transaction do
       logo_url: "",
       category_key: house_data[:category_key],
       position_order: index + 1,
-      active: true
+      active: true,
+      interior_node_slug: house_data[:interior_node_slug]
     )
 
     house_data[:boards].each do |board_type, items|

@@ -34,6 +34,9 @@ export const Community = Schema.Struct({
   // Per-house entry gate (issue #24): the gate type the door runs (e.g.
   // 'posture-login') or null when ungated. Optional so older payloads decode.
   entry_gate: Schema.optional(Schema.NullOr(Schema.String)),
+  // The authored interior Node the door portals into (#111, ADR-0005); null
+  // keeps the hardcoded InteriorScene. Optional so older payloads decode.
+  interior_node_slug: Schema.optional(Schema.NullOr(Schema.String)),
   badges: Badges,
   boards: Schema.Array(BoardSummary),
 })

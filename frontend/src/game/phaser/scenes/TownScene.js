@@ -13,7 +13,7 @@ import {
 import bus from '../bus.js'
 import { resolveDirection, stepTile } from '../movement.ts'
 import { initialPerfStallState, observeFrame } from '../perfStall.ts'
-import { townInteractionsAt } from '../townInteractions.ts'
+import { townInteractionsAt, interiorPortal } from '../townInteractions.ts'
 import { render, setupDevTools, preloadAssets, tilesetColumns } from '../townRenderer.ts'
 import {
   GATE_TRAINER,
@@ -229,13 +229,33 @@ export default class TownScene extends Phaser.Scene {
     this._onEntryResolved = ({ communityId, granted }) => {
       const b = this.buildings.find((x) => x.community.id === communityId)
       if (granted && b) {
-        bus.emit('enterCommunity', b.community.id)
-        this.scene.start('Interior', { community: b.community })
+        this.enterHouse(b.community)
       } else {
         this.scene.resume()
       }
     }
     bus.on('entryResolved', this._onEntryResolved)
+    // Portal travel failed or was refused (#111): release the avatar in place,
+    // like a failed gate — the door stays, entry is what's refused.
+    this._onPortalResolved = ({ granted }) => {
+      if (!granted) this.scene.resume()
+    }
+    bus.on('portalResolved', this._onPortalResolved)
+  }
+
+  // Through the door. A community with an authored interior Node travels
+  // (#111, ADR-0005): pause and hand the portal to the shell, which loads the
+  // target before leaving (#84) and swaps to MapScene on success — or releases
+  // us on failure. Without one, the hardcoded InteriorScene (the v0 Node).
+  enterHouse(community) {
+    const portal = interiorPortal(community)
+    if (portal) {
+      this.scene.pause()
+      bus.emit('requestPortal', { communityId: community.id, portal })
+    } else {
+      bus.emit('enterCommunity', community.id)
+      this.scene.start('Interior', { community })
+    }
   }
 
   // Test API. PR-A only exposed `engine`; PR-B+ hang reads off the
@@ -298,6 +318,7 @@ export default class TownScene extends Phaser.Scene {
       bus.off('dpadPress', this._onDpadPress)
       bus.off('dpadRelease', this._onDpadRelease)
       bus.off('entryResolved', this._onEntryResolved)
+      bus.off('portalResolved', this._onPortalResolved)
       if (typeof window !== 'undefined' && window.__game?.engine === 'phaser') {
         delete window.__game
       }
@@ -423,8 +444,7 @@ export default class TownScene extends Phaser.Scene {
           this.scene.pause()
           bus.emit('requestEntry', { communityId: it.community.id, gate: it.gate })
         } else {
-          bus.emit('enterCommunity', it.community.id)
-          this.scene.start('Interior', { community: it.community })
+          this.enterHouse(it.community)
         }
         return
       }
