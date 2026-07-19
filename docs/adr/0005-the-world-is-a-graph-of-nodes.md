@@ -63,14 +63,25 @@ so the editor, the runtime, and the data model share one language.
     three hardcoded boards.
   - `boards` — `{ boardType }`: open an in-app board's content items (today's
     `openBoard`), preserved for communities that author content in-app.
-  - `encounter` — `{ tableRef }` (#87), and onward.
+  - `encounter` — `{ pool }` (#87), and onward. *Field renamed from the
+    original `tableRef`: "pool" is already this codebase's word for the
+    weighted wild set (`GET /api/v1/monsters/pool`, `Monster.enabled_rate_total`,
+    `pickWild(pool)`), while "table" named an implementation detail and `Ref`
+    was noise the sibling payloads don't carry.*
   - `trainer` — the duel behind an `on_sight` cone (#259). Listed here because
     the vocabulary above already calls a trainer a Zone, while this list
     originally omitted it: #86 landed `on_sight` as a trigger with no payload
     that could carry what it challenges you with. A trainer is its own kind
-    rather than an `encounter` variant because an encounter table is a spawn
-    rule and a trainer is an NPC with identity — a sprite that occupies and
-    blocks its tile, and a defeated state.
+    rather than an `encounter` variant because an encounter pool is a spawn
+    rule and a trainer is a character with identity.
+
+    The payload is `{ npcId }`, referencing a **`Catalog::Npc`** row — the
+    catalog holds *who they are* (name, sprite), the payload holds *what they
+    do to you*. Named NPC rather than Trainer because duelling is a role, not
+    an identity: the same row can be placed as a wandering NPC or a
+    quest-giver, and the runtime already buckets the sprite as `devLayers.npc`.
+    Per ADR-0008 the ref is a catalog row id, like `PlacedEntity.object_id` —
+    a placed character resolves its art the same way a Prop does.
 
 - **`trigger` is a closed enum, extended as mechanics land:** `on_enter` (step
   onto the region — Portals, encounters; #85), `on_sight` (facing cone; #86),
