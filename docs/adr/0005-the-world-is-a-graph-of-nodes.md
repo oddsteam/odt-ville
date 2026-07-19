@@ -64,6 +64,13 @@ so the editor, the runtime, and the data model share one language.
   - `boards` — `{ boardType }`: open an in-app board's content items (today's
     `openBoard`), preserved for communities that author content in-app.
   - `encounter` — `{ tableRef }` (#87), and onward.
+  - `trainer` — the duel behind an `on_sight` cone (#259). Listed here because
+    the vocabulary above already calls a trainer a Zone, while this list
+    originally omitted it: #86 landed `on_sight` as a trigger with no payload
+    that could carry what it challenges you with. A trainer is its own kind
+    rather than an `encounter` variant because an encounter table is a spawn
+    rule and a trainer is an NPC with identity — a sprite that occupies and
+    blocks its tile, and a defeated state.
 
 - **`trigger` is a closed enum, extended as mechanics land:** `on_enter` (step
   onto the region — Portals, encounters; #85), `on_sight` (facing cone; #86),
