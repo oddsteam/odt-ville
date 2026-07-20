@@ -12,6 +12,9 @@ import { TileObjectsService } from './catalog/tileObjects/service.ts'
 import { objectIdsFrom } from './maps/props.ts'
 import { runEdge } from './lib/runEdge.ts'
 import { subscribeAuthToken } from './lib/authToken.ts'
+import { connectPresence } from './lib/presenceClient.ts'
+import { presenceSession } from './lib/presenceSession.ts'
+import { ViewerService } from './viewer/service.ts'
 import { trackEnterDoor, trackInteractBoard, trackEncounter } from './analytics/events.ts'
 import type { Community, FeedItem } from './communities/schema.ts'
 import type { GameSession } from './game-session/schema.ts'
@@ -153,6 +156,20 @@ export default function VillagePage() {
     [],
   )
 
+  // Presence multiplayer for maps entered through a door (#269). The wire
+  // stays in the shell (ADR-0004) and the session keeps exactly one room open
+  // — the door path never routes, so nothing else would ever close the last.
+  const presenceRef = useRef(
+    presenceSession({
+      viewerId: () =>
+        runEdge(ViewerService.get())
+          .then((v) => v.user.external_id)
+          .catch(() => null),
+      connect: connectPresence,
+    }),
+  )
+  useEffect(() => () => presenceRef.current.close(), [])
+
   // A door with an authored interior Node asked to travel (#111). Load the
   // target before leaving (#84): the baked map plus the tile objects its
   // entities reference, the same bundle MapPage assembles. Null (with the
@@ -162,7 +179,8 @@ export default function VillagePage() {
       try {
         const map = await runEdge(MapsService.get(portal.targetNode))
         const objects = await runEdge(TileObjectsService.getMany(objectIdsFrom(map.entities)))
-        return { map, objects }
+        const presence = await presenceRef.current.open(map)
+        return { map, objects, presence }
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e))
         return null
@@ -197,6 +215,8 @@ export default function VillagePage() {
       // Phaser passes the exited community id via the bus event; fall
       // back to whatever the page most recently tracked as active.
       const id = idFromCaller ?? activeCommunityId
+      // Back in the hometown, which has no room of its own (#269).
+      presenceRef.current.close()
       // Optimistic local session update so the next remount spawns on the
       // just-exited doormat rather than whatever the previous loadTown
       // returned. Phaser's own scene-start data covers the within-session
