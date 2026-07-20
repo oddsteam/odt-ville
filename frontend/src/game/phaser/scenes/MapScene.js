@@ -256,7 +256,7 @@ export default class MapScene extends Phaser.Scene {
     }
     const state = this.remoteRoster.get(frame.userId)
     this.loadPeerCharacter(state.manifestId)
-    const feet = feetWorldXY({ x: state.x, y: state.y }, false)
+    const feet = this.peerFeet(state)
     if (action === 'spawn') {
       // A sprite, not an image: peers play their own walk loop (#267).
       const img = this.add.sprite(0, 0, `player.${state.facing}.0`).setOrigin(0.5, 1)
@@ -283,6 +283,14 @@ export default class MapScene extends Phaser.Scene {
       duration: MOVE_MS,
       onComplete: () => this.applyPeerLook(remote, state, false),
     })
+  }
+
+  // Where a peer's feet belong on their tile. The lift is theirs, not ours
+  // (#274): only the bundled rpg-char-01 needs PLAYER_FEET_LIFT for its padded
+  // box, so a peer rigged to their own manifest stands on the tile line — the
+  // same line the local player takes there.
+  peerFeet(state) {
+    return feetWorldXY({ x: state.x, y: state.y }, Boolean(this.peerChars.get(state.manifestId)))
   }
 
   // Resolve a peer's character once per manifest id (#266). The fetch is the
@@ -348,11 +356,17 @@ export default class MapScene extends Phaser.Scene {
   }
 
   // A character settled — re-render every peer on it, since they've been
-  // waiting hidden (or on the fallback) while the fetch was in flight.
+  // waiting hidden (or on the fallback) while the fetch was in flight. They
+  // were also placed with the fallback's lift, so move them too (#274); their
+  // step tween holds that stale target, so end it on the tile it aimed at.
   refreshPeers() {
     for (const [userId, state] of this.remoteRoster) {
       const remote = this.remoteSprites.get(userId)
-      if (remote) this.applyPeerLook(remote, state, remote.peerWalking)
+      if (!remote) continue
+      this.tweens.killTweensOf(remote)
+      this.applyPeerLook(remote, state, false)
+      const feet = this.peerFeet(state)
+      remote.setPosition(feet.x, feet.y)
     }
   }
 
