@@ -9,7 +9,7 @@ import * as Schema from 'effect/Schema'
 import { DecodeError, Http } from '../lib/http.ts'
 import type { HttpError } from '../lib/http.ts'
 import { BakedMap } from '../kernel/schema.ts'
-import type { BakedEntity, BakedGround, Zone } from '../kernel/schema.ts'
+import type { BakedEntity, BakedGround, MapAccessPolicy, Zone } from '../kernel/schema.ts'
 import { bakeSourceMap } from '../kernel/baker.ts'
 import type { SourceMap } from '../kernel/baker.ts'
 import { propEntities } from './props.ts'
@@ -127,9 +127,14 @@ export function decorationsBaked(
   }
 }
 
+// The map settings (#91, ADR-0005 Node properties): who may enter and whether
+// players see each other. PATCHed alongside the baked document.
+export type MapSettings = { multiplayer: boolean; access_policy: MapAccessPolicy }
+
 // PATCH /maps/:slug -> re-save a saved map's authored decorations — collision
 // mask + placed props — in one write (the decorate editor, #139, extends the
-// #131 collision-only patch). Returns the re-serialized baked map.
+// #131 collision-only patch), plus the map settings (#91) when the editor
+// carries them. Returns the re-serialized baked map.
 export const saveDecorations = (
   slug: string,
   collision: ReadonlyArray<ReadonlyArray<boolean>> | null,
@@ -139,12 +144,14 @@ export const saveDecorations = (
   maskOf?: MaskOf,
   edgeMaskOf?: MaskOf,
   doorOf?: DoorOf,
+  settings?: MapSettings,
 ): Effect.Effect<BakedMap, HttpError, Http> =>
   Effect.gen(function* () {
     const http = yield* Http
     const path = `/maps/${encodeURIComponent(slug)}`
     const raw = yield* http.patch(path, {
       baked: decorationsBaked(collision, props, otherEntities, zones, maskOf, edgeMaskOf, doorOf),
+      ...settings,
     })
     return yield* decode(path, decodeOne)(raw)
   })
@@ -165,3 +172,6 @@ export { newZone, retrigger, triggersFor, zoneIndexAt, eraseZoneAt, replaceZone 
 export type { ZoneKind } from './zoneAuthor.ts'
 export { importTiledMap, TiledImportError } from './tiledImport.ts'
 export { travel } from './travel.ts'
+// Preview-in-game handoff (#91): the editor stashes its draft document, the
+// play shell takes it back through the schema — never an import (ADR-0004).
+export { draftMap, stashDraft, takeDraft, DRAFT_PLAY_PATH } from './draft.ts'

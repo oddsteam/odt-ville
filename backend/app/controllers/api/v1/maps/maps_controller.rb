@@ -47,13 +47,20 @@ module Api
         # (#131) and the placed props as object references (#139, ADR-0008). The
         # editor sends them under `baked` (the same opaque jsonb create stores); we
         # merge over the persisted baked so the ground/producer are untouched.
+        # The map settings (#91) — `multiplayer` and the access policy, both Node
+        # properties (ADR-0005) — ride the same PATCH as plain columns; a bad
+        # policy is rejected by the model validation as 422.
         def update
           map = ::Maps::Map.find_by!(slug: params[:slug])
-          baked = (map.baked.is_a?(Hash) ? map.baked : {}).merge(update_params["baked"] || {})
-          # Blank authored layers (cleared mask, no props, no zones) drop out so
-          # an undecorated map's document stays clean.
-          %w[collision entities zones].each { |k| baked.delete(k) if baked[k].blank? }
-          map.update!(baked: baked)
+          attrs = update_params.slice("multiplayer", "access_policy")
+          if update_params.key?("baked")
+            baked = (map.baked.is_a?(Hash) ? map.baked : {}).merge(update_params["baked"] || {})
+            # Blank authored layers (cleared mask, no props, no zones) drop out so
+            # an undecorated map's document stays clean.
+            %w[collision entities zones].each { |k| baked.delete(k) if baked[k].blank? }
+            attrs["baked"] = baked
+          end
+          map.update!(attrs)
           render json: ::Maps::MapSerializer.call(map)
         end
 
@@ -70,9 +77,10 @@ module Api
           params.permit(:slug, :title, :cols, :rows, source: {}, baked: {})
         end
 
-        # The update path carries only the baked document (the re-painted mask).
+        # The update path: the baked document (the re-painted mask) and/or the
+        # map settings (#91).
         def update_params
-          params.permit(baked: {}).to_h
+          params.permit(:multiplayer, access_policy: {}, baked: {}).to_h
         end
       end
     end

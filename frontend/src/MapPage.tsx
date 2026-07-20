@@ -4,7 +4,7 @@ import Phaser from 'phaser'
 import MapScene from './game/phaser/scenes/MapScene.js'
 import EncounterScene from './game/phaser/scenes/EncounterScene.js'
 import { trainerOpponent } from './game/phaser/trainerDuel.ts'
-import { MapsService, travel } from './maps/service.ts'
+import { MapsService, takeDraft, travel } from './maps/service.ts'
 import { TileObjectsService } from './catalog/tileObjects/service.ts'
 import { MonstersService } from './catalog/monsters/service.ts'
 import { NpcsService } from './catalog/npcs/service.ts'
@@ -21,8 +21,11 @@ import type { Npc } from './catalog/npcs/schema.ts'
 // Play surface for an authored map (ADR-0004). It loads a baked map by slug and
 // boots Phaser with the map-agnostic MapScene — the runtime renders "the
 // current map" without knowing which one. This is the same black-box discipline
-// as the village page; the only producer-specific thing is the loader.
-export default function MapPage() {
+// as the village page; the only producer-specific thing is the loader: with
+// `draft` (the editor's preview-in-game handoff, #91) the document comes out
+// of storage through the same schema instead of GET /maps/:slug — everything
+// downstream is identical, so walk-testing exercises the real runtime.
+export default function MapPage({ draft = false }: { draft?: boolean }) {
   const { slug } = useParams<{ slug: string }>()
   const navigate = useNavigate()
   // A portal arrival names its entry spawn via route state (#84); direct
@@ -56,16 +59,21 @@ export default function MapPage() {
   const ownIdRef = useRef<string | null>(null)
 
   useEffect(() => {
-    if (!slug) return
+    if (!slug && !draft) return
     // Arriving on a map (portal travel included) starts with a clean notice bar;
     // a refusal never navigates, so its notice survives this.
     setZoneNotice(null)
     let active = true
     Promise.all([
-      runEdge(MapsService.get(slug)),
+      // The draft route has no slug — the document was stashed by the editor.
+      // Resolve inside the chain so a contract-breaking draft lands in catch.
+      draft
+        ? Promise.resolve().then(() => takeDraft())
+        : runEdge(MapsService.get(slug!)),
       loadMyManifest().catch(() => null),
     ])
       .then(async ([m, manifest]) => {
+        if (!m) throw new Error('No draft to preview — use "Preview in game" in the editor.')
         const objects = await runEdge(TileObjectsService.getMany(objectIdsFrom(m.entities)))
         const npcs = await runEdge(NpcsService.list()).catch(() => [] as readonly Npc[])
         const viewer = m.multiplayer ? await runEdge(ViewerService.get()).catch(() => null) : null
@@ -80,7 +88,7 @@ export default function MapPage() {
     return () => {
       active = false
     }
-  }, [slug, reloadKey])
+  }, [slug, draft, reloadKey])
 
   useEffect(
     () => subscribeAuthToken(() => {
