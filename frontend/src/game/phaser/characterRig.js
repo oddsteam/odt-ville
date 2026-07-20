@@ -3,6 +3,7 @@ import {
   POSTURE_KEYS,
   resolveSheetSrc,
   framesForFacing,
+  stillForFacing,
 } from '../../kernel/characterManifest.js'
 
 // Shared "character rig" for the manifest-driven player (sprite-mapper). Both
@@ -128,6 +129,27 @@ export function buildCharacterRig(scene, manifest) {
 export function characterScale(manifest) {
   const render = manifest?.render || {}
   return (render.scale || 1) * (TILE / CHAR_TILE_BASIS)
+}
+
+// One runtime-loaded texture per distinct peer character (#266); the local
+// player keeps CHAR_SHEET_KEY, so two users on the same manifest still share
+// exactly one peer texture.
+export const peerSheetKey = (manifestId) => `peer.sheet.${manifestId}`
+
+// Cut a peer's still frames out of their loaded sheet and return what to render
+// per direction, plus the sprite scale. Static only: a peer stands facing the
+// way they last moved (ponytail: the walk loops are the follow-on slice — reuse
+// buildCharacterRig's anim path, keyed per manifest, when they land).
+export function buildPeerStills(texture, manifest) {
+  const dirs = {}
+  for (const dir of ['down', 'up', 'left', 'right']) {
+    const still = stillForFacing(manifest, dir)
+    if (!still) continue
+    const { x, y, w, h } = still.rect
+    if (!texture.has(still.name)) texture.add(still.name, 0, x, y, w, h)
+    dirs[dir] = { name: still.name, flipX: still.flipX }
+  }
+  return { dirs, scale: characterScale(manifest) }
 }
 
 // Point the manifest sprite the right way. `walking` plays the walk loop —

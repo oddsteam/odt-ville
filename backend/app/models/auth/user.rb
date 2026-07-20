@@ -14,6 +14,13 @@ module Auth
     # map to exactly one user so a verified token resolves unambiguously (#92).
     validates :external_id, uniqueness: true, allow_nil: true
 
+    # The character this user renders (#155, ADR-0009): their pick, else the
+    # global active. One resolution shared by the for_me read and the presence
+    # frames peers render each other from (#266).
+    def effective_character_manifest
+      character_manifest || ::Character::CharacterManifest.current
+    end
+
     # The location row is a per-user singleton. Create it lazily so a brand-new
     # user is treated as a first-time visitor (spawns at Town Entrance).
     def location_state

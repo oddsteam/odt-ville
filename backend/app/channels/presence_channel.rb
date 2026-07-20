@@ -26,11 +26,17 @@ class PresenceChannel < ApplicationCable::Channel
 
   # Identity is stamped from the authenticated connection — the stable
   # Keycloak sub, never a socket id, and never a client-sent field — so
-  # frames can't be spoofed and proximity voice can key on it later.
+  # frames can't be spoofed and proximity voice can key on it later. The
+  # sender's effective manifest id (#266) rides the same stamp so peers can
+  # render their real character; nil means "fall back to the bundled stills".
   def broadcast(frame)
     ActionCable.server.broadcast(
       @stream,
-      frame.merge(userId: current_user.external_id, name: current_user.name)
+      frame.merge(
+        userId: current_user.external_id,
+        name: current_user.name,
+        manifestId: current_user.effective_character_manifest&.id
+      )
     )
   end
 end

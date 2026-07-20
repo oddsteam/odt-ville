@@ -12,12 +12,15 @@ const handle = (log: unknown[], slug: string) => ({
   disconnect: () => log.push(['disconnect', slug]),
 })
 
+const loadManifest = async (id: number) => ({ id })
+
 const deps = (log: unknown[], ownId: string | null = 'kc-1') => ({
   viewerId: async () => ownId,
   connect: (slug: string) => {
     log.push(['connect', slug])
     return handle(log, slug)
   },
+  loadManifest,
 })
 
 describe('presenceSession', () => {
@@ -26,6 +29,9 @@ describe('presenceSession', () => {
     const open = await presenceSession(deps(log)).open({ slug: 'compliance-hq', multiplayer: true })
     expect(log).toEqual([['connect', 'compliance-hq']])
     expect(open?.ownId).toBe('kc-1')
+    // The peer-character lookup rides the same bundle (#266) — MapScene reads
+    // it off the registry rather than importing a data service (ADR-0004).
+    expect(open?.loadManifest).toBe(loadManifest)
   })
 
   it('opens nothing for a solo map', async () => {

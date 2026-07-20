@@ -64,17 +64,57 @@ class PresenceChannelTest < ActionCable::Channel::TestCase
     map = make_map
     join(map)
 
-    frame = { type: "move", userId: @user.external_id, name: @user.name, x: 3, y: 4, facing: "down" }
-    assert_broadcast_on("presence:map:#{map.id}", frame) do
+    assert_broadcast_on("presence:map:#{map.id}", manifest_frame(nil)) do
       perform :move, x: 3, y: 4, facing: "down", userId: "spoofed-id"
     end
+  end
+
+  # Peers render each other's real character (#266): the frame carries the
+  # sender's effective manifest id, resolved server-side exactly like for_me.
+  test "move stamps the sender's picked manifest id" do
+    picked = ::Character::CharacterManifest.create!(name: "scout", data: {})
+    ::Character::CharacterManifest.create!(name: "global", data: {}, active: true)
+    @user.update!(character_manifest: picked)
+    map = make_map
+    join(map)
+
+    assert_broadcast_on("presence:map:#{map.id}", manifest_frame(picked.id)) do
+      perform :move, x: 3, y: 4, facing: "down"
+    end
+  end
+
+  test "a user with no pick falls back to the global active manifest" do
+    global = ::Character::CharacterManifest.create!(name: "global", data: {}, active: true)
+    map = make_map
+    join(map)
+
+    assert_broadcast_on("presence:map:#{map.id}", manifest_frame(global.id)) do
+      perform :move, x: 3, y: 4, facing: "down"
+    end
+  end
+
+  test "no pick and no active manifest stamps nil" do
+    map = make_map
+    join(map)
+
+    assert_broadcast_on("presence:map:#{map.id}", manifest_frame(nil)) do
+      perform :move, x: 3, y: 4, facing: "down"
+    end
+  end
+
+  def manifest_frame(manifest_id)
+    {
+      type: "move", userId: @user.external_id, name: @user.name,
+      x: 3, y: 4, facing: "down", manifestId: manifest_id
+    }
   end
 
   test "unsubscribing broadcasts a leave frame" do
     map = make_map
     join(map)
 
-    assert_broadcast_on("presence:map:#{map.id}", type: "leave", userId: @user.external_id, name: @user.name) do
+    leave = { type: "leave", userId: @user.external_id, name: @user.name, manifestId: nil }
+    assert_broadcast_on("presence:map:#{map.id}", leave) do
       unsubscribe
     end
   end

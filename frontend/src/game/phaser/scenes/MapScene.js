@@ -7,9 +7,12 @@ import {
   CHAR_SHEET_KEY,
   preloadCharacter,
   buildCharacterRig,
+  buildPeerStills,
   characterScale,
+  peerSheetKey,
   applyFacing,
 } from '../characterRig.js'
+import { resolveSheetSrc } from '../../../kernel/characterManifest.js'
 import bus from '../bus.js'
 import { deltaFor, resolveDirection, stepTile } from '../movement.ts'
 import { applyFrame } from '../../presence.ts'
@@ -188,6 +191,10 @@ export default class MapScene extends Phaser.Scene {
     this.presence = this.registry.get('presence') || null
     this.remoteRoster = new Map()
     this.remoteSprites = new Map()
+    // Peer characters by manifest id (#266): a present key means "already
+    // asked", the value is the built stills or null while the fetch/sheet load
+    // is in flight (and after a failure — that peer stays on the fallback).
+    this.peerChars = new Map()
     if (this.presence) {
       this.presence.onFrame((frame) => this.presenceFrame(frame))
       this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.presence.onFrame(null))
@@ -237,9 +244,8 @@ export default class MapScene extends Phaser.Scene {
 
   // Fold one presence frame into the roster and render the outcome: spawn a
   // labelled avatar, tween a known one to its new tile, or drop a leaver.
-  // Remote avatars are the bundled still frames on purpose — a peer's own
-  // character manifest is not in this client's texture cache (ponytail:
-  // ship manifests over the wire if identity art ever matters).
+  // Each frame names its sender's character (#266), so a first sighting also
+  // kicks off that manifest's one-time load.
   presenceFrame(frame) {
     const { action, echo } = applyFrame(this.remoteRoster, frame, this.presence.ownId)
     if (echo) this.sendPosition()
@@ -250,24 +256,86 @@ export default class MapScene extends Phaser.Scene {
       return
     }
     const state = this.remoteRoster.get(frame.userId)
+    this.loadPeerCharacter(state.manifestId)
     const feet = feetWorldXY({ x: state.x, y: state.y }, false)
     if (action === 'spawn') {
-      const img = this.add
-        .image(0, 0, `player.${state.facing}.0`)
-        .setOrigin(0.5, 1)
-        .setDisplaySize(96, 96)
+      const img = this.add.image(0, 0, `player.${state.facing}.0`).setOrigin(0.5, 1)
       const label = this.add
         .text(0, -100, state.name, { fontSize: '12px', color: '#ffffff', backgroundColor: '#000000aa' })
         .setOrigin(0.5, 0)
       const remote = this.add.container(feet.x, feet.y, [img, label])
       remote.setDepth(mapPlayerDepth(false, false))
       this.remoteSprites.set(frame.userId, remote)
+      this.applyPeerLook(remote, state)
       return
     }
     const remote = this.remoteSprites.get(frame.userId)
     if (!remote) return
-    remote.list[0].setTexture(`player.${state.facing}.0`).setDisplaySize(96, 96)
+    this.applyPeerLook(remote, state)
     this.tweens.add({ targets: remote, x: feet.x, y: feet.y, duration: MOVE_MS })
+  }
+
+  // Resolve a peer's character once per manifest id (#266). The fetch is the
+  // shell's job — it rides the presence bundle off the registry, so the game
+  // imports no data service (ADR-0004) — and we runtime-load the sheet it
+  // names. A peer with no manifest (null), a missing loader, a failed fetch or
+  // a sheet-less manifest all just leave them on the bundled stills.
+  loadPeerCharacter(manifestId) {
+    if (manifestId == null || this.peerChars.has(manifestId)) return
+    const fetchManifest = this.presence?.loadManifest
+    if (!fetchManifest) return
+    // Three states, because "still loading" and "has no character" must render
+    // differently: null = in flight (the peer stays hidden rather than flashing
+    // the generic sprite), false = resolved to nothing (bundled stills), an
+    // object = their cut stills.
+    this.peerChars.set(manifestId, null)
+    const settle = (stills) => {
+      this.peerChars.set(manifestId, stills)
+      this.refreshPeers()
+    }
+    Promise.resolve(fetchManifest(manifestId))
+      .then((manifest) => {
+        const src = manifest && resolveSheetSrc(manifest)
+        if (!src) return settle(false)
+        const key = peerSheetKey(manifestId)
+        const cut = () => this.textures.exists(key) && buildPeerStills(this.textures.get(key), manifest)
+        // Textures outlive the scene (stop/start swaps maps, #249), so a peer
+        // seen on an earlier map is already cut and needs no second load.
+        if (this.textures.exists(key)) return settle(cut())
+        this.load.image(key, src)
+        // The queue-drained event rather than filecomplete-image-<key>: it
+        // fires whether the sheet arrived or 404'd, so a broken sheet settles
+        // to the fallback instead of hiding that peer forever.
+        this.load.once(Phaser.Loader.Events.COMPLETE, () => settle(cut()))
+        this.load.start()
+      })
+      .catch(() => settle(false))
+  }
+
+  // Show a peer facing the way they last moved: their own character once its
+  // sheet is cut, the bundled stills for a peer who has none. While their
+  // character is still in flight they stay hidden — a first sighting used to
+  // flash the generic sprite for a frame before snapping to the real one.
+  applyPeerLook(remote, state) {
+    const rig = this.peerChars.get(state.manifestId)
+    remote.setVisible(rig !== null)
+    const img = remote.list[0]
+    const still = rig && rig.dirs[state.facing]
+    if (!still) {
+      img.setTexture(`player.${state.facing}.0`).setFlipX(false).setDisplaySize(96, 96)
+      return
+    }
+    img.setTexture(peerSheetKey(state.manifestId), still.name).setFlipX(still.flipX)
+    img.setScale(rig.scale)
+  }
+
+  // A character settled — re-render every peer on it, since they've been
+  // waiting hidden (or on the fallback) while the fetch was in flight.
+  refreshPeers() {
+    for (const [userId, state] of this.remoteRoster) {
+      const remote = this.remoteSprites.get(userId)
+      if (remote) this.applyPeerLook(remote, state)
+    }
   }
 
   // Stop the avatar where it stands: forget the held D-pad direction and reset

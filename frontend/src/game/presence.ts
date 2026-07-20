@@ -9,10 +9,23 @@ export interface RemotePlayer {
   x: number
   y: number
   facing: Direction
+  // The peer's character (#266), stamped server-side. Null means they have no
+  // manifest at all and render the bundled stills.
+  manifestId: number | null
 }
 
 export type PresenceFrame =
-  | { type: 'move'; userId: string; name: string; x: number; y: number; facing: Direction }
+  | {
+      type: 'move'
+      userId: string
+      name: string
+      x: number
+      y: number
+      facing: Direction
+      // Absent on a frame from a server that predates #266 — folded to null,
+      // which is the bundled-stills fallback either way.
+      manifestId?: number | null
+    }
   | { type: 'leave'; userId: string; name: string }
 
 export interface FrameResult {
@@ -42,6 +55,12 @@ export function applyFrame(
   }
 
   const known = roster.has(frame.userId)
-  roster.set(frame.userId, { name: frame.name, x: frame.x, y: frame.y, facing: frame.facing })
+  roster.set(frame.userId, {
+    name: frame.name,
+    x: frame.x,
+    y: frame.y,
+    facing: frame.facing,
+    manifestId: frame.manifestId ?? null,
+  })
   return known ? { action: 'move', echo: false } : { action: 'spawn', echo: true }
 }

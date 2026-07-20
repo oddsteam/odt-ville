@@ -14,7 +14,7 @@ import { runEdge } from './lib/runEdge.ts'
 import { subscribeAuthToken } from './lib/authToken.ts'
 import { connectPresence } from './lib/presenceClient.ts'
 import { ViewerService } from './viewer/service.ts'
-import { loadMyManifest } from './character/service.ts'
+import { loadManifestById, loadMyManifest } from './character/service.ts'
 import type { BakedMap, Zone } from './kernel/schema.ts'
 import type { Npc } from './catalog/npcs/schema.ts'
 
@@ -126,7 +126,16 @@ export default function MapPage({ draft = false }: { draft?: boolean }) {
     // stay offline. The handle rides the registry like onZone: the scene
     // renders peers and broadcasts steps, the shell owns the wire.
     const presence = map.multiplayer && ownIdRef.current ? connectPresence(map.slug) : null
-    if (presence) game.registry.set('presence', { ownId: ownIdRef.current, ...presence })
+    // `loadManifest` rides the same bundle (#266): frames name their sender's
+    // character and the scene asks for it through here, so the fetch stays
+    // shell-side like every other data call.
+    if (presence) {
+      game.registry.set('presence', {
+        ownId: ownIdRef.current,
+        loadManifest: loadManifestById,
+        ...presence,
+      })
+    }
     // Encounter zones fire per landing step (#255); this gate owns the roll
     // rate and the post-encounter grace for this game's lifetime.
     const grassGate = wildStepGate()

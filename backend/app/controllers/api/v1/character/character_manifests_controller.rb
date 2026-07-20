@@ -34,7 +34,7 @@ module Api
         # 204 when neither exists (the client falls back to the committed
         # default).
         def for_me
-          manifest = current_user.character_manifest || ::Character::CharacterManifest.current
+          manifest = current_user.effective_character_manifest
           return head :no_content unless manifest
 
           render json: ::Character::CharacterManifestSerializer.call(manifest)

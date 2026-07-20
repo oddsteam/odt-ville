@@ -16,7 +16,13 @@ describe('applyFrame', () => {
     const result = applyFrame(roster, move('peer-1'), OWN)
 
     expect(result).toEqual({ action: 'spawn', echo: true })
-    expect(roster.get('peer-1')).toEqual({ name: 'Pat', x: 1, y: 2, facing: 'down' })
+    expect(roster.get('peer-1')).toEqual({
+      name: 'Pat',
+      x: 1,
+      y: 2,
+      facing: 'down',
+      manifestId: null,
+    })
   })
 
   it('moves a known peer without echoing', () => {
@@ -58,5 +64,35 @@ describe('applyFrame', () => {
     const result = applyFrame(new Map(), { type: 'move' } as never, OWN)
 
     expect(result).toEqual({ action: 'none', echo: false })
+  })
+
+  // Peers render each other's real character (#266): the sender's manifest id
+  // is stamped server-side and lands on the entry the scene renders from.
+  describe('manifestId', () => {
+    const withManifest = (manifestId: number | null) => ({ ...move('peer-1'), manifestId })
+
+    it('carries the sender manifest id onto the roster', () => {
+      const roster = new Map<string, RemotePlayer>()
+
+      applyFrame(roster, withManifest(42), OWN)
+
+      expect(roster.get('peer-1')?.manifestId).toBe(42)
+    })
+
+    it('folds a frame with no manifest id to null — the bundled stills', () => {
+      const roster = new Map<string, RemotePlayer>()
+
+      applyFrame(roster, move('peer-1'), OWN)
+
+      expect(roster.get('peer-1')?.manifestId).toBeNull()
+    })
+
+    it('follows a peer who switches character mid-session', () => {
+      const roster = new Map<string, RemotePlayer>()
+      applyFrame(roster, withManifest(42), OWN)
+
+      expect(applyFrame(roster, withManifest(7), OWN).action).toBe('move')
+      expect(roster.get('peer-1')?.manifestId).toBe(7)
+    })
   })
 })
