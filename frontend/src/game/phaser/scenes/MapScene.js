@@ -14,7 +14,7 @@ import {
 import { resolveSheetSrc } from '../../../kernel/characterManifest.js'
 import bus from '../bus.js'
 import { deltaFor, resolveDirection, stepTile } from '../movement.ts'
-import { applyFrame } from '../../presence.ts'
+import { applyFrame, pruneOutOfRange } from '../../presence.ts'
 import { interactZoneEvents, sightZoneEvents, zoneEvents } from '../../../kernel/zones.ts'
 import downStill from '../../assets/character/rpg-char-01/r0-c0.png'
 import leftStill from '../../assets/character/rpg-char-01/r1-c0.png'
@@ -239,6 +239,18 @@ export default class MapScene extends Phaser.Scene {
 
   sendPosition() {
     this.presence.send({ x: this.playerTile.x, y: this.playerTile.y, facing: this.facing })
+    // Interest management (#158): stepping out of a cell's neighbourhood stops
+    // its stream server-side, and a stopped stream sends no leave frame — so
+    // the peers standing in it have to be dropped here or they linger frozen
+    // on their last tile.
+    for (const userId of pruneOutOfRange(this.remoteRoster, this.playerTile)) {
+      this.dropPeer(userId)
+    }
+  }
+
+  dropPeer(userId) {
+    this.remoteSprites.get(userId)?.destroy()
+    this.remoteSprites.delete(userId)
   }
 
   // Fold one presence frame into the roster and render the outcome: spawn a
@@ -250,8 +262,7 @@ export default class MapScene extends Phaser.Scene {
     if (echo) this.sendPosition()
     if (action === 'none') return
     if (action === 'remove') {
-      this.remoteSprites.get(frame.userId)?.destroy()
-      this.remoteSprites.delete(frame.userId)
+      this.dropPeer(frame.userId)
       return
     }
     const state = this.remoteRoster.get(frame.userId)

@@ -32,13 +32,55 @@ class PresenceChannelTest < ActionCable::Channel::TestCase
     subscribe slug: map.slug
   end
 
-  test "subscribing to an accessible multiplayer map streams its presence room" do
+  def cell_stream(map, cx, cy)
+    "presence:map:#{map.id}:cell:#{cx}:#{cy}"
+  end
+
+  # Interest management (#158): the neighbourhood is only knowable once the
+  # player announces a tile, so the join itself attaches nothing. The client
+  # replays its position on `connected`, which closes that window.
+  test "subscribing to an accessible multiplayer map confirms but streams no cell yet" do
     map = make_map
 
     join(map)
 
     assert subscription.confirmed?
-    assert_has_stream "presence:map:#{map.id}"
+    assert_no_streams
+  end
+
+  test "a move attaches the sender's cell and its eight neighbours" do
+    map = make_map
+    join(map)
+
+    perform :move, x: 3, y: 4, facing: "down"
+
+    (-1..1).each do |cx|
+      (-1..1).each { |cy| assert_has_stream cell_stream(map, cx, cy) }
+    end
+  end
+
+  test "crossing a cell boundary drops the cells left behind and attaches the new ones" do
+    map = make_map
+    join(map)
+
+    perform :move, x: 3, y: 4, facing: "right"   # cell 0,0
+    perform :move, x: 15, y: 4, facing: "right"  # cell 1,0
+
+    assert_has_stream cell_stream(map, 2, 1)
+    assert_has_no_stream cell_stream(map, -1, 0)
+  end
+
+  # The scaling property, stated structurally rather than as a load test: a
+  # player broadcasts on their own cell only, so a distant one's frames land on
+  # a stream we never attached. Inbound rate therefore tracks local density,
+  # not the map's population.
+  test "a distant player's cell is not among our streams" do
+    map = make_map
+    join(map)
+
+    perform :move, x: 3, y: 4, facing: "down"
+
+    assert_has_no_stream cell_stream(map, 5, 5)
   end
 
   test "a solo map opens no presence room" do
@@ -64,7 +106,7 @@ class PresenceChannelTest < ActionCable::Channel::TestCase
     map = make_map
     join(map)
 
-    assert_broadcast_on("presence:map:#{map.id}", manifest_frame(nil)) do
+    assert_broadcast_on(cell_stream(map, 0, 0), manifest_frame(nil)) do
       perform :move, x: 3, y: 4, facing: "down", userId: "spoofed-id"
     end
   end
@@ -78,7 +120,7 @@ class PresenceChannelTest < ActionCable::Channel::TestCase
     map = make_map
     join(map)
 
-    assert_broadcast_on("presence:map:#{map.id}", manifest_frame(picked.id)) do
+    assert_broadcast_on(cell_stream(map, 0, 0), manifest_frame(picked.id)) do
       perform :move, x: 3, y: 4, facing: "down"
     end
   end
@@ -88,7 +130,7 @@ class PresenceChannelTest < ActionCable::Channel::TestCase
     map = make_map
     join(map)
 
-    assert_broadcast_on("presence:map:#{map.id}", manifest_frame(global.id)) do
+    assert_broadcast_on(cell_stream(map, 0, 0), manifest_frame(global.id)) do
       perform :move, x: 3, y: 4, facing: "down"
     end
   end
@@ -97,7 +139,7 @@ class PresenceChannelTest < ActionCable::Channel::TestCase
     map = make_map
     join(map)
 
-    assert_broadcast_on("presence:map:#{map.id}", manifest_frame(nil)) do
+    assert_broadcast_on(cell_stream(map, 0, 0), manifest_frame(nil)) do
       perform :move, x: 3, y: 4, facing: "down"
     end
   end
@@ -109,12 +151,15 @@ class PresenceChannelTest < ActionCable::Channel::TestCase
     }
   end
 
-  test "unsubscribing broadcasts a leave frame" do
+  # The leave rides the cell the player was last seen in — exactly the peers
+  # who could see them are subscribed to it.
+  test "unsubscribing broadcasts a leave frame on the last cell" do
     map = make_map
     join(map)
+    perform :move, x: 3, y: 4, facing: "down"
 
     leave = { type: "leave", userId: @user.external_id, name: @user.name, manifestId: nil }
-    assert_broadcast_on("presence:map:#{map.id}", leave) do
+    assert_broadcast_on(cell_stream(map, 0, 0), leave) do
       unsubscribe
     end
   end
