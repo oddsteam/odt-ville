@@ -15,6 +15,7 @@ import { subscribeAuthToken } from './lib/authToken.ts'
 import { connectPresence } from './lib/presenceClient.ts'
 import { presenceSession } from './lib/presenceSession.ts'
 import { ViewerService } from './viewer/service.ts'
+import { loadManifestById } from './character/service.ts'
 import { trackEnterDoor, trackInteractBoard, trackEncounter } from './analytics/events.ts'
 import type { Community, FeedItem } from './communities/schema.ts'
 import type { GameSession } from './game-session/schema.ts'
@@ -166,6 +167,7 @@ export default function VillagePage() {
           .then((v) => v.user.external_id)
           .catch(() => null),
       connect: connectPresence,
+      loadManifest: loadManifestById,
     }),
   )
   useEffect(() => () => presenceRef.current.close(), [])

@@ -151,6 +151,14 @@ async function fetchRemoteForMe() {
   return env ? normalizeManifest(env.data) : null
 }
 
+// Fetch one manifest by id (#266) — the presence renderer's peer lookup, handed
+// to the scene through the registry (ADR-0004). Same null-on-204/error contract
+// as the loaders above: null leaves that peer on the bundled fallback stills.
+export async function loadManifestById(id: number) {
+  const data = await runEdge(getById(id)).catch(() => null)
+  return data ? normalizeManifest(data) : null
+}
+
 async function committedDefault() {
   try {
     const res = await fetch(DEFAULT_MANIFEST_URL)

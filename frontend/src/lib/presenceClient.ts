@@ -23,12 +23,26 @@ export function connectPresence(slug: string): PresenceHandle | null {
 
   const consumer = createConsumer(`/api/cable?token=${encodeURIComponent(token)}`)
   let handler: ((frame: unknown) => void) | null = null
+  // ActionCable drops a `perform()` issued before the subscription confirms,
+  // and MapScene announces its spawn from create() — almost always too early,
+  // which left an arriving player invisible until their first step made the
+  // room echo. Replaying the latest position on `connected` closes that window
+  // (and re-announces us after a reconnect for free).
+  let lastPos: { x: number; y: number; facing: string } | null = null
   const sub = consumer.subscriptions.create(
     { channel: 'PresenceChannel', slug },
-    { received: (frame: unknown) => handler?.(frame) },
+    {
+      received: (frame: unknown) => handler?.(frame),
+      connected: () => {
+        if (lastPos) sub.perform('move', lastPos)
+      },
+    },
   )
   return {
-    send: (pos) => sub.perform('move', pos),
+    send: (pos) => {
+      lastPos = pos
+      sub.perform('move', pos)
+    },
     onFrame: (cb) => {
       handler = cb
     },

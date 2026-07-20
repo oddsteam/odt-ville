@@ -51,6 +51,18 @@ export function framesForFacing(m, dir, kind) {
   }
 }
 
+// The single frame a character shows standing still facing `dir`: its idle
+// posture's first frame, else its walk posture's (a character with no idle
+// art). Null when it authors neither. Peer avatars render these stills (#266)
+// — walk loops stay the rig's job.
+export function stillForFacing(m, dir) {
+  for (const kind of ['idle', 'walk']) {
+    const { slot, frames, flipX } = framesForFacing(m, dir, kind)
+    if (frames.length) return { name: `${slot}.0`, rect: frames[0], flipX }
+  }
+  return null
+}
+
 function cap(s) {
   return s.charAt(0).toUpperCase() + s.slice(1)
 }

@@ -11,13 +11,18 @@ import type { PresenceHandle } from './presenceClient.ts'
 export interface PresenceSessionDeps {
   viewerId: () => Promise<string | null>
   connect: (slug: string) => PresenceHandle | null
+  // Fetch a peer's character by the manifest id their frames carry (#266).
+  loadManifest: (id: number) => Promise<unknown>
 }
 
-// The registry bundle MapScene reads: the handle plus the id it filters its
-// own echoed frames by.
-export type OpenPresence = PresenceHandle & { ownId: string }
+// The registry bundle MapScene reads: the handle, the id it filters its own
+// echoed frames by, and the peer-character lookup it renders them with.
+export type OpenPresence = PresenceHandle & {
+  ownId: string
+  loadManifest: (id: number) => Promise<unknown>
+}
 
-export function presenceSession({ viewerId, connect }: PresenceSessionDeps) {
+export function presenceSession({ viewerId, connect, loadManifest }: PresenceSessionDeps) {
   let current: PresenceHandle | null = null
 
   const close = () => {
@@ -34,7 +39,7 @@ export function presenceSession({ viewerId, connect }: PresenceSessionDeps) {
     const ownId = await viewerId()
     if (!ownId) return null
     current = connect(map.slug)
-    return current && { ownId, ...current }
+    return current && { ownId, loadManifest, ...current }
   }
 
   return { open, close }
