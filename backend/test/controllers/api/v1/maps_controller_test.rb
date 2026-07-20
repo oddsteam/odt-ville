@@ -47,6 +47,17 @@ module Api
         assert_equal "prop", body[:entities].first[:kind]
       end
 
+      # Presence multiplayer (#88): the runtime decides whether to open a
+      # presence channel off this flag, so the play document must carry it.
+      test "show carries the multiplayer flag, defaulting to solo" do
+        make_map
+
+        get "/api/v1/maps/atrium", headers: auth(@user)
+
+        assert_response :success
+        assert_equal false, json[:multiplayer]
+      end
+
       test "show does not expose the editable source document on the play endpoint" do
         make_map
 

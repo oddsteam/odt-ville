@@ -12,6 +12,7 @@ import {
 } from '../characterRig.js'
 import bus from '../bus.js'
 import { deltaFor, resolveDirection, stepTile } from '../movement.ts'
+import { applyFrame } from '../../presence.ts'
 import { interactZoneEvents, sightZoneEvents, zoneEvents } from '../../../kernel/zones.ts'
 import downStill from '../../assets/character/rpg-char-01/r0-c0.png'
 import leftStill from '../../assets/character/rpg-char-01/r1-c0.png'
@@ -180,6 +181,21 @@ export default class MapScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.scale.off('resize', fit))
     cam.startFollow(this.player, true)
 
+    // Presence (#88): the shell hands a connected room via the registry (the
+    // onZone pattern) only for multiplayer maps — absent means solo, and the
+    // scene renders no peers. Roster/sprites reset here because the scene
+    // instance survives stop/start (#249).
+    this.presence = this.registry.get('presence') || null
+    this.remoteRoster = new Map()
+    this.remoteSprites = new Map()
+    if (this.presence) {
+      this.presence.onFrame((frame) => this.presenceFrame(frame))
+      this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.presence.onFrame(null))
+      // Announce our spawn; peers echo their own positions back (stateless
+      // roster sync — see presence.ts).
+      this.sendPosition()
+    }
+
     // Test API — same shape the town/interior scenes publish, so the walking
     // e2e scripts can read state off the canvas.
     if (typeof window !== 'undefined') {
@@ -215,6 +231,45 @@ export default class MapScene extends Phaser.Scene {
     }
   }
 
+  sendPosition() {
+    this.presence.send({ x: this.playerTile.x, y: this.playerTile.y, facing: this.facing })
+  }
+
+  // Fold one presence frame into the roster and render the outcome: spawn a
+  // labelled avatar, tween a known one to its new tile, or drop a leaver.
+  // Remote avatars are the bundled still frames on purpose — a peer's own
+  // character manifest is not in this client's texture cache (ponytail:
+  // ship manifests over the wire if identity art ever matters).
+  presenceFrame(frame) {
+    const { action, echo } = applyFrame(this.remoteRoster, frame, this.presence.ownId)
+    if (echo) this.sendPosition()
+    if (action === 'none') return
+    if (action === 'remove') {
+      this.remoteSprites.get(frame.userId)?.destroy()
+      this.remoteSprites.delete(frame.userId)
+      return
+    }
+    const state = this.remoteRoster.get(frame.userId)
+    const feet = feetWorldXY({ x: state.x, y: state.y }, false)
+    if (action === 'spawn') {
+      const img = this.add
+        .image(0, 0, `player.${state.facing}.0`)
+        .setOrigin(0.5, 1)
+        .setDisplaySize(96, 96)
+      const label = this.add
+        .text(0, -100, state.name, { fontSize: '12px', color: '#ffffff', backgroundColor: '#000000aa' })
+        .setOrigin(0.5, 0)
+      const remote = this.add.container(feet.x, feet.y, [img, label])
+      remote.setDepth(mapPlayerDepth(false, false))
+      this.remoteSprites.set(frame.userId, remote)
+      return
+    }
+    const remote = this.remoteSprites.get(frame.userId)
+    if (!remote) return
+    remote.list[0].setTexture(`player.${state.facing}.0`).setDisplaySize(96, 96)
+    this.tweens.add({ targets: remote, x: feet.x, y: feet.y, duration: MOVE_MS })
+  }
+
   // Stop the avatar where it stands: forget the held D-pad direction and reset
   // the keyboard keys, so a key still physically down reads as up until it is
   // released and pressed again.
@@ -237,6 +292,9 @@ export default class MapScene extends Phaser.Scene {
       duration: MOVE_MS,
       onStart: (t) => {
         this.playerTile = t
+        // One presence frame per tile-step (#88) — peers replay the step as a
+        // tween, so cadence is bounded by walk speed, not frame rate.
+        if (this.presence) this.sendPosition()
         // Drop below the entity band from the start of the step onto an overhang
         // cell so the object's art overhangs the avatar the whole slide (#210),
         // or between the base art and the fg overlay onto a foreground cell so the

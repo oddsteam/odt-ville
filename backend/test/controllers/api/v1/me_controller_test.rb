@@ -15,6 +15,15 @@ module Api
         assert_equal @company.id, json[:company][:id]
       end
 
+      # Presence (#88): frames carry the stable Keycloak id, so the client
+      # needs its own to tell its echo apart from other players.
+      test "the response carries the caller's stable Keycloak id" do
+        get "/api/v1/me", headers: auth(@user)
+
+        assert_response :success
+        assert_equal @user.external_id, json[:user][:external_id]
+      end
+
       test "the response carries the caller's realm roles" do
         get "/api/v1/me", headers: auth(@user, roles: ["admin"])
 

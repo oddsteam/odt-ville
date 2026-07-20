@@ -12,6 +12,10 @@ Rails.application.routes.draw do
     }
   end
 
+  # Presence multiplayer (#88): the WebSocket endpoint, under /api so the Vite
+  # proxy (dev and homeserver preview) reaches it with no extra routing rule.
+  mount ActionCable.server => "/api/cable"
+
   namespace :api do
     namespace :v1 do
       # The Communities domain (ADR-0010) — controllers under

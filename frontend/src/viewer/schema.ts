@@ -9,6 +9,9 @@ export const Viewer = Schema.Struct({
     id: Schema.Number,
     name: Schema.String,
     role: Schema.String,
+    // The stable Keycloak sub (#88) — presence frames carry it, and the
+    // client tells its own echo apart from other players by it.
+    external_id: Schema.String,
   }),
   company: Schema.Struct({
     id: Schema.Number,

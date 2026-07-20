@@ -6,13 +6,21 @@ import { Viewer } from '../src/viewer/schema.ts'
 
 describe('Viewer schema', () => {
   const valid = {
-    user: { id: 1, name: 'Pat', role: 'admin' },
+    user: { id: 1, name: 'Pat', role: 'admin', external_id: 'kc-sub-1' },
     company: { id: 42, name: 'ODT' },
     roles: ['admin'],
   }
 
   it('decodes the payload from /api/v1/me', () => {
     expect(Either.isRight(Schema.decodeUnknownEither(Viewer)(valid))).toBe(true)
+  })
+
+  // Presence (#88): the client filters its own echoed frames by this id.
+  it('rejects when user.external_id is missing', () => {
+    const { external_id, ...userWithout } = valid.user
+    expect(
+      Either.isLeft(Schema.decodeUnknownEither(Viewer)({ ...valid, user: userWithout })),
+    ).toBe(true)
   })
 
   it('rejects when user is missing', () => {
