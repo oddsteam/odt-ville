@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { applyFrame, type RemotePlayer } from '../src/game/presence.ts'
+import { applyFrame, pruneOutOfRange, type RemotePlayer } from '../src/game/presence.ts'
 
 // Presence multiplayer (#88): folding wire frames into the remote-player
 // roster. The roster sync is stateless echo — first sighting of a peer means
@@ -94,5 +94,40 @@ describe('applyFrame', () => {
       expect(applyFrame(roster, withManifest(7), OWN).action).toBe('move')
       expect(roster.get('peer-1')?.manifestId).toBe(7)
     })
+  })
+})
+
+// Interest management (#158): the server stops streaming a cell once we walk
+// out of its neighbourhood, so no `leave` ever arrives for the peers standing
+// in it — they'd linger on the roster frozen at their last tile. The scene
+// prunes them itself after each step.
+describe('pruneOutOfRange', () => {
+  const at = (x: number, y: number): RemotePlayer => ({
+    name: 'Pat',
+    x,
+    y,
+    facing: 'down',
+    manifestId: null,
+  })
+
+  it('keeps a peer inside the neighbourhood window', () => {
+    const roster = new Map([['peer-1', at(20, 4)]])
+
+    expect(pruneOutOfRange(roster, { x: 3, y: 4 })).toEqual([])
+    expect(roster.size).toBe(1)
+  })
+
+  it('drops a peer whose cell fell out of the neighbourhood', () => {
+    const roster = new Map([['peer-1', at(3, 4)]])
+
+    // We crossed east into cell 3,0 — cell 0,0 is no longer a neighbour.
+    expect(pruneOutOfRange(roster, { x: 40, y: 4 })).toEqual(['peer-1'])
+    expect(roster.size).toBe(0)
+  })
+
+  it('keeps the peer directly across a cell boundary — that is the margin', () => {
+    const roster = new Map([['peer-1', at(11, 4)]])
+
+    expect(pruneOutOfRange(roster, { x: 12, y: 4 })).toEqual([])
   })
 })
