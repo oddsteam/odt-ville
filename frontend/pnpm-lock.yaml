@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@rails/actioncable':
+        specifier: ^8.1.300
+        version: 8.1.300
       effect:
         specifier: ^3.21.4
         version: 3.21.4
@@ -30,6 +33,9 @@ importers:
         specifier: ^7.18.0
         version: 7.18.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
     devDependencies:
+      '@types/rails__actioncable':
+        specifier: ^8.0.3
+        version: 8.0.3
       '@types/react':
         specifier: ^19.2.17
         version: 19.2.17
@@ -249,6 +255,9 @@ packages:
   '@posthog/types@1.392.0':
     resolution: {integrity: sha512-nctNujXL3FC1v99FktaTMSugSD9ZOZekEpahUSafkU2TSvW+XGKNkQZbokuJtiWvPBK208dwMJva8UfBkChqpw==}
 
+  '@rails/actioncable@8.1.300':
+    resolution: {integrity: sha512-zOENQsq3NM2jyBY6Z2qtZa3V/R/6OEqA+LGKixQbBMl7kk/J3FXDRcszPe74LsHNgB01jCl/DXu/xA8sHt4I/g==}
+
   '@rolldown/binding-android-arm64@1.0.3':
     resolution: {integrity: sha512-454rs7jHngixp/NMxd5srYD57OnzSlZ/eFTETjORQHLwJG1lRtmNOJcBerZlfu4GjKqeq8aCCIQrMdHyhI51Hw==}
     engines: {node: ^20.19.0 || >=22.12.0}
@@ -361,6 +370,9 @@ packages:
 
   '@types/estree@1.0.9':
     resolution: {integrity: sha512-GhdPgy1el4/ImP05X05Uw4cw2/M93BCUmnEvWZNStlCzEKME4Fkk+YpoA5OiHNQmoS7Cafb8Xa3Pya8m1Qrzeg==}
+
+  '@types/rails__actioncable@8.0.3':
+    resolution: {integrity: sha512-y46MOTYorVQVwlHUyaZYbrh3nIkXsRYNuPna32lb3RngLVBlndNbIPvAUywFfhivftNhYg+vW5sZKWYCVIX2lA==}
 
   '@types/react-dom@19.2.3':
     resolution: {integrity: sha512-jp2L/eY6fn+KgVVQAOqYItbF0VY/YApe5Mz2F0aykSO8gx31bYCZyvSeYxCHKvzHG5eZjc+zyaS5BrBWya2+kQ==}
@@ -1080,6 +1092,8 @@ snapshots:
 
   '@posthog/types@1.392.0': {}
 
+  '@rails/actioncable@8.1.300': {}
+
   '@rolldown/binding-android-arm64@1.0.3':
     optional: true
 
@@ -1146,6 +1160,8 @@ snapshots:
   '@types/deep-eql@4.0.2': {}
 
   '@types/estree@1.0.9': {}
+
+  '@types/rails__actioncable@8.0.3': {}
 
   '@types/react-dom@19.2.3(@types/react@19.2.17)':
     dependencies:

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_07_19_000004) do
+ActiveRecord::Schema[8.1].define(version: 2026_07_20_000001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -101,6 +101,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_19_000004) do
     t.jsonb "baked", default: {}, null: false
     t.integer "cols", null: false
     t.datetime "created_at", null: false
+    t.boolean "multiplayer", default: false, null: false
     t.integer "rows", null: false
     t.string "slug", null: false
     t.jsonb "source", default: {}, null: false

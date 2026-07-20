@@ -1,0 +1,15 @@
+# Presence multiplayer (#88). The in-process async adapter is correct for this
+# stack: Puma runs a single process everywhere (no WEB_CONCURRENCY set), so
+# every subscriber shares the broadcaster's process. Interest-managed presence
+# (#158) brings Redis when fanout outgrows one process.
+default: &default
+  adapter: async
+
+development:
+  <<: *default
+
+test:
+  adapter: test
+
+production:
+  <<: *default

@@ -27,6 +27,13 @@ describe('BakedMap schema', () => {
     expect(Either.isRight(Schema.decodeUnknownEither(BakedMap)(valid))).toBe(true)
   })
 
+  // Presence (#88): the runtime opens a presence channel off this flag.
+  it('decodes the multiplayer flag', () => {
+    const decoded = Schema.decodeUnknownEither(BakedMap)({ ...valid, multiplayer: true })
+    expect(Either.isRight(decoded)).toBe(true)
+    if (Either.isRight(decoded)) expect(decoded.right.multiplayer).toBe(true)
+  })
+
   it('accepts a transparent (null) cell in the grid', () => {
     const decoded = Schema.decodeUnknownEither(BakedMap)(valid)
     expect(Either.isRight(decoded)).toBe(true)

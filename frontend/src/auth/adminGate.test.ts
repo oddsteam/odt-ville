@@ -4,7 +4,7 @@ import { adminGate } from './adminGate.ts'
 import type { Viewer } from '../viewer/schema.ts'
 
 const viewer = (roles: string[]): Viewer => ({
-  user: { id: 1, name: 'Test', role: 'branch_employee' },
+  user: { id: 1, name: 'Test', role: 'branch_employee', external_id: 'kc-sub-1' },
   company: { id: 1, name: 'Co' },
   roles,
 })

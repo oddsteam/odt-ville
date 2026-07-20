@@ -9,7 +9,9 @@ module Api
         def show
           u = current_user
           render json: {
-            user: { id: u.id, name: u.name, role: u.role },
+            # external_id is the stable Keycloak sub — presence frames (#88)
+            # carry it, and the client filters its own echo by it.
+            user: { id: u.id, name: u.name, role: u.role, external_id: u.external_id },
             company: { id: u.company.id, name: u.company.name },
             # Realm roles (#100) — the frontend gates the /admin route on these.
             roles: current_roles

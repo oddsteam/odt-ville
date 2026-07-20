@@ -19,6 +19,7 @@
     "map:palette": "node scripts/curate-palette.mjs"
   },
   "dependencies": {
+    "@rails/actioncable": "^8.1.300",
     "effect": "^3.21.4",
     "keycloak-js": "^26.2.4",
     "phaser": "^4.1.0",
@@ -28,6 +29,7 @@
     "react-router-dom": "^7.18.0"
   },
   "devDependencies": {
+    "@types/rails__actioncable": "^8.0.3",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.2",

@@ -19,7 +19,10 @@ module Maps
         # ground, so lift them to the top-level list the runtime preloads.
         tilesets: baked[:tilesets] || ground&.dig(:tilesets) || [],
         tiles: baked[:tiles] || [],
-        entities: baked[:entities] || []
+        entities: baked[:entities] || [],
+        # Presence multiplayer (#88): the runtime opens a presence channel off
+        # this Node property (ADR-0005); solo maps never connect.
+        multiplayer: map.multiplayer
       }
       # Painted maps carry autotiled `ground` (layer stacks) the runtime blits
       # instead of flat tiles; flat/seed maps omit it entirely (ADR-0003/0004).

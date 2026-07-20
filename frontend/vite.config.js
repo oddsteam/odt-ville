@@ -126,6 +126,8 @@ const serve = {
   proxy: {
     '/api': {
       target: proxyTarget,
+      // The presence WebSocket (#88) rides /api/cable through this same rule.
+      ws: true,
       // Hold requests during backend warm-up instead of 502ing (issue #226).
       bypass: backendWarmupGate(proxyTarget),
     },

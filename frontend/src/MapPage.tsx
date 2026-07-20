@@ -12,6 +12,8 @@ import { pickWild, wildStepGate } from './game/encounters.js'
 import { objectIdsFrom } from './maps/props.ts'
 import { runEdge } from './lib/runEdge.ts'
 import { subscribeAuthToken } from './lib/authToken.ts'
+import { connectPresence } from './lib/presenceClient.ts'
+import { ViewerService } from './viewer/service.ts'
 import { loadMyManifest } from './character/service.ts'
 import type { BakedMap, Zone } from './kernel/schema.ts'
 import type { Npc } from './catalog/npcs/schema.ts'
@@ -49,6 +51,9 @@ export default function MapPage() {
   // fetched with the map so the dispatch can resolve a fired npcId. Best-effort
   // (a missing endpoint leaves it empty and a trainer zone challenges nobody).
   const npcsRef = useRef<readonly Npc[]>([])
+  // The viewer's stable Keycloak id (#88) — presence filters its own echoed
+  // frames by it. Only fetched for multiplayer maps; null keeps presence off.
+  const ownIdRef = useRef<string | null>(null)
 
   useEffect(() => {
     if (!slug) return
@@ -63,7 +68,9 @@ export default function MapPage() {
       .then(async ([m, manifest]) => {
         const objects = await runEdge(TileObjectsService.getMany(objectIdsFrom(m.entities)))
         const npcs = await runEdge(NpcsService.list()).catch(() => [] as readonly Npc[])
+        const viewer = m.multiplayer ? await runEdge(ViewerService.get()).catch(() => null) : null
         if (!active) return
+        ownIdRef.current = viewer?.user.external_id ?? null
         manifestRef.current = manifest
         objectsRef.current = objects
         npcsRef.current = npcs
@@ -106,6 +113,12 @@ export default function MapPage() {
     game.registry.set('characterManifest', manifestRef.current)
     game.registry.set('entrySpawnId', entrySpawnIdRef.current)
     game.registry.set('npcs', npcsRef.current)
+    // Presence (#88): a multiplayer map opens its per-map room; solo maps —
+    // and the generated hometown, which never renders through this page —
+    // stay offline. The handle rides the registry like onZone: the scene
+    // renders peers and broadcasts steps, the shell owns the wire.
+    const presence = map.multiplayer && ownIdRef.current ? connectPresence(map.slug) : null
+    if (presence) game.registry.set('presence', { ownId: ownIdRef.current, ...presence })
     // Encounter zones fire per landing step (#255); this gate owns the roll
     // rate and the post-encounter grace for this game's lifetime.
     const grassGate = wildStepGate()
@@ -171,6 +184,7 @@ export default function MapPage() {
       }
     })
     return () => {
+      presence?.disconnect()
       game.destroy(true)
     }
   }, [map, navigate])

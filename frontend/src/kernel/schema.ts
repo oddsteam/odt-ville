@@ -175,6 +175,11 @@ export const BakedMap = Schema.Struct({
   // Row-major grid: tiles[row][col]. A null cell paints nothing.
   tiles: Schema.Array(Schema.Array(Schema.NullOr(BakedTile))),
   entities: Schema.Array(BakedEntity),
+  // Presence multiplayer (#88, ADR-0005 Node property): the shell opens a
+  // presence channel off this flag; solo maps (and the generated hometown,
+  // which never passes through this schema) stay offline. Optional so cached
+  // pre-#88 documents keep decoding.
+  multiplayer: Schema.optional(Schema.Boolean),
   // An authored *painted* map carries its autotiled ground (layer stacks) here
   // instead of flat `tiles`; the runtime blits whichever the producer supplied
   // (ADR-0004 — still one shape, no per-map branching). Absent on the seed's
