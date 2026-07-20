@@ -98,7 +98,10 @@ export type PhaserGameProps = {
     // Null on an onward hop fired from a Node the shell reached without a door.
     communityId: number | null
     portal: { kind: 'portal'; targetNode: string; entrySpawnId?: string }
-  }) => Promise<{ map: unknown; objects: unknown } | null>
+    // The connected presence room for a multiplayer target (#269), or null for
+    // a solo map. Opaque here — the shell owns the wire, MapScene reads it off
+    // the registry exactly as it does on the standalone /maps/:slug page.
+  }) => Promise<{ map: unknown; objects: unknown; presence?: unknown } | null>
   trainerDefeated: boolean
   onTrainerDefeated: () => void
 }
@@ -203,6 +206,9 @@ export default function PhaserGame({
       game.registry.set('bakedMap', loaded.map)
       game.registry.set('bakedObjects', loaded.objects)
       game.registry.set('entrySpawnId', portal.entrySpawnId)
+      // Presence (#269): set every hop, so a solo target clears the room the
+      // previous multiplayer map left here rather than inheriting its peers.
+      game.registry.set('presence', loaded.presence ?? null)
       // Keep the community that owns this chain: an onward hop stays inside the
       // community it entered, so exit-to-town still reports the right door.
       game.registry.set('portalCommunityId', communityId)
