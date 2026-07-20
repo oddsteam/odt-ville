@@ -100,6 +100,14 @@ const GAME = '^src/game/'
 // The shell: composes everything; nothing may depend on it.
 const SHELL = '^src/(App|RootLayout|VillagePage|MapPage|main)\\.tsx$'
 
+// Proximity voice (#159, #278). Kept extractable from the day it was created:
+// it owns pod membership now and WebRTC signalling/media later, and none of
+// that belongs to any existing module. The two rules below say it depends on
+// nothing but shared infrastructure, and that the game never imports it — so
+// lifting src/voice/ out (to a package, a worker, its own app) stays a move
+// rather than an untangling.
+const VOICE = '^src/voice/'
+
 // The shared src/lib grab-bag: like the kernel, it exists to be imported
 // broadly, so (with the kernel) it is exempt as a cross-module import TARGET.
 const LIB = '^src/lib/'
@@ -215,6 +223,31 @@ module.exports = {
       severity: 'error',
       from: { path: '^src/communities/' },
       to: { path: '^src/game' },
+    },
+    {
+      name: 'voice-depends-only-on-shared-infrastructure',
+      comment:
+        '#278: proximity voice must stay independently extractable. It may ' +
+        'depend on itself, the kernel and src/lib — nothing else, and the ' +
+        'game runtime least of all. Voice needs only a peer\'s {x, y}, which ' +
+        'MapScene\'s RemotePlayer satisfies structurally, so the roster can be ' +
+        'handed over without an import edge.',
+      severity: 'error',
+      from: { path: VOICE },
+      to: { path: '^src/', pathNot: [VOICE, KERNEL, LIB] },
+    },
+    {
+      name: 'game-runtime-never-imports-voice',
+      comment:
+        '#278, mirrored: voice does network I/O (signalling, #279), which is ' +
+        'exactly what game-black-box-no-data-services keeps out of src/game/. ' +
+        'The shell owns the voice session and injects a handle via the Phaser ' +
+        'registry — the same path presence takes (ADR-0004), which is why ' +
+        'MapScene calls this.presence.loadManifest rather than importing a ' +
+        'service.',
+      severity: 'error',
+      from: { path: GAME, pathNot: KERNEL },
+      to: { path: VOICE },
     },
     {
       name: 'nothing-imports-the-shell',
