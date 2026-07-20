@@ -22,7 +22,12 @@ module Maps
         entities: baked[:entities] || [],
         # Presence multiplayer (#88): the runtime opens a presence channel off
         # this Node property (ADR-0005); solo maps never connect.
-        multiplayer: map.multiplayer
+        multiplayer: map.multiplayer,
+        # The other Node property (#91): who may list/load the map. The runtime
+        # ignores it (the gate is server-side, #83); the editor reads it to
+        # prefill the settings panel. Raw column read — the model getter wraps
+        # it in the AccessPolicy value object.
+        access_policy: map.read_attribute(:access_policy)
       }
       # Painted maps carry autotiled `ground` (layer stacks) the runtime blits
       # instead of flat tiles; flat/seed maps omit it entirely (ADR-0003/0004).

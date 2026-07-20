@@ -72,6 +72,11 @@ export default function App() {
       {/* posture-login popup return (issue #24) — bare page, no app chrome;
           it posts the result home to the opener and closes. */}
       <Route path="posture/callback" element={<PostureCallbackPage />} />
+      {/* Preview in game (#91): the decorate editor stashes its draft document
+          and opens this route; the same play shell takes the draft through the
+          schema instead of fetching by slug. Registered before maps/:slug so
+          the two-segment path never reads as a slug. */}
+      <Route path="maps/draft/preview" element={<MapPage draft />} />
       {/* Authored map (ADR-0004) — loads a baked map by slug and renders it
           through the map-agnostic runtime. The editor that authors these lands
           in later slices (#80+); this route proves load-and-render end-to-end. */}

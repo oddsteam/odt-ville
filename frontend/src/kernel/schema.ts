@@ -166,6 +166,16 @@ export type Zone = Schema.Schema.Type<typeof Zone>
 // The aiming member, for the detector that reads facing/range off it.
 export type SightZone = Extract<Zone, { trigger: 'on_sight' }>
 
+// Who may list/load the map (#83, #91) — a Node property like `multiplayer`
+// (ADR-0005). The gate itself is server-side; the runtime ignores this. The
+// editor reads it to prefill its settings panel and writes it back over PATCH.
+export const MapAccessPolicy = Schema.Struct({
+  kind: Schema.Literal('public', 'claim', 'members'),
+  role: Schema.optional(Schema.String),
+  group: Schema.optional(Schema.String),
+})
+export type MapAccessPolicy = Schema.Schema.Type<typeof MapAccessPolicy>
+
 export const BakedMap = Schema.Struct({
   slug: Schema.String,
   title: Schema.String,
@@ -180,6 +190,9 @@ export const BakedMap = Schema.Struct({
   // which never passes through this schema) stay offline. Optional so cached
   // pre-#88 documents keep decoding.
   multiplayer: Schema.optional(Schema.Boolean),
+  // The access policy (#91) — see MapAccessPolicy. Optional so cached pre-#91
+  // documents keep decoding.
+  access_policy: Schema.optional(MapAccessPolicy),
   // An authored *painted* map carries its autotiled ground (layer stacks) here
   // instead of flat `tiles`; the runtime blits whichever the producer supplied
   // (ADR-0004 — still one shape, no per-map branching). Absent on the seed's

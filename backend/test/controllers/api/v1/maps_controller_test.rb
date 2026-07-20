@@ -543,6 +543,73 @@ module Api
         assert_not_includes ::Maps::Map.find_by!(slug: "grove").baked.keys, "zones"
       end
 
+      # Map settings (#91, ADR-0005): `multiplayer` and the access policy are
+      # Node properties, settable from the editor over the same PATCH the
+      # decorate save uses.
+      test "an admin toggles a map's multiplayer flag" do
+        make_painted_map(slug: "grove")
+
+        patch "/api/v1/maps/grove",
+          params: { multiplayer: true },
+          headers: auth(@user, roles: ["admin"]), as: :json
+
+        assert_response :success
+        assert_equal true, json[:multiplayer]
+      end
+
+      test "an admin sets a map's access policy, and the gate applies immediately" do
+        make_painted_map(slug: "grove")
+
+        patch "/api/v1/maps/grove",
+          params: { access_policy: { kind: "claim", role: "staff" } },
+          headers: auth(@user, roles: ["admin"]), as: :json
+        assert_response :success
+
+        get "/api/v1/maps/grove", headers: auth(@user)
+        assert_response :forbidden
+      end
+
+      test "show carries the access policy so the editor can prefill it" do
+        make_map(policy: { "kind" => "claim", "role" => "staff" })
+
+        get "/api/v1/maps/atrium", headers: auth(@user, roles: ["staff"])
+
+        assert_response :success
+        assert_equal({ kind: "claim", role: "staff" }, json[:access_policy])
+      end
+
+      test "an unknown access policy kind is rejected with 422" do
+        make_painted_map(slug: "grove")
+
+        patch "/api/v1/maps/grove",
+          params: { access_policy: { kind: "secret" } },
+          headers: auth(@user, roles: ["admin"]), as: :json
+
+        assert_response :unprocessable_entity
+        assert json[:error].present?
+      end
+
+      test "a claim policy without a role or group is rejected with 422" do
+        make_painted_map(slug: "grove")
+
+        patch "/api/v1/maps/grove",
+          params: { access_policy: { kind: "claim" } },
+          headers: auth(@user, roles: ["admin"]), as: :json
+
+        assert_response :unprocessable_entity
+      end
+
+      test "a settings-only patch preserves the baked document" do
+        make_painted_map(slug: "grove")
+
+        patch "/api/v1/maps/grove",
+          params: { multiplayer: true },
+          headers: auth(@user, roles: ["admin"]), as: :json
+
+        assert_response :success
+        assert_equal 1, json[:ground][:cols]
+      end
+
       test "updating an unknown slug returns 404" do
         patch "/api/v1/maps/does-not-exist",
           params: { baked: { collision: [[true]] } },

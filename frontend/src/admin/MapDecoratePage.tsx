@@ -10,7 +10,8 @@ import type { Npc } from '../catalog/npcs/schema.ts'
 import { makeMask, setMaskCell, resizeMask, isMaskEmpty, type Mask } from './maskPaint.ts'
 import { groupPalette } from './paletteGroups.ts'
 import { zoneRects as buildZoneRects, ZONE_COLORS } from './zoneRects.ts'
-import { placeProp, erasePropAt, propEntities, propsFromBaked, propGhost, newZone, retrigger, triggersFor, zoneIndexAt, eraseZoneAt, replaceZone, type PlacedProp, type SizeOf, type MaskOf, type DoorOf, type ZoneKind } from '../maps/service.ts'
+import { placeProp, erasePropAt, propEntities, propsFromBaked, propGhost, newZone, retrigger, triggersFor, zoneIndexAt, eraseZoneAt, replaceZone, draftMap, stashDraft, DRAFT_PLAY_PATH, type PlacedProp, type SizeOf, type MaskOf, type DoorOf, type ZoneKind } from '../maps/service.ts'
+import type { MapAccessPolicy } from '../kernel/schema.ts'
 import MapPreview from './MapPreview.tsx'
 import { runEdge } from '../lib/runEdge.ts'
 import './admin.css'
@@ -39,8 +40,9 @@ export default function MapDecoratePage() {
   // its authoring walk_mask onto the entity so collision applies automatically.
   const [palette, setPalette] = useState<readonly TileObject[]>([])
   // What a grid click does: place/erase a prop, place/select/erase a zone, or
-  // paint/erase the collision mask.
-  const [mode, setMode] = useState<'props' | 'zones' | 'collision'>('props')
+  // paint/erase the collision mask. `settings` (#91) only shows the panel —
+  // clicks on the map do nothing.
+  const [mode, setMode] = useState<'props' | 'zones' | 'collision' | 'settings'>('props')
   const [propTool, setPropTool] = useState<number | 'erase' | null>(null)
   // The authored zones (#90, ADR-0005) — trigger + payload regions, edited as
   // full desired state like props. A click places the picked kind (or selects
@@ -57,6 +59,10 @@ export default function MapDecoratePage() {
   // The tile the cursor is over, driving the footprint ghost (#144); null off-map.
   const [hover, setHover] = useState<{ x: number; y: number } | null>(null)
   const [maskTool, setMaskTool] = useState<'paint' | 'erase'>('paint')
+  // The map settings (#91, ADR-0005 Node properties), seeded from the loaded
+  // document and PATCHed back with the decoration save.
+  const [multiplayer, setMultiplayer] = useState(false)
+  const [policy, setPolicy] = useState<MapAccessPolicy>({ kind: 'public' })
   const [showMask, setShowMask] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -127,6 +133,8 @@ export default function MapDecoratePage() {
         setCollision(resizeMask(m.collision ?? [], m.cols, m.rows))
         setProps(propsFromBaked(m.entities))
         setZones([...(m.zones ?? [])])
+        setMultiplayer(m.multiplayer ?? false)
+        setPolicy(m.access_policy ?? { kind: 'public' })
         setPalette(objects)
         setMapList(maps)
         setNpcs(npcList)
@@ -162,7 +170,7 @@ export default function MapDecoratePage() {
       setSelectedZone(zones.length)
       return
     }
-    if (propTool == null || !baked) return
+    if (mode !== 'props' || propTool == null || !baked) return
     setProps((ps) =>
       propTool === 'erase'
         ? erasePropAt(ps, x, y, sizeOf)
@@ -211,18 +219,35 @@ export default function MapDecoratePage() {
     return [...new Set([...known, ...current])]
   }, [mapList, zone])
 
+  // A non-claim policy drops any leftover role/group so the stored jsonb stays
+  // clean; opt() already drops cleared inputs from a claim policy.
+  const settings = () => ({
+    multiplayer,
+    access_policy: policy.kind === 'claim' ? policy : { kind: policy.kind },
+  })
+
   const save = async () => {
     setBusy(true)
     setError(null)
     setSaved(false)
     try {
-      await runEdge(MapsService.saveDecorations(slug, isMaskEmpty(collision) ? null : collision, props, otherEntities, zones, maskOf, edgeMaskOf, doorOf))
+      await runEdge(MapsService.saveDecorations(slug, isMaskEmpty(collision) ? null : collision, props, otherEntities, zones, maskOf, edgeMaskOf, doorOf, settings()))
       setSaved(true)
     } catch (e) {
       setError((e as Error).message)
     } finally {
       setBusy(false)
     }
+  }
+
+  // Preview in game (#91): stash the current draft — unsaved edits included —
+  // as the runtime document and open the real play shell on the draft route.
+  // A handoff via the contract (ADR-0004): this page never imports the runtime.
+  const previewInGame = () => {
+    if (!baked) return
+    const entities = [...otherEntities, ...propEntities(props, maskOf, edgeMaskOf, doorOf)]
+    stashDraft(draftMap(baked, entities, isMaskEmpty(collision) ? null : collision, zones, multiplayer))
+    window.open(DRAFT_PLAY_PATH, '_blank', 'noopener')
   }
 
   if (error && !baked) return <p className="admin-msg admin-msg-error">{error}</p>
@@ -239,6 +264,7 @@ export default function MapDecoratePage() {
         <button onClick={() => setMode('props')} disabled={mode === 'props'}>Props</button>
         <button onClick={() => setMode('zones')} disabled={mode === 'zones'}>Zones</button>
         <button onClick={() => setMode('collision')} disabled={mode === 'collision'}>Collision</button>
+        <button onClick={() => setMode('settings')} disabled={mode === 'settings'}>Settings</button>
         {mode === 'collision' && (
           <>
             <button onClick={() => setMaskTool('paint')} disabled={maskTool === 'paint'}>Paint</button>
@@ -392,6 +418,43 @@ export default function MapDecoratePage() {
           </div>
         )}
 
+        {/* Map settings (#91): the two Node properties (ADR-0005) — who may
+            list/load the map (the server-side #83 gate) and whether players
+            see each other (#88). Saved with the decorations in one PATCH. */}
+        {mode === 'settings' && (
+          <div className="decorate-palette">
+            <label className="admin-field">
+              Access
+              <select value={policy.kind}
+                onChange={(e) => setPolicy({ ...policy, kind: e.target.value as MapAccessPolicy['kind'] })}>
+                <option value="public">public — any signed-in user</option>
+                <option value="claim">claim — needs a role or group</option>
+                <option value="members">members — invited users only</option>
+              </select>
+            </label>
+            {policy.kind === 'claim' && (
+              <>
+                <label className="admin-field">
+                  Role
+                  <input type="text" placeholder="staff" value={policy.role ?? ''}
+                    onChange={(e) => setPolicy({ ...policy, role: opt(e.target.value) })} />
+                </label>
+                <label className="admin-field">
+                  Group
+                  <input type="text" placeholder="/odds" value={policy.group ?? ''}
+                    onChange={(e) => setPolicy({ ...policy, group: opt(e.target.value) })} />
+                </label>
+                <p className="admin-hint">A visitor needs the role or the group. Leaving both blank won't save.</p>
+              </>
+            )}
+            <label className="admin-field-inline">
+              <input type="checkbox" checked={multiplayer}
+                onChange={(e) => setMultiplayer(e.target.checked)} />
+              Multiplayer — players on this map see each other
+            </label>
+          </div>
+        )}
+
         {/* One direct surface for both modes (#143/#145): the WYSIWYG preview
             *is* the editor. Props mode stamps/erases at the clicked tile;
             collision mode paints blocked cells (drawn back as the red overlay)
@@ -418,9 +481,13 @@ export default function MapDecoratePage() {
         </div>
       </div>
 
-      <button onClick={save} disabled={busy}>
-        {busy ? 'Saving…' : 'Save'}
-      </button>
+      <div className="admin-field-inline">
+        <button onClick={save} disabled={busy}>
+          {busy ? 'Saving…' : 'Save'}
+        </button>
+        <button onClick={previewInGame} disabled={busy}>Preview in game</button>
+        <span className="admin-hint">Preview opens the draft — unsaved edits included — in the real runtime, in a new tab.</span>
+      </div>
       {error && <p className="admin-msg admin-msg-error">{error}</p>}
       {saved && <p className="admin-msg">Saved.</p>}
     </div>
