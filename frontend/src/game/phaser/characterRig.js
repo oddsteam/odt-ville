@@ -1,10 +1,5 @@
 import { TILE } from '../constants.js'
-import {
-  POSTURE_KEYS,
-  resolveSheetSrc,
-  framesForFacing,
-  stillForFacing,
-} from '../../kernel/characterManifest.js'
+import { POSTURE_KEYS, resolveSheetSrc, framesForFacing } from '../../kernel/characterManifest.js'
 
 // Shared "character rig" for the manifest-driven player (sprite-mapper). Both
 // TownScene and InteriorScene render the active character from the same sheet,
@@ -12,7 +7,7 @@ import {
 //
 // Phaser textures and anims are global to a game instance: TownScene (the boot
 // scene) builds them first, and InteriorScene reuses the same CHAR_SHEET_KEY
-// texture + char.anim.* anims. buildCharacterRig() is idempotent (it guards on
+// texture + its char.sheet.anim.* anims. buildCharacterRig() is idempotent (it guards on
 // already-present frames/anims) so every scene can safely call it.
 
 export const CHAR_SHEET_KEY = 'char.sheet'
@@ -40,9 +35,13 @@ export function preloadCharacter(scene) {
 // (idle→walk and dir→down fallbacks). Returns { usingManifest, charDir };
 // usingManifest is false (and charDir all-null) when there's no manifest or its
 // sheet failed to load, so the caller falls back to the bundled player frames.
-export function buildCharacterRig(scene, manifest) {
+//
+// Keyed by sheet (#267): frames and anim keys are scoped to `sheetKey`, so each
+// peer's loaded sheet gets its own rig and two characters animate side by side.
+export function buildCharacterRig(scene, manifest, sheetKey = CHAR_SHEET_KEY) {
+  const anim = (slot) => `${sheetKey}.anim.${slot}`
   const charDir = { down: {}, up: {}, left: {}, right: {} }
-  const usingManifest = Boolean(manifest && scene.textures.exists(CHAR_SHEET_KEY))
+  const usingManifest = Boolean(manifest && scene.textures.exists(sheetKey))
   if (!usingManifest) {
     for (const d of Object.keys(charDir)) {
       charDir[d] = {
@@ -60,7 +59,7 @@ export function buildCharacterRig(scene, manifest) {
     return { usingManifest, charDir }
   }
 
-  const tex = scene.textures.get(CHAR_SHEET_KEY)
+  const tex = scene.textures.get(sheetKey)
   for (const slot of POSTURE_KEYS) {
     ;(manifest.postures?.[slot] || []).forEach((r, i) => {
       const name = `${slot}.${i}`
@@ -75,11 +74,11 @@ export function buildCharacterRig(scene, manifest) {
   for (const slot of POSTURE_KEYS) {
     const rects = manifest.postures?.[slot] || []
     if (rects.length < 2) continue
-    const key = `char.anim.${slot}`
+    const key = anim(slot)
     if (!scene.anims.exists(key)) {
       scene.anims.create({
         key,
-        frames: rects.map((_, i) => ({ key: CHAR_SHEET_KEY, frame: `${slot}.${i}` })),
+        frames: rects.map((_, i) => ({ key: sheetKey, frame: `${slot}.${i}` })),
         frameRate,
         repeat: -1,
       })
@@ -91,7 +90,7 @@ export function buildCharacterRig(scene, manifest) {
     const idle = framesForFacing(manifest, d, 'idle')
     const climb = framesForFacing(manifest, d, 'climb')
 
-    const walkAnimKey = walk.frames.length > 1 ? `char.anim.${walk.slot}` : null
+    const walkAnimKey = walk.frames.length > 1 ? anim(walk.slot) : null
     const walkFrame = walk.frames.length ? `${walk.slot}.0` : null
 
     // Idle: loop when the posture has 2+ frames, else a static frame. With no
@@ -101,7 +100,7 @@ export function buildCharacterRig(scene, manifest) {
     let idleAnimKey = null
     if (idle.frames.length) {
       idleFrame = `${idle.slot}.0`
-      if (idle.frames.length > 1) idleAnimKey = `char.anim.${idle.slot}`
+      if (idle.frames.length > 1) idleAnimKey = anim(idle.slot)
     } else if (walk.frames.length) {
       idleFrame = `${walk.slot}.0`
       idleFlip = walk.flipX
@@ -117,7 +116,7 @@ export function buildCharacterRig(scene, manifest) {
       idleAnimKey,
       idleFrame,
       idleFlip,
-      climbAnimKey: climbHas ? (climb.frames.length > 1 ? `char.anim.${climb.slot}` : null) : walkAnimKey,
+      climbAnimKey: climbHas ? (climb.frames.length > 1 ? anim(climb.slot) : null) : walkAnimKey,
       climbFrame: climbHas ? `${climb.slot}.0` : walkFrame,
       climbFlip: climbHas ? climb.flipX : walk.flipX,
     }
@@ -135,22 +134,6 @@ export function characterScale(manifest) {
 // player keeps CHAR_SHEET_KEY, so two users on the same manifest still share
 // exactly one peer texture.
 export const peerSheetKey = (manifestId) => `peer.sheet.${manifestId}`
-
-// Cut a peer's still frames out of their loaded sheet and return what to render
-// per direction, plus the sprite scale. Static only: a peer stands facing the
-// way they last moved (ponytail: the walk loops are the follow-on slice — reuse
-// buildCharacterRig's anim path, keyed per manifest, when they land).
-export function buildPeerStills(texture, manifest) {
-  const dirs = {}
-  for (const dir of ['down', 'up', 'left', 'right']) {
-    const still = stillForFacing(manifest, dir)
-    if (!still) continue
-    const { x, y, w, h } = still.rect
-    if (!texture.has(still.name)) texture.add(still.name, 0, x, y, w, h)
-    dirs[dir] = { name: still.name, flipX: still.flipX }
-  }
-  return { dirs, scale: characterScale(manifest) }
-}
 
 // Point the manifest sprite the right way. `walking` plays the walk loop —
 // swapped for the climb loop when `climbing` (on a ladder, #54); when standing
