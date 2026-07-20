@@ -26,16 +26,16 @@ describe('buildCharacterRig climb', () => {
   it('compiles a per-direction climb anim when climb frames are authored', () => {
     const m = normalizeManifest({ postures: { walkDown: twoFrames, climbDown: twoFrames } })
     const charDir = buildCharacterRig(fakeScene(), m).charDir as Record<string, any>
-    expect(charDir.down.climbAnimKey).toBe('char.anim.climbDown')
+    expect(charDir.down.climbAnimKey).toBe('char.sheet.anim.climbDown')
     expect(charDir.down.climbFrame).toBe('climbDown.0')
     // Up shares the down climb animation (no separate climbUp slot).
-    expect(charDir.up.climbAnimKey).toBe('char.anim.climbDown')
+    expect(charDir.up.climbAnimKey).toBe('char.sheet.anim.climbDown')
   })
 
   it('falls back to the walk anim when no climb frames exist', () => {
     const m = normalizeManifest({ postures: { walkDown: twoFrames } })
     const charDir = buildCharacterRig(fakeScene(), m).charDir as Record<string, any>
-    expect(charDir.down.climbAnimKey).toBe('char.anim.walkDown')
+    expect(charDir.down.climbAnimKey).toBe('char.sheet.anim.walkDown')
     expect(charDir.down.climbFrame).toBe('walkDown.0')
   })
 })
@@ -52,19 +52,19 @@ describe('applyFacing climbing', () => {
   }
 
   const charDir = {
-    down: { walkAnimKey: 'char.anim.walkDown', walkFrame: 'walkDown.0', walkFlip: false, idleAnimKey: null, idleFrame: 'idleDown.0', idleFlip: false, climbAnimKey: 'char.anim.climbDown', climbFrame: 'climbDown.0', climbFlip: false },
+    down: { walkAnimKey: 'char.sheet.anim.walkDown', walkFrame: 'walkDown.0', walkFlip: false, idleAnimKey: null, idleFrame: 'idleDown.0', idleFlip: false, climbAnimKey: 'char.sheet.anim.climbDown', climbFrame: 'climbDown.0', climbFlip: false },
   }
 
   it('plays the climb anim while walking on a ladder', () => {
     const p = fakePlayer()
     applyFacing(p, charDir, 'down', true, true)
-    expect(p.plays).toEqual(['char.anim.climbDown'])
+    expect(p.plays).toEqual(['char.sheet.anim.climbDown'])
   })
 
   it('plays the walk anim while walking off a ladder', () => {
     const p = fakePlayer()
     applyFacing(p, charDir, 'down', true, false)
-    expect(p.plays).toEqual(['char.anim.walkDown'])
+    expect(p.plays).toEqual(['char.sheet.anim.walkDown'])
   })
 
   it('ignores climbing while standing still (idle)', () => {

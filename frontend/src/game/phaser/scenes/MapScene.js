@@ -7,7 +7,6 @@ import {
   CHAR_SHEET_KEY,
   preloadCharacter,
   buildCharacterRig,
-  buildPeerStills,
   characterScale,
   peerSheetKey,
   applyFacing,
@@ -259,7 +258,8 @@ export default class MapScene extends Phaser.Scene {
     this.loadPeerCharacter(state.manifestId)
     const feet = feetWorldXY({ x: state.x, y: state.y }, false)
     if (action === 'spawn') {
-      const img = this.add.image(0, 0, `player.${state.facing}.0`).setOrigin(0.5, 1)
+      // A sprite, not an image: peers play their own walk loop (#267).
+      const img = this.add.sprite(0, 0, `player.${state.facing}.0`).setOrigin(0.5, 1)
       const label = this.add
         .text(0, -100, state.name, { fontSize: '12px', color: '#ffffff', backgroundColor: '#000000aa' })
         .setOrigin(0.5, 0)
@@ -271,8 +271,18 @@ export default class MapScene extends Phaser.Scene {
     }
     const remote = this.remoteSprites.get(frame.userId)
     if (!remote) return
-    this.applyPeerLook(remote, state)
-    this.tweens.add({ targets: remote, x: feet.x, y: feet.y, duration: MOVE_MS })
+    // Walk while the step tween runs, settle to idle on arrival (#267). Kill the
+    // previous tween first: a frame that lands just before its predecessor
+    // finished would otherwise let the stale onComplete idle a walking peer.
+    this.tweens.killTweensOf(remote)
+    this.applyPeerLook(remote, state, true)
+    this.tweens.add({
+      targets: remote,
+      x: feet.x,
+      y: feet.y,
+      duration: MOVE_MS,
+      onComplete: () => this.applyPeerLook(remote, state, false),
+    })
   }
 
   // Resolve a peer's character once per manifest id (#266). The fetch is the
@@ -298,7 +308,12 @@ export default class MapScene extends Phaser.Scene {
         const src = manifest && resolveSheetSrc(manifest)
         if (!src) return settle(false)
         const key = peerSheetKey(manifestId)
-        const cut = () => this.textures.exists(key) && buildPeerStills(this.textures.get(key), manifest)
+        // The same rig the local player uses, keyed to this peer's sheet (#267),
+        // so their walk/idle loops play from their own frames.
+        const cut = () => {
+          const rig = this.textures.exists(key) && buildCharacterRig(this, manifest, key)
+          return rig && rig.usingManifest && { charDir: rig.charDir, scale: characterScale(manifest) }
+        }
         // Textures outlive the scene (stop/start swaps maps, #249), so a peer
         // seen on an earlier map is already cut and needs no second load.
         if (this.textures.exists(key)) return settle(cut())
@@ -312,21 +327,24 @@ export default class MapScene extends Phaser.Scene {
       .catch(() => settle(false))
   }
 
-  // Show a peer facing the way they last moved: their own character once its
-  // sheet is cut, the bundled stills for a peer who has none. While their
-  // character is still in flight they stay hidden — a first sighting used to
-  // flash the generic sprite for a frame before snapping to the real one.
-  applyPeerLook(remote, state) {
+  // Show a peer facing the way they last moved — walking or idle (#267): their
+  // own character once its sheet is rigged, the bundled stills for a peer who
+  // has none. While their character is still in flight they stay hidden — a
+  // first sighting used to flash the generic sprite for a frame before snapping
+  // to the real one.
+  applyPeerLook(remote, state, walking = false) {
     const rig = this.peerChars.get(state.manifestId)
     remote.setVisible(rig !== null)
+    remote.peerWalking = walking
     const img = remote.list[0]
-    const still = rig && rig.dirs[state.facing]
-    if (!still) {
+    if (!rig) {
       img.setTexture(`player.${state.facing}.0`).setFlipX(false).setDisplaySize(96, 96)
       return
     }
-    img.setTexture(peerSheetKey(state.manifestId), still.name).setFlipX(still.flipX)
+    img.setTexture(peerSheetKey(state.manifestId))
     img.setScale(rig.scale)
+    // Peers never climb: the ladder pose is the local player's own tile state.
+    applyFacing(img, rig.charDir, state.facing, walking, false)
   }
 
   // A character settled — re-render every peer on it, since they've been
@@ -334,7 +352,7 @@ export default class MapScene extends Phaser.Scene {
   refreshPeers() {
     for (const [userId, state] of this.remoteRoster) {
       const remote = this.remoteSprites.get(userId)
-      if (remote) this.applyPeerLook(remote, state)
+      if (remote) this.applyPeerLook(remote, state, remote.peerWalking)
     }
   }
 
