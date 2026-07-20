@@ -16,10 +16,39 @@ class PresenceChannel < ApplicationCable::Channel
     return reject unless map&.multiplayer? &&
       map.accessible_to?(current_user, roles: current_roles, groups: current_groups)
 
+    @map = map
     @map_id = map.id
+    # WebRTC signalling (#279) must address one specific peer, which the
+    # per-cell presence streams can't — so alongside them we open a per-user
+    # postbox, keyed by the authenticated Keycloak id and scoped to this map so
+    # a signal only reaches a target who is actually here.
+    stream_from signal_stream(current_user.external_id)
     # No cell until the first `move` says where we stand; the client replays
     # its position on `connected`, so that gap is one round trip.
     @cell = nil
+  end
+
+  # Signalling postbox (#279): forward an opaque handshake blob (SDP offer /
+  # answer / ICE candidate) to another peer. The server is deliberately dumb —
+  # it never parses the payload. It only stamps the sender from the
+  # authenticated connection (a client cannot claim to be another peer, mirror
+  # of the move-frame discipline) and refuses to relay to anyone who is not a
+  # fellow member of this map, so it never becomes a message-passing side
+  # channel to arbitrary users on the platform.
+  #
+  # ponytail: "member of this map" is the access-policy gate, not live
+  # presence — an authorised peer who is offline still passes the check, their
+  # postbox is simply empty. Tightening to only-currently-connected peers wants
+  # a shared presence roster, which this slice deliberately doesn't add.
+  def signal(data)
+    target = Auth::User.find_by(external_id: data["to"])
+    return unless target &&
+      @map&.accessible_to?(target, roles: [], groups: [])
+
+    ActionCable.server.broadcast(
+      signal_stream(target.external_id),
+      { type: "signal", from: current_user.external_id, payload: data["payload"] }
+    )
   end
 
   def move(data)
@@ -39,6 +68,10 @@ class PresenceChannel < ApplicationCable::Channel
 
   def stream_name(cx, cy)
     "presence:map:#{@map_id}:cell:#{cx}:#{cy}"
+  end
+
+  def signal_stream(external_id)
+    "signal:map:#{@map_id}:user:#{external_id}"
   end
 
   # Swap the 3x3 neighbourhood on a cell crossing, touching only the

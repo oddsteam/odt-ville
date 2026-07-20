@@ -36,6 +36,17 @@ class PresenceChannelTest < ActionCable::Channel::TestCase
     "presence:map:#{map.id}:cell:#{cx}:#{cy}"
   end
 
+  # Signalling relay (#279): the per-user postbox a peer's WebRTC handshake is
+  # addressed to. Map-scoped so a signal only reaches a target who is on THIS
+  # map, never a namesake connected elsewhere.
+  def signal_stream(map, external_id)
+    "signal:map:#{map.id}:user:#{external_id}"
+  end
+
+  def peer(name: "Peer")
+    @company.users.create!(name: name, role: "branch_employee", external_id: SecureRandom.uuid)
+  end
+
   # Interest management (#158): the neighbourhood is only knowable once the
   # player announces a tile, so the join itself attaches nothing. The client
   # replays its position on `connected`, which closes that window.
@@ -45,7 +56,10 @@ class PresenceChannelTest < ActionCable::Channel::TestCase
     join(map)
 
     assert subscription.confirmed?
-    assert_no_streams
+    # The per-user signalling postbox opens at join (#279); the cell attaches
+    # only once the player announces a tile.
+    assert_has_stream signal_stream(map, @user.external_id)
+    assert_has_no_stream cell_stream(map, 0, 0)
   end
 
   test "a move attaches the sender's cell and its eight neighbours" do
@@ -141,6 +155,54 @@ class PresenceChannelTest < ActionCable::Channel::TestCase
 
     assert_broadcast_on(cell_stream(map, 0, 0), manifest_frame(nil)) do
       perform :move, x: 3, y: 4, facing: "down"
+    end
+  end
+
+  # WebRTC signalling relay (#279): the presence channel doubles as the
+  # postbox that lets two browsers exchange offer/answer/ICE. The server never
+  # parses the payload — it stamps the sender and forwards the opaque blob to
+  # the target's per-user stream.
+  test "signal relays the opaque payload to the target's per-user stream" do
+    map = make_map
+    target = peer
+    join(map)
+
+    frame = { type: "signal", from: @user.external_id, payload: { "sdp" => "offer" } }
+    assert_broadcast_on(signal_stream(map, target.external_id), frame) do
+      perform :signal, to: target.external_id, payload: { "sdp" => "offer" }
+    end
+  end
+
+  test "signal stamps the sender from the connection, ignoring a client-sent from" do
+    map = make_map
+    target = peer
+    join(map)
+
+    frame = { type: "signal", from: @user.external_id, payload: { "ice" => "candidate" } }
+    assert_broadcast_on(signal_stream(map, target.external_id), frame) do
+      perform :signal, to: target.external_id, from: "spoofed-id", payload: { "ice" => "candidate" }
+    end
+  end
+
+  # The relay is not a general message-passing side channel: a target who
+  # cannot access this map is refused, so it can only reach fellow pod members.
+  test "signal to a non-member of a members-gated map broadcasts nothing" do
+    map = make_map(policy: { "kind" => "members" })
+    map.memberships.create!(user: @user)
+    outsider = peer(name: "Outsider")
+    join(map)
+
+    assert_no_broadcasts(signal_stream(map, outsider.external_id)) do
+      perform :signal, to: outsider.external_id, payload: { "sdp" => "offer" }
+    end
+  end
+
+  test "signal to an unknown user id broadcasts nothing" do
+    map = make_map
+    join(map)
+
+    assert_no_broadcasts(signal_stream(map, "ghost")) do
+      perform :signal, to: "ghost", payload: { "sdp" => "offer" }
     end
   end
 

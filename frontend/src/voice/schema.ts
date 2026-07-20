@@ -10,6 +10,17 @@ export interface VoicePeer {
   gain: number
 }
 
+// A WebRTC signalling blob relayed peer-to-peer by PresenceChannel (#279).
+// The server stamps `from` (the sender's Keycloak id, never client-claimed)
+// and never inspects `payload` — it is whatever the sender put there: an SDP
+// offer, an SDP answer, or a trickled ICE candidate. Opaque on purpose, so the
+// media layer (#280, #281) can evolve the handshake without touching the wire.
+export interface SignalMessage {
+  type: 'signal'
+  from: string
+  payload: unknown
+}
+
 // The only thing voice needs to know about a peer: where they are, in tiles.
 // Structural on purpose — MapScene's richer RemotePlayer satisfies it without
 // this module importing anything from the game.
