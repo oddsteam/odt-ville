@@ -184,25 +184,46 @@ class PresenceChannelTest < ActionCable::Channel::TestCase
     end
   end
 
-  # The relay is not a general message-passing side channel: a target who
-  # cannot access this map is refused, so it can only reach fellow pod members.
-  test "signal to a non-member of a members-gated map broadcasts nothing" do
-    map = make_map(policy: { "kind" => "members" })
-    map.memberships.create!(user: @user)
-    outsider = peer(name: "Outsider")
-    join(map)
+  # Regression (#279): a claim-gated map is keyed to the target's Keycloak
+  # roles/groups, which the server can't read for another user — the original
+  # per-target check passed `roles: []` and so silently refused every peer here,
+  # making voice impossible on any role/group-gated map. The relay must fire;
+  # the sender clears their OWN join gate with their real role.
+  test "signal relays on a claim-gated map, which the server cannot authorise per-target" do
+    map = make_map(policy: { "kind" => "claim", "role" => "villager" })
+    target = peer
+    stub_connection current_user: @user, current_roles: [ "villager" ], current_groups: []
+    subscribe slug: map.slug
+    assert subscription.confirmed?
 
-    assert_no_broadcasts(signal_stream(map, outsider.external_id)) do
-      perform :signal, to: outsider.external_id, payload: { "sdp" => "offer" }
+    frame = { type: "signal", from: @user.external_id, payload: { "sdp" => "offer" } }
+    assert_broadcast_on(signal_stream(map, target.external_id), frame) do
+      perform :signal, to: target.external_id, payload: { "sdp" => "offer" }
     end
   end
 
-  test "signal to an unknown user id broadcasts nothing" do
+  # The relay is confined by the join gate, not by a second check in the action:
+  # a user who fails the map's access policy is rejected at subscribe and never
+  # attaches a signalling postbox, so a signal addressed to them lands nowhere —
+  # even though the dumb relay still broadcasts it. This is why the per-target
+  # check is redundant.
+  test "a rejected non-member never attaches a signalling postbox" do
+    map = make_map(policy: { "kind" => "members" })
+    stub_connection current_user: @user, current_roles: [], current_groups: []
+    subscribe slug: map.slug
+
+    assert subscription.rejected?
+    assert_has_no_stream signal_stream(map, @user.external_id)
+  end
+
+  # Input validation at the boundary: `to` is client-supplied, so a blank or
+  # non-string target is dropped rather than interpolated into a stream name.
+  test "signal with a blank target broadcasts nothing" do
     map = make_map
     join(map)
 
-    assert_no_broadcasts(signal_stream(map, "ghost")) do
-      perform :signal, to: "ghost", payload: { "sdp" => "offer" }
+    assert_no_broadcasts(signal_stream(map, "")) do
+      perform :signal, to: "", payload: { "sdp" => "offer" }
     end
   end
 
