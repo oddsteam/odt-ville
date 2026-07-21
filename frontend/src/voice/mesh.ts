@@ -10,6 +10,7 @@
 
 import { podFor } from './service.ts'
 import { connectSignalling } from './write.ts'
+import { iceConfig } from './iceConfig.ts'
 import { micState } from './micState.ts'
 import type { MicStatus, SignalMessage, VoicePosition } from './schema.ts'
 import type { SignallingHandle } from './write.ts'
@@ -175,9 +176,10 @@ export function connectVoice(slug: string, ownId: string): VoiceMesh | null {
     ownId,
     signalling,
     getLocalStream: () => navigator.mediaDevices.getUserMedia({ audio: true }),
-    // ponytail: no iceServers. Two peers on one host / a LAN connect on host
-    // candidates alone (#280); cross-NAT needs STUN/TURN (coturn, #281+).
-    createConnection: () => new RTCPeerConnection(),
+    // Cross-NAT peers relay via coturn when VITE_TURN_* is set (#283); with no
+    // TURN config this is {} and two peers on one host / a LAN still connect on
+    // host candidates alone (#280).
+    createConnection: () => new RTCPeerConnection(iceConfig()),
     play: (peerId, stream) => {
       received.set(peerId, stream)
       const el = sinks.get(peerId) ?? new Audio()

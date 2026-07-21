@@ -38,3 +38,51 @@ services:
     environment:
       VITE_KEYCLOAK_URL: https://sso.odd.works
       VITE_KEYCLOAK_REALM: odt
+      # coturn TURN relay for strict-NAT voice clients (#283). Set these three to
+      # a running coturn (server provisioning is HITL — see below); they inline
+      # into the build so iceConfig() hands them to every RTCPeerConnection.
+      # Leave them unset and voice degrades to host/LAN candidates (#280), never
+      # errors. Do NOT commit the credential — pass it at deploy time, e.g.:
+      #   VITE_TURN_CREDENTIAL=… docker compose -f compose.yaml -f compose.prod.yaml up -d --build
+      # VITE_TURN_URL: turn:turn.odt-ville.p2d.uk:3478
+      # VITE_TURN_USERNAME: odtville
+      # VITE_TURN_CREDENTIAL: ${VITE_TURN_CREDENTIAL:-}
+      #
+      # ── WHERE coturn can live ──────────────────────────────────────────────
+      # NOT behind the Cloudflare tunnel (README:105). cloudflared proxies
+      # HTTP/named-TCP only; TURN needs a directly-reachable public ip:port plus
+      # a dynamic UDP relay range it cannot carry. TURN IS the reachable
+      # middle-man — proxying it defeats the mechanism.
+      #
+      # The homeserver is behind residential NAT with a DYNAMIC public IP, which
+      # makes it a poor TURN host on two counts (see caveats). Prefer either:
+      #   - a VPS with a static public IP running coturn, or
+      #   - a hosted relay (Cloudflare Realtime TURN, Twilio NTS, Metered) —
+      #     these are just credentials that drop straight into VITE_TURN_* above,
+      #     no server to run. The client wiring is indifferent to which you pick.
+      #
+      # ── coturn provisioning (manual) ───────────────────────────────────────
+      #   - install coturn; open UDP/TCP 3478 (+ a relay UDP range) to the internet
+      #   - in Docker, use `network_mode: host` — the relay range can't be sanely
+      #     -p mapped, and a bridge adds a second NAT that external-ip can't see
+      #   - turnserver.conf: set `realm`, `user=odtville:<credential>` (or
+      #     use-auth-secret + static-auth-secret), and `external-ip`. Behind a
+      #     port-forwarding router use the PUBLIC/PRIVATE form:
+      #       external-ip=203.0.113.7/192.168.1.50
+      #   - point VITE_TURN_* above at it and rebuild the frontend
+      #
+      # ── caveats that will bite ─────────────────────────────────────────────
+      #   - Reachability: external-ip is only a label; it does nothing if inbound
+      #     ports don't arrive. If the WAN IP is CGNAT (100.64.0.0/10) or 3478 is
+      #     unreachable from a phone on cellular, homeserver TURN cannot work.
+      #     Test: `sudo ss -ulnp | grep 3478` on the host, then from off-LAN:
+      #     `turnutils_uclient -v -u USER -w PASS <public-ip>`.
+      #   - Dynamic IP: external-ip is a static string; a residential WAN IP
+      #     changes on reconnect and silently breaks TURN. Resolve it at start
+      #     instead of hardcoding:
+      #       turnserver --external-ip=$(curl -s https://api.ipify.org)/$(hostname -I | awk '{print $1}') …
+      #
+      # ── verify (the five-second verdict, #280) ─────────────────────────────
+      #   Join from a genuinely strict-NAT client (phone on cellular): the two
+      #   peers must still get audio, relaying via coturn (a `relay` ICE
+      #   candidate appears), never through the app server.
