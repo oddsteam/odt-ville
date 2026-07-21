@@ -13,6 +13,7 @@ import PostureCallbackPage from './posture/CallbackPage.tsx'
 import MapPage from './MapPage.tsx'
 import CharacterSelectPage from './character/CharacterSelectPage.tsx'
 import VoiceMeters from './voice/VoiceMeters.tsx'
+import MicIndicator from './voice/MicIndicator.tsx'
 
 // Test-env voice meter (#287): opt-in via ?voicemeter, so it rides any route
 // (door path at "/" or /maps/:slug) and works on the prod homeserver build.
@@ -33,6 +34,9 @@ const MapDecoratePage = lazy(() => import('./admin/MapDecoratePage.tsx'))
 export default function App() {
   return (
     <>
+    {/* Mic consent + mute affordance (#282): self-hides unless a voice mesh is
+        live, so it rides every route without knowing which map you are on. */}
+    <MicIndicator />
     {showVoiceMeters && <VoiceMeters />}
     <Routes>
       <Route element={<RootLayout />}>
