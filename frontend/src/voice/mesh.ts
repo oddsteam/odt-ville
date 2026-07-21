@@ -10,7 +10,8 @@
 
 import { podFor } from './service.ts'
 import { connectSignalling } from './write.ts'
-import type { SignalMessage, VoicePosition } from './schema.ts'
+import { micState } from './micState.ts'
+import type { MicStatus, SignalMessage, VoicePosition } from './schema.ts'
 import type { SignallingHandle } from './write.ts'
 
 export interface VoiceDeps {
@@ -21,10 +22,13 @@ export interface VoiceDeps {
   createConnection: () => RTCPeerConnection
   play: (peerId: string, stream: MediaStream) => void
   stopPlaying: (peerId: string) => void
+  // Local mic state for the on-screen indicator + mute toggle (#282).
+  onStatus?: (s: MicStatus) => void
 }
 
 export interface VoiceMesh {
   update(own: VoicePosition, roster: Map<string, VoicePosition>): void
+  setMute(muted: boolean): void
   stop(): void
 }
 
@@ -37,9 +41,36 @@ export function createVoiceMesh(deps: VoiceDeps): VoiceMesh {
   const peers = new Map<string, RTCPeerConnection>()
   let localStream: Promise<MediaStream> | null = null
   let acquired: MediaStream | null = null
+  // Mute (#282) is one boolean applied to track.enabled — outbound audio stops
+  // at the track, so peers hear real silence, not volume-zero cosmetics. It
+  // rides the persistent localStream, so every peer that later joins the pod
+  // reuses the same (disabled) track: a pod change never silently unmutes.
+  let muted = false
+  let denied = false // the browser declined getUserMedia — voice cleanly off
 
+  // The local stream is audio-only (getUserMedia({audio:true})), so muting every
+  // track mutes the mic. track.enabled = false stops it at the track — RTP goes
+  // silent, peers hear nothing (not a volume-zero cosmetic).
+  const applyMute = () => acquired?.getTracks().forEach((t) => (t.enabled = !muted))
+  const report = () =>
+    deps.onStatus?.({ live: !!acquired && !muted && !denied && peers.size > 0, muted, denied })
+
+  // A declined permission caches its rejection here (the ??= below never re-runs
+  // getUserMedia), so we prompt at most once and land in a clean disabled state.
   const mic = () =>
-    (localStream ??= deps.getLocalStream().then((s) => (acquired = s)))
+    (localStream ??= deps.getLocalStream().then(
+      (s) => {
+        acquired = s
+        applyMute()
+        report()
+        return s
+      },
+      (e) => {
+        denied = true
+        report()
+        throw e
+      },
+    ))
 
   // ponytail: no perfect-negotiation dance. Distance is symmetric, so both
   // sides see each other enter the pod at once and would both offer — glare.
@@ -48,14 +79,17 @@ export function createVoiceMesh(deps: VoiceDeps): VoiceMesh {
   const weInitiate = (peerId: string) => deps.ownId > peerId
 
   async function open(peerId: string): Promise<RTCPeerConnection> {
+    // Acquire the mic FIRST: a declined permission throws here, before any
+    // connection is registered, so a refusal never leaves a half-open peer.
+    const stream = await mic()
     const pc = deps.createConnection()
     peers.set(peerId, pc)
     pc.onicecandidate = (e) => {
       if (e.candidate) deps.signalling.send(peerId, { candidate: e.candidate })
     }
     pc.ontrack = (e) => deps.play(peerId, e.streams[0])
-    const stream = await mic()
     stream.getTracks().forEach((t) => pc.addTrack(t, stream))
+    report()
     return pc
   }
 
@@ -69,6 +103,7 @@ export function createVoiceMesh(deps: VoiceDeps): VoiceMesh {
     peers.get(peerId)?.close()
     peers.delete(peerId)
     deps.stopPlaying(peerId)
+    report()
   }
 
   async function accept(message: SignalMessage) {
@@ -92,15 +127,23 @@ export function createVoiceMesh(deps: VoiceDeps): VoiceMesh {
     }
   }
 
-  deps.signalling.onSignal((m) => void accept(m))
+  // A declined mic rejects mic() inside accept()/offer(); swallow it — `denied`
+  // is already recorded and reported, and there is nothing left to do.
+  deps.signalling.onSignal((m) => void accept(m).catch(() => {}))
 
   return {
     update(own, roster) {
       const want = new Set(podFor(own, roster).map((p) => p.userId))
       for (const peerId of peers.keys()) if (!want.has(peerId)) close(peerId)
       for (const peerId of want) {
-        if (!peers.has(peerId) && weInitiate(peerId)) void offer(peerId)
+        // Skip once the mic is denied — nothing to offer, and no re-prompt.
+        if (!peers.has(peerId) && weInitiate(peerId) && !denied) void offer(peerId).catch(() => {})
       }
+    },
+    setMute(next) {
+      muted = next
+      applyMute()
+      report()
     },
     stop() {
       for (const peerId of [...peers.keys()]) close(peerId)
@@ -128,7 +171,7 @@ export function connectVoice(slug: string, ownId: string): VoiceMesh | null {
   // Same window-test-API precedent as MapScene's window.__game.
   const received = new Map<string, MediaStream>()
   if (typeof window !== 'undefined') window.__voice = { received }
-  return createVoiceMesh({
+  const mesh = createVoiceMesh({
     ownId,
     signalling,
     getLocalStream: () => navigator.mediaDevices.getUserMedia({ audio: true }),
@@ -150,7 +193,20 @@ export function connectVoice(slug: string, ownId: string): VoiceMesh | null {
       el.srcObject = null
       sinks.delete(peerId)
     },
+    onStatus: (s) => micState.status(s),
   })
+  // Light up the indicator + mute toggle and hand the store this mesh's mute
+  // knob (which also pushes any standing mute in from the previous map). On
+  // teardown the store goes dark but keeps the mute choice for the next mesh.
+  micState.activate(mesh.setMute)
+  return {
+    update: mesh.update,
+    setMute: mesh.setMute,
+    stop: () => {
+      mesh.stop()
+      micState.deactivate()
+    },
+  }
 }
 
 // dev/e2e seam only; noop where there is no window (unit env).

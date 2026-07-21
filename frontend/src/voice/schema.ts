@@ -29,6 +29,16 @@ export interface VoicePosition {
   y: number
 }
 
+// The local mic's transmit state (#282), reported by the mesh to the on-screen
+// indicator + mute toggle. `live` is the honest "you are being heard" light:
+// mic granted, not muted, and at least one peer in the pod. `denied` is a
+// declined browser permission — voice cleanly off, not an error.
+export interface MicStatus {
+  live: boolean
+  muted: boolean
+  denied: boolean
+}
+
 // Tiles. Deliberately tighter than PresenceChannel::CELL (12): we subscribe to
 // a 3x3 cell window so we can *see* peers well before we can hear them.
 export const VOICE_RADIUS = 6

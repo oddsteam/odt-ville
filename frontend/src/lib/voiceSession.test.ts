@@ -8,6 +8,7 @@ import { voiceSession } from './voiceSession.ts'
 
 const mesh = (log: unknown[], slug: string) => ({
   update: () => {},
+  setMute: () => {},
   stop: () => log.push(['stop', slug]),
 })
 
