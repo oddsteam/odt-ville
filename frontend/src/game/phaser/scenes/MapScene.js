@@ -194,12 +194,20 @@ export default class MapScene extends Phaser.Scene {
     // asked", the value is the built stills or null while the fetch/sheet load
     // is in flight (and after a failure — that peer stays on the fallback).
     this.peerChars = new Map()
+    // Proximity voice (#280): an opaque handle the shell injects for multiplayer
+    // maps only (solo maps and the hometown get none). The game never imports
+    // voice — it just feeds it our tile and the roster and lets it mesh WebRTC
+    // audio to pod peers. Absent means voice off, not an error.
+    this.voice = this.registry.get('voice') || null
     if (this.presence) {
       this.presence.onFrame((frame) => this.presenceFrame(frame))
       this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.presence.onFrame(null))
       // Announce our spawn; peers echo their own positions back (stateless
       // roster sync — see presence.ts).
       this.sendPosition()
+    }
+    if (this.voice) {
+      this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.voice.stop())
     }
 
     // Test API — same shape the town/interior scenes publish, so the walking
@@ -246,6 +254,15 @@ export default class MapScene extends Phaser.Scene {
     for (const userId of pruneOutOfRange(this.remoteRoster, this.playerTile)) {
       this.dropPeer(userId)
     }
+    this.syncVoice()
+  }
+
+  // Reconcile the voice mesh with who is in earshot now. Our RemotePlayer
+  // roster satisfies voice's {x, y} structurally (#278), so it hands over
+  // unchanged. Called on our own step (above) and on every peer frame (below),
+  // so a peer walking into range while we stand still still opens a link.
+  syncVoice() {
+    this.voice?.update(this.playerTile, this.remoteRoster)
   }
 
   dropPeer(userId) {
@@ -261,6 +278,10 @@ export default class MapScene extends Phaser.Scene {
     const { action, echo } = applyFrame(this.remoteRoster, frame, this.presence.ownId)
     if (echo) this.sendPosition()
     if (action === 'none') return
+    // applyFrame has already folded this spawn/move/remove into the roster, so
+    // reconcile the voice mesh now — before any render early-return below — and
+    // a peer stepping into (or out of) earshot opens/closes their audio link.
+    this.syncVoice()
     if (action === 'remove') {
       this.dropPeer(frame.userId)
       return

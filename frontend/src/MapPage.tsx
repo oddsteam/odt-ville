@@ -13,6 +13,7 @@ import { objectIdsFrom } from './maps/props.ts'
 import { runEdge } from './lib/runEdge.ts'
 import { subscribeAuthToken } from './lib/authToken.ts'
 import { connectPresence } from './lib/presenceClient.ts'
+import { connectVoice } from './voice/mesh.ts'
 import { ViewerService } from './viewer/service.ts'
 import { loadManifestById, loadMyManifest } from './character/service.ts'
 import type { BakedMap, Zone } from './kernel/schema.ts'
@@ -136,6 +137,14 @@ export default function MapPage({ draft = false }: { draft?: boolean }) {
         ...presence,
       })
     }
+    // Proximity voice (#280): mesh WebRTC audio to pod peers, driven by the same
+    // roster MapScene renders. Explicit guard — a solo map, and the generated
+    // hometown (no Maps::Map row, so never `multiplayer`), open no voice; media
+    // is P2P and never touches the app server. Injected via the registry like
+    // presence, so the game imports no voice code (ADR-0004, arch rule #278).
+    const voice =
+      map.multiplayer && ownIdRef.current ? connectVoice(map.slug, ownIdRef.current) : null
+    if (voice) game.registry.set('voice', voice)
     // Encounter zones fire per landing step (#255); this gate owns the roll
     // rate and the post-encounter grace for this game's lifetime.
     const grassGate = wildStepGate()
