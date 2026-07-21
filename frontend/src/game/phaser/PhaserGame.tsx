@@ -101,7 +101,9 @@ export type PhaserGameProps = {
     // The connected presence room for a multiplayer target (#269), or null for
     // a solo map. Opaque here — the shell owns the wire, MapScene reads it off
     // the registry exactly as it does on the standalone /maps/:slug page.
-  }) => Promise<{ map: unknown; objects: unknown; presence?: unknown } | null>
+    // `voice` (#287) rides the same bundle: the proximity-voice mesh for a
+    // multiplayer target, or null for a solo map.
+  }) => Promise<{ map: unknown; objects: unknown; presence?: unknown; voice?: unknown } | null>
   trainerDefeated: boolean
   onTrainerDefeated: () => void
 }
@@ -209,6 +211,10 @@ export default function PhaserGame({
       // Presence (#269): set every hop, so a solo target clears the room the
       // previous multiplayer map left here rather than inheriting its peers.
       game.registry.set('presence', loaded.presence ?? null)
+      // Voice (#287): same discipline — set every hop so a solo target clears
+      // the mesh the previous multiplayer map left, and MapScene reads it off
+      // the registry to drive update/stop exactly as on /maps/:slug (#280).
+      game.registry.set('voice', loaded.voice ?? null)
       // Keep the community that owns this chain: an onward hop stays inside the
       // community it entered, so exit-to-town still reports the right door.
       game.registry.set('portalCommunityId', communityId)
