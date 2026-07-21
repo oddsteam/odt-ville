@@ -14,6 +14,8 @@ import { runEdge } from './lib/runEdge.ts'
 import { subscribeAuthToken } from './lib/authToken.ts'
 import { connectPresence } from './lib/presenceClient.ts'
 import { presenceSession } from './lib/presenceSession.ts'
+import { voiceSession } from './lib/voiceSession.ts'
+import { connectVoice } from './voice/mesh.ts'
 import { ViewerService } from './viewer/service.ts'
 import { loadManifestById } from './character/service.ts'
 import { trackEnterDoor, trackInteractBoard, trackEncounter } from './analytics/events.ts'
@@ -172,6 +174,21 @@ export default function VillagePage() {
   )
   useEffect(() => () => presenceRef.current.close(), [])
 
+  // Proximity voice for door-entered maps (#287) — the counterpart of the
+  // presence session above. Same "one mesh at a time" lifecycle: a door never
+  // routes, so the shell tears down the previous map's mesh before opening the
+  // next. The viewer id is fetched the same way; the wire lives in voice/mesh.
+  const voiceRef = useRef(
+    voiceSession({
+      viewerId: () =>
+        runEdge(ViewerService.get())
+          .then((v) => v.user.external_id)
+          .catch(() => null),
+      connect: connectVoice,
+    }),
+  )
+  useEffect(() => () => voiceRef.current.close(), [])
+
   // A door with an authored interior Node asked to travel (#111). Load the
   // target before leaving (#84): the baked map plus the tile objects its
   // entities reference, the same bundle MapPage assembles. Null (with the
@@ -182,7 +199,8 @@ export default function VillagePage() {
         const map = await runEdge(MapsService.get(portal.targetNode))
         const objects = await runEdge(TileObjectsService.getMany(objectIdsFrom(map.entities)))
         const presence = await presenceRef.current.open(map)
-        return { map, objects, presence }
+        const voice = await voiceRef.current.open(map)
+        return { map, objects, presence, voice }
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e))
         return null
@@ -217,8 +235,10 @@ export default function VillagePage() {
       // Phaser passes the exited community id via the bus event; fall
       // back to whatever the page most recently tracked as active.
       const id = idFromCaller ?? activeCommunityId
-      // Back in the hometown, which has no room of its own (#269).
+      // Back in the hometown, which has no room of its own (#269) and no voice
+      // mesh (#287) — tear both down as we leave the last authored map.
       presenceRef.current.close()
+      voiceRef.current.close()
       // Optimistic local session update so the next remount spawns on the
       // just-exited doormat rather than whatever the previous loadTown
       // returned. Phaser's own scene-start data covers the within-session

@@ -12,6 +12,12 @@ import MonstersAdminPage from './admin/MonstersAdminPage.tsx'
 import PostureCallbackPage from './posture/CallbackPage.tsx'
 import MapPage from './MapPage.tsx'
 import CharacterSelectPage from './character/CharacterSelectPage.tsx'
+import VoiceMeters from './voice/VoiceMeters.tsx'
+
+// Test-env voice meter (#287): opt-in via ?voicemeter, so it rides any route
+// (door path at "/" or /maps/:slug) and works on the prod homeserver build.
+const showVoiceMeters =
+  typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('voicemeter')
 
 // The map editor bakes (and later renders a Phaser preview, #107), so it is
 // code-split into its own chunk — it never ships in the player bundle (#106).
@@ -26,6 +32,8 @@ const MapDecoratePage = lazy(() => import('./admin/MapDecoratePage.tsx'))
 // standalone authoring pages plus communities CRUD — lives under "/admin".
 export default function App() {
   return (
+    <>
+    {showVoiceMeters && <VoiceMeters />}
     <Routes>
       <Route element={<RootLayout />}>
         <Route index element={<VillagePage />} />
@@ -84,5 +92,6 @@ export default function App() {
       {/* Unknown paths fall back to the village. */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </>
   )
 }
