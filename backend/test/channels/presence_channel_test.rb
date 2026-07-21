@@ -36,6 +36,17 @@ class PresenceChannelTest < ActionCable::Channel::TestCase
     "presence:map:#{map.id}:cell:#{cx}:#{cy}"
   end
 
+  # Signalling relay (#279): the per-user postbox a peer's WebRTC handshake is
+  # addressed to. Map-scoped so a signal only reaches a target who is on THIS
+  # map, never a namesake connected elsewhere.
+  def signal_stream(map, external_id)
+    "signal:map:#{map.id}:user:#{external_id}"
+  end
+
+  def peer(name: "Peer")
+    @company.users.create!(name: name, role: "branch_employee", external_id: SecureRandom.uuid)
+  end
+
   # Interest management (#158): the neighbourhood is only knowable once the
   # player announces a tile, so the join itself attaches nothing. The client
   # replays its position on `connected`, which closes that window.
@@ -45,7 +56,10 @@ class PresenceChannelTest < ActionCable::Channel::TestCase
     join(map)
 
     assert subscription.confirmed?
-    assert_no_streams
+    # The per-user signalling postbox opens at join (#279); the cell attaches
+    # only once the player announces a tile.
+    assert_has_stream signal_stream(map, @user.external_id)
+    assert_has_no_stream cell_stream(map, 0, 0)
   end
 
   test "a move attaches the sender's cell and its eight neighbours" do
@@ -141,6 +155,75 @@ class PresenceChannelTest < ActionCable::Channel::TestCase
 
     assert_broadcast_on(cell_stream(map, 0, 0), manifest_frame(nil)) do
       perform :move, x: 3, y: 4, facing: "down"
+    end
+  end
+
+  # WebRTC signalling relay (#279): the presence channel doubles as the
+  # postbox that lets two browsers exchange offer/answer/ICE. The server never
+  # parses the payload — it stamps the sender and forwards the opaque blob to
+  # the target's per-user stream.
+  test "signal relays the opaque payload to the target's per-user stream" do
+    map = make_map
+    target = peer
+    join(map)
+
+    frame = { type: "signal", from: @user.external_id, payload: { "sdp" => "offer" } }
+    assert_broadcast_on(signal_stream(map, target.external_id), frame) do
+      perform :signal, to: target.external_id, payload: { "sdp" => "offer" }
+    end
+  end
+
+  test "signal stamps the sender from the connection, ignoring a client-sent from" do
+    map = make_map
+    target = peer
+    join(map)
+
+    frame = { type: "signal", from: @user.external_id, payload: { "ice" => "candidate" } }
+    assert_broadcast_on(signal_stream(map, target.external_id), frame) do
+      perform :signal, to: target.external_id, from: "spoofed-id", payload: { "ice" => "candidate" }
+    end
+  end
+
+  # Regression (#279): a claim-gated map is keyed to the target's Keycloak
+  # roles/groups, which the server can't read for another user — the original
+  # per-target check passed `roles: []` and so silently refused every peer here,
+  # making voice impossible on any role/group-gated map. The relay must fire;
+  # the sender clears their OWN join gate with their real role.
+  test "signal relays on a claim-gated map, which the server cannot authorise per-target" do
+    map = make_map(policy: { "kind" => "claim", "role" => "villager" })
+    target = peer
+    stub_connection current_user: @user, current_roles: [ "villager" ], current_groups: []
+    subscribe slug: map.slug
+    assert subscription.confirmed?
+
+    frame = { type: "signal", from: @user.external_id, payload: { "sdp" => "offer" } }
+    assert_broadcast_on(signal_stream(map, target.external_id), frame) do
+      perform :signal, to: target.external_id, payload: { "sdp" => "offer" }
+    end
+  end
+
+  # The relay is confined by the join gate, not by a second check in the action:
+  # a user who fails the map's access policy is rejected at subscribe and never
+  # attaches a signalling postbox, so a signal addressed to them lands nowhere —
+  # even though the dumb relay still broadcasts it. This is why the per-target
+  # check is redundant.
+  test "a rejected non-member never attaches a signalling postbox" do
+    map = make_map(policy: { "kind" => "members" })
+    stub_connection current_user: @user, current_roles: [], current_groups: []
+    subscribe slug: map.slug
+
+    assert subscription.rejected?
+    assert_has_no_stream signal_stream(map, @user.external_id)
+  end
+
+  # Input validation at the boundary: `to` is client-supplied, so a blank or
+  # non-string target is dropped rather than interpolated into a stream name.
+  test "signal with a blank target broadcasts nothing" do
+    map = make_map
+    join(map)
+
+    assert_no_broadcasts(signal_stream(map, "")) do
+      perform :signal, to: "", payload: { "sdp" => "offer" }
     end
   end
 

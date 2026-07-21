@@ -17,9 +17,39 @@ class PresenceChannel < ApplicationCable::Channel
       map.accessible_to?(current_user, roles: current_roles, groups: current_groups)
 
     @map_id = map.id
+    # WebRTC signalling (#279) must address one specific peer, which the
+    # per-cell presence streams can't — so alongside them we open a per-user
+    # postbox, keyed by the authenticated Keycloak id and scoped to this map so
+    # a signal only reaches a target who is actually here.
+    stream_from signal_stream(current_user.external_id)
     # No cell until the first `move` says where we stand; the client replays
     # its position on `connected`, so that gap is one round trip.
     @cell = nil
+  end
+
+  # Signalling postbox (#279): forward an opaque handshake blob (SDP offer /
+  # answer / ICE candidate) to another peer. The server is deliberately dumb —
+  # it never parses the payload, and stamps the sender from the authenticated
+  # connection so a client cannot claim to be another peer (mirror of the
+  # move-frame discipline).
+  #
+  # There is deliberately no per-target access check. It would be unsound: a
+  # `claim`-gated map keys on the target's Keycloak roles/groups, which live in
+  # *their* JWT, not our DB — so the server cannot authorise another user, and
+  # the earlier `roles: []` attempt silently refused every peer on a claim map.
+  # And it would be redundant: the postbox is map-scoped and per-user, and a
+  # connection only streams `signal:map:<id>:user:<own-id>` after clearing this
+  # map's join gate (`subscribed`). Delivery is therefore already confined to
+  # authorised, present members. The join gate is the single enforcement point;
+  # a second check here only gave it a chance to drift and break.
+  def signal(data)
+    to = data["to"]
+    return unless to.is_a?(String) && to.present?
+
+    ActionCable.server.broadcast(
+      signal_stream(to),
+      { type: "signal", from: current_user.external_id, payload: data["payload"] }
+    )
   end
 
   def move(data)
@@ -39,6 +69,10 @@ class PresenceChannel < ApplicationCable::Channel
 
   def stream_name(cx, cy)
     "presence:map:#{@map_id}:cell:#{cx}:#{cy}"
+  end
+
+  def signal_stream(external_id)
+    "signal:map:#{@map_id}:user:#{external_id}"
   end
 
   # Swap the 3x3 neighbourhood on a cell crossing, touching only the
