@@ -80,8 +80,10 @@ export const loadTown = () =>
     // Complete the policy with the producer's encounter inputs (#255): the
     // wild pool the field zone names ('' — the global pool — until a
     // generation-settings admin names one) and the gate trainer's Catalog::Npc
-    // row, matched by the bundled boss's name (#259 seeds it; 0 when absent →
-    // the shell's bundled fallback guards the gate).
+    // row, matched by the bundled boss's name. #260 dropped the seed that used
+    // to supply that row, so this normally finds nothing now and the gate falls
+    // back to the shell's bundled boss — until an admin authors an NPC under
+    // the same name in /admin/npcs, which adopts it.
     Effect.map((town) => ({
       ...town,
       policy: {

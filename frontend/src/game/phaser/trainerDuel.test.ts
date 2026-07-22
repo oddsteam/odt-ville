@@ -1,10 +1,11 @@
-// Resolving a trainer payload's npcId into a duel opponent (#259).
+// Resolving a trainer payload's npcId into a duel opponent (#259, #260).
 
 import { describe, expect, it } from 'vitest'
 import { npcOpponent, trainerOpponent, type NpcLike } from './trainerDuel.ts'
+import { GATE_TRAINER } from '../encounters.js'
 
-const boss: NpcLike = { id: 7, name: 'THE BOSS', level: 99, image: 'data:boss' }
-const wanderer: NpcLike = { id: 3, name: 'Wanderer', level: null, image: 'data:w' }
+const boss: NpcLike = { id: 7, name: 'THE BOSS', level: 99 }
+const wanderer: NpcLike = { id: 3, name: 'Wanderer', level: null }
 
 describe('npcOpponent', () => {
   it('maps a catalog NPC to the trainer opponent EncounterScene launches with', () => {
@@ -13,8 +14,17 @@ describe('npcOpponent', () => {
       id: 7,
       name: 'THE BOSS',
       level: 99,
-      sprite: 'data:boss',
+      sprite: GATE_TRAINER.sprite,
     })
+  })
+
+  it('keeps the authored identity while borrowing the bundled portrait (#260)', () => {
+    // An NPC's art is a mapped rig now, and the duel screen still wants a whole
+    // image — so name and level come from the catalog row while the portrait is
+    // the bundled boss for every trainer, until a follow-up renders the rig.
+    const shown = npcOpponent(wanderer)
+    expect(shown.name).toBe('Wanderer')
+    expect(shown.sprite).toBe(npcOpponent(boss).sprite)
   })
 
   it('carries a null level through (the duel screen omits the Lv. line)', () => {
@@ -24,7 +34,7 @@ describe('npcOpponent', () => {
 
 describe('trainerOpponent', () => {
   it('resolves the referenced NPC out of the loaded catalog', () => {
-    expect(trainerOpponent([wanderer, boss], 7)).toMatchObject({ name: 'THE BOSS', sprite: 'data:boss' })
+    expect(trainerOpponent([wanderer, boss], 7)).toMatchObject({ name: 'THE BOSS' })
   })
 
   it('is null for the unset sentinel (npcId 0) — no duel starts', () => {

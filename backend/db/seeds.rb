@@ -485,20 +485,14 @@ ActiveRecord::Base.transaction do
     Catalog::Terrain.find_or_create_by!(name: name) { |t| t.priority = priority }
   end
 
-  # The NPC catalog (#259, ADR-0008): identity for placed characters, resolved by
-  # a trainer Zone payload's `npcId` the way a Prop resolves `object_id`. Seed the
-  # gate trainer (#86's GATE_TRAINER) so #255 has a referent — same "THE BOSS"
-  # name and level 99, sharing the boss-k sprite the frontend bundles, inlined
-  # here as a data URL. Guarded so a backend-only checkout without the frontend
-  # assets still seeds cleanly. find_or_create keeps an admin-edited row intact.
-  boss_k_png = Rails.root.join("../frontend/src/game/assets/character/boss-k.png")
-  if File.exist?(boss_k_png)
-    data_url = "data:image/png;base64,#{Base64.strict_encode64(File.binread(boss_k_png))}"
-    Catalog::Npc.find_or_create_by!(name: "THE BOSS") do |npc|
-      npc.image_data_url = data_url
-      npc.level = 99
-    end
-  end
+  # No NPC seed (#260). The old "THE BOSS" row inlined a frontend PNG through a
+  # path the backend container cannot see (it mounts only ./backend), so the
+  # guard fired silently and the Docker stack never got one — a seed that seeded
+  # nothing on the normal dev path. NPC art is a mapped rig now, which an admin
+  # authors in the sprite mapper and points an NPC at in /admin/npcs; seeding a
+  # rig from a still image would recreate exactly the model this replaced.
+  # The hometown gate keeps its bundled-boss fallback (`gateTrainerOpponent`),
+  # so an empty catalog still duels.
 
   puts "Seeded: #{Org::Company.count} company, #{Auth::User.count} users, " \
        "#{Communities::House.count} houses, #{Communities::Board.count} boards, #{Communities::ContentItem.count} content items, " \

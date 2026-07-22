@@ -12,16 +12,13 @@ module Catalog
 
     validates :name, presence: true, uniqueness: true
 
-    # Image read/write seam, mirrored verbatim from Catalog::Monster. The data
-    # URL lives directly in the text column for now; routing every caller through
-    # this accessor means a future move to S3/MinIO (store a key, fetch the blob)
-    # changes only this one place.
-    def image_data_url
-      image
-    end
-
-    def image_data_url=(value)
-      self.image = value
-    end
+    # An NPC's art is a mapped rig, not a still (#260) — NPCs are meant to walk,
+    # and one image cannot face four directions. The sprite mapper is the single
+    # place character art is authored; its roster feeds two tracks, a user
+    # picking their own character (ADR-0009) and an admin picking an NPC's.
+    #
+    # Optional, matching the users FK: deleting a rig nullifies the ref and
+    # leaves the NPC's identity intact rather than deleting a catalog row.
+    belongs_to :character_manifest, class_name: "::Character::CharacterManifest", optional: true
   end
 end

@@ -40,7 +40,9 @@ function fakeHttp(routes: Record<string, unknown>) {
   return Layer.succeed(Http, client as never)
 }
 
-const NPCS = [{ id: 7, name: 'THE BOSS', level: 99, enabled: true, image: 'data:boss' }]
+const NPCS = [
+  { id: 7, name: 'THE BOSS', level: 99, enabled: true, character_manifest_id: 3 },
+]
 
 const OK_ROUTES = {
   '/communities': { communities: [] },
