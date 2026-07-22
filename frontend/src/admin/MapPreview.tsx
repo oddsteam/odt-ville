@@ -26,6 +26,7 @@ class PreviewScene extends Phaser.Scene {
 export default function MapPreview({
   baked,
   objects,
+  npcRigs,
   onTileDown,
   onTileDrag,
   onTileHover,
@@ -47,6 +48,10 @@ export default function MapPreview({
     footprint_h: number
     fg_mask?: string | null
   }[]
+  // The rigs the map's placed NPCs draw from (#294), keyed by npc id — the shell
+  // resolves npc_id → catalog row → character manifest and the shared renderer
+  // stamps each at its authored facing. Absent on NPC-less maps.
+  npcRigs?: readonly { id: number; manifest: unknown }[]
   // When set the preview *is* the editing surface (#143/#145): a press resolves
   // to the tile under the cursor and calls back. `onTileDown` fires on mousedown
   // (place a prop, start a collision stroke); `onTileDrag` fires as the cursor
@@ -132,6 +137,7 @@ export default function MapPreview({
     })
     game.registry.set('bakedMap', baked)
     game.registry.set('bakedObjects', objects ?? [])
+    game.registry.set('bakedNpcs', npcRigs ?? [])
     // Let CSS size the canvas: it fills the (map×zoom) wrapper, so the native
     // bitmap scales — pixel-crisp — with the zoom instead of staying at native
     // px. previewPointer reads native width vs the rendered rect to map clicks.
@@ -144,7 +150,7 @@ export default function MapPreview({
       canvasRef.current = null
       game.destroy(true)
     }
-  }, [baked, objects])
+  }, [baked, objects, npcRigs])
 
   // End the drag on any mouseup, even off the canvas, so a stroke that runs off
   // the edge doesn't keep painting on the next hover.

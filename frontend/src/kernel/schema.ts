@@ -22,6 +22,11 @@ export const BakedTile = Schema.Struct({
 })
 export type BakedTile = Schema.Schema.Type<typeof BakedTile>
 
+// Which way an aiming zone looks (#86) — and, since #294, which way a placed
+// NPC is posed. Declared here because BakedEntity reads it.
+export const ZoneFacing = Schema.Literal('up', 'down', 'left', 'right')
+export type ZoneFacing = Schema.Schema.Type<typeof ZoneFacing>
+
 // A placed entity — a decorative prop for now. Stamped at a tile coordinate
 // above the ground. Houses/zones (ADR-0004) are later slices; this tracer
 // carries only `kind: "prop"`. The art is a reference, one of two styles:
@@ -35,6 +40,16 @@ export const BakedEntity = Schema.Struct({
   frame: Schema.optional(Schema.Number),
   x: Schema.Number,
   y: Schema.Number,
+  // A placed NPC (#294, `kind: "npc"`): the catalog row that says who this is,
+  // by id — art resolves through its rig (Catalog::Npc → character_manifest_id),
+  // never stored here, so re-rigging the NPC restyles every map that placed it.
+  npc_id: Schema.optional(Schema.Number),
+  // The pose a placed NPC *starts* in, and only that: authored here, then owned
+  // by the runtime, which turns it as the NPC walks (exactly as the avatar
+  // derives facing from movement). Distinct from a Zone's `facing` (#86), which
+  // is static trigger geometry — the cone does not follow the sprite. Never
+  // write code that assumes this still matches what was authored.
+  facing: Schema.optional(ZoneFacing),
   // Optional per-entity collision footprint (ADR-0004 walk-mask): a row-major
   // char grid anchored at (x,y), '#' = solid, anything else walkable. A prop has
   // none; a house/blocker contributes its solid cells to walkability *on top of*
@@ -129,10 +144,6 @@ export const ZonePayload = Schema.Union(
   }),
 )
 export type ZonePayload = Schema.Schema.Type<typeof ZonePayload>
-
-// Which way an aiming zone looks (#86).
-export const ZoneFacing = Schema.Literal('up', 'down', 'left', 'right')
-export type ZoneFacing = Schema.Schema.Type<typeof ZoneFacing>
 
 // Every zone is a w×h tile rect anchored at (x,y) — absent w/h mean one tile.
 const zoneRect = {

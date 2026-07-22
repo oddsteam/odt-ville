@@ -15,7 +15,7 @@ import { subscribeAuthToken } from './lib/authToken.ts'
 import { connectPresence } from './lib/presenceClient.ts'
 import { connectVoice } from './voice/mesh.ts'
 import { ViewerService } from './viewer/service.ts'
-import { loadManifestById, loadMyManifest } from './character/service.ts'
+import { loadManifestById, loadMyManifest, loadNpcRigs } from './character/service.ts'
 import type { BakedMap, Zone } from './kernel/schema.ts'
 import type { Npc } from './catalog/npcs/schema.ts'
 
@@ -55,6 +55,9 @@ export default function MapPage({ draft = false }: { draft?: boolean }) {
   // fetched with the map so the dispatch can resolve a fired npcId. Best-effort
   // (a missing endpoint leaves it empty and a trainer zone challenges nobody).
   const npcsRef = useRef<readonly Npc[]>([])
+  // The rigs the map's placed NPCs draw from (#294) — resolved shell-side and
+  // handed to the shared renderer through the registry, like `bakedObjects`.
+  const npcRigsRef = useRef<readonly { id: number; manifest: unknown }[]>([])
   // The viewer's stable Keycloak id (#88) — presence filters its own echoed
   // frames by it. Only fetched for multiplayer maps; null keeps presence off.
   const ownIdRef = useRef<string | null>(null)
@@ -77,12 +80,17 @@ export default function MapPage({ draft = false }: { draft?: boolean }) {
         if (!m) throw new Error('No draft to preview — use "Preview in game" in the editor.')
         const objects = await runEdge(TileObjectsService.getMany(objectIdsFrom(m.entities)))
         const npcs = await runEdge(NpcsService.list()).catch(() => [] as readonly Npc[])
+        // The rigs the NPCs this map placed draw from (#294) — only the placed
+        // ones, so a big catalog costs nothing to walk past.
+        const placed = new Set(m.entities.filter((e) => e.kind === 'npc').map((e) => e.npc_id))
+        const rigs = await loadNpcRigs(npcs.filter((n) => placed.has(n.id)))
         const viewer = m.multiplayer ? await runEdge(ViewerService.get()).catch(() => null) : null
         if (!active) return
         ownIdRef.current = viewer?.user.external_id ?? null
         manifestRef.current = manifest
         objectsRef.current = objects
         npcsRef.current = npcs
+        npcRigsRef.current = rigs
         setMap(m)
       })
       .catch((e) => active && setError(e instanceof Error ? e.message : String(e)))
@@ -122,6 +130,7 @@ export default function MapPage({ draft = false }: { draft?: boolean }) {
     game.registry.set('characterManifest', manifestRef.current)
     game.registry.set('entrySpawnId', entrySpawnIdRef.current)
     game.registry.set('npcs', npcsRef.current)
+    game.registry.set('bakedNpcs', npcRigsRef.current)
     // Presence (#88): a multiplayer map opens its per-map room; solo maps —
     // and the generated hometown, which never renders through this page —
     // stay offline. The handle rides the registry like onZone: the scene

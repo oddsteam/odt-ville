@@ -47,7 +47,9 @@ export interface EntityObject {
 // anchors and y-sorts its trees — so the kernel carries both as fields.
 export interface EntityDraw {
   key: string
-  frame?: number
+  // A frame index into a uniform spritesheet, or the name of a frame the caller
+  // registered on the texture (a character rig's sliced sheet, #294).
+  frame?: number | string
   x: number
   y: number
   w?: number

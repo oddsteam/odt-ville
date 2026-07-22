@@ -6,11 +6,12 @@ import type { BakedMap, Zone, ZoneFacing, ZoneTrigger } from '../kernel/schema.t
 import { TileObjectsService } from '../catalog/tileObjects/service.ts'
 import type { TileObject } from '../catalog/tileObjects/schema.ts'
 import { NpcsService } from '../catalog/npcs/service.ts'
+import { loadNpcRigs } from '../character/service.ts'
 import type { Npc } from '../catalog/npcs/schema.ts'
 import { makeMask, setMaskCell, resizeMask, isMaskEmpty, type Mask } from './maskPaint.ts'
 import { groupPalette } from './paletteGroups.ts'
 import { zoneRects as buildZoneRects, ZONE_COLORS } from './zoneRects.ts'
-import { placeProp, erasePropAt, propEntities, propsFromBaked, propGhost, newZone, retrigger, triggersFor, zoneIndexAt, eraseZoneAt, replaceZone, draftMap, stashDraft, DRAFT_PLAY_PATH, type PlacedProp, type SizeOf, type MaskOf, type DoorOf, type ZoneKind } from '../maps/service.ts'
+import { placeProp, erasePropAt, propEntities, propsFromBaked, propGhost, newZone, retrigger, triggersFor, zoneIndexAt, eraseZoneAt, replaceZone, placeNpc, eraseNpcAt, npcIndexAt, npcEntities, npcsFromBaked, NPC_FACING_DEFAULT, draftMap, stashDraft, DRAFT_PLAY_PATH, type PlacedProp, type PlacedNpc, type SizeOf, type MaskOf, type DoorOf, type ZoneKind } from '../maps/service.ts'
 import type { MapAccessPolicy } from '../kernel/schema.ts'
 import MapPreview from './MapPreview.tsx'
 import { runEdge } from '../lib/runEdge.ts'
@@ -42,7 +43,7 @@ export default function MapDecoratePage() {
   // What a grid click does: place/erase a prop, place/select/erase a zone, or
   // paint/erase the collision mask. `settings` (#91) only shows the panel —
   // clicks on the map do nothing.
-  const [mode, setMode] = useState<'props' | 'zones' | 'collision' | 'settings'>('props')
+  const [mode, setMode] = useState<'props' | 'npcs' | 'zones' | 'collision' | 'settings'>('props')
   const [propTool, setPropTool] = useState<number | 'erase' | null>(null)
   // The authored zones (#90, ADR-0005) — trigger + payload regions, edited as
   // full desired state like props. A click places the picked kind (or selects
@@ -52,8 +53,17 @@ export default function MapDecoratePage() {
   const [selectedZone, setSelectedZone] = useState<number | null>(null)
   // Saved maps, for a portal payload's target picker (plus the reserved town hub).
   const [mapList, setMapList] = useState<readonly MapSummary[]>([])
-  // The NPC catalog (#259), for a trainer payload's NPC picker.
+  // The NPC catalog (#259), for a trainer payload's NPC picker and the NPC
+  // palette (#294).
   const [npcs, setNpcs] = useState<readonly Npc[]>([])
+  // The NPCs placed on the map (#294) — catalog references posed at a facing,
+  // edited as full desired state like props, and the one under the inspector.
+  // `npcRigs` are their character manifests, fetched so the preview draws each
+  // NPC's own sprite rather than a placeholder.
+  const [placedNpcs, setPlacedNpcs] = useState<PlacedNpc[]>([])
+  const [npcTool, setNpcTool] = useState<number | 'erase' | null>(null)
+  const [selectedNpc, setSelectedNpc] = useState<number | null>(null)
+  const [npcRigs, setNpcRigs] = useState<readonly { id: number; manifest: unknown }[]>([])
   // Search box over the palette — filters objects by name/kind (#165).
   const [query, setQuery] = useState('')
   // The tile the cursor is over, driving the footprint ghost (#144); null off-map.
@@ -92,11 +102,19 @@ export default function MapDecoratePage() {
     const o = byId.get(id)
     return o?.door_dx != null && o?.door_dy != null ? { dx: o.door_dx, dy: o.door_dy } : undefined
   }
-  // Entities this editor doesn't manage (legacy tileset/frame props, later
-  // kinds) — kept on the preview and on save so decorating never wipes them.
+  // Every entity the prop baker doesn't produce: the ones this editor doesn't
+  // manage (legacy tileset/frame props, later kinds) — kept on the preview and
+  // on save so decorating never wipes them — plus the placed NPCs (#294), which
+  // bake from their own list and so are dropped from the loaded document first
+  // rather than riding through as unmanaged.
   const otherEntities = useMemo(
-    () => (baked?.entities ?? []).filter((e) => !(e.kind === 'prop' && e.object_id != null)),
-    [baked],
+    () => [
+      ...(baked?.entities ?? []).filter(
+        (e) => e.kind !== 'npc' && !(e.kind === 'prop' && e.object_id != null),
+      ),
+      ...npcEntities(placedNpcs),
+    ],
+    [baked, placedNpcs],
   )
 
   // The WYSIWYG preview: the loaded map with the current edits applied — the
@@ -132,6 +150,7 @@ export default function MapDecoratePage() {
         setBaked(m)
         setCollision(resizeMask(m.collision ?? [], m.cols, m.rows))
         setProps(propsFromBaked(m.entities))
+        setPlacedNpcs(npcsFromBaked(m.entities))
         setZones([...(m.zones ?? [])])
         setMultiplayer(m.multiplayer ?? false)
         setPolicy(m.access_policy ?? { kind: 'public' })
@@ -146,8 +165,20 @@ export default function MapDecoratePage() {
     }
   }, [slug])
 
+  // The rig behind each catalogued NPC (#294): one manifest fetch per NPC that
+  // has one, so the preview stamps the real sprite. Best-effort per NPC
+  // (loadManifestById resolves null on any failure) — a rig-less NPC can still
+  // be placed, it just draws nothing.
+  useEffect(() => {
+    let live = true
+    loadNpcRigs(npcs).then((rigs) => live && setNpcRigs(rigs))
+    return () => {
+      live = false
+    }
+  }, [npcs])
+
   // A press on the preview: paint the collision cell, place/select/erase a
-  // zone, or place/erase a prop.
+  // zone or an NPC, or place/erase a prop.
   const down = (x: number, y: number) => {
     if (mode === 'collision') {
       setCollision((m) => setMaskCell(m, x, y, maskTool === 'paint'))
@@ -168,6 +199,24 @@ export default function MapDecoratePage() {
       }
       setZones((zs) => [...zs, newZone(zoneTool, x, y)])
       setSelectedZone(zones.length)
+      return
+    }
+    if (mode === 'npcs') {
+      if (npcTool === 'erase') {
+        setPlacedNpcs((ns) => eraseNpcAt(ns, x, y))
+        setSelectedNpc(null)
+        return
+      }
+      // Like zones: a click on a placed NPC selects it for the inspector, an
+      // empty cell stamps the picked one facing the default and selects that.
+      const hit = npcIndexAt(placedNpcs, x, y)
+      if (hit >= 0) {
+        setSelectedNpc(hit)
+        return
+      }
+      if (npcTool == null) return
+      setPlacedNpcs((ns) => placeNpc(ns, { npc_id: npcTool, x, y, facing: NPC_FACING_DEFAULT }))
+      setSelectedNpc(placedNpcs.length)
       return
     }
     if (mode !== 'props' || propTool == null || !baked) return
@@ -202,6 +251,22 @@ export default function MapDecoratePage() {
   const zoneRects = useMemo(
     () => (mode === 'zones' ? buildZoneRects(zones, selectedZone) : undefined),
     [mode, zones, selectedZone],
+  )
+
+  // The placed NPC under edit and its inspector write-back (#294) — the facing
+  // dropdown re-poses the sprite in the preview on the next render.
+  const placedNpc = selectedNpc != null ? placedNpcs[selectedNpc] : null
+  const editNpc = (next: PlacedNpc) =>
+    setPlacedNpcs((ns) => ns.map((n, i) => (i === selectedNpc ? next : n)))
+  const npcName = (id: number) => npcs.find((n) => n.id === id)?.name ?? `#${id} (deleted)`
+
+  // The collision view with the placed NPCs folded in (#294): an NPC blocks its
+  // cell through the walk_mask baked onto its entity, not through the painted
+  // mask, so the overlay shows it blocked while the eraser leaves it alone —
+  // you clear an NPC's cell by deleting the NPC.
+  const blockedOverlay = useMemo(
+    () => placedNpcs.reduce((m, n) => setMaskCell(m, n.x, n.y, true), collision),
+    [collision, placedNpcs],
   )
 
   // The zone under edit and its inspector write-back.
@@ -262,6 +327,7 @@ export default function MapDecoratePage() {
 
       <div className="admin-field-inline" style={{ marginBottom: 4 }}>
         <button onClick={() => setMode('props')} disabled={mode === 'props'}>Props</button>
+        <button onClick={() => setMode('npcs')} disabled={mode === 'npcs'}>NPCs</button>
         <button onClick={() => setMode('zones')} disabled={mode === 'zones'}>Zones</button>
         <button onClick={() => setMode('collision')} disabled={mode === 'collision'}>Collision</button>
         <button onClick={() => setMode('settings')} disabled={mode === 'settings'}>Settings</button>
@@ -305,6 +371,46 @@ export default function MapDecoratePage() {
                 </div>
               </details>
             ))}
+          </div>
+        )}
+
+        {/* NPC palette + inspector (#294): pick an enabled NPC from the catalog
+            and click the preview to stamp it (or click a placed one to edit);
+            the inspector turns which way it looks and the preview re-poses its
+            own sprite. A placed NPC blocks its cell. */}
+        {mode === 'npcs' && (
+          <div className="decorate-palette">
+            <div className="admin-field-inline">
+              <button onClick={() => setNpcTool('erase')}
+                style={{ outline: npcTool === 'erase' ? '2px solid #fff' : 'none' }}>Erase NPC</button>
+              {placedNpcs.length > 0 && <span className="admin-hint">{placedNpcs.length} placed</span>}
+            </div>
+            {npcs.filter((n) => n.enabled).length === 0 && (
+              <p className="admin-msg admin-msg-error">No enabled NPCs — add some in the <Link to="/admin/npcs">NPCs</Link> tool first.</p>
+            )}
+            <div className="admin-field-inline" style={{ flexWrap: 'wrap' }}>
+              {npcs.filter((n) => n.enabled).map((n) => (
+                <button key={n.id} onClick={() => setNpcTool(n.id)}
+                  style={{ outline: npcTool === n.id ? '2px solid #fff' : 'none' }}>
+                  {n.name}
+                </button>
+              ))}
+            </div>
+            {!placedNpc && <p className="admin-hint">Click the map to place an NPC, or click a placed one to turn it.</p>}
+            {placedNpc && (
+              <div className="admin-field" style={{ display: 'grid', gap: 6 }}>
+                <strong>{npcName(placedNpc.npc_id)} at ({placedNpc.x}, {placedNpc.y})</strong>
+                <label>Faces{' '}
+                  {/* The pose it starts in — the runtime owns it once the NPC
+                      walks, and a trainer's sight cone is the Zone's own
+                      `facing`, not this one (#294). */}
+                  <select value={placedNpc.facing}
+                    onChange={(e) => editNpc({ ...placedNpc, facing: e.target.value as ZoneFacing })}>
+                    {FACINGS.map((f) => <option key={f} value={f}>{f}</option>)}
+                  </select>
+                </label>
+              </div>
+            )}
           </div>
         )}
 
@@ -468,11 +574,12 @@ export default function MapDecoratePage() {
             <MapPreview
               baked={previewMap}
               objects={palette}
+              npcRigs={npcRigs}
               onTileDown={down}
               onTileDrag={paint}
               onTileHover={(x, y) => setHover({ x, y })}
               onTileHoverEnd={() => setHover(null)}
-              overlay={mode === 'collision' && showMask ? collision : null}
+              overlay={mode === 'collision' && showMask ? blockedOverlay : null}
               zoneRects={zoneRects}
               ghost={ghost}
               fill

@@ -159,6 +159,25 @@ export async function loadManifestById(id: number) {
   return data ? normalizeManifest(data) : null
 }
 
+// The rigs a set of NPCs draw from (#294): each catalog row's
+// `character_manifest_id` → its manifest, resolved shell-side and handed to the
+// renderer as plain data (ADR-0004 — the black box never fetches). Callers choose
+// the set: the decorate editor loads every catalogued NPC so a stamp draws at
+// once, the play shell only the ones a map placed. Best-effort per NPC — one
+// with no rig, or whose manifest won't load, is left out and simply draws
+// nothing. Takes the rows structurally, so this stays a character-module concern
+// and never learns about the catalog.
+export async function loadNpcRigs(
+  npcs: readonly { id: number; character_manifest_id: number | null }[],
+) {
+  const rigs = await Promise.all(
+    npcs
+      .filter((n) => n.character_manifest_id != null)
+      .map(async (n) => ({ id: n.id, manifest: await loadManifestById(n.character_manifest_id!) })),
+  )
+  return rigs.filter((r) => r.manifest)
+}
+
 async function committedDefault() {
   try {
     const res = await fetch(DEFAULT_MANIFEST_URL)
