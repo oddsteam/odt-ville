@@ -5,6 +5,8 @@
 // — the shell fetches the catalog and hands it in, the way it does the monster
 // pool. `facing`/`range` are read off the Zone by the detector, never here.
 
+import { GATE_TRAINER } from '../encounters.js'
+
 // The fields of a catalog NPC this resolver reads — structurally the shell's
 // Npc row, but not imported from the catalog module (the game never depends on
 // a data service, ADR-0004/depcruiser).
@@ -12,7 +14,6 @@ export interface NpcLike {
   id: number
   name: string
   level: number | null
-  image: string
 }
 
 // The EncounterScene opponent for a trainer duel: identity plus the sprite URL
@@ -26,8 +27,21 @@ export interface TrainerOpponent {
   sprite: string
 }
 
+// #260: an NPC's art is a mapped rig (a sheet plus posture rects) while
+// EncounterScene loads a whole image, so there is no portrait to hand it yet.
+// The authored identity — name, level — still comes from the catalog row; only
+// the portrait falls back to the bundled boss, the same still `gateTrainerOpponent`
+// already shows when the catalog can't resolve at all. Every trainer therefore
+// duels wearing the same face until a follow-up teaches the duel to draw a rig
+// frame; nothing regresses to a broken/blank sprite in the meantime.
 export function npcOpponent(npc: NpcLike): TrainerOpponent {
-  return { kind: 'trainer', id: npc.id, name: npc.name, level: npc.level, sprite: npc.image }
+  return {
+    kind: 'trainer',
+    id: npc.id,
+    name: npc.name,
+    level: npc.level,
+    sprite: GATE_TRAINER.sprite,
+  }
 }
 
 // Resolve a trainer payload's npcId against the loaded catalog. Null when the

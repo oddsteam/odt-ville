@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_07_20_000001) do
+ActiveRecord::Schema[8.1].define(version: 2026_07_22_000001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -24,12 +24,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_20_000001) do
   end
 
   create_table "catalog_npcs", force: :cascade do |t|
+    t.bigint "character_manifest_id"
     t.datetime "created_at", null: false
     t.boolean "enabled", default: true, null: false
-    t.text "image", null: false
     t.integer "level"
     t.string "name", null: false
     t.datetime "updated_at", null: false
+    t.index ["character_manifest_id"], name: "index_catalog_npcs_on_character_manifest_id"
     t.index ["name"], name: "index_catalog_npcs_on_name", unique: true
   end
 
@@ -201,6 +202,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_20_000001) do
   end
 
   add_foreign_key "boards", "houses"
+  add_foreign_key "catalog_npcs", "character_manifests", on_delete: :nullify
   add_foreign_key "content_items", "boards"
   add_foreign_key "houses", "companies"
   add_foreign_key "maps_map_memberships", "maps"

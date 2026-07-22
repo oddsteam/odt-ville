@@ -71,7 +71,7 @@ const CATALOG = '^src/catalog/'
 // catalog, characters aren't).
 const CONTENT_AUTHORING = [
   '^src/(tileMapper|groundMapper|spriteMapper)/',
-  '^src/admin/MonstersAdminPage\\.tsx$',
+  '^src/admin/(MonstersAdminPage|NpcsAdminPage)\\.tsx$',
 ]
 
 // Map Authoring places *references* to catalog content and paints terrain on
