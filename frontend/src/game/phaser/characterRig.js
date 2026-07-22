@@ -1,5 +1,10 @@
 import { TILE } from '../constants.js'
-import { POSTURE_KEYS, resolveSheetSrc, framesForFacing } from '../../kernel/characterManifest.js'
+import {
+  POSTURE_KEYS,
+  resolveSheetSrc,
+  framesForFacing,
+  CHAR_TILE_BASIS,
+} from '../../kernel/characterManifest.js'
 
 // Shared "character rig" for the manifest-driven player (sprite-mapper). Both
 // TownScene and InteriorScene render the active character from the same sheet,
@@ -11,12 +16,6 @@ import { POSTURE_KEYS, resolveSheetSrc, framesForFacing } from '../../kernel/cha
 // already-present frames/anims) so every scene can safely call it.
 
 export const CHAR_SHEET_KEY = 'char.sheet'
-
-// The sprite-mapper authors characters against a 32-px tile grid; the game
-// renders at TILE (48). Scaling by this ratio keeps the character's size
-// relative to a tile identical to the map-preview's (drawn at scale 1 on a
-// 32-px tile) — e.g. scout's 32×64 frame becomes 48×96 = 2 tiles tall.
-const CHAR_TILE_BASIS = 32
 
 // Read the active manifest from the registry and queue its sheet for loading.
 // Call in a scene's preload(); returns the manifest (or null). The texture is

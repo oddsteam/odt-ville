@@ -15,6 +15,7 @@ import {
   entityOverhangFor,
   entityForegroundFor,
   mapPlayerDepth,
+  slidePlayerDepth,
   spawnTile,
   MAP_PLAYER_DEPTH,
   MAP_PLAYER_OVERHANG_DEPTH,
@@ -211,6 +212,28 @@ describe('entityForegroundFor', () => {
     const fg = entityForegroundFor([a, b], objects)
     expect(fg(0, 0)).toBe(true)
     expect(fg(5, 5)).toBe(true)
+  })
+})
+
+describe('slidePlayerDepth', () => {
+  // Mid-step the avatar overlaps both cells, so the depth has to hold for the
+  // whole slide — stepping *out* of an overhang cell must not pop it over the
+  // art it is still in front of (the NPC head case, #294).
+  const overhangAt = (ox: number, oy: number) => (x: number, y: number) => x === ox && y === oy
+  const never = () => false
+
+  it('keeps the walk-under depth while stepping out of an overhang cell', () => {
+    const d = slidePlayerDepth({ x: 2, y: 2 }, { x: 2, y: 1 }, overhangAt(2, 2), never)
+    expect(d).toBe(MAP_PLAYER_OVERHANG_DEPTH)
+  })
+
+  it('takes the walk-under depth from the start of a step into one', () => {
+    const d = slidePlayerDepth({ x: 2, y: 1 }, { x: 2, y: 2 }, overhangAt(2, 2), never)
+    expect(d).toBe(MAP_PLAYER_OVERHANG_DEPTH)
+  })
+
+  it('stays above the entity band when neither end overhangs', () => {
+    expect(slidePlayerDepth({ x: 0, y: 0 }, { x: 1, y: 0 }, never, never)).toBe(MAP_PLAYER_DEPTH)
   })
 })
 

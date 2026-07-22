@@ -5,7 +5,8 @@
 // `preloadBakedMap` / `renderBakedMap` load and stamp them.
 
 import { TILE } from './constants.ts'
-import type { BakedGround, BakedMap } from './schema.ts'
+import { framesForFacing, resolveSheetSrc, CHAR_TILE_BASIS } from './characterManifest.js'
+import type { BakedEntity, BakedGround, BakedMap } from './schema.ts'
 import {
   loadObjectTextures,
   loadObjectForegroundTextures,
@@ -31,7 +32,9 @@ export interface BakedDraw {
   x: number
   y: number
   key: string
-  frame: number
+  // A tileset cell is a frame index; a character rig's sheet is sliced at render
+  // time, so its stamp names the frame it registers (see `rect`).
+  frame: number | string
   w?: number
   h?: number
   fgMaskKey?: string
@@ -40,6 +43,14 @@ export interface BakedDraw {
   // is stamped as a looping sprite instead of a static image.
   frames?: readonly number[]
   fps?: number
+  // A placed NPC (#294) draws one region of its rig's sheet — an uploaded sheet
+  // is not a uniform grid, so the region comes with the draw and the renderer
+  // registers it under `frame` before stamping. `flipX` is the rig's left-from-
+  // down fallback; the anchor is bottom-centre, like the avatar's feet.
+  rect?: { x: number; y: number; w: number; h: number }
+  flipX?: boolean
+  originX?: number
+  originY?: number
 }
 
 // Texture key for a baked tileset spritesheet. The frame index addresses the
@@ -68,6 +79,47 @@ export interface ObjectArt {
   fg_mask?: string | null
 }
 
+// The rig a placed NPC draws from (#294): the character manifest its catalog row
+// points at, keyed here by *npc* id — the shell resolves
+// npc_id → Catalog::Npc → character_manifest_id → manifest and hands the result
+// in (ADR-0004: the black box takes data, it never fetches). Structural, so the
+// pure draw list is testable without a real manifest.
+export type NpcRig = {
+  sheet?: { path?: string; dataUrl?: string }
+  render?: { scale?: number }
+  postures?: Record<string, ReadonlyArray<{ x: number; y: number; w: number; h: number }>>
+}
+
+// Texture key for a placed NPC's rig sheet, alongside `obj.<id>` for props.
+export const npcSheetKey = (npcId: number) => `npc.${npcId}`
+
+// One stamp for a placed NPC: the idle frame for its authored facing, resolved
+// through the same kernel helper the game's character rig uses, so the pose an
+// author sees can't drift from the one the runtime shows. Sized off the frame at
+// the sprite-mapper's 32-px basis (a 32×64 frame is one tile wide, two tall) and
+// bottom-centre anchored so it stands in its cell. Nothing to draw when the rig
+// is missing (dangling npc_id, no rig picked) or has no frames for that pose.
+function npcDraw(e: BakedEntity, rig?: NpcRig): (BakedDraw & { depth: number }) | null {
+  if (e.npc_id == null || !rig) return null
+  const { slot, frames, flipX } = framesForFacing(rig, e.facing ?? 'down', 'idle')
+  const rect = frames[0]
+  if (!rect) return null
+  const scale = (rig.render?.scale ?? 1) / CHAR_TILE_BASIS
+  return {
+    x: e.x + 0.5,
+    y: e.y + 1,
+    key: npcSheetKey(e.npc_id),
+    frame: `${slot}.0`,
+    rect,
+    flipX,
+    originX: 0.5,
+    originY: 1,
+    w: rect.w * scale,
+    h: rect.h * scale,
+    depth: MAP_ENTITY_DEPTH,
+  }
+}
+
 // Flatten a baked *ground* (the Map Baker's autotiled output) into draw
 // instructions carrying their resolved depth: a 1:1 walk with no neighbour
 // inspection — every layer the producer stacked in a cell becomes one stamp.
@@ -94,6 +146,7 @@ export function groundDrawList(ground: BakedGround): Array<BakedDraw & { depth: 
 export function bakedDraws(
   map: BakedMap,
   objects?: ReadonlyMap<number, ObjectArt>,
+  npcRigs?: ReadonlyMap<number, NpcRig>,
 ): Array<BakedDraw & { depth: number }> {
   const tiles: BakedDraw[] = []
   map.tiles.forEach((rowCells, y) => {
@@ -106,7 +159,11 @@ export function bakedDraws(
 
   const entities: Array<BakedDraw & { depth: number }> = []
   for (const e of map.entities) {
-    if (e.object_id != null) {
+    if (e.kind === 'npc') {
+      // A placed person (#294) draws from its rig, not from the prop catalog.
+      const draw = npcDraw(e, npcRigs?.get(e.npc_id ?? -1))
+      if (draw) entities.push(draw)
+    } else if (e.object_id != null) {
       const obj = objects?.get(e.object_id)
       if (!obj) continue
       entities.push({
@@ -170,6 +227,16 @@ export function preloadBakedMap(scene: Scene) {
   loadObjectTextures(scene, objects)
   // The walk-behind overlay masks (#168), keyed objfg.<id> alongside the art.
   loadObjectForegroundTextures(scene, objects)
+  // The rigs the placed NPCs draw from (#294), keyed npc.<id>: the shell resolves
+  // each npc_id to its character manifest and hands them over the registry, the
+  // same boot-input timing as `bakedObjects`. An NPC with no rig loads nothing
+  // and draws nothing.
+  const npcs: Array<{ id: number; manifest: NpcRig | null }> = scene.registry.get('bakedNpcs') || []
+  scene._bakedNpcs = npcs
+  for (const n of npcs) {
+    const src = n.manifest ? resolveSheetSrc(n.manifest) : ''
+    if (src) scene.load.image(npcSheetKey(n.id), src)
+  }
 }
 
 // Stamp the baked map: ground cells at depth 0, entities just above so props
@@ -181,10 +248,18 @@ export function renderBakedMap(scene: Scene) {
   const objects = new Map<number, ObjectArt>(
     (scene._bakedObjects || []).map((o: { id: number } & ObjectArt) => [o.id, o]),
   )
+  const npcRigs = new Map<number, NpcRig>(
+    (scene._bakedNpcs || [])
+      .filter((n: { manifest: NpcRig | null }) => n.manifest)
+      .map((n: { id: number; manifest: NpcRig }) => [n.id, n.manifest]),
+  )
 
-  for (const d of bakedDraws(map, objects)) {
+  for (const d of bakedDraws(map, objects, npcRigs)) {
     if (d.frames && d.frames.length > 1) stampAnimated(scene, d)
-    else stampEntity(scene, d)
+    else {
+      registerRigFrame(scene, d)
+      stampEntity(scene, d)?.setFlipX(!!d.flipX)
+    }
     // A second, mask-clipped copy of the object art over the avatar's band (#168)
     // — WebGL-only; on the Canvas renderer stampForeground drops it cleanly.
     if (d.fgMaskKey) stampForeground(scene, d)
@@ -195,6 +270,17 @@ export function renderBakedMap(scene: Scene) {
   const worldH = map.rows * TILE
   scene.cameras?.main?.setBounds(0, 0, worldW, worldH)
   scene.cameras?.main?.centerOn(worldW / 2, worldH / 2)
+}
+
+// Slice a rig sheet region into a named frame before its stamp reads it (#294):
+// an uploaded character sheet is not a uniform grid, so the draw carries the
+// region — the same tex.add() slicing buildCharacterRig does for the avatar.
+// A draw with no rect (a tileset cell, an object image) has nothing to slice, and
+// a texture that never loaded is skipped — stampEntity then draws nothing.
+function registerRigFrame(scene: Scene, d: BakedDraw) {
+  if (!d.rect || !scene.textures.exists(d.key)) return
+  const tex = scene.textures.get(d.key)
+  if (!tex.has(d.frame)) tex.add(d.frame, 0, d.rect.x, d.rect.y, d.rect.w, d.rect.h)
 }
 
 // Stamp an ambient animated prop (#85): a looping sprite cycling the draw's

@@ -168,6 +168,8 @@ export {
   propGhost,
 } from './props.ts'
 export type { PlacedProp, SizeOf, MaskOf, DoorOf } from './props.ts'
+export { placeNpc, eraseNpcAt, npcIndexAt, npcEntities, npcsFromBaked, NPC_FACING_DEFAULT } from './npcs.ts'
+export type { PlacedNpc } from './npcs.ts'
 export { newZone, retrigger, triggersFor, zoneIndexAt, eraseZoneAt, replaceZone } from './zoneAuthor.ts'
 export type { ZoneKind } from './zoneAuthor.ts'
 export { importTiledMap, TiledImportError } from './tiledImport.ts'

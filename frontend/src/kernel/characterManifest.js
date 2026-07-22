@@ -26,6 +26,12 @@ export const POSTURE_SLOTS = [
 
 export const POSTURE_KEYS = POSTURE_SLOTS.map((s) => s.key)
 
+// The sprite-mapper authors characters against a 32-px tile grid; everything
+// that renders one at TILE scales by the ratio, so a 32×64 frame stays exactly
+// one tile wide and two tall. Shared by the game's rig and the map renderer's
+// placed NPCs so the two can't size the same sheet differently.
+export const CHAR_TILE_BASIS = 32
+
 // The image src the preview/mapper should load: an uploaded sheet is stored
 // inline as a data URL (embedded in the saved manifest); a bundled sheet is
 // referenced by repo path.

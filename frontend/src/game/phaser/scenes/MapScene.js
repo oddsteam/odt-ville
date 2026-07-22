@@ -2,7 +2,7 @@ import Phaser from 'phaser'
 import { preloadBakedMap, renderBakedMap } from '../../../kernel/mapRenderer.ts'
 import { MOVE_MS, TILE } from '../../constants.js'
 import { cameraBounds } from '../canvasLayout.ts'
-import { spawnTile, mapWalkable, entityBlockedFor, entityEdgeBlockedFor, entityDoorCells, entityLadderFor, entityOverhangFor, entityForegroundFor, mapPlayerDepth, feetWorldXY } from '../mapWalk.ts'
+import { spawnTile, mapWalkable, entityBlockedFor, entityEdgeBlockedFor, entityDoorCells, entityLadderFor, entityOverhangFor, entityForegroundFor, mapPlayerDepth, slidePlayerDepth, feetWorldXY } from '../mapWalk.ts'
 import {
   CHAR_SHEET_KEY,
   preloadCharacter,
@@ -427,12 +427,13 @@ export default class MapScene extends Phaser.Scene {
         // One presence frame per tile-step (#88) — peers replay the step as a
         // tween, so cadence is bounded by walk speed, not frame rate.
         if (this.presence) this.sendPosition()
-        // Drop below the entity band from the start of the step onto an overhang
-        // cell so the object's art overhangs the avatar the whole slide (#210),
-        // or between the base art and the fg overlay onto a foreground cell so the
-        // masked canopy covers the avatar (#168), mirroring TownScene's per-step
-        // playerDepthAt.
-        this.player.setDepth(mapPlayerDepth(this.isOverhang(t.x, t.y), this.isForeground(t.x, t.y)))
+        // Drop below the entity band for the whole slide when either end of the
+        // step is an overhang cell, so the object's art overhangs the avatar
+        // stepping in *and* out (#210, #294), or between the base art and the fg
+        // overlay on a foreground cell so the masked canopy covers it (#168) —
+        // mirroring TownScene's per-step playerDepthAt. onArrive settles it back
+        // to the landed cell's own depth.
+        this.player.setDepth(slidePlayerDepth(from, t, this.isOverhang, this.isForeground))
         // Climb while stepping onto a placed object's ladder cell (#211); the
         // rig falls back to walk when the character authors no climb frames.
         if (this.usingManifest) applyFacing(this.player, this.charDir, dir, true, this.isLadder(t.x, t.y))
@@ -444,6 +445,10 @@ export default class MapScene extends Phaser.Scene {
       },
       onArrive: () => {
         this.movingTween = null
+        // Settle on the landed cell's own depth — the slide may have held the
+        // walk-under band for the cell it left (#294).
+        const at = this.playerTile
+        this.player.setDepth(mapPlayerDepth(this.isOverhang(at.x, at.y), this.isForeground(at.x, at.y)))
         if (this.usingManifest && !this.activeDirection()) {
           applyFacing(this.player, this.charDir, this.facing, false)
         }

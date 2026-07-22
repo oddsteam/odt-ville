@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest'
 import { decorationsBaked } from './service.ts'
 import type { PlacedProp } from './props.ts'
+import { npcEntities } from './npcs.ts'
 
 describe('decorationsBaked', () => {
   it('carries the mask and bakes props as object references', () => {
@@ -22,6 +23,18 @@ describe('decorationsBaked', () => {
     const b = decorationsBaked(null, [{ object_id: 7, x: 1, y: 1 }], legacy, [])
     expect(b.entities).toEqual([
       { kind: 'prop', tileset: 'sheet', frame: 41, x: 0, y: 0 },
+      { kind: 'prop', object_id: 7, x: 1, y: 1 },
+    ])
+  })
+
+  it('keeps placed NPCs when the props layer is re-saved (#294)', () => {
+    // The editor bakes NPCs from their own list into the non-prop entities, so
+    // a prop save (or a collision paint) writes them back rather than wiping.
+    const b = decorationsBaked(null, [{ object_id: 7, x: 1, y: 1 }], npcEntities([
+      { npc_id: 3, x: 4, y: 5, facing: 'left' },
+    ]), [])
+    expect(b.entities).toEqual([
+      { kind: 'npc', npc_id: 3, x: 4, y: 5, facing: 'left', walk_mask: ['#'] },
       { kind: 'prop', object_id: 7, x: 1, y: 1 },
     ])
   })

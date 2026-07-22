@@ -85,6 +85,15 @@ export function entityOverhangFor(
 ): (x: number, y: number) => boolean {
   const overhangs = new Set<string>()
   for (const e of entities) {
+    // A placed person (#294) stands one tile but is drawn two tall, so its head
+    // occupies the cell to the north: an avatar standing there is *behind* the
+    // NPC and must draw under its art, exactly as under a walk-under prop. The
+    // cell stays walkable — only the depth changes. A walk_mask can't say this
+    // itself, since it anchors at (x,y) and only reaches south.
+    // ponytail: assumes the conventional one-wide, two-tall rig (the sprite
+    // mapper's 32×64 basis). A taller rig would need its height baked onto the
+    // entity at save.
+    if (e.kind === 'npc') overhangs.add(`${e.x},${e.y - 1}`)
     const mask = e.walk_mask
     if (!mask) continue
     for (let dy = 0; dy < mask.length; dy++) {
@@ -142,6 +151,24 @@ export function mapPlayerDepth(isOverhang: boolean, isForeground = false): numbe
   if (isOverhang) return MAP_PLAYER_OVERHANG_DEPTH
   if (isForeground) return MAP_PLAYER_FOREGROUND_DEPTH
   return MAP_PLAYER_DEPTH
+}
+
+// The depth to hold for a whole tile-step (#210, #294). Mid-slide the avatar
+// overlaps both cells, so it stays under the entity band while EITHER end of the
+// step is an overhang cell: taking the destination's depth alone pops the avatar
+// over the art it is still standing in front of the instant it steps *out* —
+// most visible walking away from a placed NPC, whose head fills the cell behind
+// it. The caller restores the landed cell's own depth on arrival.
+export function slidePlayerDepth(
+  from: Tile,
+  to: Tile,
+  isOverhang: (x: number, y: number) => boolean,
+  isForeground: (x: number, y: number) => boolean,
+): number {
+  return mapPlayerDepth(
+    isOverhang(from.x, from.y) || isOverhang(to.x, to.y),
+    isForeground(from.x, from.y) || isForeground(to.x, to.y),
+  )
 }
 
 // The impassable cell borders a set of placed entities contribute, as a fast
