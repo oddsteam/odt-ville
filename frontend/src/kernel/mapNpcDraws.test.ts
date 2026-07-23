@@ -7,6 +7,7 @@
 import { describe, expect, it } from 'vitest'
 import { bakedDraws, npcSheetKey, type NpcRig } from './mapRenderer.ts'
 import type { BakedMap } from './schema.ts'
+import { TILE } from './constants.ts'
 
 // A rig with its own left/up postures and a 32×64 frame, like a mapped sheet.
 const RIG = {
@@ -37,7 +38,15 @@ describe('bakedDraws for a placed NPC', () => {
     expect(d).toMatchObject({ rect: { x: 64, y: 0, w: 32, h: 64 }, flipX: false })
     // Stands in its cell the way the avatar does: bottom-centre anchored, so a
     // two-tile-tall sprite rises out of the tile instead of hanging below it.
-    expect(d).toMatchObject({ x: 1.5, y: 3, originX: 0.5, originY: 1, w: 1, h: 2 })
+    expect(d).toMatchObject({ x: 1.5, y: 3, originX: 0.5, originY: 1 })
+    // Scaled, not display-sized: an animating rig's frames differ in size, so
+    // the stamp scales source px like the avatar's rig does (#295).
+    expect(d?.scale).toBeCloseTo(TILE / 32)
+  })
+
+  it('carries the source entity, so the runtime can rig and command it (#295)', () => {
+    const d = npcDraw([{ kind: 'npc', npc_id: 7, x: 1, y: 2, facing: 'up' }])
+    expect(d?.npc).toMatchObject({ kind: 'npc', npc_id: 7, x: 1, y: 2, facing: 'up' })
   })
 
   it('falls back to the down posture, flipped, for a facing the rig lacks', () => {

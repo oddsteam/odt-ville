@@ -1,10 +1,9 @@
-import { TILE } from '../constants.js'
-import {
-  POSTURE_KEYS,
-  resolveSheetSrc,
-  framesForFacing,
-  CHAR_TILE_BASIS,
-} from '../../kernel/characterManifest.js'
+import { POSTURE_KEYS, resolveSheetSrc, framesForFacing } from '../../kernel/characterManifest.js'
+
+// The manifest sprite's on-screen scale lives in the kernel beside the tile
+// basis it uses (#295), shared with the map renderer's placed NPCs. Re-exported
+// so the scenes keep reaching it through the rig they already import.
+export { characterScale } from '../../kernel/characterManifest.js'
 
 // Shared "character rig" for the manifest-driven player (sprite-mapper). Both
 // TownScene and InteriorScene render the active character from the same sheet,
@@ -121,12 +120,6 @@ export function buildCharacterRig(scene, manifest, sheetKey = CHAR_SHEET_KEY) {
     }
   }
   return { usingManifest, charDir }
-}
-
-// On-screen scale for the manifest sprite (render.scale × tile-basis ratio).
-export function characterScale(manifest) {
-  const render = manifest?.render || {}
-  return (render.scale || 1) * (TILE / CHAR_TILE_BASIS)
 }
 
 // One runtime-loaded texture per distinct peer character (#266); the local

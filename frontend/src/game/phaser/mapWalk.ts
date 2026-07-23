@@ -85,15 +85,6 @@ export function entityOverhangFor(
 ): (x: number, y: number) => boolean {
   const overhangs = new Set<string>()
   for (const e of entities) {
-    // A placed person (#294) stands one tile but is drawn two tall, so its head
-    // occupies the cell to the north: an avatar standing there is *behind* the
-    // NPC and must draw under its art, exactly as under a walk-under prop. The
-    // cell stays walkable — only the depth changes. A walk_mask can't say this
-    // itself, since it anchors at (x,y) and only reaches south.
-    // ponytail: assumes the conventional one-wide, two-tall rig (the sprite
-    // mapper's 32×64 basis). A taller rig would need its height baked onto the
-    // entity at save.
-    if (e.kind === 'npc') overhangs.add(`${e.x},${e.y - 1}`)
     const mask = e.walk_mask
     if (!mask) continue
     for (let dy = 0; dy < mask.length; dy++) {

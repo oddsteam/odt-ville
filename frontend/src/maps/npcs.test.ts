@@ -50,11 +50,12 @@ describe('npc placement', () => {
     expect(blocked(3, 3)).toBe(false)
   })
 
-  it('overhangs the cell its head occupies, so an avatar north of it walks behind', () => {
+  it('paints no overhang cells — a person is depth-sorted, not walked under', () => {
+    // #294 borrowed the walk-under band to keep the avatar behind an NPC's head;
+    // #295 sorts NPCs against the avatar's row instead (see mapNpcs), so the
+    // avatar keeps its own depth relative to props while standing there.
     const overhang = entityOverhangFor(npcEntities([npc(1, 2, 3)]))
-    expect(overhang(2, 2)).toBe(true)
-    // Not beside it, and not the cell it stands on (which is blocked anyway).
-    expect(overhang(1, 2)).toBe(false)
-    expect(overhang(2, 4)).toBe(false)
+    expect(overhang(2, 2)).toBe(false)
+    expect(overhang(2, 3)).toBe(false)
   })
 })

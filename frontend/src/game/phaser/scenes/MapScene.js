@@ -3,6 +3,7 @@ import { preloadBakedMap, renderBakedMap } from '../../../kernel/mapRenderer.ts'
 import { MOVE_MS, TILE } from '../../constants.js'
 import { cameraBounds } from '../canvasLayout.ts'
 import { spawnTile, mapWalkable, entityBlockedFor, entityEdgeBlockedFor, entityDoorCells, entityLadderFor, entityOverhangFor, entityForegroundFor, mapPlayerDepth, slidePlayerDepth, feetWorldXY } from '../mapWalk.ts'
+import { spawnNpcs, npcBlockedFor, sortNpcs } from '../mapNpcs.ts'
 import {
   CHAR_SHEET_KEY,
   preloadCharacter,
@@ -74,12 +75,25 @@ export default class MapScene extends Phaser.Scene {
     // enterable, mirroring town.ts's always-walkable door. Legacy/door-less maps
     // yield no door cells, so this leaves walk-mask collision untouched.
     this.doorCell = entityDoorCells(map.entities)
-    const entityBlocked = entityBlockedFor(map.entities)
+    // The placed NPCs, alive (#295): the kernel's stamps rigged and animating,
+    // each holding the cell it actually stands on.
+    this.npcs = spawnNpcs(this)
+    // A placed NPC's baked walk_mask is only its authored *starting* cell (#294),
+    // so it is skipped here — the live entity speaks for where an NPC blocks, and
+    // keeps doing so once something walks it. Unlike a building's mask, a person
+    // is not opened by a door cell: you can't walk through someone standing in a
+    // doorway.
+    const entityBlocked = entityBlockedFor(map.entities.filter((e) => e.kind !== 'npc'))
+    const npcBlocked = npcBlockedFor(this.npcs)
     // Walkability = in bounds ∧ not in the collision mask ∧ not blocked by a
-    // placed entity's walk-mask (#131), except the door cell is always walkable.
-    // Legacy maps carry no `collision` and only props (no walk_mask), so this
-    // reduces to the in-bounds tracer rule for them.
-    this.walkable = mapWalkable(map, map.collision, (x, y) => entityBlocked(x, y) && !this.doorCell(x, y))
+    // placed entity's walk-mask (#131) or a live NPC, except the door cell is
+    // always walkable. Legacy maps carry no `collision` and only props (no
+    // walk_mask), so this reduces to the in-bounds tracer rule for them.
+    this.walkable = mapWalkable(
+      map,
+      map.collision,
+      (x, y) => (entityBlocked(x, y) && !this.doorCell(x, y)) || npcBlocked(x, y),
+    )
     // Fence-style border collision (#207): a placed entity's edge_mask blocks the
     // border *between* two otherwise-walkable cells (not the cell itself), so it
     // rides stepTile's transition-aware veto rather than `walkable`. Legacy maps
@@ -131,6 +145,9 @@ export default class MapScene extends Phaser.Scene {
         this.isForeground(this.playerTile.x, this.playerTile.y),
       ),
     )
+    // NPCs sort against the avatar's row rather than the flat entity band (#295)
+    // — one standing further south covers it, one further north stands behind.
+    sortNpcs(this.npcs, this.playerTile.y)
 
     this.cursors = this.input.keyboard.createCursorKeys()
     this.wasd = this.input.keyboard.addKeys({
@@ -434,6 +451,9 @@ export default class MapScene extends Phaser.Scene {
         // mirroring TownScene's per-step playerDepthAt. onArrive settles it back
         // to the landed cell's own depth.
         this.player.setDepth(slidePlayerDepth(from, t, this.isOverhang, this.isForeground))
+        // Re-sort the NPCs against the row being stepped onto, so walking past
+        // one swaps who covers whom for the whole slide (#295).
+        sortNpcs(this.npcs, t.y)
         // Climb while stepping onto a placed object's ladder cell (#211); the
         // rig falls back to walk when the character authors no climb frames.
         if (this.usingManifest) applyFacing(this.player, this.charDir, dir, true, this.isLadder(t.x, t.y))

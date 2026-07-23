@@ -5,6 +5,8 @@
 // The data-service side of the manifest (fetch/persist) lives in
 // src/character/service.ts.
 
+import { TILE } from './constants.ts'
+
 // Posture slot keys in display order, grouped idle/walk per direction, plus the
 // climb slots (#55). Climb is optional: a character without climb frames falls
 // back to walk on a ladder cell (#54), so old manifests keep working untouched.
@@ -31,6 +33,13 @@ export const POSTURE_KEYS = POSTURE_SLOTS.map((s) => s.key)
 // one tile wide and two tall. Shared by the game's rig and the map renderer's
 // placed NPCs so the two can't size the same sheet differently.
 export const CHAR_TILE_BASIS = 32
+
+// On-screen scale for a manifest sprite: its authored scale against the tile
+// basis. Sprites scale rather than display-size, because an animating rig's
+// frames differ in size — a fixed display size would stretch each one.
+export function characterScale(m) {
+  return (m?.render?.scale || 1) * (TILE / CHAR_TILE_BASIS)
+}
 
 // The image src the preview/mapper should load: an uploaded sheet is stored
 // inline as a data URL (embedded in the saved manifest); a bundled sheet is
