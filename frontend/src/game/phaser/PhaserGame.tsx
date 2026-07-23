@@ -103,7 +103,7 @@ export type PhaserGameProps = {
     // the registry exactly as it does on the standalone /maps/:slug page.
     // `voice` (#287) rides the same bundle: the proximity-voice mesh for a
     // multiplayer target, or null for a solo map.
-  }) => Promise<{ map: unknown; objects: unknown; presence?: unknown; voice?: unknown } | null>
+  }) => Promise<{ map: unknown; objects: unknown; bakedNpcs?: unknown; presence?: unknown; voice?: unknown } | null>
   trainerDefeated: boolean
   onTrainerDefeated: () => void
 }
@@ -207,6 +207,10 @@ export default function PhaserGame({
       if (!loaded) return false
       game.registry.set('bakedMap', loaded.map)
       game.registry.set('bakedObjects', loaded.objects)
+      // The placed NPCs' rigs (#294/#295), like MapPage sets on /maps/:slug —
+      // MapScene's preload reads this to load each sheet; without it a portalled
+      // NPC draws nothing. Set every hop so a target with none clears the last.
+      game.registry.set('bakedNpcs', loaded.bakedNpcs ?? [])
       game.registry.set('entrySpawnId', portal.entrySpawnId)
       // Presence (#269): set every hop, so a solo target clears the room the
       // previous multiplayer map left here rather than inheriting its peers.
