@@ -17,7 +17,7 @@ import { presenceSession } from './lib/presenceSession.ts'
 import { voiceSession } from './lib/voiceSession.ts'
 import { connectVoice } from './voice/mesh.ts'
 import { ViewerService } from './viewer/service.ts'
-import { loadManifestById } from './character/service.ts'
+import { loadManifestById, loadNpcRigs } from './character/service.ts'
 import { trackEnterDoor, trackInteractBoard, trackEncounter } from './analytics/events.ts'
 import type { Community, FeedItem } from './communities/schema.ts'
 import type { GameSession } from './game-session/schema.ts'
@@ -198,15 +198,20 @@ export default function VillagePage() {
       try {
         const map = await runEdge(MapsService.get(portal.targetNode))
         const objects = await runEdge(TileObjectsService.getMany(objectIdsFrom(map.entities)))
+        // The rigs this target's placed NPCs (#294/#295) draw from — the piece
+        // MapPage loads but this in-game portal path was missing, so an NPC
+        // reached through a town door never got its sheet and drew nothing.
+        const placed = new Set(map.entities.filter((e) => e.kind === 'npc').map((e) => e.npc_id))
+        const bakedNpcs = await loadNpcRigs(npcs.filter((n) => placed.has(n.id)))
         const presence = await presenceRef.current.open(map)
         const voice = await voiceRef.current.open(map)
-        return { map, objects, presence, voice }
+        return { map, objects, bakedNpcs, presence, voice }
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e))
         return null
       }
     },
-    [],
+    [npcs],
   )
 
   // Each board's "open content list" action — for the demo every board

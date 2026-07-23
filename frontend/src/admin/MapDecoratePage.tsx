@@ -11,7 +11,7 @@ import type { Npc } from '../catalog/npcs/schema.ts'
 import { makeMask, setMaskCell, resizeMask, isMaskEmpty, type Mask } from './maskPaint.ts'
 import { groupPalette } from './paletteGroups.ts'
 import { zoneRects as buildZoneRects, ZONE_COLORS } from './zoneRects.ts'
-import { placeProp, erasePropAt, propEntities, propsFromBaked, propGhost, newZone, retrigger, triggersFor, zoneIndexAt, eraseZoneAt, replaceZone, placeNpc, eraseNpcAt, npcIndexAt, npcEntities, npcsFromBaked, NPC_FACING_DEFAULT, draftMap, stashDraft, DRAFT_PLAY_PATH, type PlacedProp, type PlacedNpc, type SizeOf, type MaskOf, type DoorOf, type ZoneKind } from '../maps/service.ts'
+import { placeProp, erasePropAt, propEntities, propsFromBaked, propGhost, newZone, retrigger, triggersFor, zoneIndexAt, eraseZoneAt, replaceZone, placeNpc, eraseNpcAt, npcIndexAt, npcEntities, npcsFromBaked, NPC_FACING_DEFAULT, isDuellist, markDuellist, unmarkDuellist, syncDuellistZones, draftMap, stashDraft, DRAFT_PLAY_PATH, type PlacedProp, type PlacedNpc, type SizeOf, type MaskOf, type DoorOf, type ZoneKind } from '../maps/service.ts'
 import type { MapAccessPolicy } from '../kernel/schema.ts'
 import MapPreview from './MapPreview.tsx'
 import { runEdge } from '../lib/runEdge.ts'
@@ -176,6 +176,15 @@ export default function MapDecoratePage() {
       live = false
     }
   }, [npcs])
+
+  // The derived-facing contract (#296): a duellist NPC's sight cone is seeded
+  // from its pose, so whenever the NPCs change — turned, erased, or a cell
+  // re-stamped — reconcile every seeded cone to match. `syncDuellistZones`
+  // returns the same array when nothing moved, so React bails and there's no
+  // loop; hand-authored trainer Zones are left alone.
+  useEffect(() => {
+    setZones((zs) => syncDuellistZones(zs, placedNpcs))
+  }, [placedNpcs])
 
   // A press on the preview: paint the collision cell, place/select/erase a
   // zone or an NPC, or place/erase a prop.
@@ -409,6 +418,17 @@ export default function MapDecoratePage() {
                     {FACINGS.map((f) => <option key={f} value={f}>{f}</option>)}
                   </select>
                 </label>
+                {/* Marking a duellist (#296) emits a trainer on_sight Zone at
+                    this cell, its cone seeded from — and kept in sync with — the
+                    facing above. Un-marking deletes that cone; range/footprint
+                    are edited on it in the Zones tool. */}
+                <label>
+                  <input type="checkbox" checked={isDuellist(zones, placedNpc)}
+                    onChange={(e) =>
+                      setZones((zs) => (e.target.checked ? markDuellist(zs, placedNpc) : unmarkDuellist(zs, placedNpc)))
+                    } />
+                  {' '}Duellist — sees you in a cone
+                </label>
               </div>
             )}
           </div>
@@ -436,26 +456,35 @@ export default function MapDecoratePage() {
               // Const alias so the payload's kind-narrowing survives into the
               // onChange closures (property narrowing resets there).
               const p = zone.payload
+              // A cone seeded by marking an NPC a duellist (#296): its trigger,
+              // facing and NPC are owned by that NPC, so they're shown read-only
+              // here — only range/footprint stay authorable on the Zone.
+              const fromNpc = p.kind === 'trainer' && p.fromNpc === true
               return (
               <div className="admin-field" style={{ display: 'grid', gap: 6 }}>
                 <strong>{p.kind} at ({zone.x}, {zone.y})</strong>
-                <label>Trigger{' '}
-                  {/* retrigger carries the aim across the switch, because the
-                      schema ties `facing` to on_sight (#86) — picking it here
-                      seeds a facing rather than producing an illegal zone. */}
-                  <select value={zone.trigger}
-                    onChange={(e) => editZone(retrigger(zone, e.target.value as ZoneTrigger))}>
-                    {[...new Set([...triggersFor(p.kind), zone.trigger])].map((t) => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                </label>
+                {fromNpc && <p className="admin-hint">Seeded from the NPC at this cell — facing follows its pose (#296). Turn it in the NPCs tool.</p>}
+                {!fromNpc && (
+                  <label>Trigger{' '}
+                    {/* retrigger carries the aim across the switch, because the
+                        schema ties `facing` to on_sight (#86) — picking it here
+                        seeds a facing rather than producing an illegal zone. */}
+                    <select value={zone.trigger}
+                      onChange={(e) => editZone(retrigger(zone, e.target.value as ZoneTrigger))}>
+                      {[...new Set([...triggersFor(p.kind), zone.trigger])].map((t) => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  </label>
+                )}
                 {zone.trigger === 'on_sight' && (
                   <>
-                    <label>Faces{' '}
-                      <select value={zone.facing}
-                        onChange={(e) => editZone({ ...zone, facing: e.target.value as ZoneFacing })}>
-                        {FACINGS.map((f) => <option key={f} value={f}>{f}</option>)}
-                      </select>
-                    </label>
+                    {!fromNpc && (
+                      <label>Faces{' '}
+                        <select value={zone.facing}
+                          onChange={(e) => editZone({ ...zone, facing: e.target.value as ZoneFacing })}>
+                          {FACINGS.map((f) => <option key={f} value={f}>{f}</option>)}
+                        </select>
+                      </label>
+                    )}
                     <label>Sees (tiles){' '}
                       <input type="number" min={1} max={Math.max(baked.cols, baked.rows)} value={zone.range ?? 1}
                         onChange={(e) => editZone({ ...zone, range: Math.max(1, Number(e.target.value) || 1) })} />
@@ -485,16 +514,22 @@ export default function MapDecoratePage() {
                   </>
                 )}
                 {p.kind === 'trainer' && (
-                  <label>NPC{' '}
-                    {/* Identity comes from the catalog row (#259); the payload
-                        holds only which one duels you. facing/range are the
-                        on_sight fields above, not duplicated here. */}
-                    <select value={p.npcId}
-                      onChange={(e) => editZone({ ...zone, payload: { ...p, npcId: Number(e.target.value) } })}>
-                      <option value={0}>(pick an NPC)</option>
-                      {npcs.map((n) => <option key={n.id} value={n.id}>{n.name}</option>)}
-                    </select>
-                  </label>
+                  fromNpc ? (
+                    // Seeded cone: the NPC is the placed one this cone belongs to
+                    // (#296), not a free choice — shown, not picked.
+                    <p className="admin-hint">NPC: {npcName(p.npcId)}</p>
+                  ) : (
+                    <label>NPC{' '}
+                      {/* Identity comes from the catalog row (#259); the payload
+                          holds only which one duels you. facing/range are the
+                          on_sight fields above, not duplicated here. */}
+                      <select value={p.npcId}
+                        onChange={(e) => editZone({ ...zone, payload: { ...p, npcId: Number(e.target.value) } })}>
+                        <option value={0}>(pick an NPC)</option>
+                        {npcs.map((n) => <option key={n.id} value={n.id}>{n.name}</option>)}
+                      </select>
+                    </label>
+                  )
                 )}
                 {p.kind === 'encounter' && (
                   <label>Pool{' '}
