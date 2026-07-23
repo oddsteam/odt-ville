@@ -172,6 +172,7 @@ export { placeNpc, eraseNpcAt, npcIndexAt, npcEntities, npcsFromBaked, NPC_FACIN
 export type { PlacedNpc } from './npcs.ts'
 export { newZone, retrigger, triggersFor, zoneIndexAt, eraseZoneAt, replaceZone } from './zoneAuthor.ts'
 export type { ZoneKind } from './zoneAuthor.ts'
+export { isDuellist, markDuellist, unmarkDuellist, syncDuellistZones } from './duellist.ts'
 export { importTiledMap, TiledImportError } from './tiledImport.ts'
 export { travel } from './travel.ts'
 // Preview-in-game handoff (#91): the editor stashes its draft document, the

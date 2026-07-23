@@ -131,6 +131,13 @@ export const ZonePayload = Schema.Union(
   Schema.Struct({
     kind: Schema.Literal('trainer'),
     npcId: Schema.Number,
+    // Set when this cone was emitted by marking a *placed* NPC a duellist
+    // (#296) rather than hand-drawn: its `facing` is then derived — owned by
+    // that NPC's pose — and it is deleted with the NPC. The tag is what keeps
+    // a hand-authored trainer Zone (untagged) from ever being adopted,
+    // re-pointed, or cascade-deleted by the NPC gesture. Absent on hand-drawn
+    // trainers (the common case), so optional.
+    fromNpc: Schema.optional(Schema.Boolean),
   }),
   // The wild-encounter roll (#87, ADR-0005): stepping onto the Zone rolls a wild
   // monster from the named `pool` (GET /monsters/pool?pool=…) through `onZone`.
