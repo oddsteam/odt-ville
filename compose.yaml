@@ -58,6 +58,13 @@ services:
       KEYCLOAK_ISSUER: http://localhost:8080/realms/odtville
       KEYCLOAK_AUDIENCE: odt-ville-web
       KEYCLOAK_JWKS_URI: http://keycloak:8080/realms/odtville/protocol/openid-connect/certs
+      # LiveKit SFU voice (ADR-0011, #298). Room tokens are minted server-side
+      # from this key/secret — they are NEVER sent to the browser. Supply via the
+      # host's gitignored .env; absent = voice disabled (mirrors VITE_TURN, #283).
+      # These MUST NOT gain a VITE_ prefix — that would inline them into the client
+      # bundle, the one unrecoverable mistake this issue guards against (#298).
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-}
     command: bash -c "rm -f tmp/pids/server.pid && bundle install && bin/rails db:prepare && bin/rails server -b 0.0.0.0 -p 3190"
     volumes:
       - ./backend:/app
@@ -80,6 +87,10 @@ services:
       # no-op. Keep the secret out of git — supply via the host env, e.g.
       # `VITE_POSTHOG_KEY=phc_xxx docker compose up`. Host defaults to US cloud.
       VITE_POSTHOG_KEY: ${VITE_POSTHOG_KEY:-}
+      # LiveKit server URL (ADR-0011, #298). NOT a secret — the browser dials it
+      # directly (wss://…livekit.cloud) and the backend-minted token authorizes
+      # the join. Supplied from the host .env, as VITE_TURN_URL was (#283).
+      VITE_LIVEKIT_URL: ${VITE_LIVEKIT_URL:-}
     command: bash -c "pnpm install && pnpm run dev --host 0.0.0.0"
     volumes:
       - ./frontend:/app
