@@ -108,6 +108,14 @@ Rails.application.routes.draw do
         put "terrains/order", to: "terrains#reorder"
       end
 
+      # The Voice domain (ADR-0011, #308) — controller under Api::V1::Voice::.
+      # Mints a LiveKit room token for the connecting user; the room derives
+      # from the map. The api secret is read from env and never leaves the
+      # server — no token is ever minted in the browser.
+      scope module: :voice do
+        get "voice/token", to: "voice_tokens#show"
+      end
+
       # The Maps domain (ADR-0010) — controllers under Api::V1::Maps::, URLs
       # unchanged (`scope module:` nests the controller, not the path).
       scope module: :maps do
