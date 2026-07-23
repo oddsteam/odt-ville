@@ -9,6 +9,7 @@ import PerfStallNotice from '../PerfStallNotice.tsx'
 import bus from './bus.js'
 import { villageZone } from './villageZone.ts'
 import { applyMapTarget } from '../../kernel/mapTarget.ts'
+import { warp } from '../transition.ts'
 import { trainerOpponent } from './trainerDuel.ts'
 import { gateTrainerOpponent, pickWild, wildStepGate } from '../encounters.js'
 import type { Community } from '../../communities/schema.ts'
@@ -221,9 +222,14 @@ export default function PhaserGame({
       // Keep the community that owns this chain: an onward hop stays inside the
       // community it entered, so exit-to-town still reports the right door.
       game.registry.set('portalCommunityId', communityId)
-      game.scene.stop('Town')
-      game.scene.stop('Map')
-      game.scene.start('Map')
+      // Swap at black (#254): the fade is bounded and the load already resolved
+      // above, so this waits on the effect, not the network. Stopping both
+      // scenes covers either origin; stopping an idle one is a no-op.
+      await warp(() => {
+        game.scene.stop('Town')
+        game.scene.stop('Map')
+        game.scene.start('Map')
+      })
       return true
     }
 
@@ -278,8 +284,10 @@ export default function PhaserGame({
         exitToTown: () => {
           const id = (game.registry.get('portalCommunityId') as number | undefined) ?? null
           bus.emit('exitCommunity', id)
-          game.scene.stop('Map')
-          game.scene.start('Town', { exitedCommunityId: id })
+          void warp(() => {
+            game.scene.stop('Map')
+            game.scene.start('Town', { exitedCommunityId: id })
+          })
         },
         travel: (portal) => {
           void enterPortal(portal, (game.registry.get('portalCommunityId') as number | undefined) ?? null)
