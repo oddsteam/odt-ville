@@ -5,17 +5,17 @@ import MapScene from './game/phaser/scenes/MapScene.js'
 import EncounterScene from './game/phaser/scenes/EncounterScene.js'
 import { trainerOpponent } from './game/phaser/trainerDuel.ts'
 import { MapsService, takeDraft, travel } from './maps/service.ts'
-import { TileObjectsService } from './catalog/tileObjects/service.ts'
+import { loadMapBundle } from './maps/target.ts'
+import { applyMapTarget } from './kernel/mapTarget.ts'
 import { MonstersService } from './catalog/monsters/service.ts'
 import { NpcsService } from './catalog/npcs/service.ts'
 import { pickWild, wildStepGate } from './game/encounters.js'
-import { objectIdsFrom } from './maps/props.ts'
 import { runEdge } from './lib/runEdge.ts'
 import { subscribeAuthToken } from './lib/authToken.ts'
 import { connectPresence } from './lib/presenceClient.ts'
 import { connectVoice } from './voice/mesh.ts'
 import { ViewerService } from './viewer/service.ts'
-import { loadManifestById, loadMyManifest, loadNpcRigs } from './character/service.ts'
+import { loadManifestById, loadMyManifest } from './character/service.ts'
 import type { BakedMap, Zone } from './kernel/schema.ts'
 import type { Npc } from './catalog/npcs/schema.ts'
 
@@ -78,19 +78,17 @@ export default function MapPage({ draft = false }: { draft?: boolean }) {
     ])
       .then(async ([m, manifest]) => {
         if (!m) throw new Error('No draft to preview — use "Preview in game" in the editor.')
-        const objects = await runEdge(TileObjectsService.getMany(objectIdsFrom(m.entities)))
         const npcs = await runEdge(NpcsService.list()).catch(() => [] as readonly Npc[])
-        // The rigs the NPCs this map placed draw from (#294) — only the placed
-        // ones, so a big catalog costs nothing to walk past.
-        const placed = new Set(m.entities.filter((e) => e.kind === 'npc').map((e) => e.npc_id))
-        const rigs = await loadNpcRigs(npcs.filter((n) => placed.has(n.id)))
+        // Objects + placed-NPC rigs assembled by the shared helper (#303), the
+        // same bundle the portal path loads.
+        const { objects, bakedNpcs } = await loadMapBundle(m, npcs)
         const viewer = m.multiplayer ? await runEdge(ViewerService.get()).catch(() => null) : null
         if (!active) return
         ownIdRef.current = viewer?.user.external_id ?? null
         manifestRef.current = manifest
         objectsRef.current = objects
         npcsRef.current = npcs
-        npcRigsRef.current = rigs
+        npcRigsRef.current = bakedNpcs
         setMap(m)
       })
       .catch((e) => active && setError(e instanceof Error ? e.message : String(e)))
@@ -125,27 +123,15 @@ export default function MapPage({ draft = false }: { draft?: boolean }) {
       // in place; it launches paused over MapScene and resumes 'Map' on close.
       scene: [MapScene, EncounterScene],
     })
-    game.registry.set('bakedMap', map)
-    game.registry.set('bakedObjects', objectsRef.current)
+    // Session-stable inputs for this fresh game (the town keeps these across
+    // hops; here each map boots its own game, so set them once at boot).
     game.registry.set('characterManifest', manifestRef.current)
-    game.registry.set('entrySpawnId', entrySpawnIdRef.current)
     game.registry.set('npcs', npcsRef.current)
-    game.registry.set('bakedNpcs', npcRigsRef.current)
     // Presence (#88): a multiplayer map opens its per-map room; solo maps —
     // and the generated hometown, which never renders through this page —
     // stay offline. The handle rides the registry like onZone: the scene
     // renders peers and broadcasts steps, the shell owns the wire.
     const presence = map.multiplayer && ownIdRef.current ? connectPresence(map.slug) : null
-    // `loadManifest` rides the same bundle (#266): frames name their sender's
-    // character and the scene asks for it through here, so the fetch stays
-    // shell-side like every other data call.
-    if (presence) {
-      game.registry.set('presence', {
-        ownId: ownIdRef.current,
-        loadManifest: loadManifestById,
-        ...presence,
-      })
-    }
     // Proximity voice (#280): mesh WebRTC audio to pod peers, driven by the same
     // roster MapScene renders. Explicit guard — a solo map, and the generated
     // hometown (no Maps::Map row, so never `multiplayer`), open no voice; media
@@ -153,7 +139,19 @@ export default function MapPage({ draft = false }: { draft?: boolean }) {
     // presence, so the game imports no voice code (ADR-0004, arch rule #278).
     const voice =
       map.multiplayer && ownIdRef.current ? connectVoice(map.slug, ownIdRef.current) : null
-    if (voice) game.registry.set('voice', voice)
+    // The per-target keys in one place (#303), shared with the portal path.
+    // `loadManifest` rides the presence bundle (#266): frames name their
+    // sender's character and the scene asks for it through here.
+    applyMapTarget(game.registry, {
+      map,
+      objects: objectsRef.current,
+      bakedNpcs: npcRigsRef.current,
+      entrySpawnId: entrySpawnIdRef.current,
+      presence: presence
+        ? { ownId: ownIdRef.current, loadManifest: loadManifestById, ...presence }
+        : null,
+      voice,
+    })
     // Encounter zones fire per landing step (#255); this gate owns the roll
     // rate and the post-encounter grace for this game's lifetime.
     const grassGate = wildStepGate()

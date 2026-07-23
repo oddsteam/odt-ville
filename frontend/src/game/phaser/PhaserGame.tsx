@@ -8,6 +8,7 @@ import MobileDpad from '../MobileDpad.tsx'
 import PerfStallNotice from '../PerfStallNotice.tsx'
 import bus from './bus.js'
 import { villageZone } from './villageZone.ts'
+import { applyMapTarget } from '../../kernel/mapTarget.ts'
 import { trainerOpponent } from './trainerDuel.ts'
 import { gateTrainerOpponent, pickWild, wildStepGate } from '../encounters.js'
 import type { Community } from '../../communities/schema.ts'
@@ -205,20 +206,18 @@ export default function PhaserGame({
     ) => {
       const loaded = await portalRef.current?.({ communityId, portal })
       if (!loaded) return false
-      game.registry.set('bakedMap', loaded.map)
-      game.registry.set('bakedObjects', loaded.objects)
-      // The placed NPCs' rigs (#294/#295), like MapPage sets on /maps/:slug —
-      // MapScene's preload reads this to load each sheet; without it a portalled
-      // NPC draws nothing. Set every hop so a target with none clears the last.
-      game.registry.set('bakedNpcs', loaded.bakedNpcs ?? [])
-      game.registry.set('entrySpawnId', portal.entrySpawnId)
-      // Presence (#269): set every hop, so a solo target clears the room the
-      // previous multiplayer map left here rather than inheriting its peers.
-      game.registry.set('presence', loaded.presence ?? null)
-      // Voice (#287): same discipline — set every hop so a solo target clears
-      // the mesh the previous multiplayer map left, and MapScene reads it off
-      // the registry to drive update/stop exactly as on /maps/:slug (#280).
-      game.registry.set('voice', loaded.voice ?? null)
+      // The per-target keys in one place (#303), shared with MapPage's route.
+      // Set every hop so a solo target clears the previous map's rig/room/mesh
+      // rather than inheriting it — bakedNpcs (#294/#295), presence (#269),
+      // voice (#287) all default rather than persist.
+      applyMapTarget(game.registry, {
+        map: loaded.map,
+        objects: loaded.objects,
+        bakedNpcs: loaded.bakedNpcs ?? [],
+        entrySpawnId: portal.entrySpawnId,
+        presence: loaded.presence ?? null,
+        voice: loaded.voice ?? null,
+      })
       // Keep the community that owns this chain: an onward hop stays inside the
       // community it entered, so exit-to-town still reports the right door.
       game.registry.set('portalCommunityId', communityId)
