@@ -5,7 +5,7 @@
 // `preloadBakedMap` / `renderBakedMap` load and stamp them.
 
 import { TILE } from './constants.ts'
-import { framesForFacing, resolveSheetSrc, CHAR_TILE_BASIS } from './characterManifest.js'
+import { framesForFacing, resolveSheetSrc, characterScale } from './characterManifest.js'
 import type { BakedEntity, BakedGround, BakedMap } from './schema.ts'
 import {
   loadObjectTextures,
@@ -51,6 +51,12 @@ export interface BakedDraw {
   flipX?: boolean
   originX?: number
   originY?: number
+  // Scale factor for a rig sprite (#295) — its frames differ in size, so the
+  // stamp scales source px instead of forcing a display size.
+  scale?: number
+  // The placed-NPC entity a rig stamp draws, carried through so the runtime can
+  // take ownership of the created sprite (#295). Absent on every other draw.
+  npc?: BakedEntity
 }
 
 // Texture key for a baked tileset spritesheet. The frame index addresses the
@@ -104,7 +110,6 @@ function npcDraw(e: BakedEntity, rig?: NpcRig): (BakedDraw & { depth: number }) 
   const { slot, frames, flipX } = framesForFacing(rig, e.facing ?? 'down', 'idle')
   const rect = frames[0]
   if (!rect) return null
-  const scale = (rig.render?.scale ?? 1) / CHAR_TILE_BASIS
   return {
     x: e.x + 0.5,
     y: e.y + 1,
@@ -114,9 +119,11 @@ function npcDraw(e: BakedEntity, rig?: NpcRig): (BakedDraw & { depth: number }) 
     flipX,
     originX: 0.5,
     originY: 1,
-    w: rect.w * scale,
-    h: rect.h * scale,
+    scale: characterScale(rig),
     depth: MAP_ENTITY_DEPTH,
+    // The entity this stamp came from, so the runtime can pair the sprite with
+    // the NPC it draws — rig it, animate it, and own its cell from there (#295).
+    npc: e,
   }
 }
 
@@ -254,7 +261,18 @@ export function renderBakedMap(scene: Scene) {
       .map((n: { id: number; manifest: NpcRig }) => [n.id, n.manifest]),
   )
 
+  // The placed NPCs' sprites, paired with the entity each draws (#295). The
+  // runtime rigs and commands them; the editor preview leaves them as the still
+  // frame they were stamped as.
+  const npcs: NpcStamp[] = []
+  scene._npcSprites = npcs
+
   for (const d of bakedDraws(map, objects, npcRigs)) {
+    if (d.npc) {
+      const sprite = stampRig(scene, d)
+      if (sprite) npcs.push({ entity: d.npc, sprite })
+      continue
+    }
     if (d.frames && d.frames.length > 1) stampAnimated(scene, d)
     else {
       registerRigFrame(scene, d)
@@ -270,6 +288,30 @@ export function renderBakedMap(scene: Scene) {
   const worldH = map.rows * TILE
   scene.cameras?.main?.setBounds(0, 0, worldW, worldH)
   scene.cameras?.main?.centerOn(worldW / 2, worldH / 2)
+}
+
+// A stamped NPC and the entity it draws (#295), left on the scene for the
+// runtime to pick up: a Phaser sprite, so the same object the kernel positioned
+// can play its rig's loops and be moved, rather than being redrawn elsewhere.
+export interface NpcStamp {
+  entity: BakedEntity
+  sprite: any
+}
+
+// Stamp a placed NPC (#294, #295): a *sprite* — not an image — so the runtime can
+// play its rig's idle/walk loops on the very object the kernel placed, scaled
+// (never display-sized) because an animating rig's frames differ in size. Its
+// sheet region is sliced first, exactly as the avatar's rig slices its own.
+// Nothing to draw when the sheet never loaded — a dangling reference, as always.
+function stampRig(scene: Scene, d: BakedDraw & { depth: number }) {
+  if (!scene.textures.exists(d.key)) return null
+  registerRigFrame(scene, d)
+  return scene.add
+    .sprite(d.x * TILE, d.y * TILE, d.key, d.frame)
+    .setOrigin(d.originX ?? 0.5, d.originY ?? 1)
+    .setDepth(d.depth)
+    .setScale(d.scale ?? 1)
+    .setFlipX(!!d.flipX)
 }
 
 // Slice a rig sheet region into a named frame before its stamp reads it (#294):
