@@ -2,6 +2,7 @@ import Phaser from 'phaser'
 import { preloadBakedMap, renderBakedMap } from '../../../kernel/mapRenderer.ts'
 import { MOVE_MS, TILE } from '../../constants.js'
 import { cameraBounds } from '../canvasLayout.ts'
+import { isTransitioning } from '../../transition.ts'
 import { spawnTile, mapWalkable, entityBlockedFor, entityEdgeBlockedFor, entityDoorCells, entityLadderFor, entityOverhangFor, entityForegroundFor, mapPlayerDepth, slidePlayerDepth, feetWorldXY } from '../mapWalk.ts'
 import { spawnNpcs, npcBlockedFor, sortNpcs } from '../mapNpcs.ts'
 import {
@@ -240,7 +241,10 @@ export default class MapScene extends Phaser.Scene {
   }
 
   update() {
-    if (!this.player || this.movingTween) return
+    // Mid-warp (#254): a held direction key would otherwise bank a step the
+    // instant the new map lands. The fade-in covers arrival, so refuse input
+    // until it lifts.
+    if (!this.player || this.movingTween || isTransitioning()) return
     const dir = this.activeDirection()
     if (dir) this.step(dir)
   }

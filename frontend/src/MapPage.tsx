@@ -7,6 +7,7 @@ import { trainerOpponent } from './game/phaser/trainerDuel.ts'
 import { MapsService, takeDraft, travel } from './maps/service.ts'
 import { loadMapBundle } from './maps/target.ts'
 import { applyMapTarget } from './kernel/mapTarget.ts'
+import { warp } from './game/transition.ts'
 import { MonstersService } from './catalog/monsters/service.ts'
 import { NpcsService } from './catalog/npcs/service.ts'
 import { pickWild, wildStepGate } from './game/encounters.js'
@@ -169,7 +170,8 @@ export default function MapPage({ draft = false }: { draft?: boolean }) {
         case 'portal':
           void travel(p, {
             load: (s) => runEdge(MapsService.get(s)),
-            go: (s, spawn) => navigate(`/maps/${s}`, { state: { entrySpawnId: spawn } }),
+            go: (s, spawn) =>
+              void warp(() => navigate(`/maps/${s}`, { state: { entrySpawnId: spawn } })),
             refuse: setZoneNotice,
           })
           return

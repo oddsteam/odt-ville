@@ -4,6 +4,7 @@ import { buildTownMap } from '../../townMap.ts'
 import { catalogFromGroundTiles, HOMETOWN_CATALOG } from '../../../kernel/tileCatalog.ts'
 import { isWalkable, edgeBlocked, playerDepthAt, isLadderCell, doorAnchorFor, footprintFor, walkMaskFor, edgeMaskFor } from '../../town.ts'
 import { ensureTileTextures } from '../tileTextures.js'
+import { isTransitioning } from '../../transition.ts'
 import {
   CHAR_SHEET_KEY,
   buildCharacterRig,
@@ -317,6 +318,9 @@ export default class TownScene extends Phaser.Scene {
 
   update(_time, delta) {
     this.observePerf(delta)
+    // Mid-warp (#254): refuse held-key steps while the exit-to-town fade plays,
+    // so a banked step doesn't fire the instant the town lands.
+    if (isTransitioning()) return
     if (this.movingTween) return // already animating to next tile
     const dir = this.activeDirection()
     if (dir) this.step(dir)
