@@ -47,6 +47,7 @@ prefixes=(
 # means adding its pair here in the same PR — a deliberate act, not a default.
 fk_allowlist=(
   "boards|houses"
+  "catalog_npcs|character_manifests"
   "content_items|boards"
   "houses|companies"
   "maps_map_memberships|maps"
