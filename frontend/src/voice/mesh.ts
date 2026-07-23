@@ -9,6 +9,7 @@
 // arch boundary — no import of the game, no data service (see .dependency-cruiser).
 
 import { podFor } from './service.ts'
+import { connectLivekitRoom, voiceSfuEnabled } from './livekit.ts'
 import { connectSignalling } from './write.ts'
 import { iceConfig } from './iceConfig.ts'
 import { micState } from './micState.ts'
@@ -162,6 +163,12 @@ export function createVoiceMesh(deps: VoiceDeps): VoiceMesh {
 // takes, so the game never imports voice (see game-runtime-never-imports-voice).
 // Null when there is no auth token (connectSignalling gates on it).
 export function connectVoice(slug: string, ownId: string): VoiceMesh | null {
+  // ADR-0011: behind VITE_VOICE_SFU, audio rides a LiveKit SFU instead of the
+  // mesh (the mesh can't traverse residential NAT, #290). Off => the mesh path
+  // below is byte-for-byte unchanged; this slice deletes nothing.
+  if (voiceSfuEnabled(import.meta.env as { VITE_VOICE_SFU?: string }))
+    return connectLivekitRoom(slug, ownId)
+
   const signalling = connectSignalling(slug)
   if (!signalling) return null
 

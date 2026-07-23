@@ -91,6 +91,10 @@ services:
       # directly (wss://…livekit.cloud) and the backend-minted token authorizes
       # the join. Supplied from the host .env, as VITE_TURN_URL was (#283).
       VITE_LIVEKIT_URL: ${VITE_LIVEKIT_URL:-}
+      # Route voice through the LiveKit SFU instead of the peer mesh (ADR-0011,
+      # #309). Off by default (the mesh path is unchanged); set VITE_VOICE_SFU=1
+      # to opt in. Only '1'/'true' enable it — a bare string like 'false' does not.
+      VITE_VOICE_SFU: ${VITE_VOICE_SFU:-}
     command: bash -c "pnpm install && pnpm run dev --host 0.0.0.0"
     volumes:
       - ./frontend:/app
