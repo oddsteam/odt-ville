@@ -8,8 +8,7 @@ import { openGatePopup, awaitGateResult } from './posture/popup.ts'
 import { CALLBACK_PATH } from './posture/callback.ts'
 import { loadTown as loadTownData, townErrorMessage } from './townLoader.ts'
 import { MapsService } from './maps/service.ts'
-import { TileObjectsService } from './catalog/tileObjects/service.ts'
-import { objectIdsFrom } from './maps/props.ts'
+import { loadMapBundle } from './maps/target.ts'
 import { runEdge } from './lib/runEdge.ts'
 import { subscribeAuthToken } from './lib/authToken.ts'
 import { connectPresence } from './lib/presenceClient.ts'
@@ -17,7 +16,7 @@ import { presenceSession } from './lib/presenceSession.ts'
 import { voiceSession } from './lib/voiceSession.ts'
 import { connectVoice } from './voice/mesh.ts'
 import { ViewerService } from './viewer/service.ts'
-import { loadManifestById, loadNpcRigs } from './character/service.ts'
+import { loadManifestById } from './character/service.ts'
 import { trackEnterDoor, trackInteractBoard, trackEncounter } from './analytics/events.ts'
 import type { Community, FeedItem } from './communities/schema.ts'
 import type { GameSession } from './game-session/schema.ts'
@@ -197,12 +196,10 @@ export default function VillagePage() {
     async ({ portal }: { communityId: number | null; portal: { targetNode: string } }) => {
       try {
         const map = await runEdge(MapsService.get(portal.targetNode))
-        const objects = await runEdge(TileObjectsService.getMany(objectIdsFrom(map.entities)))
-        // The rigs this target's placed NPCs (#294/#295) draw from — the piece
-        // MapPage loads but this in-game portal path was missing, so an NPC
-        // reached through a town door never got its sheet and drew nothing.
-        const placed = new Set(map.entities.filter((e) => e.kind === 'npc').map((e) => e.npc_id))
-        const bakedNpcs = await loadNpcRigs(npcs.filter((n) => placed.has(n.id)))
+        // Objects + placed-NPC rigs from the shared helper (#303), the same
+        // bundle MapPage's route loader assembles — so neither path can drop a
+        // per-target input the other keeps.
+        const { objects, bakedNpcs } = await loadMapBundle(map, npcs)
         const presence = await presenceRef.current.open(map)
         const voice = await voiceRef.current.open(map)
         return { map, objects, bakedNpcs, presence, voice }
