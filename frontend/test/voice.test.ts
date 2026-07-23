@@ -15,7 +15,7 @@ describe('podFor', () => {
   })
 
   it('includes a peer standing inside the voice radius', () => {
-    const pod = podFor(own, rosterOf({ alice: at(12, 10) }))
+    const pod = podFor(own, rosterOf({ alice: at(10 + VOICE_RADIUS * 0.5, 10) }))
     expect(pod.map((p) => p.userId)).toEqual(['alice'])
   })
 
@@ -32,7 +32,10 @@ describe('podFor', () => {
   })
 
   it('scales gain with distance — the closer peer is louder', () => {
-    const pod = podFor(own, rosterOf({ near: at(11, 10), far: at(14, 10) }))
+    const pod = podFor(
+      own,
+      rosterOf({ near: at(10 + VOICE_RADIUS * 0.25, 10), far: at(10 + VOICE_RADIUS * 0.75, 10) }),
+    )
     const gain = Object.fromEntries(pod.map((p) => [p.userId, p.gain]))
     expect(gain.near).toBeGreaterThan(gain.far)
     expect(gain.far).toBeGreaterThan(0)
@@ -45,8 +48,8 @@ describe('podFor', () => {
 
   it('caps the pod and keeps the nearest peers', () => {
     const crowd: Record<string, VoicePosition> = {}
-    // Ten peers strung out along one axis, furthest declared first.
-    for (let i = 10; i >= 1; i--) crowd[`peer${i}`] = at(10 + i * 0.5, 10)
+    // Ten peers strung out along one axis inside the radius, furthest first.
+    for (let i = 10; i >= 1; i--) crowd[`peer${i}`] = at(10 + i * (VOICE_RADIUS / 12), 10)
 
     const pod = podFor(own, rosterOf(crowd))
 

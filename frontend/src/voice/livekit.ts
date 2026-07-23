@@ -10,7 +10,9 @@
 import { Room, type RemoteTrack } from 'livekit-client'
 import { getAuthToken } from '../lib/authToken.ts'
 import { micState } from './micState.ts'
-import type { MicStatus } from './schema.ts'
+import { podFor } from './service.ts'
+import { DWELL_MS, LEAVE_RADIUS, PREJOIN_RADIUS } from './schema.ts'
+import type { MicStatus, VoicePosition } from './schema.ts'
 import type { VoiceMesh } from './mesh.ts'
 
 // A Vite flag is a string, so `VITE_VOICE_SFU=false` is a truthy string — the
@@ -43,6 +45,11 @@ export interface LivekitDeps {
   attach: (track: RemoteTrackLike) => void
   detach: (track: RemoteTrackLike) => void
   onStatus?: (s: MicStatus) => void
+  // The measured room-join latency, emitted on each connect (#310 spike output).
+  onJoinLatency?: (ms: number) => void
+  // Overridable for tests; defaults to the tuned constants / wall clock.
+  dwellMs?: number
+  now?: () => number
 }
 
 // LiveKit RoomEvent string values (livekit-client uses these literals).
@@ -51,9 +58,13 @@ const TRACK_UNSUBSCRIBED = 'trackUnsubscribed'
 
 export function createLivekitVoice(deps: LivekitDeps): VoiceMesh {
   const { room, url, token, attach, detach } = deps
+  const dwellMs = deps.dwellMs ?? DWELL_MS
+  const now = deps.now ?? (() => Date.now())
   let connected = false
+  let joining = false // a connect() is in flight — don't start a second
   let muted = false
   let denied = false // the browser declined the mic — voice cleanly off
+  let leaveTimer: ReturnType<typeof setTimeout> | null = null
 
   const report = () =>
     deps.onStatus?.({ live: connected && !muted && !denied, muted, denied })
@@ -67,34 +78,73 @@ export function createLivekitVoice(deps: LivekitDeps): VoiceMesh {
   })
   room.on(TRACK_UNSUBSCRIBED, (track) => detach(track as RemoteTrackLike))
 
-  // Fire-and-forget join, like the mesh opens connections async — fetch the
-  // token, connect, then publish the mic. A token/connect failure just leaves
-  // voice off; only a declined mic reports `denied` (it lights the mic-blocked
-  // indicator), so the two aren't conflated.
+  // Fetch the token, connect, then publish the mic. A token/connect failure just
+  // leaves voice off; only a declined mic reports `denied` (it lights the
+  // mic-blocked indicator), so the two aren't conflated. Idempotent — a second
+  // caller while connected/connecting is a no-op, so a peer lingering in range
+  // never re-joins (and never re-pays LiveKit's 1-minute floor, #298).
   async function join() {
-    await room.connect(url, await token)
-    connected = true
-    report()
+    if (connected || joining) return
+    joining = true
+    const t0 = now()
     try {
-      await room.localParticipant.setMicrophoneEnabled(!muted)
-    } catch {
-      denied = true
+      await room.connect(url, await token)
+      connected = true
+      deps.onJoinLatency?.(now() - t0) // measured lead time (#310)
+      report()
+      try {
+        await room.localParticipant.setMicrophoneEnabled(!muted)
+      } catch {
+        denied = true
+      }
+      report()
+    } finally {
+      joining = false
     }
+  }
+
+  const cancelLeave = () => {
+    if (leaveTimer !== null) {
+      clearTimeout(leaveTimer)
+      leaveTimer = null
+    }
+  }
+
+  function leave() {
+    if (!connected) return
+    connected = false
+    void room.disconnect()
     report()
   }
-  void join().catch(report)
+
+  // Proximity-gated membership with three-radius hysteresis (ADR-0011, #310):
+  // join once a peer enters the (wide) pre-join band; stay connected through the
+  // dead-band out to LEAVE_RADIUS; disconnect only after the pod clears that band
+  // for DWELL_MS. Map entry never joins — this reconciler is what does.
+  function update(own: VoicePosition, roster: Map<string, VoicePosition>) {
+    const nearby = podFor(own, roster, PREJOIN_RADIUS).length > 0
+    const holding = podFor(own, roster, LEAVE_RADIUS).length > 0
+    if (nearby) {
+      cancelLeave()
+      void join().catch(report)
+    } else if (!holding && connected && leaveTimer === null) {
+      leaveTimer = setTimeout(() => {
+        leaveTimer = null
+        leave()
+      }, dwellMs)
+    }
+  }
 
   return {
-    // ponytail: no-op. Flat audio ignores the roster — proximity gating and
-    // distance gain are later slices (ADR-0011). Kept to satisfy VoiceMesh.
-    update() {},
+    update,
     setMute(next) {
       muted = next
-      void room.localParticipant.setMicrophoneEnabled(!muted).catch(() => {})
+      if (connected) void room.localParticipant.setMicrophoneEnabled(!muted).catch(() => {})
       report()
     },
     stop() {
-      void room.disconnect()
+      cancelLeave()
+      leave()
     },
   }
 }
@@ -133,6 +183,9 @@ export function connectLivekitRoom(slug: string, _ownId: string): VoiceMesh | nu
     },
     detach: (track) => (track as RemoteTrack).detach().forEach((el) => el.remove()),
     onStatus: (s) => micState.status(s),
+    // Spike output (#310): log the real join latency so PREJOIN_RADIUS can be
+    // re-derived from measurement rather than the current estimate.
+    onJoinLatency: (ms) => console.info(`[voice] livekit join latency ${Math.round(ms)}ms`),
   })
   // Light up the mic indicator + mute toggle the same way the mesh does, and
   // tear the store down on stop (the standing mute choice survives, #282).

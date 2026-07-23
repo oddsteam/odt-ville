@@ -194,7 +194,7 @@ describe('createVoiceMesh', () => {
   it('never opens more than POD_CAP connections', async () => {
     const crowd: Record<string, VoicePosition> = {}
     // Ten peers, all inside the radius and all with ids below 'z' (we initiate).
-    for (let i = 0; i < 10; i++) crowd[`peer${i}`] = at(10 + (i + 1) * 0.4, 10)
+    for (let i = 0; i < 10; i++) crowd[`peer${i}`] = at(10 + (i + 1) * 0.15, 10)
 
     const h = harness('z')
     h.mesh.update(own, rosterOf(crowd))
