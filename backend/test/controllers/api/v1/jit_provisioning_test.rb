@@ -17,11 +17,11 @@ module Api
       end
 
       test "first login provisions a local user regardless of email domain" do
-        assert_difference -> { Auth::User.count }, 1 do
+        assert_difference -> { ::Auth::User.count }, 1 do
           get "/api/v1/me", headers: auth_email("kc-sub-1", "newbie@odd.works")
         end
         assert_response :success
-        u = Auth::User.find_by(external_id: "kc-sub-1")
+        u = ::Auth::User.find_by(external_id: "kc-sub-1")
         assert_equal "newbie@odd.works", u.email
         assert_equal "branch_employee", u.role
         assert_equal @company.id, u.company_id
@@ -31,11 +31,11 @@ module Api
       test "provisioned email is lowercased" do
         get "/api/v1/me", headers: auth_email("kc-sub-2", "Mixed@ODD.works")
         assert_response :success
-        assert_equal "mixed@odd.works", Auth::User.find_by(external_id: "kc-sub-2").email
+        assert_equal "mixed@odd.works", ::Auth::User.find_by(external_id: "kc-sub-2").email
       end
 
       test "a token without an email provisions nothing and is unauthorized" do
-        assert_no_difference -> { Auth::User.count } do
+        assert_no_difference -> { ::Auth::User.count } do
           get "/api/v1/me", headers: auth_email("kc-sub-3", "")
         end
         assert_response :unauthorized
@@ -44,7 +44,7 @@ module Api
       test "a returning user re-links by email when their subject changes" do
         existing = @company.users.create!(name: "Carol", role: "branch_manager",
           external_id: "old-sub", email: "carol@odds.team")
-        assert_no_difference -> { Auth::User.count } do
+        assert_no_difference -> { ::Auth::User.count } do
           get "/api/v1/me", headers: auth_email("new-sub", "carol@odds.team")
         end
         assert_response :success

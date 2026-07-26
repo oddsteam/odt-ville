@@ -24,6 +24,25 @@ module Api
         assert_equal @user.external_id, json[:user][:external_id]
       end
 
+      # Avatars (#320, ADR-0012): Basecamp's stored URL is a signed capability
+      # token, so the viewer only ever sees our own proxy path — stable across
+      # rotations and keyed by the id presence frames already carry.
+      test "a stored avatar serializes as the proxy path, never the stored url" do
+        @user.update!(avatar_url: "https://example.test/face.png")
+
+        get "/api/v1/me", headers: auth(@user)
+
+        assert_response :success
+        assert_equal "/api/v1/users/#{@user.external_id}/avatar", json[:user][:avatar_url]
+      end
+
+      test "a user with no stored avatar serializes a null avatar_url" do
+        get "/api/v1/me", headers: auth(@user)
+
+        assert_response :success
+        assert_nil json[:user][:avatar_url]
+      end
+
       test "the response carries the caller's realm roles" do
         get "/api/v1/me", headers: auth(@user, roles: ["admin"])
 
