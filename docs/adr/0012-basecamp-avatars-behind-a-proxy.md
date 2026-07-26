@@ -113,22 +113,41 @@ column is **server-only**. `/api/v1/me` and the `Viewer` schema carry the
 `avatar_url` and the serialized field being named `avatar_url` does not make
 them the same value.
 
-### Running the sync: `rake basecamp:avatars`, from the host
+### Running the sync: `rake basecamp:avatars`, daily, in the backend container
 
 `Basecamp::AvatarSync` (#321) walks `people.json` and copies each person's
-avatar onto the user with the same email. Run it **from the host, not inside
-the backend container** — launchpad's token endpoint answers 525 to container
-egress, while the same request from the host succeeds and the avatar CDN is
-reachable from both. So point a host Ruby at the compose database:
+avatar onto the user with the same email. On the homeserver it runs from one
+host crontab entry (#322), documented in the README beside the deploy:
+
+```cron
+17 4 * * * /home/ubuntu/apps/odt-ville/scripts/basecamp-avatar-sync.sh
+```
+
+The script `exec`s the task in the prod backend container and appends `ok
+{people:, updated:}` — or `FAILED` plus the error — to
+`~/apps/odt-ville/log/basecamp-avatars.log`, so an expired refresh token is
+readable rather than a sync that quietly stopped happening. Daily is plenty:
+the URL only rotates when a person's Basecamp `updated_at` moves, and a full
+run is a handful of requests over ~520 people.
+
+**Revised 2026-07-26:** this ADR originally said to run the task **from the
+host**, because launchpad's token endpoint answered **525** to container egress
+while succeeding from the host. That no longer reproduces — the token endpoint
+answers from inside the backend container on both the homeserver and a laptop,
+and the avatar CDN always did. `exec`ing the container costs no host Ruby, no
+host bundle to keep in step with each deploy, and no published Postgres port
+(prod keeps the database private to the compose network, so a host Ruby would
+need one). If the 525 returns it lands in the log as a `FAILED` run; the
+host-side fallback is then:
 
 ```
 cd backend && set -a && . ../.env && set +a
-DATABASE_URL=postgres://postgres:postgres@<host-lan-ip>:5432/one_rev_village_development \
+DATABASE_URL=postgres://postgres:postgres@<db-host>:5432/one_rev_village_development \
   bin/rails basecamp:avatars
 ```
 
 The LAN address, not `127.0.0.1`, when a host Postgres already owns loopback
-5432 — compose publishes the container's on `0.0.0.0`.
+5432 — compose publishes the container's on `0.0.0.0` in local dev only.
 
 ### Staleness: last sync wins, no invalidation
 
