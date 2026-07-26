@@ -17,6 +17,7 @@ import { resolveSheetSrc } from '../../../kernel/characterManifest.js'
 import bus from '../bus.js'
 import { deltaFor, resolveDirection, stepTile } from '../movement.ts'
 import { applyFrame, pruneOutOfRange } from '../../presence.ts'
+import { loadAvatar } from '../peerAvatar.ts'
 import { interactZoneEvents, sightZoneEvents, zoneEvents } from '../../../kernel/zones.ts'
 import downStill from '../../assets/character/rpg-char-01/r0-c0.png'
 import leftStill from '../../assets/character/rpg-char-01/r1-c0.png'
@@ -27,6 +28,12 @@ import upStill from '../../assets/character/rpg-char-01/r3-c0.png'
 // instance boots without TownScene, so the walk strips it loads aren't in the
 // texture cache; stills are enough for the movement tracer.
 const STILL_URLS = { down: downStill, left: leftStill, right: rightStill, up: upStill }
+
+// The nameplate band, above a peer's head — where the name label hangs and the
+// face chip (#323) sits on top of it. Peers only: our own character needs no
+// label telling us who we are, and no face either.
+const NAMEPLATE_Y = -100
+const AVATAR_PX = 32
 
 // The authored-map scene — the runtime side of the map contract (ADR-0004).
 // It renders "the current map" (read from the registry as a baked document)
@@ -212,6 +219,9 @@ export default class MapScene extends Phaser.Scene {
     // asked", the value is the built stills or null while the fetch/sheet load
     // is in flight (and after a failure — that peer stays on the fallback).
     this.peerChars = new Map()
+    // Faces already asked for (#323), keyed by subject — the textures those
+    // fetches produce outlive the scene, this only stops a second ask.
+    this.avatarsAsked = new Set()
     // Proximity voice (#280): an opaque handle the shell injects for multiplayer
     // maps only (solo maps and the hometown get none). The game never imports
     // voice — it just feeds it our tile and the roster and lets it mesh WebRTC
@@ -314,12 +324,21 @@ export default class MapScene extends Phaser.Scene {
       // A sprite, not an image: peers play their own walk loop (#267).
       const img = this.add.sprite(0, 0, `player.${state.facing}.0`).setOrigin(0.5, 1)
       const label = this.add
-        .text(0, -100, state.name, { fontSize: '12px', color: '#ffffff', backgroundColor: '#000000aa' })
+        .text(0, NAMEPLATE_Y, state.name, { fontSize: '12px', color: '#ffffff', backgroundColor: '#000000aa' })
         .setOrigin(0.5, 0)
       const remote = this.add.container(feet.x, feet.y, [img, label])
       remote.setDepth(mapPlayerDepth(false, false))
       this.remoteSprites.set(frame.userId, remote)
       this.applyPeerLook(remote, state)
+      // Their face on the nameplate (#323) once it lands — a child of the
+      // container, so leaving destroys it with the rest of them. A peer who left
+      // (or walked out of range) mid-fetch is no longer the container we hold.
+      loadAvatar(this, frame.userId, this.avatarsAsked, (key) => {
+        if (this.remoteSprites.get(frame.userId) !== remote) return
+        // A square chip standing on the nameplate line, whatever the source
+        // image's aspect (Basecamp serves squares, the proxy re-serves them).
+        remote.add(this.add.image(0, NAMEPLATE_Y, key).setOrigin(0.5, 1).setDisplaySize(AVATAR_PX, AVATAR_PX))
+      })
       return
     }
     const remote = this.remoteSprites.get(frame.userId)

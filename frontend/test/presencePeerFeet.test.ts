@@ -57,6 +57,10 @@ function fakeScene(peerChars: Map<number | null, unknown>) {
     tweened,
     loadPeerCharacter() {},
     sendPosition() {},
+    // Nobody in this scene has a face (#323) — feet are what's under test.
+    avatarsAsked: new Set(),
+    textures: { exists: () => false },
+    load: { image() {}, once() {}, start() {} },
     add: {
       sprite: () => fakeSprite(),
       text: () => fakeSprite(),
