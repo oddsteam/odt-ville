@@ -113,6 +113,23 @@ column is **server-only**. `/api/v1/me` and the `Viewer` schema carry the
 `avatar_url` and the serialized field being named `avatar_url` does not make
 them the same value.
 
+### Running the sync: `rake basecamp:avatars`, from the host
+
+`Basecamp::AvatarSync` (#321) walks `people.json` and copies each person's
+avatar onto the user with the same email. Run it **from the host, not inside
+the backend container** — launchpad's token endpoint answers 525 to container
+egress, while the same request from the host succeeds and the avatar CDN is
+reachable from both. So point a host Ruby at the compose database:
+
+```
+cd backend && set -a && . ../.env && set +a
+DATABASE_URL=postgres://postgres:postgres@<host-lan-ip>:5432/one_rev_village_development \
+  bin/rails basecamp:avatars
+```
+
+The LAN address, not `127.0.0.1`, when a host Postgres already owns loopback
+5432 — compose publishes the container's on `0.0.0.0`.
+
 ### Staleness: last sync wins, no invalidation
 
 A re-sync overwrites the stored URL for anyone whose avatar changed and leaves
