@@ -12,6 +12,9 @@ export const Viewer = Schema.Struct({
     // The stable Keycloak sub (#88) — presence frames carry it, and the
     // client tells its own echo apart from other players by it.
     external_id: Schema.String,
+    // Our own avatar path (ADR-0012), or null when the person has none — the
+    // header renders its initials fallback then. Never Basecamp's signed URL.
+    avatar_url: Schema.NullOr(Schema.String),
   }),
   company: Schema.Struct({
     id: Schema.Number,

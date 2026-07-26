@@ -38,6 +38,13 @@ Rails.application.routes.draw do
         get "me", to: "me#show"
       end
 
+      # The Auth domain (ADR-0010) — controller under Api::V1::Auth::. The
+      # stable avatar path (#320, ADR-0012), keyed by the Keycloak subject so
+      # the header and the multiplayer peers (#323) share one URL shape.
+      scope module: :auth do
+        get "users/:external_id/avatar", to: "avatars#show"
+      end
+
       # The GameSession domain (ADR-0010) — controller under
       # Api::V1::GameSession::, URLs unchanged.
       scope module: :game_session do

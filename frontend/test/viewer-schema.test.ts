@@ -6,13 +6,29 @@ import { Viewer } from '../src/viewer/schema.ts'
 
 describe('Viewer schema', () => {
   const valid = {
-    user: { id: 1, name: 'Pat', role: 'admin', external_id: 'kc-sub-1' },
+    user: {
+      id: 1,
+      name: 'Pat',
+      role: 'admin',
+      external_id: 'kc-sub-1',
+      avatar_url: '/api/v1/users/kc-sub-1/avatar',
+    },
     company: { id: 42, name: 'ODT' },
     roles: ['admin'],
   }
 
   it('decodes the payload from /api/v1/me', () => {
     expect(Either.isRight(Schema.decodeUnknownEither(Viewer)(valid))).toBe(true)
+  })
+
+  // Avatars (#320): a person with none serialises null, and the header falls
+  // back — so null has to decode, not blow up the whole viewer payload.
+  it('decodes a null avatar_url', () => {
+    expect(
+      Either.isRight(
+        Schema.decodeUnknownEither(Viewer)({ ...valid, user: { ...valid.user, avatar_url: null } }),
+      ),
+    ).toBe(true)
   })
 
   // Presence (#88): the client filters its own echoed frames by this id.

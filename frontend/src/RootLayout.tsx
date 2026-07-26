@@ -6,6 +6,7 @@ import { subscribeAuthToken } from './lib/authToken.ts'
 import UserSwitcher from './auth/UserSwitcher.tsx'
 import LogoutButton from './auth/LogoutButton.tsx'
 import ArchScoreBar from './dev/ArchScoreBar.tsx'
+import Avatar from './viewer/Avatar.tsx'
 import { ViewerService } from './viewer/service.ts'
 import { trackSessionActiveTime } from './analytics/sessionTime.ts'
 import type { Viewer } from './viewer/schema.ts'
@@ -64,6 +65,10 @@ export default function RootLayout() {
               <span className="app-user-name">{me.user.name}</span>
               <span className="app-user-role">{me.user.role}</span>
             </div>
+          )}
+          {/* Key by external_id so swapping users re-tries a failed image. */}
+          {me && (
+            <Avatar key={me.user.external_id} src={me.user.avatar_url} name={me.user.name} />
           )}
           {me && <LogoutButton className="app-logout" />}
         </div>
