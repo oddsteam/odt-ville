@@ -7,10 +7,11 @@ module Basecamp
     end
 
     # Basecamp stubbed at the HTTP boundary, same stub transport as ClientTest:
-    # the first response is the token mint, the rest are pages of people.json.
-    def sync_against(*pages)
+    # the token mint, then the roster. Paging is the client's job and is covered
+    # in its own test (#326), so the roster arrives here as one page.
+    def sync_against(roster)
       calls = []
-      responses = [ [ 200, { "access_token" => "at-1" } ] ] + pages.map { |p| [ 200, p ] }
+      responses = [ [ 200, { "access_token" => "at-1" } ], [ 200, roster ] ]
       transport = ->(method, url, headers) {
         calls << { method:, url:, headers: }
         responses[calls.size - 1] || [ 200, [] ]
@@ -24,19 +25,19 @@ module Basecamp
       @company.users.create!(name: name, email: email, external_id: SecureRandom.uuid)
     end
 
-    test "copies each person's avatar onto the user with the same email, across pages" do
+    # Basecamp stores whatever casing the person typed, so the join lowercases.
+    test "copies each person's avatar onto the user with the same email" do
       alice = user(name: "Alice", email: "alice@odds.team")
       bob = user(name: "Bob", email: "bob@odds.team")
-      sync, calls = sync_against(
-        [ { "email_address" => "Alice@Odds.Team", "avatar_url" => "https://bc.test/alice.png" } ],
-        [ { "email_address" => "bob@odds.team", "avatar_url" => "https://bc.test/bob.png" } ]
-      )
+      sync, calls = sync_against([
+        { "email_address" => "Alice@Odds.Team", "avatar_url" => "https://bc.test/alice.png" },
+        { "email_address" => "bob@odds.team", "avatar_url" => "https://bc.test/bob.png" }
+      ])
 
       assert_equal 2, sync.call[:updated]
 
       assert_equal "https://bc.test/alice.png", alice.reload.avatar_url
       assert_equal "https://bc.test/bob.png", bob.reload.avatar_url
-      assert_equal 4, calls.size, "the empty page that ends pagination is still a request"
       assert_equal "ODT Ville (zacrify1986@gmail.com)", calls.last[:headers]["User-Agent"]
     end
 
