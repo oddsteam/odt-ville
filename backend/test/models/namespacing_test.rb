@@ -38,6 +38,11 @@ class NamespacingTest < ActiveSupport::TestCase
     assert_respond_to Posture::Client, :from_env
   end
 
+  test "the Basecamp client lives under the Basecamp namespace" do
+    assert_kind_of Class, ::Basecamp::Client
+    assert_respond_to ::Basecamp::Client, :from_env
+  end
+
   test "cross-module associations resolve to the namespaced classes" do
     assert_equal "Auth::User", Org::Company.reflect_on_association(:users).class_name
     assert_equal "Communities::House", Org::Company.reflect_on_association(:houses).class_name
