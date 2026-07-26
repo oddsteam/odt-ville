@@ -129,6 +129,29 @@ Notes:
 - `restart: unless-stopped` means the stack comes back automatically after a
   reboot (Docker is enabled on boot).
 
+### Scheduled job: Basecamp avatar refresh (#322)
+
+Basecamp's `avatar_url` is a signed URL that rotates, so avatars go stale until
+`rake basecamp:avatars` runs again (ADR-0012). One host crontab entry on the
+homeserver does that, daily:
+
+```cron
+17 4 * * * /home/ubuntu/apps/odt-ville/scripts/basecamp-avatar-sync.sh
+```
+
+The script `exec`s the task in the prod backend container and appends one line
+per run to `~/apps/odt-ville/log/basecamp-avatars.log` — `ok {people:, updated:}`,
+or `FAILED` plus the error, which is how an expired `BASECAMP_REFRESH_TOKEN`
+becomes visible instead of silent:
+
+```bash
+ssh homeserver 'tail -5 ~/apps/odt-ville/log/basecamp-avatars.log'
+ssh homeserver 'apps/odt-ville/scripts/basecamp-avatar-sync.sh'   # run it now
+```
+
+The crontab lives on the box, not in git; recreate it with `crontab -e` if the
+homeserver is ever rebuilt.
+
 ---
 
 ## 1. Run the backend (Rails API)

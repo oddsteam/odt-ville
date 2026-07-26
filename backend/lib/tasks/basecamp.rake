@@ -1,6 +1,6 @@
-# ponytail: a rake task, not a scheduled job — the roster moves a few times a
-# year and a re-run is cheap (ADR-0012). Schedule it when someone is tired of
-# running it.
+# A rake task, not an in-app job queue: the homeserver's crontab runs
+# scripts/basecamp-avatar-sync.sh daily (#322, ADR-0012), which is the whole of
+# "refresh" — a rotated avatar is picked up by running this again.
 namespace :basecamp do
   desc "Copy Basecamp avatars onto users with a matching email (#321)"
   task avatars: :environment do
