@@ -75,6 +75,31 @@ module Basecamp
       assert_equal [ "ODT Ville (ops@example.com)" ] * 2, calls.map { |c| c[:headers]["User-Agent"] }
     end
 
+    # #326: a caller that silently receives page 1 cannot tell a truncated
+    # roster from a short one — 15 of ODDS-TEAM's 520 people looked like the
+    # whole org. Note the first page here is shorter than the second: page size
+    # is not a terminator, the absent Link header is.
+    test "a collection follows rel=next to the end and comes back whole" do
+      http, calls = stub_http(
+        [ 200, { "access_token" => "at-1" } ],
+        [ 200, [ { "id" => 1 } ], '<https://3.basecampapi.com/999/people.json?page=2>; rel="next"' ],
+        [ 200, [ { "id" => 2 }, { "id" => 3 } ] ]
+      )
+
+      out = client(http).get("people.json")
+
+      assert_equal [ { "id" => 1 }, { "id" => 2 }, { "id" => 3 } ], out
+      assert_equal "https://3.basecampapi.com/999/people.json?page=2", calls.last[:url]
+      assert_equal "Bearer at-1", calls.last[:headers]["Authorization"], "every page is authorized"
+    end
+
+    test "a response with no rel=next is one request, not a probe for an empty page" do
+      http, calls = stub_http([ 200, { "access_token" => "at-1" } ], [ 200, [ { "id" => 1 } ] ])
+
+      assert_equal [ { "id" => 1 } ], client(http).get("people.json")
+      assert_equal 2, calls.size, "the token mint and a single GET"
+    end
+
     test "raises when a GET is not a 200" do
       http, = stub_http([ 200, { "access_token" => "at-1" } ], [ 429, {} ])
 

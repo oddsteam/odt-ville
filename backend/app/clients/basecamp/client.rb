@@ -44,11 +44,25 @@ module Basecamp
 
     # GET a Basecamp API path (e.g. "people.json") under our account, authorized.
     # Returns the parsed JSON body; raises unless Basecamp answers 200.
+    #
+    # Collections come back paged, and paging is the client's business, not the
+    # caller's (#326): a caller handed page 1 has no way to tell 15 of 520
+    # people from an org of 15. So walk `Link: rel="next"` to the end and
+    # concatenate. Page size is never the terminator — Basecamp filters records
+    # after slicing, so real pages ramp 15, 30, 50, 100.
     def get(path)
-      status, json = @http.call(:get, "#{API}/#{@account_id}/#{path}", auth_headers)
-      raise Error, "GET #{path} failed: HTTP #{status}" unless status == 200
+      url = "#{API}/#{@account_id}/#{path}"
+      pages = []
 
-      json
+      while url
+        status, json, link = @http.call(:get, url, auth_headers)
+        raise Error, "GET #{path} failed: HTTP #{status}" unless status == 200
+
+        pages << json
+        url = next_page(link)
+      end
+
+      pages.one? ? pages.first : pages.flatten(1)
     end
 
     # Access tokens last ~2 weeks; minting once per client instance keeps a sync
@@ -77,6 +91,11 @@ module Basecamp
       "#{LAUNCHPAD}/authorization/token?#{query}"
     end
 
+    # Basecamp advertises the next page in a Link header; its absence is the end.
+    def next_page(link)
+      link && link[/<([^>]+)>;\s*rel="next"/, 1]
+    end
+
     def auth_headers
       { "Authorization" => "Bearer #{access_token}", "User-Agent" => @user_agent }
     end
@@ -92,7 +111,7 @@ module Basecamp
       rescue JSON::ParserError, TypeError
         {}
       end
-      [ res.code.to_i, json ]
+      [ res.code.to_i, json, res["Link"] ]
     end
   end
 end

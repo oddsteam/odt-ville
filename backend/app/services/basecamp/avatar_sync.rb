@@ -17,26 +17,14 @@ module Basecamp
     end
 
     # Returns { people:, updated: } so a run says what it saw and what it moved.
+    # The client hands back the whole roster, pages already walked (#326).
     def call
-      roster = people
+      roster = @client.get("people.json")
       updated = roster.count { |person| apply(person) }
       { people: roster.size, updated: updated }
     end
 
     private
-
-    # Basecamp pages with a ramping window (15, 30, 50, then 100s) and ends by
-    # answering an empty array, so ask for pages until one comes back empty.
-    # ODDS-TEAM's 520 people take 9 requests — nowhere near 50-per-10s.
-    #
-    # ponytail: the page param, not the `Link: rel="next"` header — verified
-    # against live Basecamp, that header keeps pointing at a next page *past the
-    # end*, so following it never terminates. The empty body is the honest
-    # signal, and it needs no parser.
-    def people
-      (1..).lazy.map { |page| @client.get("people.json?page=#{page}") }
-           .take_while(&:any?).to_a.flatten
-    end
 
     def apply(person)
       user = user_for(person["email_address"])
