@@ -71,6 +71,30 @@ class PresenceChannelTest < ActionCable::Channel::TestCase
     assert_has_stream PresenceChannel::CARD_STREAM
   end
 
+  # World entry (#318): the card stream only carries changes going forward, so
+  # a card picked up while everyone was offline needs a bulk read to appear.
+  # One read for the whole world — never one per avatar, never polling — and
+  # what it seeds rides the frames peers render badges from.
+  test "entering the world bulk-reads Eira once, seeding the cards peers will see" do
+    map = make_map
+    @user.update!(email: "a@odds.team")
+    card = { "title" => "Wire up the pathfinder", "status" => "DOING", "url" => "https://jira/1" }
+    reads = []
+    eira = Object.new
+    eira.define_singleton_method(:lookup) { |emails| reads << emails; { "a@odds.team" => card } }
+    was, Cards::Seed.client_factory = Cards::Seed.client_factory, -> { eira }
+
+    join(map)
+
+    assert_equal [ [ "a@odds.team" ] ], reads
+    assert_broadcast_on(cell_stream(map, 0, 0), manifest_frame(nil).merge(card: card)) do
+      perform :move, x: 3, y: 4, facing: "down"
+    end
+  ensure
+    Cards::Seed.client_factory = was
+    Cards::Registry.clear
+  end
+
   # A peer who walks into range after the card landed missed the live frame,
   # so the position frame that spawns them carries the card too.
   test "move carries the sender's current card" do

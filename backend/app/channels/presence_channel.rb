@@ -30,6 +30,12 @@ class PresenceChannel < ApplicationCable::Channel
     # a signal only reaches a target who is actually here.
     stream_from signal_stream(current_user.external_id)
     stream_from CARD_STREAM
+    # World entry (#318): one bulk read of Eira's board before any frame moves,
+    # so a card someone picked up while we were down is already on their avatar
+    # when the first move frame stamps it. Not polling — the card stream keeps
+    # it live from here. Inline rather than in a job: it must land before this
+    # connection's first move, and it degrades to a no-op if Eira is down.
+    ::Cards::Seed.run
     # No cell until the first `move` says where we stand; the client replays
     # its position on `connected`, so that gap is one round trip.
     @cell = nil
