@@ -73,6 +73,7 @@ describe('podFor', () => {
       y: 10,
       facing: 'down',
       manifestId: null,
+      card: null,
     }
     const roster: Map<string, VoicePosition> = new Map([['alice', remote]])
 

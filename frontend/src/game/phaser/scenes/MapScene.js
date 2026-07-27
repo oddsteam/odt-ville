@@ -18,6 +18,7 @@ import bus from '../bus.js'
 import { deltaFor, resolveDirection, stepTile } from '../movement.ts'
 import { applyFrame, pruneOutOfRange } from '../../presence.ts'
 import { loadAvatar } from '../peerAvatar.ts'
+import { badgeText, cardHref, statusColor } from '../cardBadge.ts'
 import { interactZoneEvents, sightZoneEvents, zoneEvents } from '../../../kernel/zones.ts'
 import downStill from '../../assets/character/rpg-char-01/r0-c0.png'
 import leftStill from '../../assets/character/rpg-char-01/r1-c0.png'
@@ -34,6 +35,9 @@ const STILL_URLS = { down: downStill, left: leftStill, right: rightStill, up: up
 // label telling us who we are, and no face either.
 const NAMEPLATE_Y = -100
 const AVATAR_PX = 32
+// The card badge (#317) stacks on top of the face chip, so a glance across the
+// room reads name, face, and what they're holding as one column.
+const CARD_Y = NAMEPLATE_Y - AVATAR_PX - 4
 
 // The authored-map scene — the runtime side of the map contract (ADR-0004).
 // It renders "the current map" (read from the registry as a baked document)
@@ -222,6 +226,9 @@ export default class MapScene extends Phaser.Scene {
     // Faces already asked for (#323), keyed by subject — the textures those
     // fetches produce outlive the scene, this only stops a second ask.
     this.avatarsAsked = new Set()
+    // The card badge each peer is currently wearing (#317), so a change can
+    // replace it. The container owns it as a child — this only finds it again.
+    this.cardBadges = new Map()
     // Proximity voice (#280): an opaque handle the shell injects for multiplayer
     // maps only (solo maps and the hometown get none). The game never imports
     // voice — it just feeds it our tile and the roster and lets it mesh WebRTC
@@ -299,6 +306,37 @@ export default class MapScene extends Phaser.Scene {
   dropPeer(userId) {
     this.remoteSprites.get(userId)?.destroy()
     this.remoteSprites.delete(userId)
+    // Destroyed with the container above; drop the handle so a rejoin builds
+    // a fresh badge instead of trying to destroy a dead one.
+    this.cardBadges.delete(userId)
+  }
+
+  // Hang what this peer is working on over their head (#317). Rebuilt rather
+  // than edited: a new card changes the label and the colour together, and
+  // there is one of these per person, not per frame.
+  setPeerCard(userId, card) {
+    this.cardBadges.get(userId)?.destroy()
+    this.cardBadges.delete(userId)
+    const remote = this.remoteSprites.get(userId)
+    // No card is the resting state, not an error — most people never link a
+    // Jira token to Eira at all.
+    if (!remote || !card) return
+
+    const badge = this.add
+      .text(0, CARD_Y, badgeText(card), {
+        fontSize: '11px',
+        color: '#ffffff',
+        backgroundColor: statusColor(card.status),
+        padding: { x: 4, y: 2 },
+      })
+      .setOrigin(0.5, 1)
+    const href = cardHref(card.url)
+    if (href) {
+      badge.setInteractive({ useHandCursor: true })
+      badge.on('pointerdown', () => window.open(href, '_blank', 'noopener'))
+    }
+    remote.add(badge)
+    this.cardBadges.set(userId, badge)
   }
 
   // Fold one presence frame into the roster and render the outcome: spawn a
@@ -318,6 +356,11 @@ export default class MapScene extends Phaser.Scene {
       return
     }
     const state = this.remoteRoster.get(frame.userId)
+    // A card change touches nothing else — they haven't moved.
+    if (action === 'card') {
+      this.setPeerCard(frame.userId, state.card)
+      return
+    }
     this.loadPeerCharacter(state.manifestId)
     const feet = this.peerFeet(state)
     if (action === 'spawn') {
@@ -330,6 +373,9 @@ export default class MapScene extends Phaser.Scene {
       remote.setDepth(mapPlayerDepth(false, false))
       this.remoteSprites.set(frame.userId, remote)
       this.applyPeerLook(remote, state)
+      // The spawn frame carries their card, so someone who picked one up while
+      // out of range walks back in already wearing the badge.
+      this.setPeerCard(frame.userId, state.card)
       // Their face on the nameplate (#323) once it lands — a child of the
       // container, so leaving destroys it with the rest of them. A peer who left
       // (or walked out of range) mid-fetch is no longer the container we hold.

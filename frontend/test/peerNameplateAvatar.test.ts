@@ -46,6 +46,7 @@ function fakeScene() {
     remoteRoster: new Map(),
     remoteSprites: new Map(),
     avatarsAsked: new Set(),
+    cardBadges: new Map(),
     presence: { ownId: 'me', send() {} },
     loadPeerCharacter() {},
     sendPosition() {},
