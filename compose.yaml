@@ -82,6 +82,20 @@ services:
       # credential exchange in #331. Like the above, MUST NOT gain a VITE_
       # prefix: a token in the client bundle is a token anyone can post with.
       ODT_VILLE_INGEST_TOKEN: ${ODT_VILLE_INGEST_TOKEN:-}
+      # Eira bulk card read (#318). The token we present OUTBOUND on
+      # POST /cards/lookup to seed everyone's card on world entry — a different
+      # credential from the ingest token above, and equally server-only.
+      # Eira is a plain Node app on the same box, so this is the host's own
+      # loopback with no Cloudflare in the path; from inside the container that
+      # address is the host gateway, which extra_hosts names below.
+      # Absent token = no call at all: blank badges that self-heal on the next
+      # card event, which is the correct posture for ambient data.
+      EIRA_SERVICE_TOKEN: ${EIRA_SERVICE_TOKEN:-}
+      EIRA_URL: ${EIRA_URL:-http://host.docker.internal:3150}
+    # Docker Desktop resolves host.docker.internal already; the homeserver's
+    # Linux engine does not, so name it explicitly (see EIRA_URL above).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     command: bash -c "rm -f tmp/pids/server.pid && bundle install && bin/rails db:prepare && bin/rails server -b 0.0.0.0 -p 3190"
     volumes:
       - ./backend:/app
