@@ -115,6 +115,14 @@ Rails.application.routes.draw do
         put "terrains/order", to: "terrains#reorder"
       end
 
+      # The Cards domain (ADR-0010, #317) — controller under Api::V1::Cards::.
+      # Eira's push webhook: a card change for one person, authed by a shared
+      # service token. Not under the user-session gate — it is the only
+      # service-to-service surface in the API.
+      scope module: :cards do
+        post "cards/event", to: "events#create"
+      end
+
       # The Voice domain (ADR-0011, #308) — controller under Api::V1::Voice::.
       # Mints a LiveKit room token for the connecting user; the room derives
       # from the map. The api secret is read from env and never leaves the

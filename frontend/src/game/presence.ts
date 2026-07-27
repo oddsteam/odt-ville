@@ -4,6 +4,15 @@
 
 import type { Direction } from './phaser/movement.ts'
 
+// What a person is working on right now (#317), pre-resolved by Eira. We never
+// see a Jira issue — only these three fields, and `status` is free display
+// text, not an enum.
+export interface Card {
+  title: string
+  status: string
+  url: string
+}
+
 export interface RemotePlayer {
   name: string
   x: number
@@ -12,6 +21,9 @@ export interface RemotePlayer {
   // The peer's character (#266), stamped server-side. Null means they have no
   // manifest at all and render the bundled stills.
   manifestId: number | null
+  // Their card (#317). Null means they hold none — put down, never picked up,
+  // or simply never linked to Eira, which is indistinguishable and fine.
+  card: Card | null
 }
 
 export type PresenceFrame =
@@ -25,11 +37,15 @@ export type PresenceFrame =
       // Absent on a frame from a server that predates #266 — folded to null,
       // which is the bundled-stills fallback either way.
       manifestId?: number | null
+      // The sender's card, stamped server-side — this is what gives a peer
+      // walking into range the badge they were already holding.
+      card?: Card | null
     }
   | { type: 'leave'; userId: string; name: string }
+  | { type: 'card'; userId: string; card: Card | null }
 
 export interface FrameResult {
-  action: 'spawn' | 'move' | 'remove' | 'none'
+  action: 'spawn' | 'move' | 'remove' | 'card' | 'none'
   // Roster sync is stateless echo: first sighting of a peer means they don't
   // know us yet, so the scene re-announces its own position once.
   echo: boolean
@@ -50,6 +66,15 @@ export function applyFrame(
   if (frame.type === 'leave') {
     return roster.delete(frame.userId) ? { action: 'remove', echo: false } : NONE
   }
+  // The card stream is unpartitioned (#317) — every client hears about
+  // everyone — so a card for someone we can't see is dropped rather than
+  // conjuring them onto the roster. Their next position frame carries it.
+  if (frame.type === 'card') {
+    const peer = roster.get(frame.userId)
+    if (!peer) return NONE
+    peer.card = frame.card ?? null
+    return { action: 'card', echo: false }
+  }
   if (frame.type !== 'move' || typeof frame.x !== 'number' || typeof frame.y !== 'number') {
     return NONE
   }
@@ -61,6 +86,7 @@ export function applyFrame(
     y: frame.y,
     facing: frame.facing,
     manifestId: frame.manifestId ?? null,
+    card: frame.card ?? null,
   })
   return known ? { action: 'move', echo: false } : { action: 'spawn', echo: true }
 }

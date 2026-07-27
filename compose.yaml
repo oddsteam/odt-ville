@@ -75,6 +75,13 @@ services:
       BASECAMP_CLIENT_SECRET: ${BASECAMP_CLIENT_SECRET:-}
       BASECAMP_REFRESH_TOKEN: ${BASECAMP_REFRESH_TOKEN:-}
       BASECAMP_ACCOUNT_ID: ${BASECAMP_ACCOUNT_ID:-}
+      # Eira card ingest (#317). The shared service token Eira presents on
+      # POST /api/v1/cards/event — service-to-service, never a user session.
+      # Supply via the host's gitignored .env; absent = the ingest fails closed
+      # and rejects every call, which is the correct posture until the
+      # credential exchange in #331. Like the above, MUST NOT gain a VITE_
+      # prefix: a token in the client bundle is a token anyone can post with.
+      ODT_VILLE_INGEST_TOKEN: ${ODT_VILLE_INGEST_TOKEN:-}
     command: bash -c "rm -f tmp/pids/server.pid && bundle install && bin/rails db:prepare && bin/rails server -b 0.0.0.0 -p 3190"
     volumes:
       - ./backend:/app

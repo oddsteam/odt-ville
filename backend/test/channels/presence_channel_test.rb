@@ -62,6 +62,30 @@ class PresenceChannelTest < ActionCable::Channel::TestCase
     assert_has_no_stream cell_stream(map, 0, 0)
   end
 
+  # Card badges (#317): one shared stream, joined at subscribe. Eira's ingest
+  # knows an email, not a map or a cell, so it cannot address a cell stream —
+  # and clients drop a card for anyone outside their roster anyway.
+  test "subscribing attaches the shared card stream" do
+    join(make_map)
+
+    assert_has_stream PresenceChannel::CARD_STREAM
+  end
+
+  # A peer who walks into range after the card landed missed the live frame,
+  # so the position frame that spawns them carries the card too.
+  test "move carries the sender's current card" do
+    map = make_map
+    card = { "title" => "Wire up the pathfinder", "status" => "DOING", "url" => "https://jira/1" }
+    Cards::Registry.put(@user.external_id, card)
+    join(map)
+
+    assert_broadcast_on(cell_stream(map, 0, 0), manifest_frame(nil).merge(card: card)) do
+      perform :move, x: 3, y: 4, facing: "down"
+    end
+  ensure
+    Cards::Registry.clear
+  end
+
   test "a move attaches the sender's cell and its eight neighbours" do
     map = make_map
     join(map)
@@ -230,7 +254,7 @@ class PresenceChannelTest < ActionCable::Channel::TestCase
   def manifest_frame(manifest_id)
     {
       type: "move", userId: @user.external_id, name: @user.name,
-      x: 3, y: 4, facing: "down", manifestId: manifest_id
+      x: 3, y: 4, facing: "down", manifestId: manifest_id, card: nil
     }
   end
 
@@ -241,7 +265,7 @@ class PresenceChannelTest < ActionCable::Channel::TestCase
     join(map)
     perform :move, x: 3, y: 4, facing: "down"
 
-    leave = { type: "leave", userId: @user.external_id, name: @user.name, manifestId: nil }
+    leave = { type: "leave", userId: @user.external_id, name: @user.name, manifestId: nil, card: nil }
     assert_broadcast_on(cell_stream(map, 0, 0), leave) do
       unsubscribe
     end

@@ -9,6 +9,13 @@ class PresenceChannel < ApplicationCable::Channel
   # 12 tiles: three of them span 36, against a ~24x19-tile camera at 48px.
   CELL = 12
 
+  # Card badges (#317): one stream for everybody, deliberately unpartitioned.
+  # Eira's ingest knows an email — not a map, not a cell — so it cannot address
+  # the interest-managed streams, and a card change is a few frames a day per
+  # person against a movement frame every step. Clients drop a card for anyone
+  # outside their roster, so the fanout costs nothing visible.
+  CARD_STREAM = "cards"
+
   def subscribed
     map = ::Maps::Map.find_by(slug: params[:slug])
     # The room join rides the same gate as list/load (#83) — and a solo map
@@ -22,6 +29,7 @@ class PresenceChannel < ApplicationCable::Channel
     # postbox, keyed by the authenticated Keycloak id and scoped to this map so
     # a signal only reaches a target who is actually here.
     stream_from signal_stream(current_user.external_id)
+    stream_from CARD_STREAM
     # No cell until the first `move` says where we stand; the client replays
     # its position on `connected`, so that gap is one round trip.
     @cell = nil
@@ -102,6 +110,9 @@ class PresenceChannel < ApplicationCable::Channel
   # frames can't be spoofed and proximity voice (#159) can key on it later. The
   # sender's effective manifest id (#266) rides the same stamp so peers can
   # render their real character; nil means "fall back to the bundled stills".
+  # Their current card (#317) rides it too: a peer who walks into range after
+  # the card landed missed the live frame, and this is the frame that spawns
+  # them.
   def broadcast(frame)
     return unless @cell
 
@@ -110,7 +121,8 @@ class PresenceChannel < ApplicationCable::Channel
       frame.merge(
         userId: current_user.external_id,
         name: current_user.name,
-        manifestId: current_user.effective_character_manifest&.id
+        manifestId: current_user.effective_character_manifest&.id,
+        card: Cards::Registry.for(current_user.external_id)
       )
     )
   end
