@@ -26,9 +26,10 @@ import type { GroundTile } from './catalog/groundTiles/schema.ts'
 import { MonstersService } from './catalog/monsters/service.ts'
 import type { Npc } from './catalog/npcs/schema.ts'
 
-// Demo target for every board's "open content list" action. Replaced in a
-// follow-up by per-board content-list views (see issue #15 follow-ups).
-const DEMO_BOARD_URL = 'https://app.basecamp.com/4877526/'
+// Every board's "open content list" action opens the one URL configured on
+// the deployment (#335); unset = the press quietly opens nothing. Replaced in
+// a follow-up by per-board content-list views (see issue #15 follow-ups).
+const BOARD_URL: string | null = import.meta.env.VITE_BOARD_URL || null
 
 // The village route owns all town-scene data and hands it to <VillageGame> as
 // props, listens for game events, and persists session changes. Nothing here
@@ -211,13 +212,12 @@ export default function VillagePage() {
     [npcs],
   )
 
-  // Each board's "open content list" action — for the demo every board
-  // points at the same external URL. The game module knows nothing about
-  // this; it just emits the board id and the page decides.
+  // Each board's "open content list" action. The game module knows nothing
+  // about this; it just emits the board id and the page decides.
   const handleOpenBoard = useCallback(
     (boardType?: string) => {
       trackInteractBoard(communities, activeCommunityId, boardType)
-      window.open(DEMO_BOARD_URL, '_blank', 'noopener,noreferrer')
+      if (BOARD_URL) window.open(BOARD_URL, '_blank', 'noopener,noreferrer')
     },
     [communities, activeCommunityId],
   )

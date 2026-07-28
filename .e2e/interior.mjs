@@ -1,10 +1,11 @@
 // Spatial community interior — issue #15, ported to Phaser in PR-E.
 //
 // Walk into Compliance House, verify the InteriorScene renders three
-// boards, walk up to each and press A, assert each fires the demo
-// external URL through the openBoard bus event (window.open stubbed
-// so popups don't steal keyboard focus). Then step south through the
-// door and confirm we land back in TownScene on Compliance's doormat.
+// boards, walk up to each and press A, assert each opens the configured
+// VITE_BOARD_URL — or nothing when unset (#335) — through the openBoard
+// bus event (window.open stubbed so popups don't steal keyboard focus).
+// Then step south through the door and confirm we land back in TownScene
+// on Compliance's doormat.
 //
 // PR-E port: the canonical interior e2e now runs against the Phaser
 // engine via the __game test API; interior-phaser.mjs duplicate was
@@ -13,7 +14,10 @@ import { chromium } from 'playwright-core'
 import { clearPhaserGateTrainer } from './_helpers.mjs'
 
 const OUT = process.argv[2] || '.'
-const DEMO_URL = 'https://app.basecamp.com/4877526/'
+// Must match the VITE_BOARD_URL the dev server under test was started with
+// (#335): set in both shells, boards open it; unset in both, boards open
+// nothing and this script asserts exactly that.
+const BOARD_URL = process.env.VITE_BOARD_URL || null
 
 const browser = await chromium.launch({ channel: 'chrome', headless: true })
 const context = await browser.newContext({ viewport: { width: 1180, height: 820 } })
@@ -135,9 +139,9 @@ const townPlayerTile = await playerTile()
 // Player should respawn on Compliance's doormat (3, 7).
 const expectedTownTile = { x: 3, y: 7 }
 
-const callsAllMatchDemo = [afterShould[0], afterMust[1], afterNice[2]].every(
-  (c) => c && c.url === DEMO_URL,
-)
+// One press per board so far; with no URL configured, no calls at all.
+const wantCalls = BOARD_URL ? [1, 2, 3] : [0, 0, 0]
+const callsAllMatchBoardUrl = afterNice.every((c) => c.url === BOARD_URL)
 
 const ok =
   inInterior === 'Interior' &&
@@ -148,10 +152,10 @@ const ok =
   boards[2]?.type === 'nice_to_know' &&
   spawnTile?.x === expectedSpawn.x &&
   spawnTile?.y === expectedSpawn.y &&
-  afterShould.length === 1 &&
-  afterMust.length === 2 &&
-  afterNice.length === 3 &&
-  callsAllMatchDemo &&
+  afterShould.length === wantCalls[0] &&
+  afterMust.length === wantCalls[1] &&
+  afterNice.length === wantCalls[2] &&
+  callsAllMatchBoardUrl &&
   backInTown === 'Town' &&
   townPlayerTile?.x === expectedTownTile.x &&
   townPlayerTile?.y === expectedTownTile.y &&
@@ -168,7 +172,7 @@ console.log(
       afterShould,
       afterMust,
       afterNice,
-      callsAllMatchDemo,
+      callsAllMatchBoardUrl,
       backInTown,
       townPlayerTile,
       expectedTownTile,
