@@ -118,6 +118,11 @@ services:
       # no-op. Keep the secret out of git — supply via the host env, e.g.
       # `VITE_POSTHOG_KEY=phc_xxx docker compose up`. Host defaults to US cloud.
       VITE_POSTHOG_KEY: ${VITE_POSTHOG_KEY:-}
+      # Target of every in-world board's "open content list" action (#335) —
+      # a public URL, not a secret; supplied from the host .env like the rest.
+      # Absent = the press opens nothing (the ODDS deployment sets its demo
+      # Basecamp board here). Retired by per-board content views (#15).
+      VITE_BOARD_URL: ${VITE_BOARD_URL:-}
       # LiveKit server URL (ADR-0011, #298). NOT a secret — the browser dials it
       # directly (wss://…livekit.cloud) and the backend-minted token authorizes
       # the join. Supplied from the host .env, as VITE_TURN_URL was (#283).
