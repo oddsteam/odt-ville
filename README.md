@@ -152,6 +152,52 @@ ssh homeserver 'apps/odt-ville/scripts/basecamp-avatar-sync.sh'   # run it now
 The crontab lives on the box, not in git; recreate it with `crontab -e` if the
 homeserver is ever rebuilt.
 
+### Service credentials: Eira ↔ odt-ville (#331)
+
+Cards (#317, #318) are a two-way service-to-service link with **Eira**, the
+Jira→Discord app running as a plain Node process on the same homeserver box
+(`~/apps/jira-to-discord`). Three values, all **server-only** — none may ever
+gain a `VITE_` prefix, and no Jira token crosses the boundary in either
+direction. Values live only in the gitignored `.env` on each box; nothing here
+is committed.
+
+| Var | Set on | Direction | What it does |
+| --- | --- | --- | --- |
+| `EIRA_SERVICE_TOKEN` | odt-ville `.env` | odt-ville → Eira | Bearer on `POST /cards/lookup`, which seeds everyone's card on world entry (#318) |
+| `ODT_VILLE_INGEST_TOKEN` | **both** `.env`s | Eira → odt-ville | Shared secret Eira presents and we verify on `POST /api/v1/cards/event` (#317) |
+| `ODT_VILLE_INGEST_URL` | Eira `.env` | Eira → odt-ville | `http://localhost:5460/api/v1/cards/event` |
+
+Both tokens **fail closed**. A blank `ODT_VILLE_INGEST_TOKEN` rejects every
+ingest call with 401 — an unconfigured secret never means "let everyone in". A
+blank `EIRA_SERVICE_TOKEN` makes no outbound call at all, so badges stay blank
+and self-heal on the next pushed event.
+
+The ingest URL goes through the frontend's Vite preview proxy because the
+homeserver publishes **only** `5460`; the backend's `3190` stays private to the
+compose network. Same box, loopback only — no Cloudflare in the path and the
+ingest endpoint is never publicly exposed. `https://odt-ville.p2d.uk/api/v1/cards/event`
+would also work and was rejected for exactly that reason.
+
+Set or rotate — `ODT_VILLE_INGEST_TOKEN` is shared, so it is always a
+**two-sided** change (both `.env`s, both services restarted, or ingest goes
+dark):
+
+```bash
+# odt-ville side. The prod overlay is mandatory — a bare `docker compose`
+# in that directory silently reverts the stack to dev.
+ssh homeserver 'cd ~/apps/odt-ville && docker compose -f compose.yaml -f compose.prod.yaml up -d backend'
+# Eira side: set ODT_VILLE_INGEST_TOKEN + ODT_VILLE_INGEST_URL in
+# ~/apps/jira-to-discord/.env, then restart that service.
+```
+
+Verify from the homeserver host — 401 without the token, 204 with it, which
+also proves the proxy hop:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' -X POST http://localhost:5460/api/v1/cards/event \
+  -H 'Content-Type: application/json' -d '{"email":"nobody@example.invalid","card":null}'
+```
+
 ---
 
 ## 1. Run the backend (Rails API)
