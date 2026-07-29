@@ -53,6 +53,24 @@ export function buildWalkMask(
   return out
 }
 
+// Which tile objects author a collision walk mask (#338). A building always
+// carries one (footprint solid except its authored porch/path, #32). A prop
+// carries one only when Collides is on — then its footprint blocks like a
+// building and the Walkable paint mode carves pass-through cells. Every other
+// kind (and a plain prop) is walk-over and saves no mask (ADR-0008: a placed
+// entity blocks nothing by default).
+export function authorsWalkMask(kind: string, collides: boolean): boolean {
+  return kind === 'building' || (kind === 'prop' && collides)
+}
+
+// Which tile objects run the building door-reachability guard (validateWalkMask,
+// #32) at save. Only a building — it must have a door the avatar can reach. A
+// collidable prop has no door, so its mask saves exactly as painted; this is the
+// no-door validation split of #338.
+export function requiresDoorValidation(kind: string): boolean {
+  return kind === 'building'
+}
+
 // The 'o' overhang cells of a stored mask (#44), as "dx,dy" keys — so a saved
 // building loads back into the editor with its overhang painting intact.
 export function overhangCellsFromMask(mask: readonly string[]): Set<string> {
@@ -235,6 +253,10 @@ export default function TileMapper() {
   // Impassable cell borders for a 'building' (#53) — "c,r,side" keys (side
   // N/E/S/W) the admin marked as a ledge the avatar can't step across.
   const [edgeCells, setEdgeCells] = useState<ReadonlySet<string>>(new Set())
+  // Collides toggle for a 'prop' (#338) — off by default (walk-over). On makes
+  // the footprint block the avatar like a building; the Walkable paint carves
+  // the pass-through cells and the result saves to walk_mask (no door required).
+  const [collides, setCollides] = useState(false)
   // Erased cells for the current atlas selection (#43) — "c,r" offsets within
   // the selection box; cleared to transparent in the saved crop so neighbour
   // sprites caught in the bounding box don't ship.
@@ -316,6 +338,9 @@ export default function TileMapper() {
         setFpH(o.footprint_h)
         setDoor(o.door_dx != null && o.door_dy != null ? { dx: o.door_dx, dy: o.door_dy } : null)
         setWalk(o.walk_mask ? walkCellsFromMask(o.walk_mask) : new Set())
+        // A saved prop with a walk_mask was authored Collides-on (#338) — restore
+        // the toggle so its carved cells and footprint grid show on reopen.
+        setCollides(o.kind === 'prop' && o.walk_mask != null)
         setOverhangCells(o.walk_mask ? overhangCellsFromMask(o.walk_mask) : new Set())
         setLadderCells(o.walk_mask ? ladderCellsFromMask(o.walk_mask) : new Set())
         setEdgeCells(o.edge_mask ? edgeSetFromMask(o.edge_mask) : new Set())
@@ -340,6 +365,11 @@ export default function TileMapper() {
 
   // The building footprint as a whole-tile grid for the door picker.
   const isBuilding = kind === 'building'
+  const isProp = kind === 'prop'
+  // Objects that author a collision walk mask: a building, or a prop with
+  // Collides on (#338). Drives the footprint grid, the Walkable paint, and the
+  // saved walk_mask — everything a prop shares with a building's collision.
+  const collidable = authorsWalkMask(kind, collides)
   const doorCols = Math.max(1, Math.round(fpW))
   const doorRows = Math.max(1, Math.round(fpH))
 
@@ -448,10 +478,11 @@ export default function TileMapper() {
           if (erase.has(`${c},${r}`)) ctx.fillRect(c * ew, r * eh, ew, eh)
     }
 
-    // For a building, overlay the footprint grid, the painted walkable cells
-    // (#32), and the picked door cell so the admin sees the authored entry path
-    // and where the entrance lands (issue #29).
-    if (!isBuilding) return
+    // For a building (or a collidable prop, #338), overlay the footprint grid,
+    // the painted walkable cells (#32), and the picked door cell so the admin
+    // sees the authored entry path and where the entrance lands (issue #29). A
+    // prop has no door/overhang/ladder/edge yet — those sets stay empty for it.
+    if (!collidable) return
     const cw = w / doorCols
     const ch = h / doorRows
     ctx.fillStyle = 'rgba(46,125,255,0.35)' // painted walkable cells
@@ -488,7 +519,7 @@ export default function TileMapper() {
       else { ctx.moveTo(x + cw, y); ctx.lineTo(x + cw, y + ch) }
       ctx.stroke()
     }
-  }, [atlas, cell, selBox, editImg, fpW, fpH, isBuilding, doorCols, doorRows, door, walk, overhangCells, ladderCells, edgeCells, erase])
+  }, [atlas, cell, selBox, editImg, fpW, fpH, collidable, doorCols, doorRows, door, walk, overhangCells, ladderCells, edgeCells, erase])
 
   // Click the preview to either mark the entrance (door mode) or toggle a
   // walkable cell (walk mode) — issue #29/#32.
@@ -506,7 +537,7 @@ export default function TileMapper() {
       })
       return
     }
-    if (!isBuilding) return
+    if (!collidable) return
     // Edge mode (#53) toggles the nearest border of the clicked cell.
     if (paintMode === 'edge') {
       const e2 = edgeSideFromClick(e.clientX - rect.left, e.clientY - rect.top, rect.width, rect.height, doorCols, doorRows)
@@ -599,9 +630,11 @@ export default function TileMapper() {
     }
     // A building must ship an authored, reachable interior walk mask (#32): a
     // door + at least one walkable tile + a path connecting them to a footprint
-    // edge, so the avatar can actually enter. Block the save otherwise.
-    const mask = isBuilding ? buildWalkMask(walk, doorCols, doorRows, overhangCells, ladderCells) : undefined
-    if (isBuilding) {
+    // edge, so the avatar can actually enter. Block the save otherwise. A
+    // collidable prop (#338) carries a mask too, but has no door, so it skips
+    // the reachability guard and saves exactly as painted.
+    const mask = collidable ? buildWalkMask(walk, doorCols, doorRows, overhangCells, ladderCells) : undefined
+    if (requiresDoorValidation(kind)) {
       const v = validateWalkMask(mask, doorCols, doorRows, door)
       if (!v.ok) {
         setStatus(
@@ -877,7 +910,7 @@ export default function TileMapper() {
           </label>
           <label>
             Kind
-            <select value={kind} onChange={(e) => { setKind(e.target.value); setDoor(null); setWalk(new Set()); setOverhangCells(new Set()); setLadderCells(new Set()); setEdgeCells(new Set()) }}>
+            <select value={kind} onChange={(e) => { setKind(e.target.value); setDoor(null); setWalk(new Set()); setOverhangCells(new Set()); setLadderCells(new Set()); setEdgeCells(new Set()); setCollides(false); setPaintMode('walk') }}>
               <option value="tree">tree</option>
               <option value="prop">prop</option>
               <option value="flower-group">flower-group</option>
@@ -897,16 +930,22 @@ export default function TileMapper() {
                 onChange={(e) => setFpH(Math.min(MAX_FP, Number(e.target.value) || 1))} style={{ width: 64 }} />
             </label>
           </div>
+          {isProp && (
+            <label className="collides-toggle">
+              <input type="checkbox" checked={collides} onChange={(e) => setCollides(e.target.checked)} />
+              Collides — the footprint blocks the avatar; paint Walkable to carve pass-through cells.
+            </label>
+          )}
 
           <h3>Preview (map scale)</h3>
           <div className="preview-box">
             {selBox || editImg ? <canvas ref={previewRef} onClick={onPreviewClick} /> : <p className="hint">Drag a rectangle on the atlas, or Edit a saved object.</p>}
           </div>
-          {(selBox || (isBuilding && editImg)) && (
+          {(selBox || (collidable && editImg)) && (
             <>
               <div className="paint-mode">
                 <span>Paint:</span>
-                {isBuilding && (
+                {collidable && (
                   <button
                     type="button"
                     className={paintMode === 'walk' ? 'is-on' : ''}
@@ -1001,6 +1040,13 @@ export default function TileMapper() {
                     : 'Click the entrance cell.'}{' '}
                   {door ? `Door at ${door.dx},${door.dy}.` : 'No door yet.'} Save is blocked until the door
                   is reachable from a footprint edge via walkable tiles.
+                </p>
+              )}
+              {isProp && collidable && paintMode === 'walk' && (
+                <p className="hint">
+                  The footprint <strong>blocks</strong> the avatar. Click cells to carve walkable
+                  pass-through (toggle) — a prop has no door, so the mask saves exactly as painted.
+                  {' '}{walk.size} carved.
                 </p>
               )}
               {isBuilding && paintMode === 'fg' && (
