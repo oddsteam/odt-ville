@@ -676,7 +676,7 @@ export default function TileMapper() {
         walk_mask: mask,
         // Impassable cell borders (#53) — only when the admin marked some, so an
         // unauthored building stays fully backward-compatible (free movement).
-        edge_mask: isBuilding && edgeCells.size ? buildEdgeMask(edgeCells, doorCols, doorRows) : undefined,
+        edge_mask: collidable && edgeCells.size ? buildEdgeMask(edgeCells, doorCols, doorRows) : undefined,
         // Foreground mask (#36) — the painted overlay's alpha as a PNG, only
         // when the admin actually painted some in-front pixels.
         fg_mask: isBuilding && maskHasInk(fgMaskRef.current) ? fgMaskRef.current!.toDataURL('image/png') : undefined,
@@ -954,7 +954,7 @@ export default function TileMapper() {
                     Walkable
                   </button>
                 )}
-                {isBuilding && (
+                {collidable && (
                   <button
                     type="button"
                     className={paintMode === 'overhang' ? 'is-on' : ''}
@@ -963,7 +963,7 @@ export default function TileMapper() {
                     Overhang
                   </button>
                 )}
-                {isBuilding && (
+                {collidable && (
                   <button
                     type="button"
                     className={paintMode === 'ladder' ? 'is-on' : ''}
@@ -972,7 +972,7 @@ export default function TileMapper() {
                     Ladder
                   </button>
                 )}
-                {isBuilding && (
+                {collidable && (
                   <button
                     type="button"
                     className={paintMode === 'edge' ? 'is-on' : ''}
@@ -1014,20 +1014,20 @@ export default function TileMapper() {
                   Click cells inside the selection to drop them (toggle). {erase.size} erased — they save transparent.
                 </p>
               )}
-              {isBuilding && paintMode === 'overhang' && (
+              {collidable && paintMode === 'overhang' && (
                 <p className="hint">
-                  Click cells the avatar walks <strong>under</strong> the building art (overhang/foliage). Walkable,
-                  but drawn beneath the house. {overhangCells.size} marked.
+                  Click cells the avatar walks <strong>under</strong> the art (overhang/foliage — a tree canopy,
+                  a lamppost). Walkable, but drawn beneath the object. {overhangCells.size} marked.
                 </p>
               )}
-              {isBuilding && paintMode === 'ladder' && (
+              {collidable && paintMode === 'ladder' && (
                 <p className="hint">
                   Click cells to mark a <strong>ladder</strong> — walkable like a path, but the avatar plays its
                   climb animation while on it (falls back to walking if the character has no climb frames).
                   {' '}{ladderCells.size} marked.
                 </p>
               )}
-              {isBuilding && paintMode === 'edge' && (
+              {collidable && paintMode === 'edge' && (
                 <p className="hint">
                   Click near a cell <strong>side</strong> to wall it off — the avatar can't step across that border
                   (a ledge/balcony edge), even between two walkable cells. {edgeCells.size} marked.

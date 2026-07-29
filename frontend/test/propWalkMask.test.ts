@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest'
 
 import {
   authorsWalkMask,
+  buildEdgeMask,
   buildWalkMask,
+  edgeSetFromMask,
+  ladderCellsFromMask,
+  overhangCellsFromMask,
   requiresDoorValidation,
   walkCellsFromMask,
 } from '../src/tileMapper/TileMapper.tsx'
@@ -52,5 +56,40 @@ describe('a collidable prop mask', () => {
   it('round-trips a saved prop mask back into the painted carve set', () => {
     const mask = buildWalkMask(new Set(['0,0', '1,1']), 2, 2)
     expect(walkCellsFromMask(mask)).toEqual(new Set(['0,0', '1,1']))
+  })
+})
+
+// #339 — overhang painting on collidable props. The Overhang, Ladder, and Edge
+// paint modes (building-only until now) become available once a prop authors a
+// walk_mask, i.e. exactly when authorsWalkMask is true. The mask/edge builders
+// are kind-agnostic, so a collidable prop emits 'o'/'L'/edge just like a
+// building; the runtime already renders any placed object's 'o' cells (#210).
+describe('a collidable prop authoring overhang / ladder / edge (#339)', () => {
+  it('gates the three modes on authorsWalkMask — on for a collidable prop, off otherwise', () => {
+    expect(authorsWalkMask('prop', true)).toBe(true)
+    expect(authorsWalkMask('prop', false)).toBe(false)
+    expect(authorsWalkMask('tree', true)).toBe(false)
+  })
+
+  it("emits 'o' overhang and 'L' ladder cells in the prop's saved mask", () => {
+    const walk = new Set(['1,1'])
+    const overhang = new Set(['0,0'])
+    const ladder = new Set(['2,0'])
+    // Precedence in buildWalkMask: overhang > ladder > walk > solid.
+    expect(buildWalkMask(walk, 3, 2, overhang, ladder)).toEqual(['o#L', '#.#'])
+  })
+
+  it("round-trips a prop's overhang and ladder cells back out of the mask", () => {
+    const mask = buildWalkMask(new Set(['1,1']), 3, 2, new Set(['0,0']), new Set(['2,0']))
+    expect(overhangCellsFromMask(mask)).toEqual(new Set(['0,0']))
+    expect(ladderCellsFromMask(mask)).toEqual(new Set(['2,0']))
+  })
+
+  it('builds an impassable edge mask for a prop, now reachable via the Edge mode (#53)', () => {
+    const edges = new Set(['0,0,N', '1,1,E'])
+    const mask = buildEdgeMask(edges, 2, 2)
+    // N=1 at (0,0); E=2 at (1,1).
+    expect(mask).toEqual(['10', '02'])
+    expect(edgeSetFromMask(mask)).toEqual(edges)
   })
 })
