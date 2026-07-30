@@ -7,6 +7,13 @@ module Api
         @company, @user = setup_company
       end
 
+      def make_building_object(name: "A cottage")
+        ::Catalog::TileObject.create!(
+          name: name, kind: "building", image: "data:image/png;base64,x",
+          footprint_w: 3, footprint_h: 4
+        )
+      end
+
       test "index lists this company's active communities with badges and board summaries" do
         a = make_community(company: @company, title: "Alpha")
         b = make_community(company: @company, title: "Beta")
@@ -60,6 +67,20 @@ module Api
         by_title = json[:communities].index_by { _1[:title] }
         assert_equal "compliance-hq", by_title["Housed"][:interior_node_slug]
         assert_nil by_title["Roomless"][:interior_node_slug]
+      end
+
+      test "index exposes each community's assigned building object (null without one)" do
+        obj = make_building_object
+        housed = make_community(company: @company, title: "Housed")
+        housed.update!(tile_object_id: obj.id)
+        make_community(company: @company, title: "Bare")
+
+        get "/api/v1/communities", headers: auth(@user)
+
+        assert_response :success
+        by_title = json[:communities].index_by { _1[:title] }
+        assert_equal obj.id, by_title["Housed"][:tile_object_id]
+        assert_nil by_title["Bare"][:tile_object_id]
       end
 
       test "index excludes other companies' communities" do
@@ -221,6 +242,64 @@ module Api
         community.reload
         assert_equal "posture-login", community.entry_gate
         assert_equal "set-9", community.posture_set_id
+      end
+
+      test "update assigns a mapped building object to the community" do
+        obj = make_building_object
+        community = make_community(company: @company, title: "Housed")
+
+        patch "/api/v1/communities/#{community.id}",
+              params: { tile_object_id: obj.id },
+              as: :json, headers: auth(@user, roles: ["admin"])
+
+        assert_response :success
+        assert_equal obj.id, community.reload.tile_object_id
+      end
+
+      test "update 422s on an unknown building object id" do
+        community = make_community(company: @company, title: "Housed")
+
+        patch "/api/v1/communities/#{community.id}",
+              params: { tile_object_id: 999_999 },
+              as: :json, headers: auth(@user, roles: ["admin"])
+
+        assert_response :unprocessable_entity
+        assert_nil community.reload.tile_object_id
+      end
+
+      test "update 422s when the object is not a building" do
+        tree = ::Catalog::TileObject.create!(name: "An oak", kind: "tree", image: "data:image/png;base64,x")
+        community = make_community(company: @company, title: "Housed")
+
+        patch "/api/v1/communities/#{community.id}",
+              params: { tile_object_id: tree.id },
+              as: :json, headers: auth(@user, roles: ["admin"])
+
+        assert_response :unprocessable_entity
+        assert_nil community.reload.tile_object_id
+      end
+
+      test "update with a blank building object id clears the assignment" do
+        obj = make_building_object
+        community = make_community(company: @company, title: "Housed")
+        community.update!(tile_object_id: obj.id)
+
+        patch "/api/v1/communities/#{community.id}",
+              params: { tile_object_id: nil },
+              as: :json, headers: auth(@user, roles: ["admin"])
+
+        assert_response :success
+        assert_nil community.reload.tile_object_id
+      end
+
+      test "deleting an assigned building object clears the assignment" do
+        obj = make_building_object
+        community = make_community(company: @company, title: "Housed")
+        community.update!(tile_object_id: obj.id)
+
+        obj.destroy!
+
+        assert_nil community.reload.tile_object_id
       end
 
       test "update 404s across companies" do

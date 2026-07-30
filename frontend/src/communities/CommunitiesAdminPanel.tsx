@@ -5,6 +5,8 @@ import type { Community } from './schema.ts'
 import { PostureService } from '../posture/service.ts'
 import type { PostureSet } from '../posture/schema.ts'
 import { MapsService, type MapSummary } from '../maps/service.ts'
+import { TileObjectsService } from '../catalog/tileObjects/service.ts'
+import type { TileObjectSummary } from '../catalog/tileObjects/schema.ts'
 import { runEdge } from '../lib/runEdge.ts'
 import '../lib/mapperChrome.css'
 import './admin.css'
@@ -25,24 +27,32 @@ const COLOURS = [
 const POSTURE_GATE = 'posture-login'
 
 // Per-house door-Portal editor (ADR-0005): the interior Node the door travels
-// to (#113) and its gate — "No gate" or "Posture-login + <set>" (#38). The
-// posture set comes from the live catalog; the current set isn't shown because
-// posture_set_id is server-only (never in the index), so editing a gated house
-// re-picks the set.
+// to (#113), its gate — "No gate" or "Posture-login + <set>" (#38) — and the
+// plot's mapped building (#292, "None (default)" = active object / bundled
+// art). The posture set comes from the live catalog; the current set isn't
+// shown because posture_set_id is server-only (never in the index), so editing
+// a gated house re-picks the set.
 function HouseDoor({
   house,
   sets,
   nodes,
+  buildings,
   onSaved,
 }: {
   house: Community
   sets: readonly PostureSet[]
   nodes: readonly MapSummary[]
+  buildings: readonly TileObjectSummary[]
   onSaved?: () => void | Promise<void>
 }) {
   const [gate, setGate] = useState(house.entry_gate === POSTURE_GATE ? POSTURE_GATE : '')
   const [setId, setSetId] = useState('')
   const [nodeSlug, setNodeSlug] = useState(house.interior_node_slug ?? '')
+  // The plot's assigned mapped building (#292); '' = none, fall back to the
+  // active object / bundled art.
+  const [buildingId, setBuildingId] = useState(
+    house.tile_object_id != null ? String(house.tile_object_id) : '',
+  )
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -60,6 +70,7 @@ function HouseDoor({
           entry_gate: gate || null,
           posture_set_id: gate === POSTURE_GATE ? setId : null,
           interior_node_slug: nodeSlug || null,
+          tile_object_id: buildingId ? Number(buildingId) : null,
         }),
       )
       if (onSaved) await onSaved()
@@ -82,6 +93,20 @@ function HouseDoor({
         {nodes.map((n) => (
           <option key={n.slug} value={n.slug}>
             {n.title || n.slug}
+          </option>
+        ))}
+      </select>
+
+      <select
+        aria-label={`Building for ${house.title}`}
+        value={buildingId}
+        onChange={(e) => setBuildingId(e.target.value)}
+        disabled={busy}
+      >
+        <option value="">None (default)</option>
+        {buildings.map((b) => (
+          <option key={b.id} value={b.id}>
+            {b.name} ({b.footprint_w}×{b.footprint_h})
           </option>
         ))}
       </select>
@@ -138,6 +163,7 @@ export default function CommunitiesAdminPanel({
   const [error, setError] = useState<string | null>(null)
   const [sets, setSets] = useState<readonly PostureSet[]>([])
   const [nodes, setNodes] = useState<readonly MapSummary[]>([])
+  const [buildings, setBuildings] = useState<readonly TileObjectSummary[]>([])
 
   // The posture-set catalog for the gate picker. Empty if posture-login is
   // unreachable — the picker just shows no sets and a gate can't be saved.
@@ -153,6 +179,14 @@ export default function CommunitiesAdminPanel({
     runEdge(MapsService.list())
       .then(setNodes)
       .catch(() => setNodes([]))
+  }, [])
+
+  // The saved 'building' objects for the per-community building picker (#292).
+  // Empty on error — the picker offers only "None (default)".
+  useEffect(() => {
+    runEdge(TileObjectsService.list('building'))
+      .then(setBuildings)
+      .catch(() => setBuildings([]))
   }, [])
 
   const used = communities.length
@@ -226,7 +260,7 @@ export default function CommunitiesAdminPanel({
                     ×
                   </button>
                 </div>
-                <HouseDoor house={c} sets={sets} nodes={nodes} onSaved={onChanged} />
+                <HouseDoor house={c} sets={sets} nodes={nodes} buildings={buildings} onSaved={onChanged} />
               </li>
             ))}
             {used === 0 && <li className="hint">No communities yet.</li>}

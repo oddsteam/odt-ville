@@ -70,6 +70,10 @@ export type PhaserGameProps = {
   // consumed by buildTown at scene boot. A null role places nothing.
   policy: HometownPolicy
   building: TileObject | null
+  // Per-community building assignments (#292), keyed by tile-object id — the
+  // batched-fetch result each plot resolves against (assigned → active →
+  // bundled). Empty means every plot uses `building` / bundled art.
+  buildingsById: Record<number, TileObject>
   groundTiles: readonly GroundTile[]
   characterManifest: object | null
   // The NPC catalog (#259) — identity + sprite for placed characters, read at
@@ -115,6 +119,7 @@ export default function PhaserGame({
   session,
   policy,
   building,
+  buildingsById,
   groundTiles,
   characterManifest,
   npcs,
@@ -183,6 +188,7 @@ export default function PhaserGame({
     game.registry.set('session', session)
     game.registry.set('hometownPolicy', policy || null)
     game.registry.set('buildingObject', building || null)
+    game.registry.set('hometownBuildings', buildingsById || {})
     // Ground-tile catalog — read once by TownScene.preload() to load the
     // referenced tilesets, same boot-input timing as the hometown policy.
     game.registry.set('groundTiles', groundTiles || [])
@@ -377,6 +383,13 @@ export default function PhaserGame({
     if (!game) return
     game.registry.set('buildingObject', building || null)
   }, [building])
+
+  // Per-community building assignments (#292) — boot input like the house.
+  useEffect(() => {
+    const game = gameRef.current
+    if (!game) return
+    game.registry.set('hometownBuildings', buildingsById || {})
+  }, [buildingsById])
 
   // Ground-tile catalog — boot input like the hometown policy; pushing it keeps the
   // registry fresh for the next VillageGame mount / reload.

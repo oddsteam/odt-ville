@@ -2,7 +2,8 @@ import Phaser from 'phaser'
 import { TILE, MOVE_MS, PLAYER_FEET_LIFT } from '../../constants.js'
 import { buildTownMap } from '../../townMap.ts'
 import { catalogFromGroundTiles, HOMETOWN_CATALOG } from '../../../kernel/tileCatalog.ts'
-import { isWalkable, edgeBlocked, playerDepthAt, isLadderCell, doorAnchorFor, footprintFor, walkMaskFor, edgeMaskFor } from '../../town.ts'
+import { isWalkable, edgeBlocked, playerDepthAt, isLadderCell, doorAnchorFor, footprintFor, walkMaskFor, edgeMaskFor, plotWithBuilding } from '../../town.ts'
+import { buildingObjectFor } from '../../buildings.js'
 import { ensureTileTextures } from '../tileTextures.js'
 import { isTransitioning } from '../../transition.ts'
 import {
@@ -171,6 +172,17 @@ export default class TownScene extends Phaser.Scene {
       // Hometown Policy (#173): the active foliage objects, resolved to placed
       // entities at generation time and rendered via the shared entity loader.
       this.registry.get('hometownPolicy') || null,
+    )
+
+    // Per-community buildings (#292): each plot's door, walk mask and edge
+    // mask travel with the building the renderer draws there (assigned →
+    // active → bundled), so an assigned house's entrance and walkable cells
+    // match its art. Plot SIZE stays the active object's uniform footprint —
+    // mixed sizes are #31. Same community ordering as townRenderer.render.
+    const buildingsById = this.registry.get('hometownBuildings') || {}
+    const byOrder = [...communities].sort((a, b) => a.position_order - b.position_order)
+    this.town.plots = this.town.plots.map((plot, i) =>
+      plotWithBuilding(plot, buildingObjectFor(byOrder[i], buildingsById, buildingObject)),
     )
 
     // With Scale.RESIZE in PhaserGame, the canvas display size matches

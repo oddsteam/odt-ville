@@ -5,7 +5,7 @@
 // no behaviour change, these lock today's rules.
 
 import { describe, expect, it } from 'vitest'
-import { isWalkable, edgeBlocked, type Building } from './town.ts'
+import { isWalkable, edgeBlocked, plotWithBuilding, type Building, type Plot } from './town.ts'
 
 describe('isWalkable — terrain', () => {
   // 'T' tree and 's' signpost block; road ':' and grass '.' are ground.
@@ -22,6 +22,42 @@ describe('isWalkable — terrain', () => {
 
   it('blocks a cell in the dynamic blockers set', () => {
     expect(isWalkable(town, [], new Set(['2,0']), 2, 0)).toBe(false)
+  })
+})
+
+describe('plotWithBuilding — per-plot walk data from an assigned building (#292)', () => {
+  // A 3×4 plot with the shared (active-object) door/mask already stamped.
+  const plot: Plot = { col: 2, row: 3, w: 3, h: 4, doorCol: 3, doorRow: 6, mask: undefined, edges: undefined }
+
+  it('stamps the assigned building door, walk mask and edge mask', () => {
+    const own = {
+      door_dx: 0,
+      door_dy: 3,
+      walk_mask: ['###', '###', '###', '..#'],
+      edge_mask: ['000', '000', '000', '400'],
+    }
+    const out = plotWithBuilding(plot, own)
+    expect(out.doorCol).toBe(2)
+    expect(out.doorRow).toBe(6)
+    expect(out.mask).toEqual(own.walk_mask)
+    expect(out.edges).toEqual(own.edge_mask)
+  })
+
+  it('ignores a mask whose dimensions do not fit the uniform footprint', () => {
+    const out = plotWithBuilding(plot, { door_dx: 0, door_dy: 3, walk_mask: ['..'] })
+    expect(out.mask).toBeUndefined()
+    expect(out.doorCol).toBe(2)
+  })
+
+  it('snaps an unreachable interior door to the bottom-centre default', () => {
+    const out = plotWithBuilding(plot, { door_dx: 1, door_dy: 1 })
+    expect(out.doorCol).toBe(3) // col + 1 (default dx)
+    expect(out.doorRow).toBe(6) // row + 3 (default dy)
+  })
+
+  it('keeps the shared plot untouched when no building resolves', () => {
+    const shared: Plot = { ...plot, mask: ['###', '###', '###', '.#.'] }
+    expect(plotWithBuilding(shared, null)).toEqual(shared)
   })
 })
 

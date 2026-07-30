@@ -32,6 +32,7 @@ export default function VillageGame({
   session,
   policy,
   building,
+  buildingsById,
   groundTiles,
   characterManifest,
   npcs,
@@ -53,6 +54,7 @@ export default function VillageGame({
       session={session}
       policy={policy}
       building={building}
+      buildingsById={buildingsById}
       groundTiles={groundTiles}
       characterManifest={characterManifest}
       npcs={npcs}

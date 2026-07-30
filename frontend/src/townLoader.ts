@@ -44,6 +44,15 @@ export const resolveHometownPolicy = () =>
 // keeps its own message.
 const UNAVAILABLE = 'THE VILLAGE IS TEMPORARILY UNAVAILABLE — TRY AGAIN IN A MOMENT'
 
+// Distinct building assignments across communities (#292) — the ids the one
+// batched tile-object fetch (#138) resolves. Unassigned communities are
+// skipped; no ids means no request.
+export const assignedBuildingIds = (
+  communities: readonly { tile_object_id?: number | null }[],
+): number[] => [
+  ...new Set(communities.flatMap((c) => (c.tile_object_id != null ? [c.tile_object_id] : []))),
+]
+
 export const townErrorMessage = (e: unknown): string => {
   if (e instanceof RequestError) {
     if (e.status === 401 || e.status === 403) return "YOU DON'T HAVE ACCESS TO ENTER THE VILLAGE"
@@ -77,6 +86,24 @@ export const loadTown = () =>
     },
     { concurrency: 'unbounded' },
   ).pipe(
+    // Per-community building assignments (#292), resolved with the one batched
+    // fetch (#138) after the communities land. Best-effort: an erroring fetch
+    // resolves to no assignments and every plot falls back to the active
+    // object / bundled art. A dangling id warns and falls back (mirrors #140).
+    Effect.flatMap((town) => {
+      const ids = assignedBuildingIds(town.communities)
+      return Effect.map(
+        Effect.orElseSucceed(TileObjectsService.getMany(ids), () => []),
+        (objects) => {
+          const buildingsById = Object.fromEntries(objects.map((o) => [o.id, o]))
+          for (const id of ids) {
+            if (!buildingsById[id])
+              console.warn(`[town] assigned building object ${id} is missing — plot falls back`)
+          }
+          return { ...town, buildingsById }
+        },
+      )
+    }),
     // Complete the policy with the producer's encounter inputs (#255): the
     // wild pool the field zone names ('' — the global pool — until a
     // generation-settings admin names one) and the gate trainer's Catalog::Npc

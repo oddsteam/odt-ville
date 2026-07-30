@@ -59,6 +59,9 @@ export default function VillagePage() {
   // Admin-mapped house (tile-object mapper, kind 'building', #29) — replaces the
   // bundled buildings and carries the door anchor. Null falls back to bundled art.
   const [building, setBuilding] = useState<TileObject | null>(null)
+  // Per-community building assignments (#292), keyed by tile-object id.
+  // Assigned plots resolve here first; empty falls back to `building`/bundled.
+  const [buildingsById, setBuildingsById] = useState<Record<number, TileObject>>({})
   // Ground-tile catalog (ground-tile mapper): grass/dirt/road cells painted
   // onto the town's ground, encounter field, and roads. Empty array falls back
   // to the procedural tile textures, so it's a pure visual enhancement.
@@ -82,6 +85,7 @@ export default function VillagePage() {
     setFeed(town.feed)
     setPolicy(town.policy)
     setBuilding(town.building)
+    setBuildingsById(town.buildingsById)
     setGroundTiles(town.groundTiles)
     setCharacterManifest(town.characterManifest)
     setNpcs(town.npcs)
@@ -302,6 +306,7 @@ export default function VillagePage() {
         session={session}
         policy={policy}
         building={building}
+        buildingsById={buildingsById}
         groundTiles={groundTiles}
         characterManifest={characterManifest}
         npcs={npcs}

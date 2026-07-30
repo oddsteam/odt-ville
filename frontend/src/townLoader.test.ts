@@ -1,9 +1,25 @@
 import { describe, expect, it } from 'vitest'
 
-import { townErrorMessage } from './townLoader.ts'
+import { assignedBuildingIds, townErrorMessage } from './townLoader.ts'
 import { NetworkError, RequestError } from './lib/http.ts'
 
 const request = (status: number) => new RequestError({ path: '/x', status, body: '' })
+
+// The id list the one batched tile-object fetch (#138) resolves for the
+// per-community building assignments (#292): distinct, unassigned skipped.
+describe('assignedBuildingIds', () => {
+  it('collects distinct assigned ids, skipping unassigned communities', () => {
+    expect(
+      assignedBuildingIds([
+        { tile_object_id: 7 },
+        { tile_object_id: null },
+        {},
+        { tile_object_id: 7 },
+        { tile_object_id: 3 },
+      ]),
+    ).toEqual([7, 3])
+  })
+})
 
 describe('townErrorMessage', () => {
   it('maps 401/403 to the no-access message', () => {
