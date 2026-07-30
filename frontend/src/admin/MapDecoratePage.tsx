@@ -11,7 +11,7 @@ import type { Npc } from '../catalog/npcs/schema.ts'
 import { makeMask, setMaskCell, resizeMask, isMaskEmpty, type Mask } from './maskPaint.ts'
 import { groupPalette } from './paletteGroups.ts'
 import { zoneRects as buildZoneRects, ZONE_COLORS } from './zoneRects.ts'
-import { placeProp, erasePropAt, propEntities, propsFromBaked, propGhost, newZone, retrigger, triggersFor, zoneIndexAt, eraseZoneAt, replaceZone, placeNpc, eraseNpcAt, npcIndexAt, npcEntities, npcsFromBaked, NPC_FACING_DEFAULT, isDuellist, markDuellist, unmarkDuellist, syncDuellistZones, draftMap, stashDraft, DRAFT_PLAY_PATH, type PlacedProp, type PlacedNpc, type SizeOf, type MaskOf, type DoorOf, type ZoneKind } from '../maps/service.ts'
+import { placeProp, erasePropAt, propEntities, propsFromBaked, propGhost, propIndexAt, nudgeProp, newZone, retrigger, triggersFor, zoneIndexAt, eraseZoneAt, replaceZone, placeNpc, eraseNpcAt, npcIndexAt, npcEntities, npcsFromBaked, NPC_FACING_DEFAULT, isDuellist, markDuellist, unmarkDuellist, syncDuellistZones, draftMap, stashDraft, DRAFT_PLAY_PATH, type PlacedProp, type PlacedNpc, type SizeOf, type MaskOf, type DoorOf, type NudgeDir, type ZoneKind } from '../maps/service.ts'
 import type { MapAccessPolicy } from '../kernel/schema.ts'
 import MapPreview from './MapPreview.tsx'
 import { runEdge } from '../lib/runEdge.ts'
@@ -45,6 +45,11 @@ export default function MapDecoratePage() {
   // clicks on the map do nothing.
   const [mode, setMode] = useState<'props' | 'npcs' | 'zones' | 'collision' | 'settings'>('props')
   const [propTool, setPropTool] = useState<number | 'erase' | null>(null)
+  // The placed prop armed for arrow-key nudging (#341) — its index in `props`.
+  // Set on placing one or clicking one; cleared on Escape, an empty click, or
+  // leaving props mode. Nudging re-places through the pure grid ops, so it can
+  // walk art off any edge into a negative anchor as long as a cell stays on-map.
+  const [selectedProp, setSelectedProp] = useState<number | null>(null)
   // The authored zones (#90, ADR-0005) — trigger + payload regions, edited as
   // full desired state like props. A click places the picked kind (or selects
   // the zone already there); the inspector edits the selected one.
@@ -186,6 +191,43 @@ export default function MapDecoratePage() {
     setZones((zs) => syncDuellistZones(zs, placedNpcs))
   }, [placedNpcs])
 
+  // Arrow keys nudge the selected placed prop one cell per press (#341),
+  // through the same pure grid ops as placement so overlap and save behaviour
+  // stay uniform — and the only way to reach a negative anchor (top/left
+  // overhang), which no grid click can name. A move that would push the last
+  // footprint cell off the map is refused (nudgeProp returns the prop put).
+  // Escape disarms. Active only in props mode with a prop selected, and ignored
+  // while a form control has focus so the palette search keeps its arrow keys.
+  // `props` is a dep so each press nudges from the current list, not a stale one.
+  useEffect(() => {
+    if (mode !== 'props' || selectedProp == null || !baked) return undefined
+    const bounds = { cols: baked.cols, rows: baked.rows }
+    const dirs: Record<string, NudgeDir> = {
+      ArrowUp: 'up',
+      ArrowDown: 'down',
+      ArrowLeft: 'left',
+      ArrowRight: 'right',
+    }
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement | null)?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+      if (e.key === 'Escape') {
+        setSelectedProp(null)
+        return
+      }
+      const dir = dirs[e.key]
+      if (!dir) return
+      e.preventDefault()
+      const { props: next, index } = nudgeProp(props, selectedProp, dir, sizeOf, bounds)
+      setProps(next)
+      setSelectedProp(index)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // sizeOf is derived from byId; listing byId keeps the footprint lookup fresh.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, selectedProp, baked, props, byId])
+
   // A press on the preview: paint the collision cell, place/select/erase a
   // zone or an NPC, or place/erase a prop.
   const down = (x: number, y: number) => {
@@ -229,11 +271,23 @@ export default function MapDecoratePage() {
       return
     }
     if (mode !== 'props' || propTool == null || !baked) return
-    setProps((ps) =>
-      propTool === 'erase'
-        ? erasePropAt(ps, x, y, sizeOf)
-        : placeProp(ps, { object_id: propTool, x, y }, sizeOf, { cols: baked.cols, rows: baked.rows }),
-    )
+    if (propTool === 'erase') {
+      setProps((ps) => erasePropAt(ps, x, y, sizeOf))
+      setSelectedProp(null)
+      return
+    }
+    // Like NPCs/zones: a click on a placed prop selects it for arrow-key
+    // nudging (#341); an empty cell stamps the picked object and selects that.
+    // placeProp appends the new prop last, so its index is the fresh length−1
+    // (any overlapped props it replaced are already dropped).
+    const hit = propIndexAt(props, x, y, sizeOf)
+    if (hit >= 0) {
+      setSelectedProp(hit)
+      return
+    }
+    const next = placeProp(props, { object_id: propTool, x, y }, sizeOf, { cols: baked.cols, rows: baked.rows })
+    setProps(next)
+    setSelectedProp(next.length - 1)
   }
   // Only collision paints on drag (the preview reports one tile per crossing);
   // props stay click-only (one prop per cell).
@@ -254,6 +308,19 @@ export default function MapDecoratePage() {
     // sizeOf is derived from byId; listing byId keeps the footprint lookup fresh.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, propTool, hover, baked, props, byId])
+
+  // The selected placed prop's footprint, drawn as a persistent highlight so
+  // the author sees what arrow keys nudge (#341) — including a negative anchor,
+  // whose off-map cells fall outside the frame and just clip. Props mode only.
+  const selection = useMemo(() => {
+    if (mode !== 'props' || selectedProp == null) return null
+    const p = props[selectedProp]
+    if (!p) return null
+    const { w, h } = sizeOf(p.object_id)
+    return { x: p.x, y: p.y, w: Math.max(1, Math.ceil(w)), h: Math.max(1, Math.ceil(h)) }
+    // sizeOf is derived from byId; listing byId keeps the footprint lookup fresh.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, selectedProp, props, byId])
 
   // The zones overlay (#90): every authored zone as a tinted, labeled rect —
   // shown only in zones mode, with the selected one highlighted for editing.
@@ -362,6 +429,11 @@ export default function MapDecoratePage() {
                 style={{ outline: propTool === 'erase' ? '2px solid #fff' : 'none' }}>Erase prop</button>
               {props.length > 0 && <span className="admin-hint">{props.length} placed</span>}
             </div>
+            <p className="admin-hint">
+              {selection
+                ? `Selected at (${selection.x}, ${selection.y}) — arrow keys nudge (off any edge), Escape to deselect.`
+                : 'Click a placed object to select it, then arrow keys nudge — including off an edge.'}
+            </p>
             {palette.length === 0 && (
               <p className="admin-msg admin-msg-error">No saved objects yet — add some in the Objects tool first.</p>
             )}
@@ -617,6 +689,7 @@ export default function MapDecoratePage() {
               overlay={mode === 'collision' && showMask ? blockedOverlay : null}
               zoneRects={zoneRects}
               ghost={ghost}
+              selection={selection}
               fill
             />
           </div>

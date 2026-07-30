@@ -4,7 +4,7 @@
 // covered cell) — baked to object_id entities and reconstructed on re-open.
 
 import { describe, expect, it } from 'vitest'
-import { placeProp, erasePropAt, coveredCells, propEntities, propsFromBaked, objectIdsFrom, propGhost } from './props.ts'
+import { placeProp, erasePropAt, coveredCells, propEntities, propsFromBaked, objectIdsFrom, propGhost, nudgeProp, propIndexAt } from './props.ts'
 import type { PlacedProp } from './props.ts'
 
 // Object 7 is 2×2, object 9 is 1×1, object 5 is fractional (1.4×1.8 ≈ 2×2 cells).
@@ -25,16 +25,25 @@ describe('placeProp', () => {
     expect(place(restamped, { object_id: 9, x: 0, y: 0 })).toHaveLength(2)
   })
 
-  it('rejects a placement whose footprint would hang off the map', () => {
-    expect(place([], { object_id: 7, x: 3, y: 1 })).toEqual([]) // 2 wide at col 3 of 4
-    expect(place([], { object_id: 7, x: 1, y: 3 })).toEqual([]) // 2 tall at row 3 of 4
+  it('allows a footprint that overflows the right/bottom edge (#340)', () => {
+    // 2 wide at col 3 of 4 overflows right — now placed (anchor stays on-map).
+    expect(place([], { object_id: 7, x: 3, y: 1 })).toEqual([{ object_id: 7, x: 3, y: 1 }])
+    // 2 tall at row 3 of 4 overflows bottom — placed.
+    expect(place([], { object_id: 7, x: 1, y: 3 })).toEqual([{ object_id: 7, x: 1, y: 3 }])
   })
 
-  it('rounds a fractional footprint up to whole cells', () => {
-    // 1.4×1.8 occupies 2×2 cells, so anchor (3,3) exceeds a 4×4 map.
-    expect(place([], { object_id: 5, x: 3, y: 3 })).toEqual([])
-    const ok = place([], { object_id: 5, x: 2, y: 2 })
-    expect(ok).toHaveLength(1)
+  it('refuses a placement with no footprint cell on the map', () => {
+    // Anchor at col 4 (== cols) puts the whole 2×2 off the right edge → refused.
+    expect(place([], { object_id: 7, x: 4, y: 1 })).toEqual([])
+    // Anchor at row 4 (== rows) puts the whole 2×2 below the map → refused.
+    expect(place([], { object_id: 7, x: 1, y: 4 })).toEqual([])
+  })
+
+  it('rounds a fractional footprint up to whole cells for the edge test', () => {
+    // 1.4×1.8 occupies 2×2 cells; anchor (3,3) overflows but keeps (3,3) on-map → placed.
+    expect(place([], { object_id: 5, x: 3, y: 3 })).toEqual([{ object_id: 5, x: 3, y: 3 }])
+    // Anchor (4,4) puts the whole ceiled 2×2 off-map → refused.
+    expect(place([], { object_id: 5, x: 4, y: 4 })).toEqual([])
   })
 })
 
@@ -45,12 +54,97 @@ describe('erasePropAt', () => {
     expect(after).toEqual([{ object_id: 9, x: 0, y: 0 }])
     expect(erasePropAt(two, 3, 3, size)).toBe(two) // no-op off any prop
   })
+
+  it('removes an edge-overflowing prop from an on-map covered cell (#340)', () => {
+    // 2×2 at (3,3) covers (3..4, 3..4); only (3,3) is on a 4×4 map.
+    const one = place([], { object_id: 7, x: 3, y: 3 })
+    expect(erasePropAt(one, 3, 3, size)).toEqual([])
+  })
+
+  it('removes a negative-anchor prop from its on-map cell (#341)', () => {
+    // 2×2 at (-1,-1) overhangs the top-left; only (0,0) is on-map, and erasing
+    // from it removes the whole prop (rect-based over the intersection).
+    const one: PlacedProp[] = [{ object_id: 7, x: -1, y: -1 }]
+    expect(erasePropAt(one, 0, 0, size)).toEqual([])
+    expect(erasePropAt(one, 1, 1, size)).toBe(one) // (1,1) is outside the footprint
+  })
 })
 
 describe('coveredCells', () => {
   it('lists every cell each footprint occupies', () => {
     const cells = coveredCells([{ object_id: 7, x: 1, y: 1 }], size)
     expect(cells).toEqual(new Set(['1,1', '2,1', '1,2', '2,2']))
+  })
+
+  it('lists the off-map cells of a negative anchor too (#341)', () => {
+    // 2×2 at (-1,-1) overhangs the top-left corner; only (0,0) lands on-map,
+    // but every cell is listed — off-map keys are simply never queried.
+    expect(coveredCells([{ object_id: 7, x: -1, y: -1 }], size)).toEqual(
+      new Set(['-1,-1', '0,-1', '-1,0', '0,0']),
+    )
+  })
+})
+
+describe('nudgeProp', () => {
+  const nudge = (props: readonly PlacedProp[], i: number, dir: Parameters<typeof nudgeProp>[2]) =>
+    nudgeProp(props, i, dir, size, bounds)
+
+  it('moves the selected prop one cell per press, tracking its new index', () => {
+    const one = [{ object_id: 9, x: 1, y: 1 }]
+    expect(nudge(one, 0, 'left')).toEqual({ props: [{ object_id: 9, x: 0, y: 1 }], index: 0 })
+    expect(nudge(one, 0, 'up')).toEqual({ props: [{ object_id: 9, x: 1, y: 0 }], index: 0 })
+    expect(nudge(one, 0, 'right')).toEqual({ props: [{ object_id: 9, x: 2, y: 1 }], index: 0 })
+    expect(nudge(one, 0, 'down')).toEqual({ props: [{ object_id: 9, x: 1, y: 2 }], index: 0 })
+  })
+
+  it('crosses the top/left edge into a negative anchor while a cell stays on-map (#341)', () => {
+    // 2×2 at (0,0) nudged left → anchor (-1,0); cell (0,0) still on-map.
+    expect(nudge([{ object_id: 7, x: 0, y: 0 }], 0, 'left')).toEqual({
+      props: [{ object_id: 7, x: -1, y: 0 }],
+      index: 0,
+    })
+  })
+
+  it('refuses a nudge that would push the last footprint cell off the map', () => {
+    // 2×2 at (-1,0) covers cols (-1..0); nudging left → (-2,0) is fully off-map.
+    const props = [{ object_id: 7, x: -1, y: 0 }]
+    expect(nudge(props, 0, 'left')).toEqual({ props, index: 0 })
+    // A 1×1 at the left edge has no cell to spare — any step left leaves the map.
+    const unit = [{ object_id: 9, x: 0, y: 2 }]
+    expect(nudge(unit, 0, 'left')).toEqual({ props: unit, index: 0 })
+  })
+
+  it('re-places through placeProp so a nudge onto another prop replaces it', () => {
+    // Two props; nudging the first onto the second swaps it out and the moved
+    // prop lands last in the list (placeProp append order) → its new index.
+    const two = [{ object_id: 9, x: 0, y: 0 }, { object_id: 9, x: 1, y: 0 }]
+    expect(nudge(two, 0, 'right')).toEqual({ props: [{ object_id: 9, x: 1, y: 0 }], index: 0 })
+  })
+
+  it('is a no-op for an out-of-range index', () => {
+    const one = [{ object_id: 9, x: 1, y: 1 }]
+    expect(nudge(one, 3, 'left')).toEqual({ props: one, index: 3 })
+  })
+})
+
+describe('propIndexAt', () => {
+  const props = [{ object_id: 7, x: 1, y: 1 }, { object_id: 9, x: 0, y: 0 }]
+
+  it('finds the prop covering a cell, off its anchor, or -1 for none', () => {
+    expect(propIndexAt(props, 2, 2, size)).toBe(0) // covered corner of the 2×2
+    expect(propIndexAt(props, 0, 0, size)).toBe(1)
+    expect(propIndexAt(props, 3, 3, size)).toBe(-1)
+  })
+
+  it('returns the last (topmost) prop when footprints overlap', () => {
+    // A 1×1 restamped over the 2×2's cell — the later prop wins, matching the
+    // overlap-replacement order placeProp uses.
+    const stacked = [{ object_id: 7, x: 1, y: 1 }, { object_id: 9, x: 2, y: 2 }]
+    expect(propIndexAt(stacked, 2, 2, size)).toBe(1)
+  })
+
+  it('finds a negative-anchor prop from its on-map cell (#341)', () => {
+    expect(propIndexAt([{ object_id: 7, x: -1, y: -1 }], 0, 0, size)).toBe(0)
   })
 })
 
@@ -122,9 +216,14 @@ describe('propGhost', () => {
     expect(propGhost({ x: 0, y: 0 }, 7, [], size, bounds)).toEqual({ x: 0, y: 0, w: 2, h: 2, valid: true })
   })
 
-  it('marks the ghost invalid when the footprint would hang off the map', () => {
-    // 2 wide at col 3 of 4 hangs off — refused (matches placeProp).
-    expect(propGhost({ x: 3, y: 1 }, 7, [], size, bounds)).toEqual({ x: 3, y: 1, w: 2, h: 2, valid: false })
+  it('marks the ghost valid when the footprint overflows the edge (#340)', () => {
+    // 2 wide at col 3 of 4 overflows right — now valid (matches placeProp).
+    expect(propGhost({ x: 3, y: 1 }, 7, [], size, bounds)).toEqual({ x: 3, y: 1, w: 2, h: 2, valid: true })
+  })
+
+  it('marks the ghost invalid when no footprint cell lands on the map', () => {
+    // Anchor at col 4 (== cols) — the whole 2×2 sits off the right edge.
+    expect(propGhost({ x: 4, y: 1 }, 7, [], size, bounds)).toEqual({ x: 4, y: 1, w: 2, h: 2, valid: false })
   })
 
   it('in erase mode returns the footprint of the prop under the cursor', () => {
