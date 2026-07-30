@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import Phaser from 'phaser'
 import { preloadBakedMap, renderBakedMap } from '../kernel/mapRenderer.ts'
 import { TILE } from '../kernel/constants.ts'
-import { tileFromPointer } from './previewPointer.ts'
+import { tileFromPointer, tileWithinGutter } from './previewPointer.ts'
 import { blockedCells, type Mask } from './maskPaint.ts'
 import type { BakedMap } from '../kernel/schema.ts'
 
@@ -36,6 +36,7 @@ export default function MapPreview({
   ghost,
   selection,
   fill,
+  gutter = 0,
 }: {
   baked: BakedMap
   // The fetched tile objects the map's entities reference (ADR-0008), for the
@@ -86,6 +87,11 @@ export default function MapPreview({
   // over a scrollable, pannable map — default zoom fits the whole map. Off by
   // default so the create-map preview keeps its natural, native-px size.
   fill?: boolean
+  // Interactive tiles past every map edge (#347): a pointer in this band
+  // resolves to an out-of-map tile (negative, or ≥ cols/rows) so a click can
+  // name an edge-overhanging anchor directly. 0/absent keeps the old behaviour
+  // — out-of-map cursors dropped (collision, zones, NPCs).
+  gutter?: number
 }) {
   const hostRef = useRef<HTMLDivElement>(null)
   // The live Phaser canvas — measured on press to map cursor px → tile,
@@ -108,21 +114,24 @@ export default function MapPreview({
 
   const mapW = baked.cols * TILE
   const mapH = baked.rows * TILE
+  // The gutter's native px, added on every side of the map (#347) — scaled by
+  // zoom like the map itself so gutter tiles stay tile-sized.
+  const gutterPx = gutter * TILE
 
-  // Track the frame size so "Fit" (and the initial zoom) shows the whole map:
-  // the largest scale where both dimensions fit.
+  // Track the frame size so "Fit" (and the initial zoom) shows the whole map —
+  // gutter included, so the overhang band is reachable without scrolling.
   useEffect(() => {
     const frame = frameRef.current
     if (!fill || !frame) return undefined
     const measure = () => {
       const { width, height } = frame.getBoundingClientRect()
-      setFitScale(Math.max(0.1, Math.min(width / mapW, height / mapH)))
+      setFitScale(Math.max(0.1, Math.min(width / (mapW + 2 * gutterPx), height / (mapH + 2 * gutterPx))))
     }
     measure()
     const ro = new ResizeObserver(measure)
     ro.observe(frame)
     return () => ro.disconnect()
-  }, [fill, mapW, mapH])
+  }, [fill, mapW, mapH, gutterPx])
 
   // ponytail: rebuild the game on every bake change. Fine for editor-sized
   // grids; if large maps lag mid-drag, keep one game and scene.restart() instead.
@@ -169,12 +178,13 @@ export default function MapPreview({
     return () => window.removeEventListener('mouseup', end)
   }, [])
 
-  // Resolve a pointer to its in-bounds tile, or null when it's off the map.
+  // Resolve a pointer to its tile, or null when it's outside the map plus the
+  // gutter — with no gutter, exactly the old drop-out-of-map behaviour.
   const tileAt = (e: { clientX: number; clientY: number }) => {
     const canvas = canvasRef.current
     if (!canvas) return null
-    const { x, y } = tileFromPointer(e, canvas.getBoundingClientRect(), canvas, TILE)
-    return x >= 0 && x < baked.cols && y >= 0 && y < baked.rows ? { x, y } : null
+    const t = tileFromPointer(e, canvas.getBoundingClientRect(), canvas, TILE)
+    return tileWithinGutter(t, { cols: baked.cols, rows: baked.rows }, gutter)
   }
 
   const handleDown = (e: { clientX: number; clientY: number }) => {
@@ -201,25 +211,18 @@ export default function MapPreview({
 
   const interactive = !!(onTileDown || onTileDrag || onTileHover)
 
-  // The map board: a wrapper sized map×zoom (native px when not filling), the
+  // The map board: a div sized map×zoom (native px when not filling), the
   // CSS-filled Phaser canvas, and the % overlay/ghost that track the art at any
-  // zoom or scroll. pointer-events:none lets presses fall through to the canvas.
+  // zoom or scroll. pointer-events:none lets presses fall through to the
+  // canvas; overflow:hidden clips an off-map ghost or selection at the map
+  // edge (#347).
   const board = (
     <div
-      onMouseDown={interactive ? handleDown : undefined}
-      onMouseMove={interactive ? handleMove : undefined}
-      onMouseLeave={onTileHoverEnd}
       style={{
         position: 'relative',
         width: mapW * zoom,
         height: mapH * zoom,
-        // Center in the fill-mode flex frame when smaller than it; auto margins
-        // collapse to 0 on overflow so scrollbars still reach every edge
-        // (justify-content: center would clip the top/left).
-        flex: fill ? 'none' : undefined,
-        margin: fill ? 'auto' : undefined,
-        lineHeight: 0,
-        cursor: interactive ? 'crosshair' : undefined,
+        overflow: 'hidden',
       }}
     >
       <div ref={hostRef} style={{ width: '100%', height: '100%' }} />
@@ -304,13 +307,36 @@ export default function MapPreview({
     </div>
   )
 
+  // The mouse surface: the board plus its gutter (#347). Hover/click land on
+  // the padding too, resolving past the map edge — to out-of-map tiles that
+  // tileAt keeps or drops by `gutter`.
+  const surface = (
+    <div
+      onMouseDown={interactive ? handleDown : undefined}
+      onMouseMove={interactive ? handleMove : undefined}
+      onMouseLeave={onTileHoverEnd}
+      style={{
+        padding: gutterPx * zoom,
+        // Center in the fill-mode flex frame when smaller than it; auto margins
+        // collapse to 0 on overflow so scrollbars still reach every edge
+        // (justify-content: center would clip the top/left).
+        flex: fill ? 'none' : undefined,
+        margin: fill ? 'auto' : undefined,
+        lineHeight: 0,
+        cursor: interactive ? 'crosshair' : undefined,
+      }}
+    >
+      {board}
+    </div>
+  )
+
   const frameStyle = { border: '1px solid #34343f', borderRadius: 6, background: '#0e0e14' } as const
 
   // Standalone (create-map) preview: natural size, scroll when it overflows.
   if (!fill)
     return (
       <div ref={frameRef} style={{ ...frameStyle, display: 'inline-block', maxWidth: '100%', overflow: 'auto' }}>
-        {board}
+        {surface}
       </div>
     )
 
@@ -325,7 +351,7 @@ export default function MapPreview({
         <button onClick={() => setUserZoom(null)} title="Fit to view">Fit</button>
       </div>
       <div ref={frameRef} style={{ ...frameStyle, flex: 1, minHeight: 0, overflow: 'auto', display: 'flex' }}>
-        {board}
+        {surface}
       </div>
     </div>
   )

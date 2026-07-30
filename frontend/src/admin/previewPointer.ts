@@ -17,3 +17,17 @@ export function tileFromPointer(
   const py = (pointer.clientY - rect.top) * sy
   return { x: Math.floor(px / tile), y: Math.floor(py / tile) }
 }
+
+// Bound a resolved tile to the map plus an interactive gutter of `gutter`
+// tiles past every edge (#347) — so a pointer in the gutter names an off-map
+// anchor (negative, or ≥ cols/rows) for edge-overhanging placement, while a
+// gutter of 0 keeps dropping every out-of-map tile (collision/zones/NPCs).
+export function tileWithinGutter(
+  t: { x: number; y: number },
+  bounds: { cols: number; rows: number },
+  gutter: number,
+): { x: number; y: number } | null {
+  return t.x >= -gutter && t.x < bounds.cols + gutter && t.y >= -gutter && t.y < bounds.rows + gutter
+    ? t
+    : null
+}
