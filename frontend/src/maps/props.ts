@@ -5,8 +5,8 @@
 // object rethemes every map that placed it. A prop *occupies* its authored
 // footprint on the grid (fractions round up to whole cells): placement
 // replaces whatever it overlaps, may overflow the map edge as long as one cell
-// stays on-map (#340), and erasing works from any covered cell. Pure and
-// Phaser-free.
+// stays on-map (#340, and via nudging any edge into a negative anchor — #341),
+// and erasing works from any covered cell. Pure and Phaser-free.
 
 import type { BakedEntity } from '../kernel/schema.ts'
 
@@ -73,6 +73,53 @@ export function placeProp(
   const r = rectOf(prop, sizeOf)
   if (!anyCellOnMap(r, bounds)) return props as PlacedProp[]
   return [...props.filter((p) => !overlaps(p, prop, sizeOf)), prop]
+}
+
+// Which placed prop a cell lands on — any cell of its footprint, not just the
+// anchor — for click-selection in decorate mode (#341). Later props win where
+// footprints overlap, matching placeProp's replacement order (a re-stamp sits
+// last). -1 off any prop. Rect-based, so a negative-anchor prop is found from
+// its on-map cell.
+export function propIndexAt(props: readonly PlacedProp[], x: number, y: number, sizeOf: SizeOf): number {
+  for (let i = props.length - 1; i >= 0; i--) {
+    const r = rectOf(props[i], sizeOf)
+    if (x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h) return i
+  }
+  return -1
+}
+
+// The four arrow-key nudge directions and their cell delta.
+export type NudgeDir = 'up' | 'down' | 'left' | 'right'
+const NUDGE: Record<NudgeDir, { dx: number; dy: number }> = {
+  up: { dx: 0, dy: -1 },
+  down: { dx: 0, dy: 1 },
+  left: { dx: -1, dy: 0 },
+  right: { dx: 1, dy: 0 },
+}
+
+// Move the selected prop one cell in `dir`, re-placing through placeProp so
+// overlap replacement and save behaviour stay uniform (#341). The move is the
+// fine-positioning tool for large art and the only way to reach a negative
+// anchor (top/left overhang) — a grid click can only name an on-map cell. A
+// nudge that would push the last footprint cell off the map is refused: the
+// list and index come back unchanged (we pre-check rather than let placeProp
+// silently drop the prop after we've removed it). Returns the moved prop's new
+// index — placeProp appends it last — so the caller keeps it selected for the
+// next press.
+export function nudgeProp(
+  props: readonly PlacedProp[],
+  index: number,
+  dir: NudgeDir,
+  sizeOf: SizeOf,
+  bounds: { cols: number; rows: number },
+): { props: PlacedProp[]; index: number } {
+  const prop = props[index]
+  if (!prop) return { props: props as PlacedProp[], index }
+  const { dx, dy } = NUDGE[dir]
+  const moved = { ...prop, x: prop.x + dx, y: prop.y + dy }
+  if (!anyCellOnMap(rectOf(moved, sizeOf), bounds)) return { props: props as PlacedProp[], index }
+  const next = placeProp(props.filter((_, i) => i !== index), moved, sizeOf, bounds)
+  return { props: next, index: next.length - 1 }
 }
 
 // Remove the prop covering a cell — any cell of its footprint, not just the

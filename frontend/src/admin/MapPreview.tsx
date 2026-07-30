@@ -34,6 +34,7 @@ export default function MapPreview({
   overlay,
   zoneRects,
   ghost,
+  selection,
   fill,
 }: {
   baked: BakedMap
@@ -76,6 +77,11 @@ export default function MapPreview({
   // transparent; `refused` tints it red (placement would hang off the edge);
   // no image (erase mode) draws a highlight box round the prop a click removes.
   ghost?: { x: number; y: number; w: number; h: number; image?: string; refused?: boolean } | null
+  // A persistent highlight round the selected placed prop's footprint (#341) —
+  // what arrow-key nudging moves. Unlike the hover `ghost` it stays put while
+  // the author nudges; a negative-anchor footprint positions off the top/left
+  // and simply clips at the frame. Pure presentation.
+  selection?: { x: number; y: number; w: number; h: number } | null
   // Fill the host frame (the full-width decorate pane, #165) with a zoom toolbar
   // over a scrollable, pannable map — default zoom fits the whole map. Off by
   // default so the create-map preview keeps its natural, native-px size.
@@ -275,6 +281,20 @@ export default function MapPreview({
             />
           )}
         </div>
+      )}
+      {selection && (
+        <div
+          style={{
+            position: 'absolute',
+            pointerEvents: 'none',
+            left: `${(selection.x / baked.cols) * 100}%`,
+            top: `${(selection.y / baked.rows) * 100}%`,
+            width: `${(selection.w / baked.cols) * 100}%`,
+            height: `${(selection.h / baked.rows) * 100}%`,
+            outline: '2px dashed #43c6ff',
+            outlineOffset: -2,
+          }}
+        />
       )}
     </div>
   )
