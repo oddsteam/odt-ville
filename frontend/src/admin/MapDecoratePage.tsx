@@ -134,6 +134,14 @@ export default function MapDecoratePage() {
   // (#165). Free-form kinds → sections appear/disappear with the data.
   const groups = useMemo(() => groupPalette(palette, query), [palette, query])
 
+  // The interactive gutter round the preview (#347): sized to the largest
+  // palette footprint, so the mouse can name any off-map anchor that still
+  // keeps a cell on-map. Props mode only — collision/zones/NPCs stay in-bounds.
+  const gutter = useMemo(
+    () => palette.reduce((g, o) => Math.max(g, Math.ceil(o.footprint_w), Math.ceil(o.footprint_h)), 1),
+    [palette],
+  )
+
   // Load the map + the prop palette (roster → batched full objects, #138) and
   // seed both layers from the baked document (resizeMask fills missing cells
   // false; propsFromBaked reads back the placed object references).
@@ -691,6 +699,7 @@ export default function MapDecoratePage() {
               ghost={ghost}
               selection={selection}
               fill
+              gutter={mode === 'props' ? gutter : 0}
             />
           </div>
         </div>

@@ -3,7 +3,7 @@
 // (large map overflows its column) or CSS-scaled (shrunk to fit).
 
 import { describe, expect, it } from 'vitest'
-import { tileFromPointer } from './previewPointer.ts'
+import { tileFromPointer, tileWithinGutter } from './previewPointer.ts'
 
 // A 10×10 tile preview at 48px/tile → a 480×480 native canvas.
 const canvas = { width: 480, height: 480 }
@@ -28,5 +28,37 @@ describe('tileFromPointer', () => {
     const rect = { left: 0, top: 0, width: 240, height: 240 }
     // 60css px in → 120 native px → col 2; 24css px down → 48 native px → row 1.
     expect(tileFromPointer({ clientX: 60, clientY: 24 }, rect, canvas, tile)).toEqual({ x: 2, y: 1 })
+  })
+
+  it('resolves a pointer left/above the canvas to a negative tile (#347)', () => {
+    // 20px left of and 50px above the canvas: -20/48 → col -1, -50/48 → row -2.
+    const rect = { left: 100, top: 100, width: 480, height: 480 }
+    expect(tileFromPointer({ clientX: 80, clientY: 50 }, rect, canvas, tile)).toEqual({ x: -1, y: -2 })
+  })
+})
+
+// Pins the gutter rule (#347): an out-of-map tile is kept while it lies within
+// `gutter` tiles of the map, so a click there can name an off-map anchor; a
+// gutter of 0 keeps the old drop-out-of-bounds behaviour.
+describe('tileWithinGutter', () => {
+  const bounds = { cols: 10, rows: 10 }
+
+  it('keeps an in-map tile regardless of gutter', () => {
+    expect(tileWithinGutter({ x: 0, y: 9 }, bounds, 0)).toEqual({ x: 0, y: 9 })
+  })
+
+  it('drops any out-of-map tile when the gutter is 0', () => {
+    expect(tileWithinGutter({ x: -1, y: 5 }, bounds, 0)).toBeNull()
+    expect(tileWithinGutter({ x: 5, y: 10 }, bounds, 0)).toBeNull()
+  })
+
+  it('keeps an out-of-map tile within the gutter, on any edge', () => {
+    expect(tileWithinGutter({ x: -3, y: 5 }, bounds, 3)).toEqual({ x: -3, y: 5 })
+    expect(tileWithinGutter({ x: 12, y: 12 }, bounds, 3)).toEqual({ x: 12, y: 12 })
+  })
+
+  it('drops a tile beyond the gutter', () => {
+    expect(tileWithinGutter({ x: -4, y: 5 }, bounds, 3)).toBeNull()
+    expect(tileWithinGutter({ x: 5, y: 13 }, bounds, 3)).toBeNull()
   })
 })

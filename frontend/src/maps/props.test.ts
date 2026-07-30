@@ -226,6 +226,13 @@ describe('propGhost', () => {
     expect(propGhost({ x: 4, y: 1 }, 7, [], size, bounds)).toEqual({ x: 4, y: 1, w: 2, h: 2, valid: false })
   })
 
+  it('marks a negative-anchor hover valid while a cell stays on-map (#347)', () => {
+    // 2×2 at (-1,-1) keeps (0,0) on-map — a gutter click there may place it.
+    expect(propGhost({ x: -1, y: -1 }, 7, [], size, bounds)).toEqual({ x: -1, y: -1, w: 2, h: 2, valid: true })
+    // 2×2 at (-2,-2) is entirely off — red ghost, click refused.
+    expect(propGhost({ x: -2, y: -2 }, 7, [], size, bounds)).toEqual({ x: -2, y: -2, w: 2, h: 2, valid: false })
+  })
+
   it('in erase mode returns the footprint of the prop under the cursor', () => {
     // A covered (non-anchor) cell resolves to the whole 2×2 that a click removes.
     expect(propGhost({ x: 2, y: 2 }, 'erase', props, size, bounds)).toEqual({ x: 1, y: 1, w: 2, h: 2, valid: true })
