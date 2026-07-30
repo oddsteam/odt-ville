@@ -13,9 +13,15 @@
 import { TILE } from '../constants.js'
 import { buildingOverlayDepth } from '../town.js'
 import { townPropDraws } from '../townProps.ts'
-import { loadObjectTextures, stampEntity } from '../../kernel/entityLoader.ts'
+import {
+  loadObjectForegroundTextures,
+  loadObjectTextures,
+  objectForegroundKey,
+  objectTextureKey,
+  stampEntity,
+} from '../../kernel/entityLoader.ts'
 import { bakedTextureKey, groundDrawList } from '../../kernel/mapRenderer.ts'
-import { buildingKeyFor, DEFAULT_BUILDING } from '../buildings.js'
+import { buildingObjectFor, DEFAULT_BUILDING } from '../buildings.js'
 import { preloadCharacter } from './characterRig.js'
 import { GATE_TRAINER } from '../encounters.js'
 
@@ -90,13 +96,16 @@ export function preloadAssets(scene: Scene) {
     [policy.tree, policy.flowerGroup, policy.flowerSingle].filter((o) => o?.image),
   )
 
-  // Admin-mapped house (#29). When present it replaces the bundled roof/body
-  // stack on every plot (addBuildingSprite); absent → the bundled art.
+  // Mapped houses — the active 'building' object (#29) plus the per-community
+  // assignments (#292). All register through the shared entity loader
+  // (`obj.<id>` art, `objfg.<id>` foreground mask #36), the same path the
+  // authored map loads its placed props; addBuildingSprite resolves which one
+  // each plot draws (assigned → active → bundled).
   scene._buildingObject = scene.registry.get('buildingObject') || null
-  if (scene._buildingObject?.image) scene.load.image('building.mapped', scene._buildingObject.image)
-  // Foreground / in-front mask (#36): the alpha bitmap that clips the overlay
-  // copy of the house drawn above the avatar's on-building depth band.
-  if (scene._buildingObject?.fg_mask) scene.load.image('building.fgmask', scene._buildingObject.fg_mask)
+  scene._buildingsById = scene.registry.get('hometownBuildings') || {}
+  const houses = [scene._buildingObject, ...Object.values<any>(scene._buildingsById)]
+  loadObjectTextures(scene, houses.filter((o) => o?.image))
+  loadObjectForegroundTextures(scene, houses.filter((o) => o?.fg_mask))
 
   // Ground-tile catalog (ground-tile mapper). Each referenced tileset loads
   // once as a uniform spritesheet (frame = cell) under the SAME `bake.<name>`
@@ -211,11 +220,17 @@ function addBuildingSprite(scene: Scene, community: any, plot: any) {
       .setOrigin(0.5, 0)
       .setDepth(depth + 2)
 
-  // Admin-mapped house (#29): one baked sprite filling the plot, replacing the
-  // roof/body stack + per-community tint. The door anchor it carries is honoured
-  // in town.ts (buildTown), so walkability/entry/depth already line up.
-  if (scene._buildingObject?.image && scene.textures.exists('building.mapped')) {
-    const house = scene.add.image(cx, cy, 'building.mapped').setOrigin(0, 0).setDisplaySize(w, h).setDepth(depth)
+  // Mapped house (#29/#292): one baked sprite filling the plot, replacing the
+  // roof/body stack + per-community tint. Resolved per plot: the community's
+  // assigned object → the active 'building' object → bundled art below. The
+  // door anchor / footprint stay the ACTIVE object's — mixed layouts are #31.
+  const mapped = buildingObjectFor(community, scene._buildingsById, scene._buildingObject)
+  if (mapped?.image && scene.textures.exists(objectTextureKey(mapped.id))) {
+    const house = scene.add
+      .image(cx, cy, objectTextureKey(mapped.id))
+      .setOrigin(0, 0)
+      .setDisplaySize(w, h)
+      .setDepth(depth)
     const nameplate = addPlate()
     if (DEV) scene.devLayers?.buildings?.push(house, nameplate)
 
@@ -227,15 +242,15 @@ function addBuildingSprite(scene: Scene, community: any, plot: any) {
     // overlay's alpha by the mask texture's (matched to the overlay's bounds; the
     // mask shares the house art's layout). Filters are WebGL-only — on the Canvas
     // renderer we drop the overlay and fall back to today's single-depth house.
-    if (scene._buildingObject.fg_mask && scene.textures.exists('building.fgmask')) {
+    if (mapped.fg_mask && scene.textures.exists(objectForegroundKey(mapped.id))) {
       const overlay = scene.add
-        .image(cx, cy, 'building.mapped')
+        .image(cx, cy, objectTextureKey(mapped.id))
         .setOrigin(0, 0)
         .setDisplaySize(w, h)
         .setDepth(buildingOverlayDepth(plot))
       overlay.enableFilters()
       if (overlay.filters) {
-        overlay.filters.internal.addMask('building.fgmask')
+        overlay.filters.internal.addMask(objectForegroundKey(mapped.id))
         if (DEV) scene.devLayers?.buildings?.push(overlay)
       } else {
         overlay.destroy()
@@ -244,10 +259,9 @@ function addBuildingSprite(scene: Scene, community: any, plot: any) {
     return house
   }
 
-  // Which art to use. Falls back to the default if the chosen key never
-  // loaded (e.g. a community.building naming art that isn't present).
-  let key = buildingKeyFor(community)
-  if (!scene.textures.exists(`building.${key}.roof`)) key = DEFAULT_BUILDING
+  // Bundled art (#292 resolution tail): every community shares the default
+  // roof/body pair, differentiated by the roof tint below.
+  const key = DEFAULT_BUILDING
 
   // Roof — top 36% of the footprint.
   const roof = scene.add

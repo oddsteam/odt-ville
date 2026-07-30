@@ -39,14 +39,12 @@ for (const [p, url] of Object.entries(bodies)) {
 // Prefer the original guild art as the fallback; otherwise first registered.
 export const DEFAULT_BUILDING = BUILDINGS.guild ? 'guild' : Object.keys(BUILDINGS)[0]
 
-// Choose the art key for a community. An explicit `community.building` key
-// wins (set it server-side / in seed data to pin a building's look). With no
-// override, everyone uses DEFAULT_BUILDING so existing towns are unchanged.
-//
-// To instead spread the available arts across communities for instant
-// variety, swap the final return for:
-//   const keys = Object.keys(BUILDINGS); return keys[index % keys.length]
-export function buildingKeyFor(community /*, index */) {
-  if (community?.building && BUILDINGS[community.building]) return community.building
-  return DEFAULT_BUILDING
+// The one resolution rule for a plot's mapped building (#292): the
+// community's assigned object → the active 'building' object → null, which
+// means the bundled roof/body art (DEFAULT_BUILDING). A dangling assignment
+// (id missing from `byId`) falls through like no assignment.
+export function buildingObjectFor(community, byId, active) {
+  const id = community?.tile_object_id
+  if (id != null && byId?.[id]) return byId[id]
+  return active ?? null
 }

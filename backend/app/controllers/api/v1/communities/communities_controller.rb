@@ -65,7 +65,9 @@ module Api
         # clobber each other. `entry_gate` (#38): posture-login needs a
         # posture_set_id, blank clears both columns. `interior_node_slug` (#113):
         # must name an existing map, blank clears (door falls back to the
-        # hardcoded InteriorScene).
+        # hardcoded InteriorScene). `tile_object_id` (#292): must name a saved
+        # 'building' object, blank clears (plot falls back to the active
+        # object, then bundled art).
         def update
           community = current_user.company.houses.find(params[:id])
           attrs = {}
@@ -74,6 +76,14 @@ module Api
             slug = params[:interior_node_slug].presence
             return render json: { error: "Unknown node: #{slug}" }, status: :unprocessable_entity if slug && !::Maps::Map.exists?(slug: slug)
             attrs[:interior_node_slug] = slug
+          end
+
+          if params.key?(:tile_object_id)
+            oid = params[:tile_object_id].presence
+            if oid && ::Catalog::TileObject.find_by(id: oid)&.kind != "building"
+              return render json: { error: "Unknown building object: #{oid}" }, status: :unprocessable_entity
+            end
+            attrs[:tile_object_id] = oid
           end
 
           if params.key?(:entry_gate)

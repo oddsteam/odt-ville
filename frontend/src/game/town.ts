@@ -183,6 +183,59 @@ function doorOnPerimeter(w: number, h: number, dx: number, dy: number): boolean 
   return dx === 0 || dx === w - 1 || dy === 0 || dy === h - 1
 }
 
+// The rules one plot's walk data obeys (#30/#32/#53): a mask applies only when
+// sized to the footprint (a stale mask falls back to a solid box / free
+// movement), the door clamps into the box, and an unreachable door — off the
+// perimeter with no walkable mask path to an edge — snaps to the bottom-centre
+// default.
+function plotWalk(
+  W: number,
+  H: number,
+  door: DoorAnchor | undefined,
+  walkMask?: string[],
+  edgeMask?: string[],
+) {
+  const fit = (m: string[] | undefined) =>
+    m && m.length === H && m.every((row) => row.length === W) ? m : undefined
+  const mask = fit(walkMask)
+  const edges = fit(edgeMask)
+  const def = defaultDoorFor(W, H)
+  let ddx = Math.max(0, Math.min(W - 1, Math.floor(door?.dx ?? def.dx)))
+  let ddy = Math.max(0, Math.min(H - 1, Math.floor(door?.dy ?? def.dy)))
+  const reachable = mask
+    ? walkMaskConnected(mask, W, H, { dx: ddx, dy: ddy })
+    : doorOnPerimeter(W, H, ddx, ddy)
+  if (!reachable) {
+    ddx = def.dx
+    ddy = def.dy
+  }
+  return { mask, edges, ddx, ddy }
+}
+
+// Re-stamp one plot's walk data from ITS resolved building (#292): the door,
+// walk mask and edge mask travel with the assigned art, under the same rules
+// as the shared stamp (plotWalk). Null — no assignment and no active object —
+// leaves the shared plot untouched. The footprint stays uniform; mixed sizes
+// are #31, so a differently-sized building's mask won't fit and falls back to
+// a solid box.
+export function plotWithBuilding(
+  plot: Plot,
+  building:
+    | { door_dx?: number | null; door_dy?: number | null; walk_mask?: string[] | null; edge_mask?: string[] | null }
+    | null
+    | undefined,
+): Plot {
+  if (building == null) return plot
+  const { mask, edges, ddx, ddy } = plotWalk(
+    plot.w,
+    plot.h,
+    doorAnchorFor(building),
+    walkMaskFor(building),
+    edgeMaskFor(building),
+  )
+  return { ...plot, doorCol: plot.col + ddx, doorRow: plot.row + ddy, mask, edges }
+}
+
 // Build the whole town for a given number of building plots. Returns a `town`
 // object: { cols, rows, map (string[]), plots, entrance }. Every plot shares the
 // single active building's footprint (#30); mixed footprints stay out of scope.
@@ -197,15 +250,6 @@ export function buildTown(
   const count = Math.max(plotCount, 1)
   const { w: W, h: H } = clampFootprint(footprint?.w ?? MIN_W, footprint?.h ?? MIN_H)
 
-  // Stamp the authored walk mask onto every plot, but only when its dimensions
-  // match the clamped footprint — a mismatched mask (e.g. authored before a
-  // footprint edit) is ignored so the building falls back to a solid box.
-  const fits = (m: string[] | undefined) =>
-    m && m.length === H && m.every((row) => row.length === W) ? m : undefined
-  const mask = fits(walkMask)
-  // Impassable cell borders (#53), gated the same way — a stale edge mask is
-  // ignored so movement falls back to today's free transitions.
-  const edges = fits(edgeMask)
   const bandH = H + STREET_H + GRASS_GAP // building rows + 1 street + 2 grass
   const stride = W + COL_GAP // plot width + 1 grass column between plots
   const numRows = Math.ceil(count / PER_ROW)
@@ -214,24 +258,10 @@ export function buildTown(
   const rows =
     1 + TOP_MARGIN + numRows * bandH + FIELD_GAP + FIELD_H + BOTTOM_MARGIN + 1
 
-  // Door: authored anchor or computed bottom-centre default, clamped to the
-  // footprint box so it can never escape the building. An interior door (no
-  // orthogonal neighbour outside the box) is unreachable, so snap it to the
-  // default (#30 runtime safety net; #32 replaces this with an authored interior
-  // walk mask).
-  // A door is reachable when it sits on the footprint perimeter, or — with an
-  // authored walk mask (#32) — when a walkable path connects it to an edge.
-  // Unreachable doors snap to the bottom-centre default (#30 safety net).
-  const def = defaultDoorFor(W, H)
-  let ddx = Math.max(0, Math.min(W - 1, Math.floor(door?.dx ?? def.dx)))
-  let ddy = Math.max(0, Math.min(H - 1, Math.floor(door?.dy ?? def.dy)))
-  const reachable = mask
-    ? walkMaskConnected(mask, W, H, { dx: ddx, dy: ddy })
-    : doorOnPerimeter(W, H, ddx, ddy)
-  if (!reachable) {
-    ddx = def.dx
-    ddy = def.dy
-  }
+  // The shared walk data every plot starts from (the active object's mask,
+  // borders and door), under the plotWalk rules: stale masks fall back to a
+  // solid box, an unreachable door snaps to the bottom-centre default.
+  const { mask, edges, ddx, ddy } = plotWalk(W, H, door, walkMask, edgeMask)
 
   // Each plot is W wide x H tall; door at the (clamped) authored offset. The
   // first plots (by position_order) sit on the bottom-most row.

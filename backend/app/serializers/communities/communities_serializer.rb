@@ -28,6 +28,9 @@ module Communities
         # The authored interior Node the door portals into (#111); null = the
         # hardcoded InteriorScene.
         interior_node_slug: community.interior_node_slug,
+        # The assigned mapped building for this house's hometown plot (#292);
+        # null falls back to the active 'building' object, then bundled art.
+        tile_object_id: community.tile_object_id,
         badges: {
           unread: all_items.count { |ci| state_of(ci, user) == "unread" },
           urgent: urgent_signage_count(effective_by_board, user),
