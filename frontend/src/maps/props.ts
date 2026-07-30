@@ -4,8 +4,9 @@
 // masks live on the object; the map stores only the reference, so editing the
 // object rethemes every map that placed it. A prop *occupies* its authored
 // footprint on the grid (fractions round up to whole cells): placement
-// replaces whatever it overlaps, refuses to hang off the map, and erasing
-// works from any covered cell. Pure and Phaser-free.
+// replaces whatever it overlaps, may overflow the map edge as long as one cell
+// stays on-map (#340), and erasing works from any covered cell. Pure and
+// Phaser-free.
 
 import type { BakedEntity } from '../kernel/schema.ts'
 
@@ -48,9 +49,21 @@ function overlaps(a: PlacedProp, b: PlacedProp, sizeOf: SizeOf): boolean {
   return ra.x < rb.x + rb.w && rb.x < ra.x + ra.w && ra.y < rb.y + rb.h && rb.y < ra.y + ra.h
 }
 
+// Does a footprint rect keep at least one whole cell on the cols×rows map?
+// Large edge scenery may overflow the right/bottom (and, with nudging, the
+// top/left) as long as some cell still lands on-map (#340, #341) — a footprint
+// entirely off the map is the only placement refused.
+function anyCellOnMap(
+  r: { x: number; y: number; w: number; h: number },
+  bounds: { cols: number; rows: number },
+): boolean {
+  return r.x < bounds.cols && r.x + r.w > 0 && r.y < bounds.rows && r.y + r.h > 0
+}
+
 // Stamp a prop, replacing every prop its footprint overlaps (a re-stamp swaps,
-// a move is erase-then-place). A footprint that would hang off the cols×rows
-// grid is refused — the input comes back unchanged. Fresh list otherwise.
+// a move is erase-then-place). A footprint that lands entirely off the cols×rows
+// grid is refused — the input comes back unchanged; overflow past any edge is
+// allowed so long as one cell stays on-map (#340). Fresh list otherwise.
 export function placeProp(
   props: readonly PlacedProp[],
   prop: PlacedProp,
@@ -58,7 +71,7 @@ export function placeProp(
   bounds: { cols: number; rows: number },
 ): PlacedProp[] {
   const r = rectOf(prop, sizeOf)
-  if (r.x + r.w > bounds.cols || r.y + r.h > bounds.rows) return props as PlacedProp[]
+  if (!anyCellOnMap(r, bounds)) return props as PlacedProp[]
   return [...props.filter((p) => !overlaps(p, prop, sizeOf)), prop]
 }
 
@@ -90,8 +103,9 @@ export function coveredCells(props: readonly PlacedProp[], sizeOf: SizeOf): Set<
 
 // The footprint rect a hover would act on, for the ghost cursor (#144). In
 // place mode (numeric tool) it's the selected object's footprint at the hovered
-// tile, with `valid` false when it would hang off the grid (the same edge
-// refusal placeProp enforces) so the caller can tint it red. In erase mode it's
+// tile, with `valid` false only when no cell lands on the grid (the same
+// refusal placeProp enforces) so the caller can tint it red — edge overflow is
+// valid (#340). In erase mode it's
 // the footprint of the prop under the cursor — what a click removes — or null
 // when there's none. Pure presentation: never touches the placed list.
 export function propGhost(
@@ -110,7 +124,7 @@ export function propGhost(
   }
   const { w, h } = sizeOf(tool)
   const rect = { x: hover.x, y: hover.y, w: cells(w), h: cells(h) }
-  return { ...rect, valid: rect.x + rect.w <= bounds.cols && rect.y + rect.h <= bounds.rows }
+  return { ...rect, valid: anyCellOnMap(rect, bounds) }
 }
 
 // Bake the placed props into the runtime's entity list (kind:"prop" references).

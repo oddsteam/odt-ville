@@ -25,16 +25,25 @@ describe('placeProp', () => {
     expect(place(restamped, { object_id: 9, x: 0, y: 0 })).toHaveLength(2)
   })
 
-  it('rejects a placement whose footprint would hang off the map', () => {
-    expect(place([], { object_id: 7, x: 3, y: 1 })).toEqual([]) // 2 wide at col 3 of 4
-    expect(place([], { object_id: 7, x: 1, y: 3 })).toEqual([]) // 2 tall at row 3 of 4
+  it('allows a footprint that overflows the right/bottom edge (#340)', () => {
+    // 2 wide at col 3 of 4 overflows right — now placed (anchor stays on-map).
+    expect(place([], { object_id: 7, x: 3, y: 1 })).toEqual([{ object_id: 7, x: 3, y: 1 }])
+    // 2 tall at row 3 of 4 overflows bottom — placed.
+    expect(place([], { object_id: 7, x: 1, y: 3 })).toEqual([{ object_id: 7, x: 1, y: 3 }])
   })
 
-  it('rounds a fractional footprint up to whole cells', () => {
-    // 1.4×1.8 occupies 2×2 cells, so anchor (3,3) exceeds a 4×4 map.
-    expect(place([], { object_id: 5, x: 3, y: 3 })).toEqual([])
-    const ok = place([], { object_id: 5, x: 2, y: 2 })
-    expect(ok).toHaveLength(1)
+  it('refuses a placement with no footprint cell on the map', () => {
+    // Anchor at col 4 (== cols) puts the whole 2×2 off the right edge → refused.
+    expect(place([], { object_id: 7, x: 4, y: 1 })).toEqual([])
+    // Anchor at row 4 (== rows) puts the whole 2×2 below the map → refused.
+    expect(place([], { object_id: 7, x: 1, y: 4 })).toEqual([])
+  })
+
+  it('rounds a fractional footprint up to whole cells for the edge test', () => {
+    // 1.4×1.8 occupies 2×2 cells; anchor (3,3) overflows but keeps (3,3) on-map → placed.
+    expect(place([], { object_id: 5, x: 3, y: 3 })).toEqual([{ object_id: 5, x: 3, y: 3 }])
+    // Anchor (4,4) puts the whole ceiled 2×2 off-map → refused.
+    expect(place([], { object_id: 5, x: 4, y: 4 })).toEqual([])
   })
 })
 
@@ -44,6 +53,12 @@ describe('erasePropAt', () => {
     const after = erasePropAt(two, 2, 2, size) // covered corner of the 2×2
     expect(after).toEqual([{ object_id: 9, x: 0, y: 0 }])
     expect(erasePropAt(two, 3, 3, size)).toBe(two) // no-op off any prop
+  })
+
+  it('removes an edge-overflowing prop from an on-map covered cell (#340)', () => {
+    // 2×2 at (3,3) covers (3..4, 3..4); only (3,3) is on a 4×4 map.
+    const one = place([], { object_id: 7, x: 3, y: 3 })
+    expect(erasePropAt(one, 3, 3, size)).toEqual([])
   })
 })
 
@@ -122,9 +137,14 @@ describe('propGhost', () => {
     expect(propGhost({ x: 0, y: 0 }, 7, [], size, bounds)).toEqual({ x: 0, y: 0, w: 2, h: 2, valid: true })
   })
 
-  it('marks the ghost invalid when the footprint would hang off the map', () => {
-    // 2 wide at col 3 of 4 hangs off — refused (matches placeProp).
-    expect(propGhost({ x: 3, y: 1 }, 7, [], size, bounds)).toEqual({ x: 3, y: 1, w: 2, h: 2, valid: false })
+  it('marks the ghost valid when the footprint overflows the edge (#340)', () => {
+    // 2 wide at col 3 of 4 overflows right — now valid (matches placeProp).
+    expect(propGhost({ x: 3, y: 1 }, 7, [], size, bounds)).toEqual({ x: 3, y: 1, w: 2, h: 2, valid: true })
+  })
+
+  it('marks the ghost invalid when no footprint cell lands on the map', () => {
+    // Anchor at col 4 (== cols) — the whole 2×2 sits off the right edge.
+    expect(propGhost({ x: 4, y: 1 }, 7, [], size, bounds)).toEqual({ x: 4, y: 1, w: 2, h: 2, valid: false })
   })
 
   it('in erase mode returns the footprint of the prop under the cursor', () => {
