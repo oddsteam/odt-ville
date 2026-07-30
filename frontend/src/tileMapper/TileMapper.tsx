@@ -558,7 +558,9 @@ export default function TileMapper() {
     }
     const cell = doorCellFromClick(e.clientX - rect.left, e.clientY - rect.top, rect.width, rect.height, doorCols, doorRows)
     if (paintMode === 'door') {
-      setDoor(cell)
+      // Clicking the placed door again removes it — a door-less building is
+      // legal since #343, so the door must be un-placeable too.
+      setDoor((prev) => (prev && prev.dx === cell.dx && prev.dy === cell.dy ? null : cell))
       return
     }
     // Overhang mode (#44) toggles walk-under cells; walk mode toggles porch cells.
@@ -677,10 +679,11 @@ export default function TileMapper() {
         image,
         footprint_w: Math.min(MAX_FP, Number(fpW) || selBox?.w || 1),
         footprint_h: Math.min(MAX_FP, Number(fpH) || selBox?.h || 1),
-        // Building entrance, when picked. Unsent → the town defaults to
-        // bottom-centre (its existing hardcoded door).
-        door_dx: isBuilding && door ? door.dx : undefined,
-        door_dy: isBuilding && door ? door.dy : undefined,
+        // Building entrance, when picked. An explicit null clears a previously
+        // saved door (the server keeps the old value when the key is absent);
+        // the town then falls back to its hardcoded bottom-centre entrance.
+        door_dx: isBuilding ? (door ? door.dx : null) : undefined,
+        door_dy: isBuilding ? (door ? door.dy : null) : undefined,
         // Authored interior walk mask (#32) — only for buildings, validated above.
         walk_mask: mask,
         // Impassable cell borders (#53) — only when the admin marked some, so an
@@ -1046,9 +1049,10 @@ export default function TileMapper() {
                 <p className="hint">
                   {paintMode === 'walk'
                     ? 'Click cells to paint the walkable porch/path (toggle).'
-                    : 'Click the entrance cell.'}{' '}
-                  {door ? `Door at ${door.dx},${door.dy}.` : 'No door yet.'} Save is blocked until the door
-                  is reachable from a footprint edge via walkable tiles.
+                    : 'Click the entrance cell; click the placed door again to remove it.'}{' '}
+                  {door
+                    ? `Door at ${door.dx},${door.dy}. Save is blocked until the door is reachable from a footprint edge via walkable tiles.`
+                    : 'No door — saves as solid scenery.'}
                 </p>
               )}
               {isProp && collidable && paintMode === 'walk' && (
