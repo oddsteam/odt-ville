@@ -213,6 +213,11 @@ export default function MapPreview({
         position: 'relative',
         width: mapW * zoom,
         height: mapH * zoom,
+        // Center in the fill-mode flex frame when smaller than it; auto margins
+        // collapse to 0 on overflow so scrollbars still reach every edge
+        // (justify-content: center would clip the top/left).
+        flex: fill ? 'none' : undefined,
+        margin: fill ? 'auto' : undefined,
         lineHeight: 0,
         cursor: interactive ? 'crosshair' : undefined,
       }}
@@ -319,7 +324,7 @@ export default function MapPreview({
         <button onClick={() => bumpZoom(1.25)} title="Zoom in">+</button>
         <button onClick={() => setUserZoom(null)} title="Fit to view">Fit</button>
       </div>
-      <div ref={frameRef} style={{ ...frameStyle, flex: 1, minHeight: 0, overflow: 'auto' }}>
+      <div ref={frameRef} style={{ ...frameStyle, flex: 1, minHeight: 0, overflow: 'auto', display: 'flex' }}>
         {board}
       </div>
     </div>
