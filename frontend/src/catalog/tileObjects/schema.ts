@@ -48,9 +48,10 @@ export const NewTileObject = Schema.Struct({
   image: Schema.String,
   footprint_w: Schema.Number,
   footprint_h: Schema.Number,
-  // Door cell, only sent for 'building' objects (issue #29).
-  door_dx: Schema.optional(Schema.Number),
-  door_dy: Schema.optional(Schema.Number),
+  // Door cell, only sent for 'building' objects (issue #29). An explicit null
+  // clears a saved door — absent keys keep the server's stored value.
+  door_dx: Schema.optional(Schema.NullOr(Schema.Number)),
+  door_dy: Schema.optional(Schema.NullOr(Schema.Number)),
   // Interior walk mask, only sent for 'building' objects (issue #32).
   walk_mask: Schema.optional(Schema.Array(Schema.String)),
   // Impassable cell borders, only sent for 'building' objects (issue #53).

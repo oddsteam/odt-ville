@@ -10,6 +10,7 @@ import {
   requiresDoorValidation,
   walkCellsFromMask,
 } from '../src/tileMapper/TileMapper.tsx'
+import { validateWalkMask } from '../src/kernel/walkMask.ts'
 
 // #338 — "Collides" authoring on props. A prop with Collides on carries a
 // walk_mask like a building (solid footprint, Walkable carves pass-through) but
@@ -33,11 +34,19 @@ describe('authorsWalkMask', () => {
   })
 })
 
-describe('requiresDoorValidation (the #338 no-door split)', () => {
-  it('runs only for buildings — a collidable prop skips the door guard', () => {
-    expect(requiresDoorValidation('building')).toBe(true)
-    expect(requiresDoorValidation('prop')).toBe(false)
-    expect(requiresDoorValidation('tree')).toBe(false)
+describe('requiresDoorValidation (the #338/#343 no-door split)', () => {
+  const door = { dx: 1, dy: 0 }
+
+  it('runs only for a building that has a door placed', () => {
+    expect(requiresDoorValidation('building', door)).toBe(true)
+    // A collidable prop never has a door, so it always skips the guard.
+    expect(requiresDoorValidation('prop', door)).toBe(false)
+    expect(requiresDoorValidation('tree', door)).toBe(false)
+  })
+
+  it('skips a door-less building — it saves as solid scenery (#343)', () => {
+    expect(requiresDoorValidation('building', null)).toBe(false)
+    expect(requiresDoorValidation('building', undefined)).toBe(false)
   })
 })
 
@@ -91,5 +100,33 @@ describe('a collidable prop authoring overhang / ladder / edge (#339)', () => {
     // N=1 at (0,0); E=2 at (1,1).
     expect(mask).toEqual(['10', '02'])
     expect(edgeSetFromMask(mask)).toEqual(edges)
+  })
+})
+
+// #343 — a building's door is optional. With no door placed a building is pure
+// scenery: its footprint saves as a solid box (a Collides prop with nothing
+// carved) and the save-time door-reachability guard never runs. A door that IS
+// placed keeps the full #32 guard, since an unreachable door is always a mistake.
+describe('a door-optional building (#343)', () => {
+  it('a door-less building skips the guard and saves a solid footprint', () => {
+    // The mask a door-less building saves: buildWalkMask over an empty paint set.
+    expect(buildWalkMask(new Set(), 3, 2)).toEqual(['###', '###'])
+    expect(requiresDoorValidation('building', null)).toBe(false)
+  })
+
+  it('a placed door still runs the guard and blocks an unreachable door', () => {
+    const door = { dx: 1, dy: 1 }
+    expect(requiresDoorValidation('building', door)).toBe(true)
+    // Door at an interior cell with no carved path out — unreachable, still blocked.
+    const island = buildWalkMask(new Set(['1,1']), 3, 3)
+    expect(validateWalkMask(island, 3, 3, door)).toEqual({ ok: false, reason: 'unreachable' })
+  })
+
+  it('a placed door with a carved path to the edge saves as before', () => {
+    const door = { dx: 1, dy: 2 }
+    expect(requiresDoorValidation('building', door)).toBe(true)
+    // A column of walkable cells from the door up to the top edge.
+    const reachable = buildWalkMask(new Set(['1,0', '1,1', '1,2']), 3, 3)
+    expect(validateWalkMask(reachable, 3, 3, door)).toEqual({ ok: true })
   })
 })

@@ -64,11 +64,18 @@ export function authorsWalkMask(kind: string, collides: boolean): boolean {
 }
 
 // Which tile objects run the building door-reachability guard (validateWalkMask,
-// #32) at save. Only a building — it must have a door the avatar can reach. A
-// collidable prop has no door, so its mask saves exactly as painted; this is the
-// no-door validation split of #338.
-export function requiresDoorValidation(kind: string): boolean {
-  return kind === 'building'
+// #32) at save. Only a building, and only once a door is actually placed (#343):
+// a door-less building is pure scenery — its footprint saves as a solid box and
+// the hometown fallback bottom-centre door still applies at runtime. A placed
+// door, though, must reach a footprint edge (an unreachable door is always a
+// mistake), so it keeps the existing block. A collidable prop has no door, so
+// its mask saves exactly as painted; this is the no-door validation split of
+// #338/#343.
+export function requiresDoorValidation(
+  kind: string,
+  door: { dx: number; dy: number } | null | undefined,
+): boolean {
+  return kind === 'building' && door != null
 }
 
 // The 'o' overhang cells of a stored mask (#44), as "dx,dy" keys — so a saved
@@ -551,7 +558,9 @@ export default function TileMapper() {
     }
     const cell = doorCellFromClick(e.clientX - rect.left, e.clientY - rect.top, rect.width, rect.height, doorCols, doorRows)
     if (paintMode === 'door') {
-      setDoor(cell)
+      // Clicking the placed door again removes it — a door-less building is
+      // legal since #343, so the door must be un-placeable too.
+      setDoor((prev) => (prev && prev.dx === cell.dx && prev.dy === cell.dy ? null : cell))
       return
     }
     // Overhang mode (#44) toggles walk-under cells; walk mode toggles porch cells.
@@ -628,13 +637,15 @@ export default function TileMapper() {
       setStatus('Give the object a name.')
       return
     }
-    // A building must ship an authored, reachable interior walk mask (#32): a
-    // door + at least one walkable tile + a path connecting them to a footprint
-    // edge, so the avatar can actually enter. Block the save otherwise. A
-    // collidable prop (#338) carries a mask too, but has no door, so it skips
-    // the reachability guard and saves exactly as painted.
+    // A building with a door must ship an authored, reachable interior walk mask
+    // (#32): a door + at least one walkable tile + a path connecting them to a
+    // footprint edge, so the avatar can actually enter. Block the save otherwise.
+    // A door-less building (#343) is pure scenery — its footprint saves as a
+    // solid box and skips the guard (the hometown fallback door still applies at
+    // runtime). A collidable prop (#338) carries a mask too, but has no door, so
+    // it also skips the guard and saves exactly as painted.
     const mask = collidable ? buildWalkMask(walk, doorCols, doorRows, overhangCells, ladderCells) : undefined
-    if (requiresDoorValidation(kind)) {
+    if (requiresDoorValidation(kind, door)) {
       const v = validateWalkMask(mask, doorCols, doorRows, door)
       if (!v.ok) {
         setStatus(
@@ -668,10 +679,11 @@ export default function TileMapper() {
         image,
         footprint_w: Math.min(MAX_FP, Number(fpW) || selBox?.w || 1),
         footprint_h: Math.min(MAX_FP, Number(fpH) || selBox?.h || 1),
-        // Building entrance, when picked. Unsent → the town defaults to
-        // bottom-centre (its existing hardcoded door).
-        door_dx: isBuilding && door ? door.dx : undefined,
-        door_dy: isBuilding && door ? door.dy : undefined,
+        // Building entrance, when picked. An explicit null clears a previously
+        // saved door (the server keeps the old value when the key is absent);
+        // the town then falls back to its hardcoded bottom-centre entrance.
+        door_dx: isBuilding ? (door ? door.dx : null) : undefined,
+        door_dy: isBuilding ? (door ? door.dy : null) : undefined,
         // Authored interior walk mask (#32) — only for buildings, validated above.
         walk_mask: mask,
         // Impassable cell borders (#53) — only when the admin marked some, so an
@@ -1037,9 +1049,10 @@ export default function TileMapper() {
                 <p className="hint">
                   {paintMode === 'walk'
                     ? 'Click cells to paint the walkable porch/path (toggle).'
-                    : 'Click the entrance cell.'}{' '}
-                  {door ? `Door at ${door.dx},${door.dy}.` : 'No door yet.'} Save is blocked until the door
-                  is reachable from a footprint edge via walkable tiles.
+                    : 'Click the entrance cell; click the placed door again to remove it.'}{' '}
+                  {door
+                    ? `Door at ${door.dx},${door.dy}. Save is blocked until the door is reachable from a footprint edge via walkable tiles.`
+                    : 'No door — saves as solid scenery.'}
                 </p>
               )}
               {isProp && collidable && paintMode === 'walk' && (
