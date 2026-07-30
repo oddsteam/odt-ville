@@ -64,11 +64,18 @@ export function authorsWalkMask(kind: string, collides: boolean): boolean {
 }
 
 // Which tile objects run the building door-reachability guard (validateWalkMask,
-// #32) at save. Only a building — it must have a door the avatar can reach. A
-// collidable prop has no door, so its mask saves exactly as painted; this is the
-// no-door validation split of #338.
-export function requiresDoorValidation(kind: string): boolean {
-  return kind === 'building'
+// #32) at save. Only a building, and only once a door is actually placed (#343):
+// a door-less building is pure scenery — its footprint saves as a solid box and
+// the hometown fallback bottom-centre door still applies at runtime. A placed
+// door, though, must reach a footprint edge (an unreachable door is always a
+// mistake), so it keeps the existing block. A collidable prop has no door, so
+// its mask saves exactly as painted; this is the no-door validation split of
+// #338/#343.
+export function requiresDoorValidation(
+  kind: string,
+  door: { dx: number; dy: number } | null | undefined,
+): boolean {
+  return kind === 'building' && door != null
 }
 
 // The 'o' overhang cells of a stored mask (#44), as "dx,dy" keys — so a saved
@@ -628,13 +635,15 @@ export default function TileMapper() {
       setStatus('Give the object a name.')
       return
     }
-    // A building must ship an authored, reachable interior walk mask (#32): a
-    // door + at least one walkable tile + a path connecting them to a footprint
-    // edge, so the avatar can actually enter. Block the save otherwise. A
-    // collidable prop (#338) carries a mask too, but has no door, so it skips
-    // the reachability guard and saves exactly as painted.
+    // A building with a door must ship an authored, reachable interior walk mask
+    // (#32): a door + at least one walkable tile + a path connecting them to a
+    // footprint edge, so the avatar can actually enter. Block the save otherwise.
+    // A door-less building (#343) is pure scenery — its footprint saves as a
+    // solid box and skips the guard (the hometown fallback door still applies at
+    // runtime). A collidable prop (#338) carries a mask too, but has no door, so
+    // it also skips the guard and saves exactly as painted.
     const mask = collidable ? buildWalkMask(walk, doorCols, doorRows, overhangCells, ladderCells) : undefined
-    if (requiresDoorValidation(kind)) {
+    if (requiresDoorValidation(kind, door)) {
       const v = validateWalkMask(mask, doorCols, doorRows, door)
       if (!v.ok) {
         setStatus(
