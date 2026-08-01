@@ -32,9 +32,17 @@ type DragAnchor = { c: number; r: number }
 
 const MAP_TILE = 48 // px per tile in the game — used to preview real map size.
 const MAX_FP = 15 // largest building footprint, in tiles (15×15 cap).
+// The sheet key an uploaded PNG's cells carry. ponytail: one slot — uploading a
+// second PNG re-points cells stamped from the first. Key by file name if that
+// ever bites; registry tilesets (the normal path) key by their own name.
+const UPLOAD_SHEET = 'upload'
 
 export default function TileMapper() {
   const [tileset, setTileset] = useState<Tileset | null>(null) // { img, width, height }
+  // Every sheet loaded this session, by name — the composition's cells name the
+  // sheet they came from, so switching the tileset adds a sheet to draw from
+  // rather than replacing the one the art depends on (#354).
+  const [sheets, setSheets] = useState<ReadonlyMap<string, HTMLImageElement>>(new Map())
   // Where the source sheet comes from (#351): a registry tileset fetched by URL
   // (the default — survives a reload, no file picker) or an uploaded one-off PNG.
   const [source, setSource] = useState<Source>('tileset')
@@ -75,13 +83,15 @@ export default function TileMapper() {
   // the preview instead of a tileset selection — so the admin can add/adjust the
   // door + walkable path without re-uploading and re-selecting the tileset.
   const [editImg, setEditImg] = useState<HTMLImageElement | null>(null)
-  // The composition (#353) — composition cell → source tileset cell. The picked
-  // tileset rectangle is the block; stamping/repeat-dragging on the composition
-  // canvas fills this in. Non-empty composition ⇒ it, not the raw selection,
-  // is the object's art.
-  const [placed, setPlaced] = useState<Placed>(new Map())
+  // The composition (#353/#354) — an ordered stack of layers, each mapping a
+  // composition cell → the source tileset cell it draws. The picked tileset
+  // rectangle is the block; stamping/repeat-dragging on the composition canvas
+  // fills the active layer in. A second layer puts a sign over a wall. Non-empty
+  // composition ⇒ it, not the raw selection, is the object's art.
+  const [layers, setLayers] = useState<readonly Placed[]>([new Map()])
+  const [active, setActive] = useState(0)
   // The composition flattened at native resolution — what the preview, the
-  // foreground editor and the save all draw. Rebuilt whenever `placed` changes.
+  // foreground editor and the save all draw. Rebuilt whenever a layer changes.
   const [composed, setComposed] = useState<HTMLCanvasElement | null>(null)
 
   const cell = effectiveCell(source, tilesetName, manualCell)
@@ -115,7 +125,8 @@ export default function TileMapper() {
         setOverhangCells(o.walk_mask ? overhangCellsFromMask(o.walk_mask) : new Set())
         setLadderCells(o.walk_mask ? ladderCellsFromMask(o.walk_mask) : new Set())
         setEdgeCells(o.edge_mask ? edgeSetFromMask(o.edge_mask) : new Set())
-        setPlaced(new Map()) // the loaded art replaces any composition in progress
+        setLayers([new Map()]) // the loaded art replaces any composition in progress
+        setActive(0)
         setPaintMode('walk')
         setLoadedFg(o.fg_mask ?? null) // restore the foreground mask into the editor
         fgMaskRef.current = null // force a rebuild against the loaded art
@@ -144,6 +155,9 @@ export default function TileMapper() {
   const doorCols = Math.max(1, Math.round(fpW))
   const doorRows = Math.max(1, Math.round(fpH))
 
+  // The sheet the picked block comes from, and the key its placed cells carry.
+  const sheetKey = source === 'tileset' ? tilesetName : UPLOAD_SHEET
+
   // Normalized selection in cells (inclusive), or null.
   const selBox = sel
     ? {
@@ -151,26 +165,30 @@ export default function TileMapper() {
         r: Math.min(sel.r0, sel.r1),
         w: Math.abs(sel.c1 - sel.c0) + 1,
         h: Math.abs(sel.r1 - sel.r0) + 1,
+        sheet: sheetKey,
       }
     : null
 
   // The composition's own geometry (#353): the picked tileset rectangle is the
-  // block that stamps, and the bounding box of what's placed is the composed
+  // block that stamps, and the bounding box of every layer is the composed
   // art's extent (and the default footprint).
-  const compBox = useMemo(() => bounds(placed), [placed])
+  const compBox = useMemo(() => bounds(layers), [layers])
 
-  // Adopt a freshly loaded source sheet: drop the selection, the composition and
-  // saved-object edit mode, so nothing from the previous sheet bleeds into the
-  // next object. (One composition draws from one sheet until #354 adds layers.)
-  const useSheet = useCallback((img: HTMLImageElement) => {
+  // Stamps and erases land on the active layer; the rest of the stack is left
+  // alone (#354).
+  const setActiveLayer = (next: Placed) =>
+    setLayers((ls) => ls.map((l, i) => (i === active ? next : l)))
+
+  // Adopt a freshly loaded source sheet: keep it for the composition to draw
+  // from, and drop the selection (the block belongs to the sheet it was picked
+  // on). What's already stamped stays — a composition may draw a wall from one
+  // sheet and a sign from another (#354).
+  const useSheet = useCallback((img: HTMLImageElement, key: string) => {
     setTileset({ img, width: img.naturalWidth, height: img.naturalHeight })
+    setSheets((prev) => new Map(prev).set(key, img))
     setSel(null)
-    setPlaced(new Map())
-    setEditImg(null)
-    setLoadedFg(null)
-    fgMaskRef.current = null // a fresh tileset starts with no foreground mask
     wrapRef.current?.scrollTo(0, 0) // a new sheet starts at the top (#352)
-    setStatus(`Loaded tileset (${img.naturalWidth}×${img.naturalHeight}). Drag to select an object.`)
+    setStatus(`Loaded tileset (${img.naturalWidth}×${img.naturalHeight}). Drag to pick a block.`)
   }, [])
 
   // Tileset mode (#351): fetch the registry sheet from public/maps/tilesets/, so
@@ -179,7 +197,7 @@ export default function TileMapper() {
     if (source !== 'tileset') return
     let alive = true
     const img = new Image()
-    img.onload = () => { if (alive) useSheet(img) }
+    img.onload = () => { if (alive) useSheet(img, tilesetName) }
     img.onerror = () => { if (alive) setStatus(`Could not load ${tilesetName}.png`) }
     img.src = tilesetUrl(tilesetName)
     return () => { alive = false }
@@ -191,7 +209,7 @@ export default function TileMapper() {
     const reader = new FileReader()
     reader.onload = () => {
       const img = new Image()
-      img.onload = () => useSheet(img)
+      img.onload = () => useSheet(img, UPLOAD_SHEET)
       img.onerror = () => setStatus('Could not read that image.')
       img.src = reader.result as string
     }
@@ -255,15 +273,18 @@ export default function TileMapper() {
     const off = document.createElement('canvas')
     off.width = compBox.w * cell
     off.height = compBox.h * cell
-    flatten(off.getContext('2d')!, tileset.img, placed, cell, compBox)
+    flatten(off.getContext('2d')!, sheets, layers, cell, compBox)
     setComposed(off)
-  }, [tileset, placed, cell]) // compBox is derived from placed — one run per change
+  }, [tileset, sheets, layers, cell]) // compBox is derived from layers — one run per change
 
   // A stamp/erase drag on the board finished: the composition is the art now.
-  function onCompCommit() {
+  // A stamp that landed on filled cells replaced them — say so, and point at the
+  // layer that would have stacked instead (#354).
+  function onCompCommit(replaced: boolean) {
     setEditImg(null)
     setLoadedFg(null)
     fgMaskRef.current = null
+    if (replaced) setStatus('Replaced — use + Layer to stack instead.')
   }
 
   // The composition's bounding box is the default footprint (#353) — still
@@ -559,10 +580,15 @@ export default function TileMapper() {
           sheet={tileset?.img ?? null}
           cell={cell}
           block={selBox}
-          placed={placed}
+          placed={layers[active]}
+          layerCount={layers.length}
+          active={active}
           box={compBox}
           composed={composed}
-          onChange={setPlaced}
+          onChange={setActiveLayer}
+          onClear={() => { setLayers([new Map()]); setActive(0) }}
+          onAddLayer={() => { setLayers((ls) => [...ls, new Map()]); setActive(layers.length) }}
+          onPickLayer={setActive}
           onCommit={onCompCommit}
           onNeedBlock={() => setStatus('Drag a rectangle on the tileset first — that block is what stamps.')}
         />

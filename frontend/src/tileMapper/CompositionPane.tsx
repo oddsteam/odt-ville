@@ -1,33 +1,40 @@
 import { useEffect, useRef, useState } from 'react'
-import { erase as eraseCells, repeat, type Block, type Bounds, type Cell, type Placed } from './composition.ts'
+import { erase as eraseCells, overlaps, repeat, type Block, type Bounds, type Cell, type Placed } from './composition.ts'
 
 // The composition board (#353) — the middle column of the Tile-Object Mapper.
 // The rectangle picked on the tileset is the block; clicking here stamps it and
 // dragging repeats it a whole block at a time, so a 12-storey tower costs the
-// same drag as a 3-storey one. The board owns its tool + pointer handling; the
-// composition itself lives in TileMapper, which needs it for save and preview.
+// same drag as a 3-storey one. Stamps land on the active layer, so a sign can
+// sit over a wall (#354). The board owns its tool + pointer handling; the
+// layer stack itself lives in TileMapper, which needs it for save and preview.
 
 // A fixed 24×24-cell board — room for a 12-storey tower of two-tile floors.
 // ponytail: fixed board, no pan/resize; widen the constant if authors run out.
 const COMP_CELLS = 24
 
 export default function CompositionPane({
-  sheet, cell, block, placed, box, composed, onChange, onCommit, onNeedBlock,
+  sheet, cell, block, placed, layerCount, active, box, composed,
+  onChange, onClear, onAddLayer, onPickLayer, onCommit, onNeedBlock,
 }: {
   sheet: HTMLImageElement | null // the source tileset, for drawing the stamp ghost
   cell: number
   block: Block | null // the picked tileset rectangle
-  placed: Placed
+  placed: Placed // the active layer — what stamps and erases touch
+  layerCount: number
+  active: number
   box: Bounds | null
   composed: HTMLCanvasElement | null
   onChange: (next: Placed) => void
-  onCommit: () => void // a stamp/erase drag finished
+  onClear: () => void // drop the whole stack back to one empty layer
+  onAddLayer: () => void
+  onPickLayer: (i: number) => void
+  onCommit: (replaced: boolean) => void // a stamp/erase drag finished
   onNeedBlock: () => void // tried to stamp with nothing picked
 }) {
   const [tool, setTool] = useState<'stamp' | 'erase'>('stamp')
   const [hover, setHover] = useState<Cell | null>(null) // drives the stamp ghost
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const dragRef = useRef<{ anchor: Cell; base: Placed } | null>(null)
+  const dragRef = useRef<{ anchor: Cell; base: Placed; to: Cell } | null>(null)
   const zoom = Math.max(1, Math.round(32 / cell)) // ~32 px per cell, whole-number
   const step = cell * zoom
 
@@ -94,19 +101,24 @@ export default function CompositionPane({
       return
     }
     const anchor = cellAt(e)
-    dragRef.current = { anchor, base: placed }
+    dragRef.current = { anchor, base: placed, to: anchor }
     onChange(apply(placed, anchor, anchor))
   }
   function onMove(e: React.MouseEvent<HTMLCanvasElement>) {
     const at = cellAt(e)
     setHover(at)
     const drag = dragRef.current
-    if (drag) onChange(apply(drag.base, drag.anchor, at))
+    if (!drag) return
+    drag.to = at
+    onChange(apply(drag.base, drag.anchor, at))
   }
   function onUp() {
-    if (!dragRef.current) return
+    const drag = dragRef.current
+    if (!drag) return
     dragRef.current = null
-    onCommit()
+    // Stamping over occupied cells replaced them rather than stacking — the
+    // status line says so and offers the layer (#354).
+    onCommit(tool === 'stamp' && !!block && overlaps(drag.base, block, drag.anchor, drag.to))
   }
 
   return (
@@ -119,15 +131,28 @@ export default function CompositionPane({
         <button type="button" className={tool === 'erase' ? 'is-on' : ''} onClick={() => setTool('erase')}>
           Eraser
         </button>
-        <button type="button" onClick={() => onChange(new Map())} disabled={placed.size === 0}>
+        {/* Clear is the whole composition, not just the active layer — it's how
+            an author starts the next object. */}
+        <button type="button" onClick={onClear} disabled={!box}>
           Clear
         </button>
+        {/* One layer is the common case, so the picker only appears once there
+            are two to choose between (#354). Layer 1 is the bottom of the stack. */}
+        <button type="button" onClick={onAddLayer}>+ Layer</button>
+        {layerCount > 1 && (
+          <select value={active} onChange={(e) => onPickLayer(Number(e.target.value))}>
+            {Array.from({ length: layerCount }, (_, i) => (
+              <option key={i} value={i}>Layer {i + 1}</option>
+            ))}
+          </select>
+        )}
       </div>
       <p className="hint">
         {block
           ? `Block ${block.w}×${block.h} — click to stamp it, drag to repeat it along the drag.`
           : 'Drag a rectangle on the tileset to pick a block, then stamp it here.'}
         {box && ` ${box.w}×${box.h} tiles placed.`}
+        {layerCount > 1 && ` Stamping on layer ${active + 1} of ${layerCount}.`}
       </p>
       <div className="comp-wrap">
         <canvas
