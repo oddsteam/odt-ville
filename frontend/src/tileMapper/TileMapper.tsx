@@ -4,17 +4,27 @@ import { TileObjectsWrite } from '../catalog/tileObjects/write.ts'
 import type { TileObject, TileObjectSummary } from '../catalog/tileObjects/schema.ts'
 import { runEdge } from '../lib/runEdge.ts'
 import { validateWalkMask, EDGE_N, EDGE_E, EDGE_S, EDGE_W } from '../kernel/walkMask.ts'
+import { TILESETS, tilesetUrl } from '../catalog/groundTiles/service.ts'
 import '../lib/mapperChrome.css'
 
-type Tileset = { img: HTMLImageElement; src: string; width: number; height: number }
+type Tileset = { img: HTMLImageElement; width: number; height: number }
+type Source = 'tileset' | 'upload'
 type Sel = { c0: number; r0: number; c1: number; r1: number }
 type DragAnchor = { c: number; r: number }
 
-// Tile-Object Mapper — admins upload a tileset PNG, drag a rectangle over the
-// cell grid to select a whole object (a tree, a prop), then save it. The
-// browser crops that region to a standalone PNG (data URL) so the game just
-// draws one image; the tileset never has to ship to the game. See the Rails
-// tile_objects API + TownScene's tall-prop overlay.
+// Tile-Object Mapper — admins pick a source sheet (a repo-committed tileset from
+// the shared registry, or a one-off uploaded PNG), drag a rectangle over the cell
+// grid to select a whole object (a tree, a prop), then save it. The browser crops
+// that region to a standalone PNG (data URL) so the game just draws one image;
+// the tileset never has to ship to the game. See the Rails tile_objects API +
+// TownScene's tall-prop overlay.
+
+// The grid's cell size for the current source (#351). A registry tileset carries
+// its own cell, so the Cell input is hidden and ignored in tileset mode.
+export function effectiveCell(source: Source, tilesetName: string, manualCell: number): number {
+  if (source === 'upload') return manualCell
+  return (TILESETS.find((t) => t.name === tilesetName) ?? TILESETS[0]).cell
+}
 
 const MAP_TILE = 48 // px per tile in the game — used to preview real map size.
 const MAX_FP = 15 // largest building footprint, in tiles (15×15 cap).
@@ -237,8 +247,12 @@ function maskHasInk(c: HTMLCanvasElement | null): boolean {
 }
 
 export default function TileMapper() {
-  const [tileset, setTileset] = useState<Tileset | null>(null) // { img, src, width, height }
-  const [cell, setCell] = useState(32)
+  const [tileset, setTileset] = useState<Tileset | null>(null) // { img, width, height }
+  // Where the source sheet comes from (#351): a registry tileset fetched by URL
+  // (the default — survives a reload, no file picker) or an uploaded one-off PNG.
+  const [source, setSource] = useState<Source>('tileset')
+  const [tilesetName, setTilesetName] = useState(TILESETS[0].name)
+  const [manualCell, setManualCell] = useState(32) // upload mode only; see effectiveCell
   const [zoom, setZoom] = useState(3)
   const [sel, setSel] = useState<Sel | null>(null) // { c0, r0, c1, r1 } inclusive cell range
   const [name, setName] = useState('tree')
@@ -285,13 +299,14 @@ export default function TileMapper() {
   const fgMaskRef = useRef<HTMLCanvasElement | null>(null)
   const fgViewRef = useRef<HTMLCanvasElement>(null)
   const fgDrawingRef = useRef(false)
-  const [status, setStatus] = useState('Upload a tileset PNG to begin.')
+  const [status, setStatus] = useState('Loading tileset…')
   const [saved, setSaved] = useState<readonly TileObjectSummary[]>([]) // roster for the saved-objects list
   // When editing a saved object (#29/#32), its cropped art loads here and drives
   // the preview instead of a tileset selection — so the admin can add/adjust the
   // door + walkable path without re-uploading and re-selecting the tileset.
   const [editImg, setEditImg] = useState<HTMLImageElement | null>(null)
 
+  const cell = effectiveCell(source, tilesetName, manualCell)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const dragRef = useRef<DragAnchor | null>(null) // { c, r } drag anchor while the mouse is down
 
@@ -390,26 +405,42 @@ export default function TileMapper() {
       }
     : null
 
+  // Adopt a freshly loaded source sheet: drop the selection and leave saved-object
+  // edit mode, so nothing from the previous sheet bleeds into the next object.
+  const useSheet = useCallback((img: HTMLImageElement) => {
+    setTileset({ img, width: img.naturalWidth, height: img.naturalHeight })
+    setSel(null)
+    setErase(new Set())
+    setEditImg(null)
+    setLoadedFg(null)
+    fgMaskRef.current = null // a fresh tileset starts with no foreground mask
+    setStatus(`Loaded tileset (${img.naturalWidth}×${img.naturalHeight}). Drag to select an object.`)
+  }, [])
+
+  // Tileset mode (#351): fetch the registry sheet from public/maps/tilesets/, so
+  // building twenty objects off one sheet costs zero uploads and survives reload.
+  useEffect(() => {
+    if (source !== 'tileset') return
+    let alive = true
+    const img = new Image()
+    img.onload = () => { if (alive) useSheet(img) }
+    img.onerror = () => { if (alive) setStatus(`Could not load ${tilesetName}.png`) }
+    img.src = tilesetUrl(tilesetName)
+    return () => { alive = false }
+  }, [source, tilesetName, useSheet])
+
   const onUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     const reader = new FileReader()
     reader.onload = () => {
       const img = new Image()
-      img.onload = () => {
-        setTileset({ img, src: reader.result as string, width: img.naturalWidth, height: img.naturalHeight })
-        setSel(null)
-        setErase(new Set())
-        setEditImg(null) // a fresh tileset leaves saved-object edit mode
-        setLoadedFg(null)
-        fgMaskRef.current = null // a fresh tileset starts with no foreground mask
-        setStatus(`Loaded tileset (${img.naturalWidth}×${img.naturalHeight}). Drag to select an object.`)
-      }
+      img.onload = () => useSheet(img)
       img.onerror = () => setStatus('Could not read that image.')
       img.src = reader.result as string
     }
     reader.readAsDataURL(file)
-  }, [])
+  }, [useSheet])
 
   // ---- draw the tileset + grid + selection ----------------------------
   useEffect(() => {
@@ -873,20 +904,40 @@ export default function TileMapper() {
     <div className="tilemapper">
       <header className="bar">
         <h1>Tile-Object Mapper</h1>
-        <label className="upload">
-          Tileset PNG
-          <input type="file" accept="image/png" onChange={onUpload} />
-        </label>
         <label>
-          Cell
-          <input
-            type="number"
-            min={1}
-            value={cell}
-            onChange={(e) => { setCell(Math.max(1, Number(e.target.value) || 1)); setSel(null) }}
-            style={{ width: 52 }}
-          />
+          Source
+          <select value={source} onChange={(e) => { setSource(e.target.value as Source); setSel(null) }}>
+            <option value="tileset">Tileset</option>
+            <option value="upload">Upload PNG</option>
+          </select>
         </label>
+        {source === 'tileset' ? (
+          <label>
+            Tileset
+            <select value={tilesetName} onChange={(e) => setTilesetName(e.target.value)}>
+              {TILESETS.map((t) => (
+                <option key={t.name} value={t.name}>{t.name}</option>
+              ))}
+            </select>
+          </label>
+        ) : (
+          <>
+            <label className="upload">
+              Tileset PNG
+              <input type="file" accept="image/png" onChange={onUpload} />
+            </label>
+            <label>
+              Cell
+              <input
+                type="number"
+                min={1}
+                value={manualCell}
+                onChange={(e) => { setManualCell(Math.max(1, Number(e.target.value) || 1)); setSel(null) }}
+                style={{ width: 52 }}
+              />
+            </label>
+          </>
+        )}
         <span className="zoom-ctl">
           Zoom
           <button type="button" onClick={() => setZoom((z) => Math.max(1, z - 1))}>−</button>
