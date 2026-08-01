@@ -14,7 +14,7 @@ import './styles.css'
 // Ground-Tile Mapper — admins pick a bundled tileset, click a single cell, and
 // tag it with a surface type (grass, road, …). We store the *coordinate*
 // (tileset, col, row) rather than a cropped PNG, so the game draws ground via
-// its tilemap renderer (one texture, few draw calls) and the atlas/neighbour
+// its tilemap renderer (one texture, few draw calls) and the tileset/neighbour
 // relationship survives for the edge/corner autotiling that comes later.
 //
 // No laying logic here: this only builds the catalog you see on the right.
@@ -67,7 +67,7 @@ function Thumb({ tile, size = 32 }: ThumbProps) {
 
 export default function GroundTileMapper() {
   const [tileset, setTileset] = useState(TILESETS[0].name)
-  const [atlas, setAtlas] = useState<{ img: HTMLImageElement; width: number; height: number } | null>(null) // { img, width, height }
+  const [tilesetImg, setTilesetImg] = useState<{ img: HTMLImageElement; width: number; height: number } | null>(null) // { img, width, height }
   const [zoom, setZoom] = useState(2)
   const [sel, setSel] = useState<{ c: number; r: number } | null>(null) // { c, r } single cell
   const [type, setType] = useState('grass')
@@ -87,8 +87,8 @@ export default function GroundTileMapper() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const meta = TILESETS.find((t) => t.name === tileset) || TILESETS[0]
   const cell = meta.cell
-  const cols = atlas ? Math.floor(atlas.width / cell) : 0
-  const rows = atlas ? Math.floor(atlas.height / cell) : 0
+  const cols = tilesetImg ? Math.floor(tilesetImg.width / cell) : 0
+  const rows = tilesetImg ? Math.floor(tilesetImg.height / cell) : 0
 
   // Tagged cells in the *current* tileset, keyed "c,r" -> tile (for grid marks).
   const taggedHere = new Map()
@@ -126,29 +126,29 @@ export default function GroundTileMapper() {
   // Load the selected tileset image.
   useEffect(() => {
     let alive = true
-    setAtlas(null)
+    setTilesetImg(null)
     setSel(null)
     loadTileset(tileset)
       .then((img: HTMLImageElement) => {
         if (!alive) return
-        setAtlas({ img, width: img.naturalWidth, height: img.naturalHeight })
+        setTilesetImg({ img, width: img.naturalWidth, height: img.naturalHeight })
         setStatus(`Loaded ${tileset} (${img.naturalWidth}×${img.naturalHeight}). Click a cell.`)
       })
       .catch((e: unknown) => { if (alive) setStatus((e as Error).message) })
     return () => { alive = false }
   }, [tileset])
 
-  // Draw atlas + grid + tagged marks + selection.
+  // Draw the tileset + grid + tagged marks + selection.
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas || !atlas) return
+    if (!canvas || !tilesetImg) return
     const step = cell * zoom
     canvas.width = cols * step
     canvas.height = rows * step
     const ctx = canvas.getContext('2d')!
     ctx.imageSmoothingEnabled = false
     ctx.clearRect(0, 0, canvas.width, canvas.height)
-    ctx.drawImage(atlas.img, 0, 0, canvas.width, canvas.height)
+    ctx.drawImage(tilesetImg.img, 0, 0, canvas.width, canvas.height)
 
     // Grid
     ctx.strokeStyle = 'rgba(0,0,0,0.25)'
@@ -178,7 +178,7 @@ export default function GroundTileMapper() {
       ctx.lineWidth = 2
       ctx.strokeRect(sel.c * step + 1, sel.r * step + 1, step - 2, step - 2)
     }
-  }, [atlas, cell, zoom, cols, rows, sel, catalog, tileset])
+  }, [tilesetImg, cell, zoom, cols, rows, sel, catalog, tileset])
 
   function cellAt(e: React.MouseEvent<HTMLCanvasElement>) {
     const rect = canvasRef.current!.getBoundingClientRect()
@@ -190,7 +190,7 @@ export default function GroundTileMapper() {
   }
 
   function onCanvasClick(e: React.MouseEvent<HTMLCanvasElement>) {
-    if (!atlas) return
+    if (!tilesetImg) return
     const { c, r } = cellAt(e)
     setSel({ c, r })
     const existing = taggedHere.get(`${c},${r}`)
@@ -263,7 +263,7 @@ export default function GroundTileMapper() {
       <div className="cols">
         <div className="left">
           <div className="canvas-wrap">
-            {atlas ? (
+            {tilesetImg ? (
               <canvas ref={canvasRef} onClick={onCanvasClick} />
             ) : (
               <div className="empty">Loading tileset…</div>

@@ -6,14 +6,14 @@ import { runEdge } from '../lib/runEdge.ts'
 import { validateWalkMask, EDGE_N, EDGE_E, EDGE_S, EDGE_W } from '../kernel/walkMask.ts'
 import '../lib/mapperChrome.css'
 
-type Atlas = { img: HTMLImageElement; src: string; width: number; height: number }
+type Tileset = { img: HTMLImageElement; src: string; width: number; height: number }
 type Sel = { c0: number; r0: number; c1: number; r1: number }
 type DragAnchor = { c: number; r: number }
 
-// Tile-Object Mapper — admins upload an atlas PNG, drag a rectangle over the
+// Tile-Object Mapper — admins upload a tileset PNG, drag a rectangle over the
 // cell grid to select a whole object (a tree, a prop), then save it. The
 // browser crops that region to a standalone PNG (data URL) so the game just
-// draws one image; the atlas never has to ship to the game. See the Rails
+// draws one image; the tileset never has to ship to the game. See the Rails
 // tile_objects API + TownScene's tall-prop overlay.
 
 const MAP_TILE = 48 // px per tile in the game — used to preview real map size.
@@ -98,7 +98,7 @@ export function ladderCellsFromMask(mask: readonly string[]): Set<string> {
   return out
 }
 
-// Crop the atlas selection to a standalone PNG, clearing any erased cells to
+// Crop the tileset selection to a standalone PNG, clearing any erased cells to
 // transparent (#43). `erase` holds "c,r" cell offsets within the selection;
 // each gets wiped so neighbour-sprite bleed inside the bounding box doesn't
 // ship in the saved object. Empty erase set → a plain drawImage crop.
@@ -237,7 +237,7 @@ function maskHasInk(c: HTMLCanvasElement | null): boolean {
 }
 
 export default function TileMapper() {
-  const [atlas, setAtlas] = useState<Atlas | null>(null) // { img, src, width, height }
+  const [tileset, setTileset] = useState<Tileset | null>(null) // { img, src, width, height }
   const [cell, setCell] = useState(32)
   const [zoom, setZoom] = useState(3)
   const [sel, setSel] = useState<Sel | null>(null) // { c0, r0, c1, r1 } inclusive cell range
@@ -264,7 +264,7 @@ export default function TileMapper() {
   // the footprint block the avatar like a building; the Walkable paint carves
   // the pass-through cells and the result saves to walk_mask (no door required).
   const [collides, setCollides] = useState(false)
-  // Erased cells for the current atlas selection (#43) — "c,r" offsets within
+  // Erased cells for the current tileset selection (#43) — "c,r" offsets within
   // the selection box; cleared to transparent in the saved crop so neighbour
   // sprites caught in the bounding box don't ship.
   const [erase, setErase] = useState<ReadonlySet<string>>(new Set())
@@ -285,11 +285,11 @@ export default function TileMapper() {
   const fgMaskRef = useRef<HTMLCanvasElement | null>(null)
   const fgViewRef = useRef<HTMLCanvasElement>(null)
   const fgDrawingRef = useRef(false)
-  const [status, setStatus] = useState('Upload an atlas PNG to begin.')
+  const [status, setStatus] = useState('Upload a tileset PNG to begin.')
   const [saved, setSaved] = useState<readonly TileObjectSummary[]>([]) // roster for the saved-objects list
   // When editing a saved object (#29/#32), its cropped art loads here and drives
-  // the preview instead of an atlas selection — so the admin can add/adjust the
-  // door + walkable path without re-uploading and re-selecting the atlas.
+  // the preview instead of a tileset selection — so the admin can add/adjust the
+  // door + walkable path without re-uploading and re-selecting the tileset.
   const [editImg, setEditImg] = useState<HTMLImageElement | null>(null)
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -355,7 +355,7 @@ export default function TileMapper() {
         setPaintMode('walk')
         setLoadedFg(o.fg_mask ?? null) // restore the foreground mask into the editor
         fgMaskRef.current = null // force a rebuild against the loaded art
-        setSel(null) // leave atlas-selection mode; the loaded art drives the preview
+        setSel(null) // leave tileset-selection mode; the loaded art drives the preview
         const img = new Image()
         img.onload = () => {
           setEditImg(img)
@@ -367,8 +367,8 @@ export default function TileMapper() {
       .catch((err: unknown) => setStatus(`Load failed: ${err instanceof Error ? err.message : String(err)}`))
   }, [])
 
-  const cols = atlas ? Math.floor(atlas.width / cell) : 0
-  const rows = atlas ? Math.floor(atlas.height / cell) : 0
+  const cols = tileset ? Math.floor(tileset.width / cell) : 0
+  const rows = tileset ? Math.floor(tileset.height / cell) : 0
 
   // The building footprint as a whole-tile grid for the door picker.
   const isBuilding = kind === 'building'
@@ -397,13 +397,13 @@ export default function TileMapper() {
     reader.onload = () => {
       const img = new Image()
       img.onload = () => {
-        setAtlas({ img, src: reader.result as string, width: img.naturalWidth, height: img.naturalHeight })
+        setTileset({ img, src: reader.result as string, width: img.naturalWidth, height: img.naturalHeight })
         setSel(null)
         setErase(new Set())
-        setEditImg(null) // a fresh atlas leaves saved-object edit mode
+        setEditImg(null) // a fresh tileset leaves saved-object edit mode
         setLoadedFg(null)
-        fgMaskRef.current = null // a fresh atlas starts with no foreground mask
-        setStatus(`Loaded atlas (${img.naturalWidth}×${img.naturalHeight}). Drag to select an object.`)
+        fgMaskRef.current = null // a fresh tileset starts with no foreground mask
+        setStatus(`Loaded tileset (${img.naturalWidth}×${img.naturalHeight}). Drag to select an object.`)
       }
       img.onerror = () => setStatus('Could not read that image.')
       img.src = reader.result as string
@@ -411,16 +411,16 @@ export default function TileMapper() {
     reader.readAsDataURL(file)
   }, [])
 
-  // ---- draw the atlas + grid + selection ----------------------------
+  // ---- draw the tileset + grid + selection ----------------------------
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas || !atlas) return
-    canvas.width = atlas.width * zoom
-    canvas.height = atlas.height * zoom
+    if (!canvas || !tileset) return
+    canvas.width = tileset.width * zoom
+    canvas.height = tileset.height * zoom
     const ctx = canvas.getContext('2d')!
     ctx.imageSmoothingEnabled = false
     ctx.clearRect(0, 0, canvas.width, canvas.height)
-    ctx.drawImage(atlas.img, 0, 0, canvas.width, canvas.height)
+    ctx.drawImage(tileset.img, 0, 0, canvas.width, canvas.height)
 
     // Grid
     ctx.strokeStyle = 'rgba(0,0,0,0.25)'
@@ -449,13 +449,13 @@ export default function TileMapper() {
       ctx.fillRect(x, y, selBox.w * step, selBox.h * step)
       ctx.strokeRect(x + 1, y + 1, selBox.w * step - 2, selBox.h * step - 2)
     }
-  }, [atlas, cell, zoom, cols, rows, selBox])
+  }, [tileset, cell, zoom, cols, rows, selBox])
 
   // ---- live preview of the cropped object at map scale --------------
   const previewRef = useRef<HTMLCanvasElement>(null)
   useEffect(() => {
     const canvas = previewRef.current
-    if (!canvas || (!editImg && !(atlas && selBox))) return
+    if (!canvas || (!editImg && !(tileset && selBox))) return
     const w = Math.max(1, Math.round(fpW * MAP_TILE))
     const h = Math.max(1, Math.round(fpH * MAP_TILE))
     canvas.width = w
@@ -466,15 +466,15 @@ export default function TileMapper() {
     if (editImg) {
       // Editing a saved object — its art is already cropped, draw it whole.
       ctx.drawImage(editImg, 0, 0, w, h)
-    } else if (atlas && selBox) {
+    } else if (tileset && selBox) {
       ctx.drawImage(
-        atlas.img,
+        tileset.img,
         selBox.c * cell, selBox.r * cell, selBox.w * cell, selBox.h * cell,
         0, 0, w, h,
       )
     }
 
-    // Erased cells (#43) overlay on the atlas-selection grid — red so the admin
+    // Erased cells (#43) overlay on the tileset-selection grid — red so the admin
     // sees what won't ship. Independent of the footprint/door grid below.
     if (selBox && erase.size) {
       const ew = w / selBox.w
@@ -526,13 +526,13 @@ export default function TileMapper() {
       else { ctx.moveTo(x + cw, y); ctx.lineTo(x + cw, y + ch) }
       ctx.stroke()
     }
-  }, [atlas, cell, selBox, editImg, fpW, fpH, collidable, doorCols, doorRows, door, walk, overhangCells, ladderCells, edgeCells, erase])
+  }, [tileset, cell, selBox, editImg, fpW, fpH, collidable, doorCols, doorRows, door, walk, overhangCells, ladderCells, edgeCells, erase])
 
   // Click the preview to either mark the entrance (door mode) or toggle a
   // walkable cell (walk mode) — issue #29/#32.
   function onPreviewClick(e: React.MouseEvent<HTMLCanvasElement>) {
     const rect = previewRef.current!.getBoundingClientRect()
-    // Erase toggles a cell on the atlas-selection grid (#43) — works for any
+    // Erase toggles a cell on the tileset-selection grid (#43) — works for any
     // kind, but only for a fresh selection (edit mode's art is already cropped).
     if (paintMode === 'erase' && selBox) {
       const cell = doorCellFromClick(e.clientX - rect.left, e.clientY - rect.top, rect.width, rect.height, selBox.w, selBox.h)
@@ -601,7 +601,7 @@ export default function TileMapper() {
     }
   }
   function onDown(e: React.MouseEvent<HTMLCanvasElement>) {
-    if (!atlas) return
+    if (!tileset) return
     const { c, r } = cellAt(e)
     dragRef.current = { c, r }
     setSel({ c0: c, r0: r, c1: c, r1: r })
@@ -617,7 +617,7 @@ export default function TileMapper() {
       return
     }
     dragRef.current = null
-    setEditImg(null) // a new atlas selection leaves saved-object edit mode
+    setEditImg(null) // a new tileset selection leaves saved-object edit mode
     setErase(new Set()) // erased cells are per-selection — a new box starts clean
     setLoadedFg(null)
     fgMaskRef.current = null // a new selection starts with a clean foreground mask
@@ -629,8 +629,8 @@ export default function TileMapper() {
   }
 
   async function onSave() {
-    if (!editImg && (!atlas || !selBox)) {
-      setStatus('Select a region on the atlas first.')
+    if (!editImg && (!tileset || !selBox)) {
+      setStatus('Select a region on the tileset first.')
       return
     }
     if (!name.trim()) {
@@ -658,7 +658,7 @@ export default function TileMapper() {
         return
       }
     }
-    // In edit mode the art is already a standalone PNG; otherwise crop the atlas
+    // In edit mode the art is already a standalone PNG; otherwise crop the tileset
     // selection to one at native pixel size.
     let image: string
     if (editImg) {
@@ -667,7 +667,7 @@ export default function TileMapper() {
       const off = document.createElement('canvas')
       off.width = selBox!.w * cell
       off.height = selBox!.h * cell
-      cropSelection(off.getContext('2d')!, atlas!.img, selBox!, cell, erase)
+      cropSelection(off.getContext('2d')!, tileset!.img, selBox!, cell, erase)
       image = off.toDataURL('image/png')
     }
 
@@ -712,14 +712,14 @@ export default function TileMapper() {
       c.getContext('2d')!.drawImage(editImg, 0, 0)
       return c
     }
-    if (atlas && selBox) {
+    if (tileset && selBox) {
       c.width = selBox.w * cell
       c.height = selBox.h * cell
-      cropSelection(c.getContext('2d')!, atlas.img, selBox, cell, erase)
+      cropSelection(c.getContext('2d')!, tileset.img, selBox, cell, erase)
       return c
     }
     return null
-  }, [editImg, atlas, selBox, cell, erase])
+  }, [editImg, tileset, selBox, cell, erase])
 
   // Build/refresh the source + mask canvases when foreground mode opens or the
   // art changes; restore a loaded mask onto the (matching-size) mask canvas.
@@ -874,7 +874,7 @@ export default function TileMapper() {
       <header className="bar">
         <h1>Tile-Object Mapper</h1>
         <label className="upload">
-          Atlas PNG
+          Tileset PNG
           <input type="file" accept="image/png" onChange={onUpload} />
         </label>
         <label>
@@ -900,7 +900,7 @@ export default function TileMapper() {
       <div className="cols">
         <div className="left">
           <div className="canvas-wrap">
-            {atlas ? (
+            {tileset ? (
               <canvas
                 ref={canvasRef}
                 onMouseDown={onDown}
@@ -909,7 +909,7 @@ export default function TileMapper() {
                 onMouseLeave={onUp}
               />
             ) : (
-              <div className="empty">No atlas loaded.</div>
+              <div className="empty">No tileset loaded.</div>
             )}
           </div>
         </div>
@@ -951,7 +951,7 @@ export default function TileMapper() {
 
           <h3>Preview (map scale)</h3>
           <div className="preview-box">
-            {selBox || editImg ? <canvas ref={previewRef} onClick={onPreviewClick} /> : <p className="hint">Drag a rectangle on the atlas, or Edit a saved object.</p>}
+            {selBox || editImg ? <canvas ref={previewRef} onClick={onPreviewClick} /> : <p className="hint">Drag a rectangle on the tileset, or Edit a saved object.</p>}
           </div>
           {(selBox || (collidable && editImg)) && (
             <>
