@@ -1,15 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import {
-  authorsWalkMask,
-  buildEdgeMask,
-  buildWalkMask,
-  edgeSetFromMask,
-  ladderCellsFromMask,
-  overhangCellsFromMask,
-  requiresDoorValidation,
-  walkCellsFromMask,
-} from '../src/tileMapper/TileMapper.tsx'
+import { authorsWalkMask, buildEdgeMask, buildWalkMask, edgeSetFromMask, ladderCellsFromMask, overhangCellsFromMask, requiresDoorValidation, walkCellsFromMask } from '../src/tileMapper/masks.ts'
 import { validateWalkMask } from '../src/kernel/walkMask.ts'
 
 // #338 — "Collides" authoring on props. A prop with Collides on carries a

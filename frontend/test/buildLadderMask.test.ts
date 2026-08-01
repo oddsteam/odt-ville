@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildWalkMask, ladderCellsFromMask } from '../src/tileMapper/TileMapper.tsx'
+import { buildWalkMask, ladderCellsFromMask } from '../src/tileMapper/masks.ts'
 
 // Ladder cells (#54) paint as 'L' in the walk mask — walkable like '.', but the
 // avatar climbs while on them. Overhang 'o' still wins; a ladder beats a plain

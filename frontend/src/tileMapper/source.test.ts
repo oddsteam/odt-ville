@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { effectiveCell } from './TileMapper.tsx'
+import { effectiveCell } from './selection.ts'
 import { TILESETS } from '../catalog/groundTiles/service.ts'
 
 // In tileset mode the registry is authoritative (#351) — the Cell input is

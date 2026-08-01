@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { viewToSourcePixel } from '../src/tileMapper/TileMapper.tsx'
+import { viewToSourcePixel } from '../src/tileMapper/foreground.ts'
 
 // Maps a mouse position over the foreground view canvas to a source-image pixel.
 // getBoundingClientRect() is the *border* box, so the mapping must shift past the

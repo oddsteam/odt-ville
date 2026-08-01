@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { floodSelect } from '../src/tileMapper/TileMapper.tsx'
+import { floodSelect } from '../src/tileMapper/foreground.ts'
 
 // 3×3 image: left column red, the rest green. Indices are y*width+x.
 //   R G G

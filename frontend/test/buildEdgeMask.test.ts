@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildEdgeMask, edgeSetFromMask, edgeSideFromClick } from '../src/tileMapper/TileMapper.tsx'
+import { buildEdgeMask, edgeSetFromMask } from '../src/tileMapper/masks.ts'
+import { edgeSideFromClick } from '../src/tileMapper/selection.ts'
 
 // The mapper paints impassable cell borders as "c,r,side" keys (#53); this turns
 // that set into the row-major hex edge mask the town stamps. Bits N=1 E=2 S=4 W=8.
