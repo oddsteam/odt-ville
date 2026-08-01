@@ -194,10 +194,9 @@ Repo-committed, not uploaded (ADR-0007's asset contract): the PNG lives under
 across environments (a name survives the content-migration reload; a DB id
 doesn't). `/admin/ground` already works this way; `/admin/objects` uploading its
 own copy is the anomaly.
-_Avoid_: "atlas" (survives only in `TileMapper.tsx`'s `type Atlas` / "Atlas PNG"
-label — it loses to `frontend/public/maps/tilesets/`, the `.tsx` files, ADR-0007
-and Tiled's own vocabulary; renaming it is tracked work), "spritesheet"
-(reserved for character rigs).
+_Avoid_: "atlas" (it loses to `frontend/public/maps/tilesets/`, the `.tsx` files,
+ADR-0007 and Tiled's own vocabulary), "spritesheet" (reserved for character
+rigs).
 
 **Object art**:
 The finished, flattened PNG of *one* object — what the game actually draws
