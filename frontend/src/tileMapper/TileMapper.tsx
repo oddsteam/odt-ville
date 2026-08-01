@@ -5,6 +5,7 @@ import type { TileObject, TileObjectSummary } from '../catalog/tileObjects/schem
 import { runEdge } from '../lib/runEdge.ts'
 import { validateWalkMask, EDGE_N, EDGE_E, EDGE_S, EDGE_W } from '../kernel/walkMask.ts'
 import { TILESETS, tilesetUrl } from '../catalog/groundTiles/service.ts'
+import { cellAtPoint, useScrollView, visibleSlice } from '../lib/tilesetWindow.ts'
 import '../lib/mapperChrome.css'
 
 type Tileset = { img: HTMLImageElement; width: number; height: number }
@@ -309,6 +310,10 @@ export default function TileMapper() {
   const cell = effectiveCell(source, tilesetName, manualCell)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const dragRef = useRef<DragAnchor | null>(null) // { c, r } drag anchor while the mouse is down
+  // The scrolling viewport around the canvas (#352) — the canvas is sized to
+  // this, not to the sheet, and only the visible slice is drawn.
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const view = useScrollView(wrapRef)
 
   // Saved-objects roster — which tile-objects exist and which is the active one
   // of each kind. Refreshed on mount and after every save/activate.
@@ -414,6 +419,7 @@ export default function TileMapper() {
     setEditImg(null)
     setLoadedFg(null)
     fgMaskRef.current = null // a fresh tileset starts with no foreground mask
+    wrapRef.current?.scrollTo(0, 0) // a new sheet starts at the top (#352)
     setStatus(`Loaded tileset (${img.naturalWidth}×${img.naturalHeight}). Drag to select an object.`)
   }, [])
 
@@ -443,15 +449,21 @@ export default function TileMapper() {
   }, [useSheet])
 
   // ---- draw the tileset + grid + selection ----------------------------
+  // Windowed (#352): the canvas covers the viewport and everything below is
+  // drawn in full-sheet coordinates translated by the scroll offset, so a
+  // 1024×8288 sheet at 3× costs one screenful of canvas instead of ~76 MP.
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas || !tileset) return
-    canvas.width = tileset.width * zoom
-    canvas.height = tileset.height * zoom
+    if (!canvas || !tileset || view.w === 0 || view.h === 0) return
+    canvas.width = view.w
+    canvas.height = view.h
     const ctx = canvas.getContext('2d')!
     ctx.imageSmoothingEnabled = false
     ctx.clearRect(0, 0, canvas.width, canvas.height)
-    ctx.drawImage(tileset.img, 0, 0, canvas.width, canvas.height)
+    ctx.translate(-view.x, -view.y)
+    const { sx, sy, sw, sh } = visibleSlice(view, zoom, tileset.width, tileset.height)
+    if (sw > 0 && sh > 0)
+      ctx.drawImage(tileset.img, sx, sy, sw, sh, sx * zoom, sy * zoom, sw * zoom, sh * zoom)
 
     // Grid
     ctx.strokeStyle = 'rgba(0,0,0,0.25)'
@@ -480,7 +492,7 @@ export default function TileMapper() {
       ctx.fillRect(x, y, selBox.w * step, selBox.h * step)
       ctx.strokeRect(x + 1, y + 1, selBox.w * step - 2, selBox.h * step - 2)
     }
-  }, [tileset, cell, zoom, cols, rows, selBox])
+  }, [tileset, cell, zoom, cols, rows, selBox, view])
 
   // ---- live preview of the cropped object at map scale --------------
   const previewRef = useRef<HTMLCanvasElement>(null)
@@ -623,13 +635,8 @@ export default function TileMapper() {
   // ---- drag-select on the canvas ------------------------------------
   function cellAt(e: React.MouseEvent<HTMLCanvasElement>) {
     const rect = canvasRef.current!.getBoundingClientRect()
-    const step = cell * zoom
-    const c = Math.floor((e.clientX - rect.left) / step)
-    const r = Math.floor((e.clientY - rect.top) / step)
-    return {
-      c: Math.max(0, Math.min(cols - 1, c)),
-      r: Math.max(0, Math.min(rows - 1, r)),
-    }
+    // The canvas only covers the viewport, so add the scroll offset back (#352).
+    return cellAtPoint(e.clientX - rect.left, e.clientY - rect.top, view, cell * zoom, cols, rows)
   }
   function onDown(e: React.MouseEvent<HTMLCanvasElement>) {
     if (!tileset) return
@@ -950,15 +957,22 @@ export default function TileMapper() {
 
       <div className="cols">
         <div className="left">
-          <div className="canvas-wrap">
+          <div className="canvas-wrap" ref={wrapRef}>
             {tileset ? (
-              <canvas
-                ref={canvasRef}
-                onMouseDown={onDown}
-                onMouseMove={onMove}
-                onMouseUp={onUp}
-                onMouseLeave={onUp}
-              />
+              // The spacer carries the full sheet extent so the wrapper scrolls
+              // it all; the canvas sticks to the viewport and redraws (#352).
+              <div
+                className="canvas-spacer"
+                style={{ width: tileset.width * zoom, height: tileset.height * zoom }}
+              >
+                <canvas
+                  ref={canvasRef}
+                  onMouseDown={onDown}
+                  onMouseMove={onMove}
+                  onMouseUp={onUp}
+                  onMouseLeave={onUp}
+                />
+              </div>
             ) : (
               <div className="empty">No tileset loaded.</div>
             )}

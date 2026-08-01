@@ -18,7 +18,8 @@ body { margin: 0; font-family: system-ui, sans-serif; background: #1b1b22; color
 .status { padding: 8px 16px; background: #2a2a36; font-size: 13px; border-bottom: 1px solid #34343f; }
 
 .cols { display: flex; flex: 1; min-height: 0; }
-.left { flex: 1; overflow: auto; padding: 16px; }
+/* The canvas wrapper owns the scrolling now (#352), so the column just sizes it. */
+.left { flex: 1; display: flex; overflow: hidden; min-width: 0; padding: 16px; }
 .right {
   width: 300px; flex-shrink: 0; padding: 16px; background: #20202a;
   border-left: 1px solid #34343f; display: flex; flex-direction: column; gap: 12px;
@@ -34,8 +35,11 @@ body { margin: 0; font-family: system-ui, sans-serif; background: #1b1b22; color
 .right label.collides-toggle { flex-direction: row; align-items: flex-start; gap: 8px; }
 .collides-toggle input { flex-shrink: 0; margin-top: 1px; }
 
-.canvas-wrap { display: inline-block; background: #101015; border: 1px solid #34343f; }
-.canvas-wrap canvas { display: block; cursor: crosshair; image-rendering: pixelated; }
+/* Windowed tileset view (#352): the wrapper is the scrollport, the spacer holds
+   the full sheet extent, and the canvas — sized to the viewport — sticks to the
+   wrapper's top-left and redraws the visible slice on scroll. */
+.canvas-wrap { flex: 1; min-width: 0; min-height: 0; overflow: auto; background: #101015; border: 1px solid #34343f; }
+.canvas-wrap canvas { position: sticky; top: 0; left: 0; display: block; cursor: crosshair; image-rendering: pixelated; }
 .empty { padding: 40px; color: #6a6a7a; }
 
 .preview-box {
