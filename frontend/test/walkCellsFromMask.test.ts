@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildWalkMask, walkCellsFromMask } from '../src/tileMapper/TileMapper.tsx'
+import { buildWalkMask, walkCellsFromMask } from '../src/tileMapper/masks.ts'
 
 // walkCellsFromMask is the inverse of buildWalkMask: a stored row-major walk
 // mask ('.' walkable, '#' solid) loads back into the editor's set of painted

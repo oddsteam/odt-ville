@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildWalkMask, overhangCellsFromMask } from '../src/tileMapper/TileMapper.tsx'
+import { buildWalkMask, overhangCellsFromMask } from '../src/tileMapper/masks.ts'
 
 // The mapper paints walkable cells onto the building footprint grid; this turns
 // that painted set into the row-major mask the town stamps (#32): '.' walkable,

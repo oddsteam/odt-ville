@@ -20,6 +20,22 @@ body { margin: 0; font-family: system-ui, sans-serif; background: #1b1b22; color
 .cols { display: flex; flex: 1; min-height: 0; }
 /* The canvas wrapper owns the scrolling now (#352), so the column just sizes it. */
 .left { flex: 1; display: flex; overflow: hidden; min-width: 0; padding: 16px; }
+/* Composition canvas (#353) — the middle column, between the tileset and the
+   object pane. Fixed board, scrolls inside its own wrapper. */
+.mid {
+  width: 380px; flex-shrink: 0; padding: 16px; display: flex; flex-direction: column; gap: 8px;
+  border-left: 1px solid #34343f; min-height: 0;
+}
+.comp-tools { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #9a9ab0; }
+.comp-tools button {
+  background: #2a2a34; color: #e8e8ee; border: 1px solid #3a3a47;
+  border-radius: 4px; padding: 3px 10px; font-size: 12px; cursor: pointer;
+}
+.comp-tools button.is-on { background: #2e7dff; border-color: #2e7dff; color: #fff; }
+.comp-tools button:disabled { color: #6a6a7a; cursor: not-allowed; }
+.comp-wrap { flex: 1; min-height: 0; overflow: auto; background: #101015; border: 1px solid #34343f; }
+.comp-canvas { display: block; cursor: crosshair; image-rendering: pixelated; }
+
 .right {
   width: 300px; flex-shrink: 0; padding: 16px; background: #20202a;
   border-left: 1px solid #34343f; display: flex; flex-direction: column; gap: 12px;

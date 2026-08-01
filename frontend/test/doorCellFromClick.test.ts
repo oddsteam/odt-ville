@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { doorCellFromClick } from '../src/tileMapper/TileMapper.tsx'
+import { doorCellFromClick } from '../src/tileMapper/selection.ts'
 
 // The building door picker maps a click on the footprint preview (rectW×rectH
 // px showing cols×rows tiles) to a clamped cell offset the town uses as the
