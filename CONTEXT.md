@@ -177,6 +177,55 @@ solid. Authored in the admin tool and validated so the door is reachable before
 save (#32). Until #32 lands, a footprint is solid except its door, and an
 unreachable authored door snaps to bottom-centre at runtime (#30).
 
+### Object authoring (2026-08-01)
+
+The vocabulary of `/admin/objects` — how source art becomes a placeable object.
+
+**Tileset**:
+A source art-pack sheet: one PNG holding a uniform grid of many tiles
+(`5_Floor_Modular_Buildings_32x32.png` — 1024×8288, 8,288 tiles at 32px). The
+raw material, never rendered by the game as a whole. Shared: one tileset feeds
+many objects.
+
+Repo-committed, not uploaded (ADR-0007's asset contract): the PNG lives under
+`frontend/public/maps/tilesets/<category>/`, registered with its `cell` size in
+`catalog/groundTiles/tilesets.js`, and is fetched by **name** over HTTP — so an
+8 MB sheet caches across page loads and a composition's reference stays portable
+across environments (a name survives the content-migration reload; a DB id
+doesn't). `/admin/ground` already works this way; `/admin/objects` uploading its
+own copy is the anomaly.
+_Avoid_: "atlas" (survives only in `TileMapper.tsx`'s `type Atlas` / "Atlas PNG"
+label — it loses to `frontend/public/maps/tilesets/`, the `.tsx` files, ADR-0007
+and Tiled's own vocabulary; renaming it is tracked work), "spritesheet"
+(reserved for character rigs).
+
+**Object art**:
+The finished, flattened PNG of *one* object — what the game actually draws
+(`tile_objects.image`, registered as texture `obj.<id>`). Not a file: a base64
+data URL in a Postgres `text` column. Produced in the browser
+(`canvas.toDataURL()`) and posted up; never rendered server-side.
+_Avoid_: "image" alone (a tile object carries two PNGs — its art and its
+`fg_mask` foreground stencil).
+
+**Composition**:
+The instructions that produced a piece of object art: which tilesets, which tile
+index, at which footprint cell, on which layer. Points *at* tilesets; object art
+is its **output**, not something it references. Ordered layers exist because a
+prop tile (a hanging sign) can sit over a wall tile in the same cell, though the
+common case is one tile per cell.
+
+Editor-only — the game never reads a composition (see ADR on composed objects).
+The art is truth; the composition is a rebuild note that makes an object
+*remixable* (swap the wall tiles for the red variant) instead of rebuild-only. A
+dangling composition (tileset deleted, tiles shifted) costs remixability and
+nothing else: the art still renders.
+
+**Tile object**:
+Unchanged, and distinct from its art — the *record*: object art plus footprint,
+door anchor, walk mask, edge mask, foreground mask. Objects authored before
+compositions existed simply have none; a composition cannot be recovered from
+flattened art.
+
 ## Multi-map model (resolving — 2026-06-29)
 
 The roadmap's Phase 3+ multi-map work is being designed. This section is
