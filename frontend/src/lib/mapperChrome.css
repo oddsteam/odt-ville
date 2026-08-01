@@ -33,6 +33,10 @@ body { margin: 0; font-family: system-ui, sans-serif; background: #1b1b22; color
 }
 .comp-tools button.is-on { background: #2e7dff; border-color: #2e7dff; color: #fff; }
 .comp-tools button:disabled { color: #6a6a7a; cursor: not-allowed; }
+.comp-tools select {
+  background: #15151b; color: #e8e8ee; border: 1px solid #3a3a47;
+  border-radius: 4px; padding: 3px 6px; font-size: 12px;
+}
 .comp-wrap { flex: 1; min-height: 0; overflow: auto; background: #101015; border: 1px solid #34343f; }
 .comp-canvas { display: block; cursor: crosshair; image-rendering: pixelated; }
 

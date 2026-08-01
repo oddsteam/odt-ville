@@ -12,6 +12,8 @@ export const TILESETS = [
   { name: 'terrain/2_City_Terrains_32x32', cell: 32 },
   { name: 'buildings/5_Floor_Modular_Buildings_32x32', cell: 32 },
   { name: 'buildings/4_Generic_Buildings_32x32', cell: 32 },
+  { name: 'props/3_City_Props_32x32', cell: 32 }, // signs, awnings, street clutter
+  { name: 'props/17_Garden_32x32', cell: 32 },
   { name: 'interiors/Interiors_free_32x32', cell: 32 },
   { name: 'vehicles/10_Vehicles_32x32', cell: 32 },
 ]
