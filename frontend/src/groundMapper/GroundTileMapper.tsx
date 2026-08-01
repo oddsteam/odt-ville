@@ -8,6 +8,7 @@ import { TerrainsWrite } from '../catalog/terrains/write.ts'
 import { priorityOrder } from '../catalog/terrains/schema.ts'
 import { movedOrder } from './priorityMove.ts'
 import { runEdge } from '../lib/runEdge.ts'
+import { cellAtPoint, useScrollView, visibleSlice } from '../lib/tilesetWindow.ts'
 import '../lib/mapperChrome.css'
 import './styles.css'
 
@@ -85,6 +86,10 @@ export default function GroundTileMapper() {
   const [status, setStatus] = useState('Pick a tileset, click a cell, set its type, then save.')
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  // The scrolling viewport around the canvas (#352) — the canvas is sized to
+  // this, not to the sheet, and only the visible slice is drawn.
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const view = useScrollView(wrapRef)
   const meta = TILESETS.find((t) => t.name === tileset) || TILESETS[0]
   const cell = meta.cell
   const cols = tilesetImg ? Math.floor(tilesetImg.width / cell) : 0
@@ -132,23 +137,30 @@ export default function GroundTileMapper() {
       .then((img: HTMLImageElement) => {
         if (!alive) return
         setTilesetImg({ img, width: img.naturalWidth, height: img.naturalHeight })
+        wrapRef.current?.scrollTo(0, 0) // a new sheet starts at the top (#352)
         setStatus(`Loaded ${tileset} (${img.naturalWidth}×${img.naturalHeight}). Click a cell.`)
       })
       .catch((e: unknown) => { if (alive) setStatus((e as Error).message) })
     return () => { alive = false }
   }, [tileset])
 
-  // Draw the tileset + grid + tagged marks + selection.
+  // Draw the tileset + grid + tagged marks + selection. Windowed (#352): the
+  // canvas covers the viewport and everything below is drawn in full-sheet
+  // coordinates translated by the scroll offset, so a tall sheet costs one
+  // screenful of canvas instead of the whole zoomed sheet.
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas || !tilesetImg) return
+    if (!canvas || !tilesetImg || view.w === 0 || view.h === 0) return
     const step = cell * zoom
-    canvas.width = cols * step
-    canvas.height = rows * step
+    canvas.width = view.w
+    canvas.height = view.h
     const ctx = canvas.getContext('2d')!
     ctx.imageSmoothingEnabled = false
     ctx.clearRect(0, 0, canvas.width, canvas.height)
-    ctx.drawImage(tilesetImg.img, 0, 0, canvas.width, canvas.height)
+    ctx.translate(-view.x, -view.y)
+    const { sx, sy, sw, sh } = visibleSlice(view, zoom, cols * cell, rows * cell)
+    if (sw > 0 && sh > 0)
+      ctx.drawImage(tilesetImg.img, sx, sy, sw, sh, sx * zoom, sy * zoom, sw * zoom, sh * zoom)
 
     // Grid
     ctx.strokeStyle = 'rgba(0,0,0,0.25)'
@@ -178,15 +190,12 @@ export default function GroundTileMapper() {
       ctx.lineWidth = 2
       ctx.strokeRect(sel.c * step + 1, sel.r * step + 1, step - 2, step - 2)
     }
-  }, [tilesetImg, cell, zoom, cols, rows, sel, catalog, tileset])
+  }, [tilesetImg, cell, zoom, cols, rows, sel, catalog, tileset, view])
 
   function cellAt(e: React.MouseEvent<HTMLCanvasElement>) {
     const rect = canvasRef.current!.getBoundingClientRect()
-    const step = cell * zoom
-    return {
-      c: Math.max(0, Math.min(cols - 1, Math.floor((e.clientX - rect.left) / step))),
-      r: Math.max(0, Math.min(rows - 1, Math.floor((e.clientY - rect.top) / step))),
-    }
+    // The canvas only covers the viewport, so add the scroll offset back (#352).
+    return cellAtPoint(e.clientX - rect.left, e.clientY - rect.top, view, cell * zoom, cols, rows)
   }
 
   function onCanvasClick(e: React.MouseEvent<HTMLCanvasElement>) {
@@ -262,9 +271,13 @@ export default function GroundTileMapper() {
 
       <div className="cols">
         <div className="left">
-          <div className="canvas-wrap">
+          <div className="canvas-wrap" ref={wrapRef}>
             {tilesetImg ? (
-              <canvas ref={canvasRef} onClick={onCanvasClick} />
+              // The spacer carries the full sheet extent so the wrapper scrolls
+              // it all; the canvas sticks to the viewport and redraws (#352).
+              <div className="canvas-spacer" style={{ width: cols * cell * zoom, height: rows * cell * zoom }}>
+                <canvas ref={canvasRef} onClick={onCanvasClick} />
+              </div>
             ) : (
               <div className="empty">Loading tileset…</div>
             )}
