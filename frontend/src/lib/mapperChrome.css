@@ -37,6 +37,16 @@ body { margin: 0; font-family: system-ui, sans-serif; background: #1b1b22; color
   background: #15151b; color: #e8e8ee; border: 1px solid #3a3a47;
   border-radius: 4px; padding: 3px 6px; font-size: 12px;
 }
+/* Recent blocks (#356) — one wrapping row of pick thumbnails above the board.
+   Each thumb is a scaled background crop of its own source sheet. */
+.recent-strip { display: flex; flex-wrap: wrap; gap: 4px; }
+.recent-strip button {
+  display: flex; align-items: center; justify-content: center;
+  width: 42px; height: 42px; padding: 0; cursor: pointer;
+  background: #15151b; border: 1px solid #3a3a47; border-radius: 4px;
+}
+.recent-strip button.is-on { border-color: #2e7dff; box-shadow: 0 0 0 1px #2e7dff; }
+.recent-strip span { background-repeat: no-repeat; image-rendering: pixelated; }
 .comp-wrap { flex: 1; min-height: 0; overflow: auto; background: #101015; border: 1px solid #34343f; }
 .comp-canvas { display: block; cursor: crosshair; image-rendering: pixelated; }
 
