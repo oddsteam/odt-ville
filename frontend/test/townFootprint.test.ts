@@ -10,18 +10,22 @@ import {
 } from '../src/game/town.ts'
 
 // A plot's footprint is sourced from the active mapped building (#30), clamped
-// to a sane range so the grid never runs away: width 3..15, height 4..15.
-// Today's 3x4 is the minimum (nameplate + roof/body split need it); 15x15 the cap.
+// to a sane range so the grid never runs away: width 3..20, height 4..20.
+// Today's 3x4 is the minimum (nameplate + roof/body split need it); 20x20 the cap,
+// raised from 15x15 (#31) because art authored taller than 15 tiles — the
+// 448x608px classic-darkblue, 14x19 — was silently clamped below its own art.
 describe('clampFootprint', () => {
   it('passes an in-range footprint through, floored to whole tiles', () => {
     expect(clampFootprint(4, 5)).toEqual({ w: 4, h: 5 })
     expect(clampFootprint(4.9, 5.9)).toEqual({ w: 4, h: 5 })
     expect(clampFootprint(9, 9)).toEqual({ w: 9, h: 9 })
+    expect(clampFootprint(14, 19)).toEqual({ w: 14, h: 19 }) // classic-darkblue, was 14x15
   })
 
-  it('clamps each dimension to [3..15] x [4..15]', () => {
+  it('clamps each dimension to [3..20] x [4..20]', () => {
     expect(clampFootprint(2, 2)).toEqual({ w: 3, h: 4 })
-    expect(clampFootprint(20, 20)).toEqual({ w: 15, h: 15 })
+    expect(clampFootprint(20, 20)).toEqual({ w: 20, h: 20 }) // the cap itself passes
+    expect(clampFootprint(99, 99)).toEqual({ w: 20, h: 20 })
     expect(clampFootprint(15, 3)).toEqual({ w: 15, h: 4 })
   })
 
@@ -45,7 +49,7 @@ describe('defaultDoorFor', () => {
 describe('footprintFor', () => {
   it('reads and clamps the building footprint', () => {
     expect(footprintFor({ footprint_w: 4, footprint_h: 5 })).toEqual({ w: 4, h: 5 })
-    expect(footprintFor({ footprint_w: 20, footprint_h: 1 })).toEqual({ w: 15, h: 4 })
+    expect(footprintFor({ footprint_w: 99, footprint_h: 1 })).toEqual({ w: 20, h: 4 })
   })
 
   it('defaults to 3x4 when no building or fields are present', () => {
@@ -111,7 +115,8 @@ describe('buildTown footprint invariants', () => {
     { w: 4, h: 5 },
     { w: 6, h: 3 }, // clamps to 6x4
     { w: 6, h: 6 },
-    { w: 15, h: 15 }, // the cap
+    { w: 14, h: 19 }, // classic-darkblue's true size, unreachable under the old cap
+    { w: 20, h: 20 }, // the cap
   ]
 
   it('produces no one-tile-wide autotiled (grass/dirt) strips', () => {
