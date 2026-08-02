@@ -11,6 +11,14 @@ module Catalog
       summary(obj).merge(image: obj.image, fg_mask: obj.fg_mask)
     end
 
+    # `show` alone — the mapper reopening an object to remix it. Adds the
+    # editor-only composition (#355, ADR-0014) on top of the full object. Kept
+    # off `call` so the game's batched read (index?ids) and `active` stay lean:
+    # the game never reads the composition, only the flat `image`.
+    def detail(obj)
+      call(obj).merge(composition: obj.composition)
+    end
+
     def summary(obj)
       {
         id: obj.id,

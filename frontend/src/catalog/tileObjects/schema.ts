@@ -39,6 +39,37 @@ export const TileObject = Schema.Struct({
 })
 export type TileObject = Schema.Schema.Type<typeof TileObject>
 
+// The editor-only composition (#355, ADR-0014) — the rebuild note beside the
+// art: which tileset (`ts`, registry name), which flat tile index (`i`), which
+// composition cell (`c,r`), which layer. Read only by the tile-object mapper to
+// reopen and remix a composed object; the game never sees it. Mirrors the pure
+// shape in tileMapper/composition.ts.
+export const Composition = Schema.Struct({
+  v: Schema.Literal(1),
+  cell: Schema.Number,
+  cols: Schema.Number,
+  rows: Schema.Number,
+  layers: Schema.Array(
+    Schema.Struct({
+      tiles: Schema.Array(
+        Schema.Struct({ c: Schema.Number, r: Schema.Number, ts: Schema.String, i: Schema.Number }),
+      ),
+    }),
+  ),
+})
+export type Composition = Schema.Schema.Type<typeof Composition>
+
+// The object as returned by `show` alone — the full object plus its composition,
+// so the mapper can reopen it. `{}` (no composition: every cropped/uploaded
+// object, plus everything composed before #355) decodes to the empty struct and
+// the mapper treats it as flat art. Kept off the shared `TileObject` (the game's
+// batched/active reads) so the roster and play paths stay lean.
+export const TileObjectDetail = Schema.Struct({
+  ...TileObject.fields,
+  composition: Schema.optional(Schema.Union(Composition, Schema.Struct({}))),
+})
+export type TileObjectDetail = Schema.Schema.Type<typeof TileObjectDetail>
+
 // Body the mapper POSTs to save a tile object. Echoes the controller's permit
 // list (name / kind / image / footprint_w / footprint_h); the service adds
 // `active: true`.
@@ -58,5 +89,9 @@ export const NewTileObject = Schema.Struct({
   edge_mask: Schema.optional(Schema.Array(Schema.String)),
   // Foreground mask, only sent for 'building' objects (issue #36).
   fg_mask: Schema.optional(Schema.String),
+  // Editor-only composition (#355) — sent whenever the art was composed from
+  // tiles, so the object can be reopened and remixed. Absent for the upload
+  // path and for flat re-saves, which keeps the server's stored value.
+  composition: Schema.optional(Composition),
 })
 export type NewTileObject = Schema.Schema.Type<typeof NewTileObject>

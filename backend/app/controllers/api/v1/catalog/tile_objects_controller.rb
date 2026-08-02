@@ -25,7 +25,7 @@ module Api
         # door anchor or interior walk mask.
         def show
           obj = ::Catalog::TileObject.find(params[:id])
-          render json: ::Catalog::TileObjectSerializer.call(obj)
+          render json: ::Catalog::TileObjectSerializer.detail(obj)
         end
 
         # GET /api/v1/tile_objects/active?kind=tree — the live object of a kind
@@ -64,7 +64,12 @@ module Api
             edge_mask: params.key?(:edge_mask) ? Array(params[:edge_mask]).join("\n") : obj.edge_mask,
             # Foreground mask (#36) — a PNG data URL marking which house pixels
             # render over the avatar. Stored as-is; only authored for buildings.
-            fg_mask: params.key?(:fg_mask) ? params[:fg_mask] : obj.fg_mask
+            fg_mask: params.key?(:fg_mask) ? params[:fg_mask] : obj.fg_mask,
+            # Composition (#355, ADR-0014) — the editor-only rebuild note. An
+            # opaque jsonb document, so permit its nested structure wholesale;
+            # absent key keeps the stored composition, so re-saving a flat object
+            # (no composition sent) never clobbers one already recorded.
+            composition: params.key?(:composition) ? params.permit(composition: {})[:composition].to_h : obj.composition
           )
           obj.save!
           obj.activate! unless params[:active] == false

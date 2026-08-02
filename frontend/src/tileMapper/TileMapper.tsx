@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { TileObjectsService } from '../catalog/tileObjects/service.ts'
 import { TileObjectsWrite } from '../catalog/tileObjects/write.ts'
-import type { TileObject } from '../catalog/tileObjects/schema.ts'
+import type { TileObjectDetail } from '../catalog/tileObjects/schema.ts'
 import { runEdge } from '../lib/runEdge.ts'
 import { validateWalkMask } from '../kernel/walkMask.ts'
 import { TILESETS, tilesetUrl } from '../catalog/groundTiles/service.ts'
@@ -12,7 +12,10 @@ import {
 } from './masks.ts'
 import { maskHasInk } from './foreground.ts'
 import { doorCellFromClick, edgeSideFromClick, effectiveCell, type Source } from './selection.ts'
-import { bounds, flatten, type Placed } from './composition.ts'
+import {
+  bounds, compositionSheets, flatten, fromComposition, toComposition,
+  type Composition, type Placed,
+} from './composition.ts'
 import CompositionPane from './CompositionPane.tsx'
 import ForegroundEditor from './ForegroundEditor.tsx'
 import SavedObjects from './SavedObjects.tsx'
@@ -36,6 +39,17 @@ const MAX_FP = 15 // largest building footprint, in tiles (15×15 cap).
 // second PNG re-points cells stamped from the first. Key by file name if that
 // ever bites; registry tilesets (the normal path) key by their own name.
 const UPLOAD_SHEET = 'upload'
+
+// Load an image URL, resolving null if it 404s — so reopening a composition can
+// tell a removed tileset (fall back to flat art) from a present one (#355).
+function loadImage(src: string): Promise<HTMLImageElement | null> {
+  return new Promise((resolve) => {
+    const img = new Image()
+    img.onload = () => resolve(img)
+    img.onerror = () => resolve(null)
+    img.src = src
+  })
+}
 
 export default function TileMapper() {
   const [tileset, setTileset] = useState<Tileset | null>(null) // { img, width, height }
@@ -112,7 +126,7 @@ export default function TileMapper() {
   const onEdit = useCallback((id: number) => {
     setStatus('Loading…')
     runEdge(TileObjectsService.get(id))
-      .then((o: TileObject) => {
+      .then(async (o: TileObjectDetail) => {
         setName(o.name)
         setKind(o.kind)
         setFpW(o.footprint_w)
@@ -125,19 +139,52 @@ export default function TileMapper() {
         setOverhangCells(o.walk_mask ? overhangCellsFromMask(o.walk_mask) : new Set())
         setLadderCells(o.walk_mask ? ladderCellsFromMask(o.walk_mask) : new Set())
         setEdgeCells(o.edge_mask ? edgeSetFromMask(o.edge_mask) : new Set())
-        setLayers([new Map()]) // the loaded art replaces any composition in progress
         setActive(0)
         setPaintMode('walk')
         setLoadedFg(o.fg_mask ?? null) // restore the foreground mask into the editor
         fgMaskRef.current = null // force a rebuild against the loaded art
-        setSel(null) // leave tileset-selection mode; the loaded art drives the preview
-        const img = new Image()
-        img.onload = () => {
-          setEditImg(img)
-          setStatus(`Editing "${o.name}". Add/adjust the door + walkable path, then Save.`)
+        setSel(null) // leave tileset-selection mode; the art/composition drives the preview
+
+        // Draw the saved flat art into the preview — the fallback for any object
+        // with no resolvable composition (cropped, uploaded, or pre-#355).
+        const editFlat = (msg: string) => {
+          setLayers([new Map()]) // the loaded art replaces any composition in progress
+          setEditImg(null)
+          const img = new Image()
+          img.onload = () => { setEditImg(img); setStatus(msg) }
+          img.onerror = () => setStatus('Could not load the saved image.')
+          img.src = o.image
         }
-        img.onerror = () => setStatus('Could not load the saved image.')
-        img.src = o.image
+
+        // A composed object (#355) reopens with its tiles in place, on the right
+        // tilesets, ready to swap. `{}` (no composition) has no `v`. Resolving
+        // means every referenced tileset still loads and its columns are known.
+        const comp = o.composition && 'v' in o.composition ? (o.composition as Composition) : null
+        if (!comp) {
+          editFlat(`Editing "${o.name}". Add/adjust the door + walkable path, then Save.`)
+          return
+        }
+        const names = compositionSheets(comp)
+        const loaded = new Map<string, HTMLImageElement>()
+        for (const [n, img] of await Promise.all(
+          names.map((n) => loadImage(tilesetUrl(n)).then((img) => [n, img] as const)),
+        ))
+          if (img) loaded.set(n, img)
+        const rebuilt = fromComposition(comp, (s) =>
+          loaded.has(s) ? Math.floor(loaded.get(s)!.naturalWidth / comp.cell) : null,
+        )
+        if (!rebuilt) {
+          // A tileset was removed/renamed since the object was composed: the art
+          // still renders, so fall back to editing it flat rather than blocking.
+          editFlat(`Editing "${o.name}" as flat art — its composition can't be resolved (a tileset was removed or renamed).`)
+          return
+        }
+        setSheets((prev) => new Map([...prev, ...loaded]))
+        setLayers(rebuilt)
+        setEditImg(null) // the composition, not a stored crop, drives the preview
+        setSource('tileset')
+        setTilesetName(names.find((n) => loaded.has(n))!) // pick blocks off a source sheet
+        setStatus(`Reopened "${o.name}" — swap tiles, then Save (as a new name for a variant).`)
       })
       .catch((err: unknown) => setStatus(`Load failed: ${err instanceof Error ? err.message : String(err)}`))
   }, [])
@@ -462,6 +509,22 @@ export default function TileMapper() {
     // exactly as the old crop path did; in edit mode the art already is one.
     const image = composed ? composed.toDataURL('image/png') : editImg!.src
 
+    // Store the composition beside the art (#355) so the object can be reopened
+    // and remixed. Only when it was composed here (a flat re-save keeps the
+    // server's stored one) and every tile came from a loaded registry tileset —
+    // an upload-sourced composition could never be reopened, so we don't persist
+    // a guaranteed-dangling note (ADR-0014). `ts`'s columns come off the sheet.
+    const usedSheets = new Set<string>()
+    for (const layer of layers) for (const [, [, , sheet]] of layer) usedSheets.add(sheet)
+    const reopenable =
+      composed != null &&
+      compBox != null &&
+      usedSheets.size > 0 &&
+      [...usedSheets].every((s) => s !== UPLOAD_SHEET && sheets.has(s))
+    const composition = reopenable
+      ? toComposition(layers, cell, compBox!, (s) => Math.floor(sheets.get(s)!.naturalWidth / cell))
+      : undefined
+
     setStatus('Saving…')
     try {
       const obj = await runEdge(TileObjectsWrite.save({
@@ -483,6 +546,8 @@ export default function TileMapper() {
         // Foreground mask (#36) — the painted overlay's alpha as a PNG, only
         // when the admin actually painted some in-front pixels.
         fg_mask: isBuilding && maskHasInk(fgMaskRef.current) ? fgMaskRef.current!.toDataURL('image/png') : undefined,
+        // Composition (#355) — the editor-only rebuild note, when reopenable.
+        composition,
       }))
       setStatus(`Saved "${obj.name}" as the active ${obj.kind}. It'll show on the map on reload.`)
       setSavedTick((t) => t + 1)

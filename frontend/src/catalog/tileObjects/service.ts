@@ -8,7 +8,7 @@ import * as Schema from 'effect/Schema'
 
 import { DecodeError, Http } from '../../lib/http.ts'
 import type { HttpError } from '../../lib/http.ts'
-import { TileObject, TileObjectSummary } from './schema.ts'
+import { TileObject, TileObjectDetail, TileObjectSummary } from './schema.ts'
 
 const decodeWith =
   <A>(schema: Schema.Schema<A>) =>
@@ -17,6 +17,7 @@ const decodeWith =
     Effect.mapError(Schema.decodeUnknown(schema)(raw), (e) => new DecodeError({ path, reason: e instanceof Error ? e.message : String(e) }))
 
 const decode = decodeWith(TileObject)
+const decodeDetail = decodeWith(TileObjectDetail)
 const decodeMany = decodeWith(Schema.Array(TileObject))
 const decodeSummaries = decodeWith(Schema.Array(TileObjectSummary))
 
@@ -31,16 +32,17 @@ export const getActive = (
     return raw === null ? null : yield* decode(path)(raw)
   })
 
-// GET /tile_objects/:id -> the full object incl. image, for loading a saved
-// object back into the mapper to add/adjust its door anchor or walk mask.
+// GET /tile_objects/:id -> the full object incl. image and its editor-only
+// composition (#355), for loading a saved object back into the mapper to
+// add/adjust its door anchor or walk mask, or reopen its composed tiles to remix.
 export const get = (
   id: number,
-): Effect.Effect<TileObject, HttpError, Http> =>
+): Effect.Effect<TileObjectDetail, HttpError, Http> =>
   Effect.gen(function* () {
     const http = yield* Http
     const path = `/tile_objects/${id}`
     const raw = yield* http.get(path)
-    return yield* decode(path)(raw)
+    return yield* decodeDetail(path)(raw)
   })
 
 // GET /tile_objects?ids=1,2,3 -> the full objects (incl. image) for those ids,
