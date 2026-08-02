@@ -141,9 +141,20 @@ export default class TownScene extends Phaser.Scene {
     // game's design data.
     // An admin-mapped house (#29) overrides the hardcoded bottom-centre door
     // with its authored anchor; absent → default (doorAnchorFor returns undefined).
-    // It also drives each plot's footprint (#30, clamped 3..15 x 4..15) so a
+    // It also drives each plot's footprint (#30, clamped 3..20 x 4..20) so a
     // non-3x4 house renders undistorted with the grid re-spaced around it.
     const buildingObject = this.registry.get('buildingObject') || null
+
+    // Per-community buildings (#292), resolved BEFORE layout because each one's
+    // footprint SIZES its plot (#31) — the packer needs the sizes to place them.
+    // Same community ordering as townRenderer.render; padded to the plot count
+    // so a community-less town still gets its one plot from the active object.
+    const buildingsById = this.registry.get('hometownBuildings') || {}
+    const byOrder = [...communities].sort((a, b) => a.position_order - b.position_order)
+    const plotCount = Math.max(communities.length, 1)
+    const plotBuildings = Array.from({ length: plotCount }, (_, i) =>
+      buildingObjectFor(byOrder[i], buildingsById, buildingObject),
+    )
     // The converged producer (#171, ADR-0003/0004): one call generates the
     // layout AND bakes its ground through the shared engine, against a catalog
     // assembled from the mapped ground tiles (art) + the hometown's OWN terrain
@@ -159,10 +170,12 @@ export default class TownScene extends Phaser.Scene {
     // terrain names for the dev-layer inspector and the sign's above-ground depth.
     this._groundStack = catalog.stack
     this.town = buildTownMap(
-      Math.max(communities.length, 1),
+      plotCount,
       catalog,
       doorAnchorFor(buildingObject),
-      footprintFor(buildingObject),
+      // One footprint per plot, from that plot's own building — the packer lays
+      // mixed sizes out side by side (#31).
+      plotBuildings.map(footprintFor),
       // Authored interior walk mask (#32): which footprint cells the avatar may
       // stand on. Stamped onto every plot; absent → solid box (just the door).
       walkMaskFor(buildingObject),
@@ -174,16 +187,10 @@ export default class TownScene extends Phaser.Scene {
       this.registry.get('hometownPolicy') || null,
     )
 
-    // Per-community buildings (#292): each plot's door, walk mask and edge
-    // mask travel with the building the renderer draws there (assigned →
-    // active → bundled), so an assigned house's entrance and walkable cells
-    // match its art. Plot SIZE stays the active object's uniform footprint —
-    // mixed sizes are #31. Same community ordering as townRenderer.render.
-    const buildingsById = this.registry.get('hometownBuildings') || {}
-    const byOrder = [...communities].sort((a, b) => a.position_order - b.position_order)
-    this.town.plots = this.town.plots.map((plot, i) =>
-      plotWithBuilding(plot, buildingObjectFor(byOrder[i], buildingsById, buildingObject)),
-    )
+    // Each plot's door, walk mask and edge mask travel with the same building
+    // that sized it, so an assigned house's entrance and walkable cells match
+    // its art (#292).
+    this.town.plots = this.town.plots.map((plot, i) => plotWithBuilding(plot, plotBuildings[i]))
 
     // With Scale.RESIZE in PhaserGame, the canvas display size matches
     // .gb-screen at 1:1 device pixels (TILE=48 → 48 screen px, same as

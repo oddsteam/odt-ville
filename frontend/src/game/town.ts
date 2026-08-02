@@ -219,9 +219,8 @@ function plotWalk(
 // Re-stamp one plot's walk data from ITS resolved building (#292): the door,
 // walk mask and edge mask travel with the assigned art, under the same rules
 // as the shared stamp (plotWalk). Null — no assignment and no active object —
-// leaves the shared plot untouched. The footprint stays uniform; mixed sizes
-// are #31, so a differently-sized building's mask won't fit and falls back to
-// a solid box.
+// leaves the shared plot untouched. The plot is already sized to this same
+// building's footprint (#31), so its mask fits.
 export function plotWithBuilding(
   plot: Plot,
   building:
@@ -241,54 +240,75 @@ export function plotWithBuilding(
 }
 
 // Build the whole town for a given number of building plots. Returns a `town`
-// object: { cols, rows, map (string[]), plots, entrance }. Every plot shares the
-// single active building's footprint (#30); mixed footprints stay out of scope.
+// object: { cols, rows, map (string[]), plots, entrance }. `footprint` is either
+// one size every plot shares (#30) or a per-plot list — each community's own
+// assigned building (#292) — which this packs (#31).
 export function buildTown(
   plotCount: number,
   door?: DoorAnchor,
-  footprint?: Footprint,
+  footprint?: Footprint | Footprint[],
   walkMask?: string[],
   edgeMask?: string[],
   policy?: HometownPolicy | null,
 ): Town {
   const count = Math.max(plotCount, 1)
-  const { w: W, h: H } = clampFootprint(footprint?.w ?? MIN_W, footprint?.h ?? MIN_H)
+  const sizeAt = (i: number) => (Array.isArray(footprint) ? footprint[i] : footprint)
+  const sizes = Array.from({ length: count }, (_, i) =>
+    clampFootprint(sizeAt(i)?.w ?? MIN_W, sizeAt(i)?.h ?? MIN_H),
+  )
 
-  const bandH = H + STREET_H + GRASS_GAP // building rows + 1 street + 2 grass
-  const stride = W + COL_GAP // plot width + 1 grass column between plots
-  const numRows = Math.ceil(count / PER_ROW)
-  const colsUsed = Math.max(Math.min(count, PER_ROW), 3)
-  const cols = (colsUsed - 1) * stride + W + 5
+  // Pack left→right, wrapping every PER_ROW plots. Each band is as tall as its
+  // tallest plot and the map as wide as its widest band; a uniform list gives
+  // back exactly the old grid arithmetic. ponytail: count-based wrap, not a
+  // width budget — swap in a max row width when a town outgrows the screen.
+  const bands: Footprint[][] = []
+  for (let i = 0; i < count; i += PER_ROW) bands.push(sizes.slice(i, i + PER_ROW))
+  const bandW = (b: Footprint[]) => b.reduce((n, f) => n + f.w, 0) + COL_GAP * (b.length - 1)
+  const bandH = (b: Footprint[]) => Math.max(...b.map((f) => f.h)) + STREET_H + GRASS_GAP
+  const numRows = bands.length
+
+  // A one- or two-plot town still gets three plots' worth of width, so the
+  // entrance avenue and the field either side of it have room.
+  const widest = Math.max(...sizes.map((f) => f.w))
+  const cols = Math.max(...bands.map(bandW), 3 * widest + 2 * COL_GAP) + 5
   const rows =
-    1 + TOP_MARGIN + numRows * bandH + FIELD_GAP + FIELD_H + BOTTOM_MARGIN + 1
+    1 + TOP_MARGIN + bands.reduce((n, b) => n + bandH(b), 0) + FIELD_GAP + FIELD_H + BOTTOM_MARGIN + 1
 
-  // The shared walk data every plot starts from (the active object's mask,
-  // borders and door), under the plotWalk rules: stale masks fall back to a
-  // solid box, an unreachable door snaps to the bottom-centre default.
-  const { mask, edges, ddx, ddy } = plotWalk(W, H, door, walkMask, edgeMask)
+  // The first plots (by position_order) sit on the bottom-most band, so bands
+  // are laid out from the last one down. `base` is a band's street row — the
+  // row its buildings stand on.
+  const bandTop: number[] = []
+  for (let b = numRows - 1, y = 1 + TOP_MARGIN; b >= 0; b--) {
+    bandTop[b] = y
+    y += bandH(bands[b])
+  }
+  const bandBase = (b: number) => bandTop[b] + Math.max(...bands[b].map((f) => f.h))
 
-  // Each plot is W wide x H tall; door at the (clamped) authored offset. The
-  // first plots (by position_order) sit on the bottom-most row.
+  // Each plot is its own size, bottom-aligned in its band so its door still
+  // opens onto the street row directly below. The active object's door/masks
+  // are the shared starting point; a mask that doesn't fit this plot's size
+  // falls back to a solid box (plotWalk), and TownScene then re-stamps each
+  // plot from its own building (plotWithBuilding).
   const plots: Plot[] = []
   for (let i = 0; i < count; i++) {
-    const slot = i % PER_ROW
-    const r = Math.floor(i / PER_ROW)
-    const col = 2 + slot * stride
-    const row = 1 + TOP_MARGIN + (numRows - 1 - r) * bandH
-    plots.push({ col, row, w: W, h: H, doorCol: col + ddx, doorRow: row + ddy, mask, edges })
+    const b = Math.floor(i / PER_ROW)
+    const { w, h } = sizes[i]
+    const col = bands[b].slice(0, i % PER_ROW).reduce((n, f) => n + f.w + COL_GAP, 2)
+    const row = bandBase(b) - h
+    const { mask, edges, ddx, ddy } = plotWalk(w, h, door, walkMask, edgeMask)
+    plots.push({ col, row, w, h, doorCol: col + ddx, doorRow: row + ddy, mask, edges })
   }
 
   const streetPathRows = new Set<number>()
   const buildingRows = new Set<number>()
-  for (let r = 0; r < numRows; r++) {
-    const top = 1 + TOP_MARGIN + r * bandH
-    streetPathRows.add(top + H)
-    for (let k = 0; k < H; k++) buildingRows.add(top + k)
+  for (let b = 0; b < numRows; b++) {
+    streetPathRows.add(bandBase(b))
+    for (let y = bandTop[b]; y < bandBase(b); y++) buildingRows.add(y)
   }
-  const lastStreetPath = 1 + TOP_MARGIN + (numRows - 1) * bandH + H
+  const lastStreetPath = bandBase(0)
   const entranceCol = Math.floor(cols / 2)
 
-  const fieldTop = 1 + TOP_MARGIN + numRows * bandH + FIELD_GAP
+  const fieldTop = bandTop[0] + bandH(bands[0]) + FIELD_GAP
   const fieldBottom = fieldTop + FIELD_H - 1
   // Two grass cells separate the avenue from the dirt field. This is the
   // minimum margin that prevents an autotiled grass cell from having road and
