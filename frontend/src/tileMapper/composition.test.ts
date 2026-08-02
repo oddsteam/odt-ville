@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  bounds, compositionSheets, erase, flatten, fromComposition, overlaps, repeat, toComposition,
-  type Composition, type Placed,
+  bounds, compositionSheets, erase, flatten, fromComposition, overlaps, remember, repeat, toComposition,
+  type Block, type Composition, type Placed,
 } from './composition.ts'
 
 const WALLS = 'buildings/5_Floor_Modular_Buildings_32x32'
@@ -179,5 +179,33 @@ describe('overlaps', () => {
   it('is false on an empty cell', () => {
     const wall = repeat(new Map(), { c: 0, r: 0, w: 2, h: 2, sheet: WALLS }, at(0, 0), at(0, 0))
     expect(overlaps(wall, { c: 5, r: 5, w: 1, h: 1, sheet: WALLS }, at(9, 9), at(9, 9))).toBe(false)
+  })
+})
+
+describe('remember', () => {
+  it('puts the newest block first', () => {
+    const a = { c: 0, r: 0, w: 1, h: 1, sheet: WALLS }
+    const b = { c: 2, r: 0, w: 1, h: 1, sheet: WALLS }
+    expect(remember(remember([], a), b)).toEqual([b, a])
+  })
+
+  it('moves a re-picked block back to the front instead of duplicating it', () => {
+    const a = { c: 0, r: 0, w: 1, h: 1, sheet: WALLS }
+    const b = { c: 2, r: 0, w: 1, h: 1, sheet: WALLS }
+    expect(remember(remember(remember([], a), b), { ...a })).toEqual([a, b])
+  })
+
+  it('keeps the same rectangle from two sheets apart', () => {
+    const a = { c: 0, r: 0, w: 1, h: 1, sheet: WALLS }
+    const b = { c: 0, r: 0, w: 1, h: 1, sheet: PROPS }
+    expect(remember(remember([], a), b)).toHaveLength(2)
+  })
+
+  it('caps the strip, dropping the least recent', () => {
+    let recent: readonly Block[] = []
+    for (let c = 0; c < 20; c++) recent = remember(recent, { c, r: 0, w: 1, h: 1, sheet: WALLS })
+    expect(recent).toHaveLength(12)
+    expect(recent[0].c).toBe(19)
+    expect(recent[11].c).toBe(8)
   })
 })

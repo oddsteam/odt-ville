@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { erase as eraseCells, overlaps, repeat, type Block, type Bounds, type Cell, type Placed } from './composition.ts'
+import {
+  erase as eraseCells, overlaps, repeat, sameBlock,
+  type Block, type Bounds, type Cell, type Placed,
+} from './composition.ts'
 
 // The composition board (#353) — the middle column of the Tile-Object Mapper.
 // The rectangle picked on the tileset is the block; clicking here stamps it and
@@ -12,13 +15,31 @@ import { erase as eraseCells, overlaps, repeat, type Block, type Bounds, type Ce
 // ponytail: fixed board, no pan/resize; widen the constant if authors run out.
 const COMP_CELLS = 24
 
+// The recent-blocks strip (#356) — thumbnails of the last dozen picks, so the
+// tenth shop off one style block doesn't cost a tenth hunt through the sheet.
+// Drawn as a scaled background crop of the source sheet: no canvas, no effect.
+const THUMB = 34 // px, the strip's row height
+
+function thumbStyle(b: Block, img: HTMLImageElement | undefined, cell: number): React.CSSProperties {
+  if (!img) return { width: THUMB, height: THUMB } // sheet not loaded this session
+  const s = THUMB / (Math.max(b.w, b.h) * cell)
+  return {
+    width: b.w * cell * s,
+    height: b.h * cell * s,
+    backgroundImage: `url("${img.src}")`, // quoted: an uploaded sheet's src is a data URL
+    backgroundSize: `${img.naturalWidth * s}px ${img.naturalHeight * s}px`,
+    backgroundPosition: `-${b.c * cell * s}px -${b.r * cell * s}px`,
+  }
+}
+
 export default function CompositionPane({
-  sheet, cell, block, placed, layerCount, active, box, composed,
-  onChange, onClear, onAddLayer, onPickLayer, onCommit, onNeedBlock,
+  sheets, cell, block, recent, placed, layerCount, active, box, composed,
+  onChange, onClear, onAddLayer, onPickLayer, onCommit, onNeedBlock, onPickRecent,
 }: {
-  sheet: HTMLImageElement | null // the source tileset, for drawing the stamp ghost
+  sheets: ReadonlyMap<string, HTMLImageElement> // every sheet loaded this session
   cell: number
   block: Block | null // the picked tileset rectangle
+  recent: readonly Block[] // the strip, newest first
   placed: Placed // the active layer — what stamps and erases touch
   layerCount: number
   active: number
@@ -30,6 +51,7 @@ export default function CompositionPane({
   onPickLayer: (i: number) => void
   onCommit: (replaced: boolean) => void // a stamp/erase drag finished
   onNeedBlock: () => void // tried to stamp with nothing picked
+  onPickRecent: (block: Block) => void // a strip thumbnail became the active block
 }) {
   const [tool, setTool] = useState<'stamp' | 'erase'>('stamp')
   const [hover, setHover] = useState<Cell | null>(null) // drives the stamp ghost
@@ -70,17 +92,21 @@ export default function CompositionPane({
     const x = hover.c * step
     const y = hover.r * step
     ctx.globalAlpha = 0.55
-    if (tool === 'erase' || !sheet) {
+    // The ghost is drawn from the block's *own* sheet, not the sheet on screen —
+    // a block pinned off the strip may come from a tileset the author has since
+    // switched away from (#356).
+    const img = block && sheets.get(block.sheet)
+    if (tool === 'erase' || !img) {
       ctx.fillStyle = '#ffffff'
       ctx.fillRect(x, y, w * step, h * step)
     } else {
-      ctx.drawImage(sheet, block!.c * cell, block!.r * cell, w * cell, h * cell, x, y, w * step, h * step)
+      ctx.drawImage(img, block!.c * cell, block!.r * cell, w * cell, h * cell, x, y, w * step, h * step)
     }
     ctx.globalAlpha = 1
     ctx.strokeStyle = '#ffffff'
     ctx.lineWidth = 2
     ctx.strokeRect(x + 1, y + 1, w * step - 2, h * step - 2)
-  }, [composed, box, step, hover, tool, block, sheet, cell])
+  }, [composed, box, step, hover, tool, block, sheets, cell])
 
   // A click is a zero-length drag, so stamp and repeat-drag share one path: down
   // anchors, move re-runs the whole action against the pre-drag composition (so
@@ -95,7 +121,7 @@ export default function CompositionPane({
     return block ? repeat(base, block, anchor, to) : base
   }
   function onDown(e: React.MouseEvent<HTMLCanvasElement>) {
-    if (!sheet) return
+    if (!sheets.size) return
     if (tool === 'stamp' && !block) {
       onNeedBlock()
       return
@@ -154,6 +180,21 @@ export default function CompositionPane({
         {box && ` ${box.w}×${box.h} tiles placed.`}
         {layerCount > 1 && ` Stamping on layer ${active + 1} of ${layerCount}.`}
       </p>
+      {recent.length > 0 && (
+        <div className="recent-strip">
+          {recent.map((b) => (
+            <button
+              key={`${b.sheet}:${b.c},${b.r},${b.w},${b.h}`}
+              type="button"
+              className={block && sameBlock(b, block) ? 'is-on' : ''}
+              title={`${b.w}×${b.h} from ${b.sheet}`}
+              onClick={() => onPickRecent(b)}
+            >
+              <span style={thumbStyle(b, sheets.get(b.sheet), cell)} />
+            </button>
+          ))}
+        </div>
+      )}
       <div className="comp-wrap">
         <canvas
           ref={canvasRef}

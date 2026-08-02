@@ -37,6 +37,20 @@ export function repeat(placed: Placed, block: Block, from: Cell, to: Cell): Plac
   return next
 }
 
+// The recent-blocks strip (#356). Locating a block in an 8,288-tile sheet is the
+// expensive part of composing, so the last dozen picks stay pinned above the
+// board, newest first; re-picking one moves it back to the front rather than
+// duplicating it. In-memory for the session — saved, named regions are #356's
+// deliberate next step, not this.
+const RECENT = 12
+
+export const sameBlock = (a: Block, b: Block) =>
+  a.c === b.c && a.r === b.r && a.w === b.w && a.h === b.h && a.sheet === b.sheet
+
+export function remember(recent: readonly Block[], block: Block): readonly Block[] {
+  return [block, ...recent.filter((b) => !sameBlock(b, block))].slice(0, RECENT)
+}
+
 // Clear every cell in the dragged rectangle — the composition-side eraser.
 export function erase(placed: Placed, from: Cell, to: Cell): Placed {
   const next = new Map(placed)

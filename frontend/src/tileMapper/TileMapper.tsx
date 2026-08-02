@@ -13,8 +13,8 @@ import {
 import { maskHasInk } from './foreground.ts'
 import { doorCellFromClick, edgeSideFromClick, effectiveCell, type Source } from './selection.ts'
 import {
-  bounds, compositionSheets, flatten, fromComposition, toComposition,
-  type Composition, type Placed,
+  bounds, compositionSheets, flatten, fromComposition, remember, toComposition,
+  type Block, type Composition, type Placed,
 } from './composition.ts'
 import CompositionPane from './CompositionPane.tsx'
 import ForegroundEditor from './ForegroundEditor.tsx'
@@ -107,6 +107,12 @@ export default function TileMapper() {
   // The composition flattened at native resolution — what the preview, the
   // foreground editor and the save all draw. Rebuilt whenever a layer changes.
   const [composed, setComposed] = useState<HTMLCanvasElement | null>(null)
+  // The recent-blocks strip (#356) — the last dozen picks, pinned above the
+  // board so building ten shops off one style block costs one hunt, not ten.
+  // Session-only: no persistence, no CRUD (saved named regions are the next
+  // step, deliberately not taken yet). `pinned` is the strip's click.
+  const [recent, setRecent] = useState<readonly Block[]>([])
+  const [pinned, setPinned] = useState<Block | null>(null)
 
   const cell = effectiveCell(source, tilesetName, manualCell)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -215,6 +221,11 @@ export default function TileMapper() {
         sheet: sheetKey,
       }
     : null
+
+  // The active block is the tileset rectangle just dragged, unless a strip
+  // thumbnail was clicked to pin an earlier one (#356); starting a new drag
+  // hands it back to the selection.
+  const block = pinned ?? selBox
 
   // The composition's own geometry (#353): the picked tileset rectangle is the
   // block that stamps, and the bounding box of every layer is the composed
@@ -461,6 +472,7 @@ export default function TileMapper() {
     if (!tileset) return
     const { c, r } = cellAt(e)
     dragRef.current = { c, r }
+    setPinned(null) // a fresh drag takes the block back off the strip (#356)
     setSel({ c0: c, r0: r, c1: c, r1: r })
   }
   function onMove(e: React.MouseEvent<HTMLCanvasElement>) {
@@ -469,10 +481,14 @@ export default function TileMapper() {
     setSel({ c0: dragRef.current.c, r0: dragRef.current.r, c1: c, r1: r })
   }
   function onUp() {
+    if (!dragRef.current) return // a stray mouseup (leaving the canvas) isn't a pick
     dragRef.current = null
     // The tileset selection is only ever the block to stamp (#353) — the object's
-    // art comes from the composition, never straight from this rectangle.
-    if (selBox) setStatus(`Block ${selBox.w}×${selBox.h}. Click the composition to stamp it, or drag to repeat it.`)
+    // art comes from the composition, never straight from this rectangle. Every
+    // finished pick joins the recent strip so it can be re-picked (#356).
+    if (!selBox) return
+    setRecent((r) => remember(r, selBox))
+    setStatus(`Block ${selBox.w}×${selBox.h}. Click the composition to stamp it, or drag to repeat it.`)
   }
 
   async function onSave() {
@@ -642,9 +658,10 @@ export default function TileMapper() {
         </div>
 
         <CompositionPane
-          sheet={tileset?.img ?? null}
+          sheets={sheets}
           cell={cell}
-          block={selBox}
+          block={block}
+          recent={recent}
           placed={layers[active]}
           layerCount={layers.length}
           active={active}
@@ -656,6 +673,11 @@ export default function TileMapper() {
           onPickLayer={setActive}
           onCommit={onCompCommit}
           onNeedBlock={() => setStatus('Drag a rectangle on the tileset first — that block is what stamps.')}
+          onPickRecent={(b) => {
+            setPinned(b)
+            setSel(null) // the highlight belongs to the sheet the drag was on, not this block
+            setStatus(`Block ${b.w}×${b.h} from ${b.sheet}. Click the composition to stamp it.`)
+          }}
         />
 
         <div className="right">
