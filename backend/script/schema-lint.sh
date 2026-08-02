@@ -50,6 +50,7 @@ fk_allowlist=(
   "catalog_npcs|character_manifests"
   "content_items|boards"
   "houses|companies"
+  "houses|tile_objects"
   "maps_map_memberships|maps"
   "maps_map_memberships|users"
   "user_content_states|content_items"

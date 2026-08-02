@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import { bounds, erase, flatten, overlaps, repeat, type Placed } from './composition.ts'
+import {
+  bounds, compositionSheets, erase, flatten, fromComposition, overlaps, repeat, toComposition,
+  type Composition, type Placed,
+} from './composition.ts'
 
 const WALLS = 'buildings/5_Floor_Modular_Buildings_32x32'
 const PROPS = 'props/3_City_Props_32x32'
@@ -100,6 +103,70 @@ describe('flatten', () => {
     const wall = repeat(new Map(), { c: 1, r: 0, w: 1, h: 1, sheet: WALLS }, at(1, 0), at(1, 0))
     run(ctx, [stray, wall])
     expect(calls.map((a) => a[0])).toEqual([wallsImg])
+  })
+})
+
+describe('toComposition / fromComposition round-trip (#355)', () => {
+  // 32px cells; WALLS is 4 cols wide, PROPS is 8 cols wide, for i = row*cols+col.
+  const colsOf = (s: string) => (s === WALLS ? 4 : s === PROPS ? 8 : null)
+  const cols = (s: string) => colsOf(s)!
+
+  it('serializes each tile as {c,r,ts,i}, normalized to the bounding box origin', () => {
+    // A wall block placed at board (2,3): source cell (1,1) on a 4-col sheet -> i=5.
+    const wall = repeat(new Map(), { c: 1, r: 1, w: 1, h: 1, sheet: WALLS }, at(2, 3), at(2, 3))
+    const box = bounds([wall])!
+    const comp = toComposition([wall], 32, box, cols)
+    expect(comp).toEqual({
+      v: 1, cell: 32, cols: 1, rows: 1,
+      layers: [{ tiles: [{ c: 0, r: 0, ts: WALLS, i: 5 }] }],
+    })
+  })
+
+  it('round-trips a multi-sheet, multi-layer composition back to the same layers', () => {
+    const wall = repeat(new Map(), { c: 0, r: 0, w: 2, h: 1, sheet: WALLS }, at(1, 1), at(1, 1))
+    const sign = repeat(new Map(), { c: 3, r: 2, w: 1, h: 1, sheet: PROPS }, at(2, 1), at(2, 1))
+    const layers = [wall, sign]
+    const box = bounds(layers)!
+    const rebuilt = fromComposition(toComposition(layers, 32, box, cols), colsOf)!
+    // Coords are normalized to the box origin (1,1) -> (0,0); source cells survive.
+    expect(keys(rebuilt[0])).toEqual(['0,0', '1,0'])
+    expect(rebuilt[0].get('0,0')).toEqual([0, 0, WALLS])
+    expect(rebuilt[0].get('1,0')).toEqual([1, 0, WALLS])
+    expect([...rebuilt[1]]).toEqual([['1,0', [3, 2, PROPS]]])
+  })
+
+  it('keeps empty layers so layer numbering survives the round-trip', () => {
+    const wall = repeat(new Map(), { c: 0, r: 0, w: 1, h: 1, sheet: WALLS }, at(0, 0), at(0, 0))
+    const layers = [wall, new Map() as Placed]
+    const rebuilt = fromComposition(toComposition(layers, 32, bounds(layers)!, cols), colsOf)!
+    expect(rebuilt.length).toBe(2)
+    expect(rebuilt[1].size).toBe(0)
+  })
+
+  it('is unresolvable when a referenced tileset is gone — the caller falls back to flat art', () => {
+    const comp: Composition = {
+      v: 1, cell: 32, cols: 1, rows: 1,
+      layers: [{ tiles: [{ c: 0, r: 0, ts: 'gone/removed', i: 5 }] }],
+    }
+    expect(fromComposition(comp, colsOf)).toBeNull()
+  })
+
+  it('is unresolvable when it has no tiles at all — nothing to reopen', () => {
+    const comp: Composition = { v: 1, cell: 32, cols: 0, rows: 0, layers: [{ tiles: [] }] }
+    expect(fromComposition(comp, colsOf)).toBeNull()
+  })
+})
+
+describe('compositionSheets', () => {
+  it('lists each distinct source tileset the composition references', () => {
+    const comp: Composition = {
+      v: 1, cell: 32, cols: 2, rows: 1,
+      layers: [
+        { tiles: [{ c: 0, r: 0, ts: WALLS, i: 1 }, { c: 1, r: 0, ts: WALLS, i: 2 }] },
+        { tiles: [{ c: 0, r: 0, ts: PROPS, i: 3 }] },
+      ],
+    }
+    expect([...compositionSheets(comp)].sort()).toEqual([WALLS, PROPS].sort())
   })
 })
 

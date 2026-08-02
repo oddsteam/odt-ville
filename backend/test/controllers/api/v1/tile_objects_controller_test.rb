@@ -110,6 +110,65 @@ module Api
         assert_equal fg, json[:fg_mask]
       end
 
+      test "create persists the composition and show returns it, for remixing" do
+        comp = {
+          "v" => 1, "cell" => 32, "cols" => 2, "rows" => 1,
+          "layers" => [{ "tiles" => [
+            { "c" => 0, "r" => 0, "ts" => "buildings/5_Floor_Modular_Buildings_32x32", "i" => 1284 },
+            { "c" => 1, "r" => 0, "ts" => "props/3_City_Props_32x32", "i" => 88 },
+          ] }],
+        }
+        # as: :json so the opaque nested jsonb (numbers, arrays of hashes) survives
+        # strong params unmangled — same as the maps `baked` create path.
+        post "/api/v1/tile_objects",
+             params: { name: "Bakery", kind: "building", image: "data:img", footprint_w: 2, footprint_h: 1, composition: comp },
+             headers: auth(@user, roles: ["admin"]), as: :json
+
+        assert_response :success
+        obj = ::Catalog::TileObject.find_by!(name: "Bakery")
+        assert_equal comp, obj.composition, "the composition is stored beside the art"
+
+        get "/api/v1/tile_objects/#{obj.id}", headers: auth(@user)
+        assert_response :success
+        assert_equal JSON.parse(comp.to_json, symbolize_names: true), json[:composition],
+                     "show carries the composition so the mapper can reopen it"
+      end
+
+      test "an absent composition on re-save keeps the stored one, and defaults to {}" do
+        comp = { "v" => 1, "cell" => 32, "cols" => 1, "rows" => 1,
+                 "layers" => [{ "tiles" => [{ "c" => 0, "r" => 0, "ts" => "props/3_City_Props_32x32", "i" => 5 }] }] }
+        obj = ::Catalog::TileObject.create!(name: "Sign", kind: "prop", image: "data:img", composition: comp)
+
+        # A flat re-save (no composition key) must not clobber the recorded one.
+        post "/api/v1/tile_objects",
+             params: { name: "Sign", kind: "prop", image: "data:img2" },
+             headers: auth(@user, roles: ["admin"])
+        assert_response :success
+        assert_equal comp, obj.reload.composition, "absent key preserves the stored composition"
+
+        # A never-composed object defaults to {} — no composition.
+        plain = ::Catalog::TileObject.create!(name: "Oak", kind: "tree", image: "data:img")
+        assert_equal({}, plain.composition)
+      end
+
+      test "the composition stays off the roster and the game's batched/active reads" do
+        comp = { "v" => 1, "cell" => 32, "cols" => 1, "rows" => 1,
+                 "layers" => [{ "tiles" => [{ "c" => 0, "r" => 0, "ts" => "props/3_City_Props_32x32", "i" => 5 }] }] }
+        obj = ::Catalog::TileObject.create!(name: "Kiosk", kind: "building", image: "data:img", composition: comp, active: true)
+
+        get "/api/v1/tile_objects", headers: auth(@user)
+        assert_response :success
+        assert_not json.first.key?(:composition), "the roster stays light — no composition"
+
+        get "/api/v1/tile_objects", params: { ids: obj.id.to_s }, headers: auth(@user)
+        assert_response :success
+        assert_not json.first.key?(:composition), "the game's batched read carries only art, not the rebuild note"
+
+        get "/api/v1/tile_objects/active", params: { kind: "building" }, headers: auth(@user)
+        assert_response :success
+        assert_not json.key?(:composition), "the live object the game draws carries no composition"
+      end
+
       test "show returns the full object including the image blob, for editing" do
         obj = ::Catalog::TileObject.create!(name: "Cottage", kind: "building", image: "data:img", footprint_w: 3, footprint_h: 4, door_dx: 1, door_dy: 3, walk_mask: "###\n#.#\n#.#\n#.#", active: true)
 
