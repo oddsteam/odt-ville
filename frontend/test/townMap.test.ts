@@ -118,6 +118,17 @@ describe('buildTownMap', () => {
     expect({ cols: map.cols, rows: map.rows, map: map.map, plots: map.plots, entrance: map.entrance, entities: map.entities, zones: map.zones }).toEqual(town)
     expect(map.ground).toEqual(bakeTownGround(town, HOMETOWN_CATALOG))
   })
+
+  it('forwards a per-plot footprint list, baking the ground the packer sized (#31)', () => {
+    const sizes = [
+      { w: 6, h: 6 },
+      { w: 3, h: 4 },
+    ]
+    const map = buildTownMap(2, HOMETOWN_CATALOG, undefined, sizes)
+    expect(map.plots.map((p) => ({ w: p.w, h: p.h }))).toEqual(sizes)
+    expect(map.ground.cols).toBe(map.cols)
+    expect(map.ground.rows).toBe(map.rows)
+  })
 })
 
 // Locate the first cell (row-major) satisfying `pred`, failing loudly if none —

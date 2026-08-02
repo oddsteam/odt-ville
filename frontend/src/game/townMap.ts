@@ -52,7 +52,7 @@ export function buildTownMap(
   plotCount: number,
   catalog: TileCatalog,
   door?: DoorAnchor,
-  footprint?: Footprint,
+  footprint?: Footprint | Footprint[],
   walkMask?: string[],
   edgeMask?: string[],
   policy?: HometownPolicy | null,

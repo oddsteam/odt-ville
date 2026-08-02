@@ -223,7 +223,8 @@ function addBuildingSprite(scene: Scene, community: any, plot: any) {
   // Mapped house (#29/#292): one baked sprite filling the plot, replacing the
   // roof/body stack + per-community tint. Resolved per plot: the community's
   // assigned object → the active 'building' object → bundled art below. The
-  // door anchor / footprint stay the ACTIVE object's — mixed layouts are #31.
+  // plot is already sized to this same object's footprint (#31), so the art
+  // fills it undistorted.
   const mapped = buildingObjectFor(community, scene._buildingsById, scene._buildingObject)
   if (mapped?.image && scene.textures.exists(objectTextureKey(mapped.id))) {
     const house = scene.add
