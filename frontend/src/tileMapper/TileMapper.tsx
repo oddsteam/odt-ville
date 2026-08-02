@@ -34,7 +34,7 @@ type DragAnchor = { c: number; r: number }
 // API + TownScene's tall-prop overlay.
 
 const MAP_TILE = 48 // px per tile in the game — used to preview real map size.
-const MAX_FP = 15 // largest building footprint, in tiles (15×15 cap).
+const MAX_FP = 20 // largest building footprint, in tiles (20×20 cap; see town.ts MAX_W/MAX_H).
 // The sheet key an uploaded PNG's cells carry. ponytail: one slot — uploading a
 // second PNG re-points cells stamped from the first. Key by file name if that
 // ever bites; registry tilesets (the normal path) key by their own name.
