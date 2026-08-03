@@ -13,7 +13,7 @@ import {
 import { maskHasInk } from './foreground.ts'
 import { doorCellFromClick, edgeSideFromClick, effectiveCell, type Source } from './selection.ts'
 import {
-  bounds, compositionSheets, flatten, fromComposition, remember, toComposition,
+  bounds, compositionSheets, flatten, fromComposition, remember, sameBlock, toComposition,
   type Block, type Composition, type Placed,
 } from './composition.ts'
 import CompositionPane from './CompositionPane.tsx'
@@ -678,6 +678,9 @@ export default function TileMapper() {
             setSel(null) // the highlight belongs to the sheet the drag was on, not this block
             setStatus(`Block ${b.w}×${b.h} from ${b.sheet}. Click the composition to stamp it.`)
           }}
+          // Dropping a thumbnail only forgets the shortcut; a dropped block that
+          // was pinned stays armed until something else is picked.
+          onDropRecent={(b) => setRecent((r) => r.filter((x) => !sameBlock(x, b)))}
         />
 
         <div className="right">

@@ -39,14 +39,23 @@ body { margin: 0; font-family: system-ui, sans-serif; background: #1b1b22; color
 }
 /* Recent blocks (#356) — one wrapping row of pick thumbnails above the board.
    Each thumb is a scaled background crop of its own source sheet. */
-.recent-strip { display: flex; flex-wrap: wrap; gap: 4px; }
-.recent-strip button {
+.recent-strip { display: flex; flex-wrap: wrap; gap: 10px; }
+/* The gap leaves room for the drop badge, which hangs off the thumb's corner. */
+.recent-thumb { position: relative; }
+.recent-thumb .pick {
   display: flex; align-items: center; justify-content: center;
   width: 42px; height: 42px; padding: 0; cursor: pointer;
   background: #15151b; border: 1px solid #3a3a47; border-radius: 4px;
 }
-.recent-strip button.is-on { border-color: #2e7dff; box-shadow: 0 0 0 1px #2e7dff; }
-.recent-strip span { background-repeat: no-repeat; image-rendering: pixelated; }
+.recent-thumb .pick.is-on { border-color: #2e7dff; box-shadow: 0 0 0 1px #2e7dff; }
+.recent-thumb span { background-repeat: no-repeat; image-rendering: pixelated; }
+.recent-thumb .drop {
+  position: absolute; top: -6px; right: -6px; width: 16px; height: 16px; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; line-height: 1; cursor: pointer;
+  background: #2a2a34; color: #9a9ab0; border: 1px solid #3a3a47; border-radius: 50%;
+}
+.recent-thumb .drop:hover { background: #b33; color: #fff; border-color: #b33; }
 .comp-wrap { flex: 1; min-height: 0; overflow: auto; background: #101015; border: 1px solid #34343f; }
 .comp-canvas { display: block; cursor: crosshair; image-rendering: pixelated; }
 

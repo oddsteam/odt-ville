@@ -34,7 +34,7 @@ function thumbStyle(b: Block, img: HTMLImageElement | undefined, cell: number): 
 
 export default function CompositionPane({
   sheets, cell, block, recent, placed, layerCount, active, box, composed,
-  onChange, onClear, onAddLayer, onPickLayer, onCommit, onNeedBlock, onPickRecent,
+  onChange, onClear, onAddLayer, onPickLayer, onCommit, onNeedBlock, onPickRecent, onDropRecent,
 }: {
   sheets: ReadonlyMap<string, HTMLImageElement> // every sheet loaded this session
   cell: number
@@ -52,6 +52,7 @@ export default function CompositionPane({
   onCommit: (replaced: boolean) => void // a stamp/erase drag finished
   onNeedBlock: () => void // tried to stamp with nothing picked
   onPickRecent: (block: Block) => void // a strip thumbnail became the active block
+  onDropRecent: (block: Block) => void // a thumbnail's × — drop it from the strip
 }) {
   const [tool, setTool] = useState<'stamp' | 'erase'>('stamp')
   const [hover, setHover] = useState<Cell | null>(null) // drives the stamp ghost
@@ -183,15 +184,27 @@ export default function CompositionPane({
       {recent.length > 0 && (
         <div className="recent-strip">
           {recent.map((b) => (
-            <button
-              key={`${b.sheet}:${b.c},${b.r},${b.w},${b.h}`}
-              type="button"
-              className={block && sameBlock(b, block) ? 'is-on' : ''}
-              title={`${b.w}×${b.h} from ${b.sheet}`}
-              onClick={() => onPickRecent(b)}
-            >
-              <span style={thumbStyle(b, sheets.get(b.sheet), cell)} />
-            </button>
+            // The × sits in the thumb's own corner rather than over its art, so
+            // a one-click drop doesn't cost the block's top-right tile.
+            <div className="recent-thumb" key={`${b.sheet}:${b.c},${b.r},${b.w},${b.h}`}>
+              <button
+                type="button"
+                className={`pick${block && sameBlock(b, block) ? ' is-on' : ''}`}
+                title={`${b.w}×${b.h} from ${b.sheet}`}
+                onClick={() => onPickRecent(b)}
+              >
+                <span style={thumbStyle(b, sheets.get(b.sheet), cell)} />
+              </button>
+              <button
+                type="button"
+                className="drop"
+                title="Drop this block from the strip"
+                aria-label={`Drop the ${b.w}×${b.h} block from ${b.sheet}`}
+                onClick={() => onDropRecent(b)}
+              >
+                ×
+              </button>
+            </div>
           ))}
         </div>
       )}
