@@ -795,6 +795,20 @@ button:disabled {
   white-space: pre-wrap;
 }
 
+/* The reply link (#373): the place to take the conversation, named as a place
+   to reply rather than as "chat with this person" — opens in a new tab. */
+.placard-reply {
+  display: inline-block;
+  margin-top: 12px;
+  padding: 5px 8px;
+  font-size: 10px;
+  color: var(--ink);
+  text-decoration: none;
+  background: #fff0c4;
+  border: 2px solid var(--ink);
+  box-shadow: 2px 2px 0 var(--ink);
+}
+
 /* D-pad */
 .dpad {
   display: grid;

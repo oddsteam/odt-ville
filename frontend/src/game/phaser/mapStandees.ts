@@ -29,6 +29,7 @@ export interface LiveStandee {
   detail: string | null
   ownerName: string | null
   ownerAvatarUrl: string | null
+  replyLink: string | null
   tile: { x: number; y: number }
   sprite: any
 }
@@ -42,6 +43,7 @@ export interface Placard {
   detail: string | null
   ownerName: string | null
   ownerAvatarUrl: string | null
+  replyLink: string | null
 }
 
 // What the shell places over the registry: the cell, the Placard (short line +
@@ -55,6 +57,7 @@ type BakedStandee = {
   detail?: string | null
   ownerName?: string | null
   ownerAvatarUrl?: string | null
+  replyLink?: string | null
   manifest: unknown
 }
 
@@ -74,6 +77,7 @@ export function spawnStandees(scene: Scene): LiveStandee[] {
     detail: s.detail ?? null,
     ownerName: s.ownerName ?? null,
     ownerAvatarUrl: s.ownerAvatarUrl ?? null,
+    replyLink: s.replyLink ?? null,
     tile: { x: s.x, y: s.y },
     sprite: stampStandee(scene, s),
   }))
@@ -98,6 +102,7 @@ export function placardOf(s: LiveStandee): Placard {
     detail: s.detail,
     ownerName: s.ownerName,
     ownerAvatarUrl: s.ownerAvatarUrl,
+    replyLink: s.replyLink,
   }
 }
 

@@ -126,6 +126,7 @@ describe('standeeAt / placardOf', () => {
     detail: null,
     ownerName: null,
     ownerAvatarUrl: null,
+    replyLink: null,
     tile: { x, y },
     sprite: fakeSprite(),
     ...extra,
@@ -143,6 +144,7 @@ describe('standeeAt / placardOf', () => {
       detail: 'Kitchen, bring a game',
       ownerName: 'Ada Lovelace',
       ownerAvatarUrl: '/api/v1/users/abc/avatar',
+      replyLink: 'https://basecamp.com/1/campfire/2',
     })
     expect(placardOf(s)).toEqual({
       id: 7,
@@ -150,13 +152,14 @@ describe('standeeAt / placardOf', () => {
       detail: 'Kitchen, bring a game',
       ownerName: 'Ada Lovelace',
       ownerAvatarUrl: '/api/v1/users/abc/avatar',
+      replyLink: 'https://basecamp.com/1/campfire/2',
     })
   })
 })
 
 describe('sortStandees', () => {
   it('draws a Standee south of the avatar over it, one north behind, by the NPC rule', () => {
-    const base = { detail: null, ownerName: null, ownerAvatarUrl: null }
+    const base = { detail: null, ownerName: null, ownerAvatarUrl: null, replyLink: null }
     const north: LiveStandee = { id: 1, message: 'a', tile: { x: 0, y: 1 }, sprite: fakeSprite(), ...base }
     const south: LiveStandee = { id: 2, message: 'b', tile: { x: 0, y: 5 }, sprite: fakeSprite(), ...base }
 

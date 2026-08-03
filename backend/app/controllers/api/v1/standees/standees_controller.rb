@@ -46,7 +46,8 @@ module Api
             cell_x: deploy_params[:x],
             cell_y: deploy_params[:y],
             message: deploy_params[:message],
-            detail: deploy_params[:detail]
+            detail: deploy_params[:detail],
+            reply_link: deploy_params[:reply_link]
           )
           render json: ::Standees::StandeeSerializer.call(standee), status: :created
         end
@@ -75,7 +76,7 @@ module Api
         end
 
         def deploy_params
-          params.permit(:x, :y, :message, :detail)
+          params.permit(:x, :y, :message, :detail, :reply_link)
         end
       end
     end

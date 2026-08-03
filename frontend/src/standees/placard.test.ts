@@ -3,7 +3,7 @@
 // the overhead bubble both lean on.
 
 import { describe, expect, it } from 'vitest'
-import { SHORT_LINE_MAX, shortLine, attribution } from './placard.ts'
+import { SHORT_LINE_MAX, shortLine, attribution, replyHref } from './placard.ts'
 
 describe('shortLine', () => {
   it('passes a line at or under the cap through unchanged', () => {
@@ -40,5 +40,29 @@ describe('attribution', () => {
   it('falls back to "someone" for a blank or missing name', () => {
     expect(attribution('')).toBe('— someone')
     expect(attribution('   ')).toBe('— someone')
+  })
+})
+
+describe('replyHref', () => {
+  it('passes an http(s) reply link through unchanged', () => {
+    expect(replyHref('https://basecamp.com/1/campfire/2')).toBe('https://basecamp.com/1/campfire/2')
+    expect(replyHref('http://example.com/thread')).toBe('http://example.com/thread')
+  })
+
+  it('refuses a javascript: URL — no click-through at all', () => {
+    expect(replyHref('javascript:alert(1)')).toBeNull()
+  })
+
+  it('refuses a non-http(s) scheme', () => {
+    expect(replyHref('mailto:ada@example.com')).toBeNull()
+  })
+
+  it('refuses a malformed link', () => {
+    expect(replyHref('not a url')).toBeNull()
+  })
+
+  it('refuses an empty or blank link', () => {
+    expect(replyHref('')).toBeNull()
+    expect(replyHref('   ')).toBeNull()
   })
 })

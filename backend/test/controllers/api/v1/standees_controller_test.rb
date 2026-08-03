@@ -25,9 +25,9 @@ module Api
         )
       end
 
-      def deploy(slug, x: 3, y: 5, message: "Jogging Sunday 8am, anyone?", detail: nil, user: @user, roles: [])
+      def deploy(slug, x: 3, y: 5, message: "Jogging Sunday 8am, anyone?", detail: nil, reply_link: nil, user: @user, roles: [])
         post "/api/v1/maps/#{slug}/standees",
-             params: { x: x, y: y, message: message, detail: detail },
+             params: { x: x, y: y, message: message, detail: detail, reply_link: reply_link },
              headers: auth(user, roles: roles), as: :json
       end
 
@@ -94,6 +94,26 @@ module Api
         assert_response :created
         assert_nil json[:detail]
         assert_nil json[:owner_avatar_url]
+      end
+
+      test "the deployed standee carries the owner-supplied reply link" do
+        # The reply link (#373): the campfire or thread where the conversation
+        # happens, stored raw and echoed back. The client gates the click-through.
+        make_map(slug: "plaza")
+
+        deploy("plaza", reply_link: "https://basecamp.com/1/campfire/2")
+
+        assert_response :created
+        assert_equal "https://basecamp.com/1/campfire/2", json[:reply_link]
+      end
+
+      test "a Placard with no reply link serializes it as null" do
+        make_map(slug: "plaza")
+
+        deploy("plaza")
+
+        assert_response :created
+        assert_nil json[:reply_link]
       end
 
       test "index returns only the standees on that map" do

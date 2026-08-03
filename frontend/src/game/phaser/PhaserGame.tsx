@@ -132,12 +132,16 @@ export type PhaserGameProps = {
     // The Placard's optional detail body (#372) — the longer text revealed on
     // press-A. Absent leaves a short-line-only Placard.
     detail?: string
+    // The optional reply link (#373) — a campfire or thread. Absent leaves a
+    // Placard with no reply button.
+    reply?: string
   }) => Promise<{
     id: number
     x: number
     y: number
     message: string
     detail?: string | null
+    reply_link?: string | null
     owner_name?: string | null
     owner_avatar_url?: string | null
   } | null>
@@ -152,6 +156,7 @@ export type PhaserGameProps = {
     detail: string | null
     ownerName: string | null
     ownerAvatarUrl: string | null
+    replyLink: string | null
   }) => Promise<void>
   // The caller's world-wide Standee budget (#371): the count out, the cap,
   // whether a deploy is allowed, and the located refusal when at the cap. A
@@ -201,6 +206,7 @@ export default function PhaserGame({
   const [mapContext, setMapContext] = useState<{ slug: string; multiplayer: boolean } | null>(null)
   const [standeeLine, setStandeeLine] = useState('')
   const [standeeDetail, setStandeeDetail] = useState('')
+  const [standeeReply, setStandeeReply] = useState('')
   const [deploying, setDeploying] = useState(false)
   const deployStandeeRef = useRef(onDeployStandee)
   deployStandeeRef.current = onDeployStandee
@@ -540,6 +546,7 @@ export default function PhaserGame({
       detail: string | null
       ownerName: string | null
       ownerAvatarUrl: string | null
+      replyLink: string | null
     }) => {
       const handler = readStandeeRef.current
       if (!handler) {
@@ -566,6 +573,7 @@ export default function PhaserGame({
       .__game?.playerTile?.()
     if (!tile) return
     const detail = standeeDetail.trim()
+    const reply = standeeReply.trim()
     setDeploying(true)
     const created = await deploy({
       slug: mapContext.slug,
@@ -573,12 +581,14 @@ export default function PhaserGame({
       y: tile.y,
       message: line,
       detail: detail || undefined,
+      reply: reply || undefined,
     }).catch(() => null)
     setDeploying(false)
     if (created) {
       bus.emit('standeeDeployed', created)
       setStandeeLine('')
       setStandeeDetail('')
+      setStandeeReply('')
     }
   }
 
@@ -660,6 +670,16 @@ export default function PhaserGame({
                       rows={3}
                       placeholder="Details (optional)…"
                       onChange={(e) => setStandeeDetail(e.target.value)}
+                    />
+                    {/* The reply link (#373): a campfire or thread where the
+                        conversation happens, so interested people land in one
+                        place. Optional; only an http(s) link becomes a button. */}
+                    <input
+                      type="url"
+                      className="standee-input"
+                      value={standeeReply}
+                      placeholder="Reply link (optional)…"
+                      onChange={(e) => setStandeeReply(e.target.value)}
                     />
                     <button
                       type="button"

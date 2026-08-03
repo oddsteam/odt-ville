@@ -247,15 +247,19 @@ export default function VillagePage() {
       y,
       message,
       detail,
+      reply,
     }: {
       slug: string
       x: number
       y: number
       message: string
       detail?: string
+      reply?: string
     }) => {
       try {
-        const created = await runEdge(StandeesWrite.deploy(slug, { x, y, message, detail }))
+        const created = await runEdge(
+          StandeesWrite.deploy(slug, { x, y, message, detail, reply_link: reply }),
+        )
         // Refresh the world-wide budget so "N of 3 out" reflects the new cutout.
         setMyStandees(await runEdge(StandeesService.mine()).catch(() => null))
         return created

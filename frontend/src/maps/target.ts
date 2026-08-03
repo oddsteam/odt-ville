@@ -45,6 +45,9 @@ async function loadStandees(map: BakedMap) {
       detail: s.detail,
       ownerName: s.owner_name,
       ownerAvatarUrl: s.owner_avatar_url,
+      // The reply link the owner supplied (#373): carried through as plain data
+      // for the shell's Placard button; `replyHref` gates the click-through.
+      replyLink: s.reply_link,
       manifest: s.character_manifest_id != null ? await loadManifestById(s.character_manifest_id) : null,
     })),
   )

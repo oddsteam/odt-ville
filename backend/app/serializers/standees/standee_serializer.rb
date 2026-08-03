@@ -17,6 +17,10 @@ module Standees
         # The Placard's detail body (#372), revealed on press-A; null when the
         # owner left only a short line.
         detail: standee.detail,
+        # The owner-supplied reply link (#373): the campfire or thread to reply
+        # in, stored raw and null when none. The client gates the click-through
+        # to http(s) only, matching the card-badge rule.
+        reply_link: standee.reply_link,
         # Who left it, for the full Placard (#372): the owner's name and face.
         # The face rides the same avatar proxy path the header uses (ADR-0012 —
         # never Basecamp's URL), and is null when the owner has no avatar.

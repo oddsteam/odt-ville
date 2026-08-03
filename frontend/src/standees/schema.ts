@@ -20,6 +20,10 @@ export const Standee = Schema.Struct({
   y: Schema.Number,
   message: Schema.String,
   detail: Schema.NullOr(Schema.String),
+  // The reply link the owner supplied (#373): the campfire or thread where the
+  // conversation happens, null when none. Stored raw; the shell's Placard gates
+  // whether it becomes a clickable button (http(s) only).
+  reply_link: Schema.NullOr(Schema.String),
   owner_name: Schema.NullOr(Schema.String),
   owner_avatar_url: Schema.NullOr(Schema.String),
   character_manifest_id: Schema.NullOr(Schema.Number),
@@ -34,6 +38,9 @@ export const NewStandee = Schema.Struct({
   y: Schema.Number,
   message: Schema.String,
   detail: Schema.optional(Schema.String),
+  // The optional reply link (#373): a campfire or thread the owner pastes so
+  // interested people land in one conversation, not three separate pings.
+  reply_link: Schema.optional(Schema.String),
 })
 export type NewStandee = Schema.Schema.Type<typeof NewStandee>
 

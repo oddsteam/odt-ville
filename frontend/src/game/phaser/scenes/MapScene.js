@@ -335,7 +335,7 @@ export default class MapScene extends Phaser.Scene {
   // which *is* the owner's rig, by definition — so no fetch is needed; a later
   // map load resolves every cutout by reference through the registry instead.
   // Never blocks and never animates, exactly like a loaded Standee.
-  addOwnStandee({ id, x, y, message = '', detail = null, owner_name = null, owner_avatar_url = null }) {
+  addOwnStandee({ id, x, y, message = '', detail = null, reply_link = null, owner_name = null, owner_avatar_url = null }) {
     if (!this.standees) return
     const wx = (x + 0.5) * TILE
     const wy = (y + 1) * TILE
@@ -353,6 +353,7 @@ export default class MapScene extends Phaser.Scene {
       detail,
       ownerName: owner_name,
       ownerAvatarUrl: owner_avatar_url,
+      replyLink: reply_link,
       tile: { x, y },
       sprite,
     })

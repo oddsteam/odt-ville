@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import Avatar from '../viewer/Avatar.tsx'
-import { attribution, shortLine, type Placard } from './placard.ts'
+import { attribution, replyHref, shortLine, type Placard } from './placard.ts'
 
 // The full Placard, opened by pressing A on a Standee (#372, ADR-0015). The
 // game detects the press and emits the note over a semantic seam; the *shell*
@@ -29,6 +29,10 @@ export default function PlacardPanel({
   }, [onClose])
 
   const name = placard.ownerName ?? ''
+  // The reply link becomes a button only when it is a real http(s) address
+  // (#373) — a missing, malformed or non-web link simply has none, and the
+  // Placard still says its piece. Opens in a new tab, like the board shortcut.
+  const reply = placard.replyLink ? replyHref(placard.replyLink) : null
 
   return (
     <div className="placard-scrim" onClick={onClose}>
@@ -48,6 +52,16 @@ export default function PlacardPanel({
         </div>
         <p className="placard-line">{shortLine(placard.message)}</p>
         {placard.detail && <p className="placard-detail">{placard.detail}</p>}
+        {reply && (
+          <a
+            className="placard-reply"
+            href={reply}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Reply where they’re planning it →
+          </a>
+        )}
       </div>
     </div>
   )

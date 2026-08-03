@@ -18,6 +18,9 @@ export interface Placard {
   detail: string | null
   ownerName: string | null
   ownerAvatarUrl: string | null
+  // The place to reply the owner supplied (#373): a campfire, a thread. Raw as
+  // stored — `replyHref` gates whether it ever becomes a clickable button.
+  replyLink: string | null
 }
 
 // The short line, clipped to the display cap. At or under the cap it rides
@@ -27,6 +30,19 @@ export function shortLine(message: string): string {
   const line = message.trim()
   if (line.length <= SHORT_LINE_MAX) return line
   return `${line.slice(0, SHORT_LINE_MAX).trimEnd()}…`
+}
+
+// The owner-supplied reply link, gated exactly as `cardBadge.ts` gates a card's
+// link (#373): the string is owner-supplied and ends up in `window.open`, so
+// only ever navigate to an http(s) address. Anything else — a `javascript:`
+// URL, a `mailto:`, a malformed or empty string — returns null, so the Placard
+// simply shows no button and still says its piece.
+export function replyHref(url: string): string | null {
+  try {
+    return /^https?:$/.test(new URL(url).protocol) ? url : null
+  } catch {
+    return null
+  }
 }
 
 // The Placard's byline — who left it, for the detail panel. A blank or missing
