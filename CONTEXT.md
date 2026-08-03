@@ -225,6 +225,110 @@ door anchor, walk mask, edge mask, foreground mask. Objects authored before
 compositions existed simply have none; a composition cannot be recovered from
 flattened art.
 
+### Standees (resolving — 2026-08-03)
+
+Peer-to-peer announcements left standing on a shared map. Why they sit outside
+the baked map document — and why they are not NPCs, not Zones, and not baked —
+is [ADR-0015](docs/adr/0015-standees-live-outside-the-baked-document.md).
+
+**Standee**:
+A copy of a user's own avatar, deployed by that user onto a multiplayer map at a
+cell of their choosing, carrying a **Placard**. It is a *placed entity* like a
+Prop or a House, but authored by a player at runtime rather than by an admin at
+author time.
+
+Explicitly **not an NPC**: it has no `catalog_npcs` row, no level, never duels,
+and never blocks — you walk straight past (or through) it. _Avoid_: modelling a
+Standee as `kind:"npc"`, which would inherit blocking, the catalog FK and the
+trainer path, all of which are wrong here.
+
+A user's **standee budget is 3, counted across every map** — not 3 per map. The
+scarcity is the point: a budget spent world-wide forces the judgement about
+whether a message is worth interrupting someone's walk for, and it keeps the
+number legible to its owner ("3 standees, 1 is out"). A per-map budget would
+grow without bound as maps multiply and leave density entirely to expiry, which
+bounds age but not count. At the cap, deploying is **refused with a pointer** to
+the standees already out — never a silent replace of the oldest, which would
+destroy something the owner still believes is live.
+
+A Standee is **time-bound by construction**: the owner sets an expiry when they
+deploy it (defaulted, capped), and it disappears on its own when that passes.
+The owner may also pick it up early. This is the opposite of the billboard
+back-pressure principle above, and deliberately so: billboard clutter is a
+signal fed back to the executives who can correct it, whereas peer clutter has
+no gardener — so a Standee decays instead of accumulating. The message genre is
+time-bound anyway (a jog, a lunch, an offsite).
+
+A Standee is drawn as a **cutout**, not as a person: the owner's own rig, on a
+stand, desaturated a notch, never animated. It must never be mistaken for its
+owner standing there — the owner may be on the same map at the same time, and
+with three deployed there can be four copies of one person in view. For the
+same reason the Standee carries **no name label**; attribution rides inside the
+Placard bubble instead, so only the living person wears a nameplate.
+
+Beyond expiry and owner pickup, a Standee is removed by an **admin** (any of
+them, any Standee) and by **cascade** — it dies with its owner and with its map,
+never orphaned, so a departed employee is not left standing in the plaza
+inviting people jogging. There is deliberately **no user-facing report flow**:
+one company, real names, faces synced from the Basecamp roster, so the
+accountability is social, and an unstaffed report queue would be worse than
+none. That is a deferral to revisit at scale, not an oversight.
+
+**Placard**:
+The message a Standee carries — the short line shown over its head plus whatever
+detail the interaction reveals. Named narrowly on purpose: **announcement** is
+reserved for the broader family of push devices (billboards, townhall
+broadcasts, wild encounters), of which the Standee is the *peer-to-peer* one.
+_Avoid_: "announcement" for a Placard.
+
+A Placard may carry a **reply link** — an owner-supplied URL naming where the
+conversation should happen (a Basecamp campfire, a message thread, anything
+http(s)). Owner-supplied rather than derived: Basecamp addresses a direct
+message by *circle* — a conversation id that only exists once that pair has
+already talked — so there is no person-to-DM address to construct. And for the
+message genre this serves ("anyone interested?"), a thread beats a DM: three
+separate pings about one plan is three conversations instead of one. An absent
+or non-http(s) link simply hides the button; the Standee still says its piece.
+_Avoid_: modelling the reply link as "chat with this user" — it names a place,
+not a person.
+
+The Placard's short line rides over the cutout as a **speech bubble with a
+tail** — deliberately a different silhouette from the **card badge** (#317),
+which is a chip naming what a *live* person is working on. Both float over a
+head and both are clickable, so their shapes must say which is which: a bubble
+means someone is *saying* this, a chip means a status is *attached to* someone.
+The tail also points at the cutout it belongs to.
+
+A Standee **appears and disappears live**, without a reload. This app is left
+open for hours, so a Standee that only materialises on the next map load is
+invisible to exactly the people standing in front of it. The event rate makes
+this cheap and the shape already exists: the presence channel runs unpartitioned
+streams beside its per-cell ones for precisely this class of traffic (card
+badges, #317 — "a few frames a day per person against a movement frame every
+step"). A deploy is rarer still. Deploying is nonetheless a **durable write**,
+not a channel action — it persists and it spends budget — so the broadcast is a
+consequence of the write, not the mechanism of it. Expiry needs no server tick:
+a client holding the expiry can retire the cutout itself.
+
+Standees live on **multiplayer maps only** — a generated hometown is solo and
+per-user, so a Standee there has an audience of one, and it has no document to
+live in anyway.
+
+**Deploying** is done by walking: the owner stands on the cell they want, opens
+the overlay and leaves the Standee where their own feet are. Location is chosen
+the way everything else in this app is chosen — by going there — so there is no
+cursor, no coordinate entry, and no admin stamp idiom in a player's hands. The
+cell is walkable by definition (they are standing on it) and occupied by nobody
+else (likewise). Picking one up is the same press-A the visitor uses to read it:
+the owner is offered *pick up* where a visitor is offered the reply link.
+
+A Standee is **inspectable, never an obstacle and never an opponent**: walking
+into its cell is allowed, and pressing A on it opens its Placard in full. The
+short line rides over its head; the rest is revealed on inspect. Inspection
+follows the established seam — the game detects the interact trigger and emits a
+semantic event; the **shell** renders the detail and owns any outbound link, so
+no vendor integration leaks into the game black box.
+
 ## Multi-map model (resolving — 2026-06-29)
 
 The roadmap's Phase 3+ multi-map work is being designed. This section is
