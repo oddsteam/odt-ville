@@ -25,9 +25,9 @@ module Api
         )
       end
 
-      def deploy(slug, x: 3, y: 5, message: "Jogging Sunday 8am, anyone?", user: @user, roles: [])
+      def deploy(slug, x: 3, y: 5, message: "Jogging Sunday 8am, anyone?", detail: nil, user: @user, roles: [])
         post "/api/v1/maps/#{slug}/standees",
-             params: { x: x, y: y, message: message },
+             params: { x: x, y: y, message: message, detail: detail },
              headers: auth(user, roles: roles), as: :json
       end
 
@@ -69,6 +69,31 @@ module Api
 
         assert_response :created
         assert_equal manifest.id, json[:character_manifest_id]
+      end
+
+      test "the serialized standee carries the Placard's detail body and owner attribution" do
+        # The full Placard (#372): who left it, their face, and the detail body.
+        @user.update!(name: "Ada Lovelace", avatar_url: "roster/ada.png")
+        make_map(slug: "plaza")
+
+        deploy("plaza", message: "Jogging Sunday?", detail: "Meet at the gym door, 8am, bring water")
+
+        assert_response :created
+        body = json
+        assert_equal "Meet at the gym door, 8am, bring water", body[:detail]
+        assert_equal "Ada Lovelace", body[:owner_name]
+        # The face rides the avatar proxy path, never the stored Basecamp URL.
+        assert_equal "/api/v1/users/#{@user.external_id}/avatar", body[:owner_avatar_url]
+      end
+
+      test "a Placard with no detail and no avatar serializes them as null" do
+        make_map(slug: "plaza")
+
+        deploy("plaza")
+
+        assert_response :created
+        assert_nil json[:detail]
+        assert_nil json[:owner_avatar_url]
       end
 
       test "index returns only the standees on that map" do

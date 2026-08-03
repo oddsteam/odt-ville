@@ -17,7 +17,8 @@ module Api
         # Queried by map_id rather than through a reverse association, so the
         # dependency runs one way (Standees → Maps), never back.
         def index
-          standees = ::Standees::Standee.where(map_id: @map.id).order(:id)
+          standees = ::Standees::Standee.where(map_id: @map.id)
+                                        .includes(user: :character_manifest).order(:id)
           render json: standees.map { |s| ::Standees::StandeeSerializer.call(s) }
         end
 
@@ -44,7 +45,8 @@ module Api
             user: current_user,
             cell_x: deploy_params[:x],
             cell_y: deploy_params[:y],
-            message: deploy_params[:message]
+            message: deploy_params[:message],
+            detail: deploy_params[:detail]
           )
           render json: ::Standees::StandeeSerializer.call(standee), status: :created
         end
@@ -73,7 +75,7 @@ module Api
         end
 
         def deploy_params
-          params.permit(:x, :y, :message)
+          params.permit(:x, :y, :message, :detail)
         end
       end
     end

@@ -39,6 +39,12 @@ async function loadStandees(map: BakedMap) {
       x: s.x,
       y: s.y,
       message: s.message,
+      // The full Placard (#372): the detail body and who left it, carried
+      // through as plain data so the game can echo it on press-A without ever
+      // rendering the panel or importing a data service (ADR-0004).
+      detail: s.detail,
+      ownerName: s.owner_name,
+      ownerAvatarUrl: s.owner_avatar_url,
       manifest: s.character_manifest_id != null ? await loadManifestById(s.character_manifest_id) : null,
     })),
   )

@@ -129,7 +129,30 @@ export type PhaserGameProps = {
     x: number
     y: number
     message: string
-  }) => Promise<{ id: number; x: number; y: number; message: string } | null>
+    // The Placard's optional detail body (#372) — the longer text revealed on
+    // press-A. Absent leaves a short-line-only Placard.
+    detail?: string
+  }) => Promise<{
+    id: number
+    x: number
+    y: number
+    message: string
+    detail?: string | null
+    owner_name?: string | null
+    owner_avatar_url?: string | null
+  } | null>
+  // Pressing A on a Standee (#372): the game emits the Placard it carries and
+  // the shell mounts the full-bleed detail panel, resolving this when the reader
+  // closes it — PhaserGame then tells the scene to resume input. The seam
+  // mirrors onEnterCommunity: a semantic event out, no panel inside the black
+  // box. Absent on shells that don't render Placards (input resumes at once).
+  onReadStandee?: (placard: {
+    id: number
+    message: string
+    detail: string | null
+    ownerName: string | null
+    ownerAvatarUrl: string | null
+  }) => Promise<void>
   // The caller's world-wide Standee budget (#371): the count out, the cap,
   // whether a deploy is allowed, and the located refusal when at the cap. A
   // plain display shape resolved by the shell — no standees/ import enters the
@@ -163,6 +186,7 @@ export default function PhaserGame({
   onRequestEntry,
   onPortal,
   onDeployStandee,
+  onReadStandee,
   standeeBudget,
   trainerDefeated,
   onTrainerDefeated,
@@ -176,9 +200,12 @@ export default function PhaserGame({
   // this slug. Null in the town / on a solo map.
   const [mapContext, setMapContext] = useState<{ slug: string; multiplayer: boolean } | null>(null)
   const [standeeLine, setStandeeLine] = useState('')
+  const [standeeDetail, setStandeeDetail] = useState('')
   const [deploying, setDeploying] = useState(false)
   const deployStandeeRef = useRef(onDeployStandee)
   deployStandeeRef.current = onDeployStandee
+  const readStandeeRef = useRef(onReadStandee)
+  readStandeeRef.current = onReadStandee
 
   const enterCommunityRef = useRef(onEnterCommunity)
   enterCommunityRef.current = onEnterCommunity
@@ -492,12 +519,38 @@ export default function PhaserGame({
     const left = () => {
       setMapContext(null)
       setStandeeLine('')
+      setStandeeDetail('')
     }
     bus.on('mapEntered', entered)
     bus.on('mapLeft', left)
     return () => {
       bus.off('mapEntered', entered)
       bus.off('mapLeft', left)
+    }
+  }, [])
+
+  // Press-A-to-read (#372): the scene emits the Placard and has already paused
+  // its own input; the shell mounts the panel via onReadStandee and resolves
+  // when the reader closes it. Emit `standeeClosed` back so the scene resumes —
+  // and emit it at once when no shell handler is wired, so input never sticks.
+  useEffect(() => {
+    const onRead = (placard: {
+      id: number
+      message: string
+      detail: string | null
+      ownerName: string | null
+      ownerAvatarUrl: string | null
+    }) => {
+      const handler = readStandeeRef.current
+      if (!handler) {
+        bus.emit('standeeClosed')
+        return
+      }
+      handler(placard).finally(() => bus.emit('standeeClosed'))
+    }
+    bus.on('readStandee', onRead)
+    return () => {
+      bus.off('readStandee', onRead)
     }
   }, [])
 
@@ -512,14 +565,20 @@ export default function PhaserGame({
     const tile = (window as unknown as { __game?: { playerTile?: () => { x: number; y: number } } })
       .__game?.playerTile?.()
     if (!tile) return
+    const detail = standeeDetail.trim()
     setDeploying(true)
-    const created = await deploy({ slug: mapContext.slug, x: tile.x, y: tile.y, message: line }).catch(
-      () => null,
-    )
+    const created = await deploy({
+      slug: mapContext.slug,
+      x: tile.x,
+      y: tile.y,
+      message: line,
+      detail: detail || undefined,
+    }).catch(() => null)
     setDeploying(false)
     if (created) {
       bus.emit('standeeDeployed', created)
       setStandeeLine('')
+      setStandeeDetail('')
     }
   }
 
@@ -581,8 +640,8 @@ export default function PhaserGame({
                       type="text"
                       className="standee-input"
                       value={standeeLine}
-                      maxLength={80}
-                      placeholder="Leave a standee…"
+                      maxLength={60}
+                      placeholder="Short line…"
                       onChange={(e) => setStandeeLine(e.target.value)}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
@@ -590,6 +649,17 @@ export default function PhaserGame({
                           void submitStandee()
                         }
                       }}
+                    />
+                    {/* The Placard's detail body (#372): the time, the place,
+                        what to bring — revealed on press-A, kept off the map so
+                        the short line over the head stays a glance. Optional. */}
+                    <textarea
+                      className="standee-detail"
+                      value={standeeDetail}
+                      maxLength={500}
+                      rows={3}
+                      placeholder="Details (optional)…"
+                      onChange={(e) => setStandeeDetail(e.target.value)}
                     />
                     <button
                       type="button"

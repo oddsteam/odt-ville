@@ -8,11 +8,20 @@ module Standees
     module_function
 
     def call(standee)
+      owner = standee.user
       {
         id: standee.id,
         x: standee.cell_x,
         y: standee.cell_y,
         message: standee.message,
+        # The Placard's detail body (#372), revealed on press-A; null when the
+        # owner left only a short line.
+        detail: standee.detail,
+        # Who left it, for the full Placard (#372): the owner's name and face.
+        # The face rides the same avatar proxy path the header uses (ADR-0012 —
+        # never Basecamp's URL), and is null when the owner has no avatar.
+        owner_name: owner&.name,
+        owner_avatar_url: owner&.avatar_url && "/api/v1/users/#{owner.external_id}/avatar",
         character_manifest_id: standee.character_manifest_id
       }
     end

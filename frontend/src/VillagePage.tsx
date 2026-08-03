@@ -11,6 +11,8 @@ import { MapsService } from './maps/service.ts'
 import { StandeesWrite } from './standees/write.ts'
 import { StandeesService } from './standees/service.ts'
 import { standeeBudget } from './standees/budget.ts'
+import PlacardPanel from './standees/PlacardPanel.tsx'
+import type { Placard } from './standees/placard.ts'
 import type { MyStandees } from './standees/schema.ts'
 import { loadMapBundle } from './maps/target.ts'
 import { runEdge } from './lib/runEdge.ts'
@@ -81,6 +83,11 @@ export default function VillagePage() {
   // out" and refuse — with a located pointer — before anything is typed. Null
   // until fetched; a failed fetch just hides the count, never blocks deploying.
   const [myStandees, setMyStandees] = useState<MyStandees | null>(null)
+  // The Placard currently open in the full-bleed panel (#372), or null. Set when
+  // the game reports a press-A on a Standee; cleared on close, which also
+  // resolves the pending read so the game resumes input where it stood.
+  const [placard, setPlacard] = useState<Placard | null>(null)
+  const placardCloseRef = useRef<(() => void) | null>(null)
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -234,9 +241,21 @@ export default function VillagePage() {
   // then echoes the created Standee to the scene so the cutout appears at once.
   // A refusal (e.g. deploying on a solo map) surfaces on the error banner.
   const handleDeployStandee = useCallback(
-    async ({ slug, x, y, message }: { slug: string; x: number; y: number; message: string }) => {
+    async ({
+      slug,
+      x,
+      y,
+      message,
+      detail,
+    }: {
+      slug: string
+      x: number
+      y: number
+      message: string
+      detail?: string
+    }) => {
       try {
-        const created = await runEdge(StandeesWrite.deploy(slug, { x, y, message }))
+        const created = await runEdge(StandeesWrite.deploy(slug, { x, y, message, detail }))
         // Refresh the world-wide budget so "N of 3 out" reflects the new cutout.
         setMyStandees(await runEdge(StandeesService.mine()).catch(() => null))
         return created
@@ -245,6 +264,23 @@ export default function VillagePage() {
         return null
       }
     },
+    [],
+  )
+
+  // A press-A on a Standee (#372): the game emits the Placard; the shell mounts
+  // the full-bleed detail panel. The returned promise resolves when the reader
+  // closes it, which is PhaserGame's cue to resume the paused input — so the
+  // avatar stays put behind the takeover and picks up exactly where it was.
+  const handleReadStandee = useCallback(
+    (p: Placard) =>
+      new Promise<void>((resolve) => {
+        setPlacard(p)
+        placardCloseRef.current = () => {
+          setPlacard(null)
+          placardCloseRef.current = null
+          resolve()
+        }
+      }),
     [],
   )
 
@@ -366,10 +402,15 @@ export default function VillagePage() {
         onRequestEntry={handleRequestEntry}
         onPortal={handlePortal}
         onDeployStandee={handleDeployStandee}
+        onReadStandee={handleReadStandee}
         standeeBudget={standeeBudgetView}
         trainerDefeated={trainerDefeated}
         onTrainerDefeated={() => setTrainerDefeated(true)}
       />
+
+      {placard && (
+        <PlacardPanel placard={placard} onClose={() => placardCloseRef.current?.()} />
+      )}
     </>
   )
 }

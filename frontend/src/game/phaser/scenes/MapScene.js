@@ -5,7 +5,7 @@ import { cameraBounds } from '../canvasLayout.ts'
 import { isTransitioning } from '../../transition.ts'
 import { spawnTile, mapWalkable, entityBlockedFor, entityEdgeBlockedFor, entityDoorCells, entityLadderFor, entityOverhangFor, entityForegroundFor, mapPlayerDepth, slidePlayerDepth, feetWorldXY } from '../mapWalk.ts'
 import { spawnNpcs, npcBlockedFor, sortNpcs } from '../mapNpcs.ts'
-import { spawnStandees, sortStandees } from '../mapStandees.ts'
+import { spawnStandees, sortStandees, standeeAt, placardOf } from '../mapStandees.ts'
 import {
   CHAR_SHEET_KEY,
   preloadCharacter,
@@ -55,6 +55,10 @@ export default class MapScene extends Phaser.Scene {
     this.facing = 'down'
     this.movingTween = null
     this.dpadDir = null
+    // True while a Placard panel is open in the shell (#372): input pauses so
+    // the avatar doesn't wander off behind the takeover, and resumes exactly
+    // where it stood when the shell reports the panel closed.
+    this.reading = false
   }
 
   preload() {
@@ -72,6 +76,9 @@ export default class MapScene extends Phaser.Scene {
     // when the swap landed leaves `movingTween` set on the fresh map and
     // update() refuses every input: an avatar frozen on arrival.
     this.movingTween = null
+    // A stale reading flag from a previous map (the instance survives stop/start,
+    // #249) would freeze input on arrival — clear it like movingTween above.
+    this.reading = false
     renderBakedMap(this)
     const map = this._bakedMap
     if (!map) return
@@ -199,10 +206,16 @@ export default class MapScene extends Phaser.Scene {
     // data service, ADR-0004) and echoes the created Standee back on the bus. We
     // stand the deployer's own cutout up at once, so it appears without a reload.
     this._onStandeeDeployed = (s) => this.addOwnStandee(s)
+    // The shell closed a Placard panel (#372): resume input in place. The
+    // avatar never moved while reading, so "exactly where they were" is free.
+    this._onStandeeClosed = () => {
+      this.reading = false
+    }
     bus.on('dpadPress', this._onDpadPress)
     bus.on('dpadRelease', this._onDpadRelease)
     bus.on('aButton', this._onABtn)
     bus.on('standeeDeployed', this._onStandeeDeployed)
+    bus.on('standeeClosed', this._onStandeeClosed)
     // Tell the shell overlay which map we're on, so the deploy control shows
     // only on a multiplayer map and knows the slug to POST to. Standalone MapPage
     // has no overlay, so nothing listens; leaving emits `mapLeft` to hide it.
@@ -214,6 +227,7 @@ export default class MapScene extends Phaser.Scene {
       bus.off('dpadRelease', this._onDpadRelease)
       bus.off('aButton', this._onABtn)
       bus.off('standeeDeployed', this._onStandeeDeployed)
+      bus.off('standeeClosed', this._onStandeeClosed)
       bus.emit('mapLeft')
     })
 
@@ -281,7 +295,7 @@ export default class MapScene extends Phaser.Scene {
     // Mid-warp (#254): a held direction key would otherwise bank a step the
     // instant the new map lands. The fade-in covers arrival, so refuse input
     // until it lifts.
-    if (!this.player || this.movingTween || isTransitioning()) return
+    if (!this.player || this.movingTween || isTransitioning() || this.reading) return
     const dir = this.activeDirection()
     if (dir) this.step(dir)
   }
@@ -294,10 +308,23 @@ export default class MapScene extends Phaser.Scene {
   // through the same onZone channel steps use; the shell dispatches on
   // payload.kind and never learns which input fired.
   pressA() {
-    const onZone = this.registry.get('onZone')
-    if (!onZone) return
+    // A panel is already open — swallow the press so it can't stack.
+    if (this.reading) return
     const { dx, dy } = deltaFor(this.facing)
     const faced = { x: this.playerTile.x + dx, y: this.playerTile.y + dy }
+    // Reading a Standee's Placard (#372) takes precedence over an interact
+    // zone under the same cell: a cutout you can press A on is the thing you
+    // meant. The game emits the note; the shell renders the full Placard and
+    // reports back on `standeeClosed`. Input pauses now (before the async shell
+    // responds) so the avatar can't wander off behind the takeover.
+    const s = standeeAt(this.standees || [], faced) || standeeAt(this.standees || [], this.playerTile)
+    if (s) {
+      this.reading = true
+      bus.emit('readStandee', placardOf(s))
+      return
+    }
+    const onZone = this.registry.get('onZone')
+    if (!onZone) return
     for (const ev of interactZoneEvents(this.playerTile, faced, this._bakedMap?.zones)) {
       onZone(ev.trigger, ev.zone)
     }
@@ -308,7 +335,7 @@ export default class MapScene extends Phaser.Scene {
   // which *is* the owner's rig, by definition — so no fetch is needed; a later
   // map load resolves every cutout by reference through the registry instead.
   // Never blocks and never animates, exactly like a loaded Standee.
-  addOwnStandee({ id, x, y, message = '' }) {
+  addOwnStandee({ id, x, y, message = '', detail = null, owner_name = null, owner_avatar_url = null }) {
     if (!this.standees) return
     const wx = (x + 0.5) * TILE
     const wy = (y + 1) * TILE
@@ -318,7 +345,17 @@ export default class MapScene extends Phaser.Scene {
           .setOrigin(0.5, 1)
           .setScale(characterScale(this._charManifest))
       : this.add.image(wx, wy, `player.down.0`).setOrigin(0.5, 1).setDisplaySize(TILE, TILE * 2)
-    this.standees.push({ id, message, tile: { x, y }, sprite })
+    // Carry the Placard the server echoed back (#372) so pressing A on your own
+    // fresh cutout reads it too — the same shape a loaded Standee holds.
+    this.standees.push({
+      id,
+      message,
+      detail,
+      ownerName: owner_name,
+      ownerAvatarUrl: owner_avatar_url,
+      tile: { x, y },
+      sprite,
+    })
     sortStandees(this.standees, this.playerTile.y)
   }
 

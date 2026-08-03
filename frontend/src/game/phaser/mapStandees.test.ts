@@ -5,7 +5,7 @@
 // Phaser, the same shape the placed-NPC spawn test uses.
 
 import { describe, expect, it } from 'vitest'
-import { spawnStandees, sortStandees, type LiveStandee } from './mapStandees.ts'
+import { spawnStandees, sortStandees, standeeAt, placardOf, type LiveStandee } from './mapStandees.ts'
 import * as mapStandees from './mapStandees.ts'
 import { npcBlockedFor } from './mapNpcs.ts'
 import { mapWalkable, MAP_PLAYER_DEPTH } from './mapWalk.ts'
@@ -119,10 +119,46 @@ describe('a Standee never blocks', () => {
   })
 })
 
+describe('standeeAt / placardOf', () => {
+  const live = (id: number, x: number, y: number, extra = {}): LiveStandee => ({
+    id,
+    message: 'Jogging Sunday?',
+    detail: null,
+    ownerName: null,
+    ownerAvatarUrl: null,
+    tile: { x, y },
+    sprite: fakeSprite(),
+    ...extra,
+  })
+
+  it('finds the Standee standing on a cell, or nothing', () => {
+    const standees = [live(1, 2, 3), live(2, 5, 6)]
+    expect(standeeAt(standees, { x: 5, y: 6 })?.id).toBe(2)
+    expect(standeeAt(standees, { x: 9, y: 9 })).toBeUndefined()
+  })
+
+  it('strips the Placard the shell renders from the live cutout', () => {
+    const s = live(7, 1, 1, {
+      message: 'Board games at 4',
+      detail: 'Kitchen, bring a game',
+      ownerName: 'Ada Lovelace',
+      ownerAvatarUrl: '/api/v1/users/abc/avatar',
+    })
+    expect(placardOf(s)).toEqual({
+      id: 7,
+      message: 'Board games at 4',
+      detail: 'Kitchen, bring a game',
+      ownerName: 'Ada Lovelace',
+      ownerAvatarUrl: '/api/v1/users/abc/avatar',
+    })
+  })
+})
+
 describe('sortStandees', () => {
   it('draws a Standee south of the avatar over it, one north behind, by the NPC rule', () => {
-    const north: LiveStandee = { id: 1, message: 'a', tile: { x: 0, y: 1 }, sprite: fakeSprite() }
-    const south: LiveStandee = { id: 2, message: 'b', tile: { x: 0, y: 5 }, sprite: fakeSprite() }
+    const base = { detail: null, ownerName: null, ownerAvatarUrl: null }
+    const north: LiveStandee = { id: 1, message: 'a', tile: { x: 0, y: 1 }, sprite: fakeSprite(), ...base }
+    const south: LiveStandee = { id: 2, message: 'b', tile: { x: 0, y: 5 }, sprite: fakeSprite(), ...base }
 
     sortStandees([north, south], 3)
 

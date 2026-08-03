@@ -10,23 +10,30 @@ import * as Schema from 'effect/Schema'
 // A Standee from GET /maps/:slug/standees. `character_manifest_id` names the
 // owner's rig (their pick, else the global active); null when the owner has no
 // manifest — the runtime draws the bundled fallback rather than crashing.
-// `message` is the Placard's short line, shown over the cutout's head.
+// `message` is the Placard's short line, shown over the cutout's head; `detail`
+// is the longer body revealed on press-A (#372), null when only a short line
+// was left. `owner_name`/`owner_avatar_url` are who left it, for the full
+// Placard — the face rides the avatar proxy path (ADR-0012), null when none.
 export const Standee = Schema.Struct({
   id: Schema.Number,
   x: Schema.Number,
   y: Schema.Number,
   message: Schema.String,
+  detail: Schema.NullOr(Schema.String),
+  owner_name: Schema.NullOr(Schema.String),
+  owner_avatar_url: Schema.NullOr(Schema.String),
   character_manifest_id: Schema.NullOr(Schema.Number),
 })
 export type Standee = Schema.Schema.Type<typeof Standee>
 
-// Body the deploy affordance POSTs: the cell the owner is standing on plus the
-// Placard's short line. The owner and the map are the caller's identity and the
-// URL slug, so neither is in the body.
+// Body the deploy affordance POSTs: the cell the owner is standing on, the
+// Placard's short line, and its optional detail body (#372). The owner and the
+// map are the caller's identity and the URL slug, so neither is in the body.
 export const NewStandee = Schema.Struct({
   x: Schema.Number,
   y: Schema.Number,
   message: Schema.String,
+  detail: Schema.optional(Schema.String),
 })
 export type NewStandee = Schema.Schema.Type<typeof NewStandee>
 

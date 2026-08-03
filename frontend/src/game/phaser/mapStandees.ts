@@ -18,19 +18,45 @@ import { npcDepth } from './mapNpcs.ts'
 // The Phaser scene, structurally — same loose convention as the renderers.
 type Scene = any
 
-// A Standee, live: the cell it stands on, the Placard's short line, and the
+// A Standee, live: the cell it stands on, the Placard it carries, and the
 // cutout sprite drawing it. No `moveTo` — a Standee never moves — and no facing
-// to command: it is a static effigy of its absent owner.
+// to command: it is a static effigy of its absent owner. The Placard fields
+// (short line, detail body, who left it) ride along so a press-A can hand them
+// to the shell without a second lookup — the game never renders them (#372).
 export interface LiveStandee {
   id: number
   message: string
+  detail: string | null
+  ownerName: string | null
+  ownerAvatarUrl: string | null
   tile: { x: number; y: number }
   sprite: any
 }
 
-// What the shell places over the registry: the cell, the short line, and the
-// owner's rig resolved by reference (null when the owner has no manifest).
-type BakedStandee = { id: number; x: number; y: number; message: string; manifest: unknown }
+// The full Placard a press-A reveals (#372): the short line, the detail body,
+// and who left it. A plain data shape the game emits to the shell — which owns
+// every pixel of the panel; the game imports no panel and no data service.
+export interface Placard {
+  id: number
+  message: string
+  detail: string | null
+  ownerName: string | null
+  ownerAvatarUrl: string | null
+}
+
+// What the shell places over the registry: the cell, the Placard (short line +
+// detail body + owner attribution), and the owner's rig resolved by reference
+// (null when the owner has no manifest).
+type BakedStandee = {
+  id: number
+  x: number
+  y: number
+  message: string
+  detail?: string | null
+  ownerName?: string | null
+  ownerAvatarUrl?: string | null
+  manifest: unknown
+}
 
 // The bundled fallback frame — the same still MapScene loads for the no-manifest
 // avatar. A Standee whose owner has no rig (or whose sheet never loaded) stands
@@ -45,9 +71,34 @@ export function spawnStandees(scene: Scene): LiveStandee[] {
   return standees.map((s) => ({
     id: s.id,
     message: s.message,
+    detail: s.detail ?? null,
+    ownerName: s.ownerName ?? null,
+    ownerAvatarUrl: s.ownerAvatarUrl ?? null,
     tile: { x: s.x, y: s.y },
     sprite: stampStandee(scene, s),
   }))
+}
+
+// The Standee whose cell matches `tile`, or undefined — the press-A lookup
+// (#372). A Standee never blocks, so the avatar can share its cell; pressing A
+// on your own tile or the one you face reads whichever cutout stands there.
+export function standeeAt(
+  standees: ReadonlyArray<LiveStandee>,
+  tile: { x: number; y: number },
+): LiveStandee | undefined {
+  return standees.find((s) => s.tile.x === tile.x && s.tile.y === tile.y)
+}
+
+// The Placard a press-A hands to the shell (#372): the note, stripped of the
+// live sprite and cell the panel has no use for.
+export function placardOf(s: LiveStandee): Placard {
+  return {
+    id: s.id,
+    message: s.message,
+    detail: s.detail,
+    ownerName: s.ownerName,
+    ownerAvatarUrl: s.ownerAvatarUrl,
+  }
 }
 
 // One cutout sprite. With a loaded rig sheet, the owner's idle-down frame sliced

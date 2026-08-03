@@ -46,6 +46,7 @@ export default function VillageGame({
   onRequestEntry,
   onPortal,
   onDeployStandee,
+  onReadStandee,
   standeeBudget,
   trainerDefeated,
   onTrainerDefeated,
@@ -70,6 +71,7 @@ export default function VillageGame({
       onRequestEntry={onRequestEntry}
       onPortal={onPortal}
       onDeployStandee={onDeployStandee}
+      onReadStandee={onReadStandee}
       standeeBudget={standeeBudget}
       trainerDefeated={trainerDefeated}
       onTrainerDefeated={onTrainerDefeated}
