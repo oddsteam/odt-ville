@@ -589,6 +589,11 @@ export default function PhaserGame({
       setStandeeLine('')
       setStandeeDetail('')
       setStandeeReply('')
+      // Hand the keyboard back to the game. The deploy button suppresses its
+      // own mousedown so clicking it never steals focus mid-typing — which
+      // means focus is still in the form here, and without this the avatar
+      // stays frozen until you happen to click the map.
+      ;(document.activeElement as HTMLElement | null)?.blur()
     }
   }
 
@@ -645,7 +650,25 @@ export default function PhaserGame({
                 {standeeBudget && !standeeBudget.allowed ? (
                   <p className="standee-refusal">{standeeBudget.reason}</p>
                 ) : (
-                  <div className="standee-form">
+                  // Phaser's keyboard plugin listens on `window` and *captures*
+                  // the keys a scene binds — W/A/S/D, SPACE, ENTER — so while a
+                  // field here has focus those keystrokes never reach the input
+                  // and walk the avatar instead. Nothing else in the game
+                  // overlay takes typed text, so this is the first place it
+                  // bites. Silence the game's keyboard for as long as the form
+                  // holds focus; onFocus/onBlur bubble, so the wrapper covers
+                  // all three fields.
+                  <div
+                    className="standee-form"
+                    onFocus={() => {
+                      const kb = gameRef.current?.input?.keyboard
+                      if (kb) kb.enabled = false
+                    }}
+                    onBlur={() => {
+                      const kb = gameRef.current?.input?.keyboard
+                      if (kb) kb.enabled = true
+                    }}
+                  >
                     <input
                       type="text"
                       className="standee-input"

@@ -6,6 +6,10 @@ require "test_helper"
 # load-bearing rule that the count spans maps rather than being per-map.
 module Standees
   class BudgetTest < ActiveSupport::TestCase
+    # test_helper mixes the fixture builders into integration tests only; this
+    # is a model test, so it asks for them itself.
+    include ApiTestHelpers
+
     setup do
       @company, @user = setup_company
     end
