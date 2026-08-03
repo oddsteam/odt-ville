@@ -59,6 +59,10 @@ export default function MapPage({ draft = false }: { draft?: boolean }) {
   // The rigs the map's placed NPCs draw from (#294) — resolved shell-side and
   // handed to the shared renderer through the registry, like `bakedObjects`.
   const npcRigsRef = useRef<readonly { id: number; manifest: unknown }[]>([])
+  // The Standees standing on the map (#369, ADR-0015), each with its owner's rig
+  // resolved by reference — handed to the runtime through the registry like the
+  // NPC rigs. Empty on solo maps (Standees live on multiplayer maps only).
+  const standeesRef = useRef<readonly unknown[]>([])
   // The viewer's stable Keycloak id (#88) — presence filters its own echoed
   // frames by it. Only fetched for multiplayer maps; null keeps presence off.
   const ownIdRef = useRef<string | null>(null)
@@ -82,7 +86,7 @@ export default function MapPage({ draft = false }: { draft?: boolean }) {
         const npcs = await runEdge(NpcsService.list()).catch(() => [] as readonly Npc[])
         // Objects + placed-NPC rigs assembled by the shared helper (#303), the
         // same bundle the portal path loads.
-        const { objects, bakedNpcs } = await loadMapBundle(m, npcs)
+        const { objects, bakedNpcs, bakedStandees } = await loadMapBundle(m, npcs)
         const viewer = m.multiplayer ? await runEdge(ViewerService.get()).catch(() => null) : null
         if (!active) return
         ownIdRef.current = viewer?.user.external_id ?? null
@@ -90,6 +94,7 @@ export default function MapPage({ draft = false }: { draft?: boolean }) {
         objectsRef.current = objects
         npcsRef.current = npcs
         npcRigsRef.current = bakedNpcs
+        standeesRef.current = bakedStandees
         setMap(m)
       })
       .catch((e) => active && setError(e instanceof Error ? e.message : String(e)))
@@ -147,6 +152,7 @@ export default function MapPage({ draft = false }: { draft?: boolean }) {
       map,
       objects: objectsRef.current,
       bakedNpcs: npcRigsRef.current,
+      bakedStandees: standeesRef.current,
       entrySpawnId: entrySpawnIdRef.current,
       presence: presence
         ? { ownId: ownIdRef.current, loadManifest: loadManifestById, ...presence }

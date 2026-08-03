@@ -143,6 +143,15 @@ Rails.application.routes.draw do
         post "maps", to: "maps#create"
         patch "maps/:slug", to: "maps#update"
       end
+
+      # The Standees domain (ADR-0010, ADR-0015): peer-to-peer cutouts read
+      # alongside a map, never baked into it. Nested under the map slug so both
+      # endpoints inherit that map's access gate (#83). `index` returns the
+      # Standees on the map; `create` deploys one at the caller's current cell.
+      scope module: :standees do
+        get "maps/:slug/standees", to: "standees#index"
+        post "maps/:slug/standees", to: "standees#create"
+      end
     end
   end
 end

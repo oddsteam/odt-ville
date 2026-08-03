@@ -650,6 +650,45 @@ button:disabled {
   gap: 6px;
 }
 
+/* Deploy-a-Standee control (#369) — top-centre, above the D-pad. Only mounted
+   on a multiplayer map. A short-line input plus a "Leave standee" button in the
+   GB chrome; the scene stands the cutout up the moment the write returns. */
+.overlay-standee {
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: rgba(11, 13, 18, 0.78);
+  border: 2px solid var(--ink);
+}
+
+.standee-input {
+  width: 150px;
+  padding: 3px 5px;
+  font-family: inherit;
+  font-size: 8px;
+  color: var(--ink);
+  background: var(--paper);
+  border: 2px solid var(--ink);
+}
+
+.standee-btn {
+  padding: 3px 6px;
+  font-size: 8px;
+  color: var(--ink);
+  background: #fff0c4;
+  border: 2px solid var(--ink);
+  box-shadow: 2px 2px 0 var(--ink);
+  white-space: nowrap;
+}
+
+.standee-btn:disabled {
+  opacity: 0.5;
+  box-shadow: none;
+}
+
 /* D-pad */
 .dpad {
   display: grid;

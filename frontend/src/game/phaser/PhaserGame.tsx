@@ -109,7 +109,27 @@ export type PhaserGameProps = {
     // the registry exactly as it does on the standalone /maps/:slug page.
     // `voice` (#287) rides the same bundle: the proximity-voice mesh for a
     // multiplayer target, or null for a solo map.
-  }) => Promise<{ map: unknown; objects: unknown; bakedNpcs?: unknown; presence?: unknown; voice?: unknown } | null>
+  }) => Promise<{
+    map: unknown
+    objects: unknown
+    bakedNpcs?: unknown
+    // The Standees standing on the target (#369, ADR-0015) — resolved by the
+    // shell like bakedNpcs, so the portal path can't drop them (the #294/#295 trap).
+    bakedStandees?: unknown
+    presence?: unknown
+    voice?: unknown
+  } | null>
+  // Deploy a Standee (#369, ADR-0015): the overlay's deploy control calls in
+  // here so the write stays out of the game black box (ADR-0004) — the shell
+  // owns the POST and the outbound data service. Resolves to the created Standee
+  // (echoed onto the bus so the scene stands the cutout up at once) or null on a
+  // refusal. Absent on shells that don't offer deploying (e.g. the town-only page).
+  onDeployStandee?: (payload: {
+    slug: string
+    x: number
+    y: number
+    message: string
+  }) => Promise<{ id: number; x: number; y: number; message: string } | null>
   trainerDefeated: boolean
   onTrainerDefeated: () => void
 }
@@ -132,6 +152,7 @@ export default function PhaserGame({
   onEncounter,
   onRequestEntry,
   onPortal,
+  onDeployStandee,
   trainerDefeated,
   onTrainerDefeated,
 }: PhaserGameProps) {
@@ -139,6 +160,14 @@ export default function PhaserGame({
   const shellRef = useRef<HTMLDivElement>(null)
   const gameRef = useRef<Phaser.Game | null>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
+  // Which map the game is currently showing (#369), learned from the scene over
+  // the bus — the deploy control shows only on a multiplayer map and POSTs to
+  // this slug. Null in the town / on a solo map.
+  const [mapContext, setMapContext] = useState<{ slug: string; multiplayer: boolean } | null>(null)
+  const [standeeLine, setStandeeLine] = useState('')
+  const [deploying, setDeploying] = useState(false)
+  const deployStandeeRef = useRef(onDeployStandee)
+  deployStandeeRef.current = onDeployStandee
 
   const enterCommunityRef = useRef(onEnterCommunity)
   enterCommunityRef.current = onEnterCommunity
@@ -221,6 +250,7 @@ export default function PhaserGame({
         map: loaded.map,
         objects: loaded.objects,
         bakedNpcs: loaded.bakedNpcs ?? [],
+        bakedStandees: loaded.bakedStandees ?? [],
         entrySpawnId: portal.entrySpawnId,
         presence: loaded.presence ?? null,
         voice: loaded.voice ?? null,
@@ -444,6 +474,44 @@ export default function PhaserGame({
   const onDpadRelease = (dir: string) => bus.emit('dpadRelease', dir)
   const onAButton = () => bus.emit('aButton')
 
+  // Track which map the scene is on so the deploy control (#369) appears only on
+  // a multiplayer map. MapScene emits `mapEntered`/`mapLeft` around its lifetime.
+  useEffect(() => {
+    const entered = (ctx: { slug: string; multiplayer: boolean }) => setMapContext(ctx)
+    const left = () => {
+      setMapContext(null)
+      setStandeeLine('')
+    }
+    bus.on('mapEntered', entered)
+    bus.on('mapLeft', left)
+    return () => {
+      bus.off('mapEntered', entered)
+      bus.off('mapLeft', left)
+    }
+  }, [])
+
+  // Deploy a Standee where the avatar stands (#369): the shell owns the write,
+  // and on success the created Standee rides the bus so the scene stands the
+  // cutout up without a reload. The cell comes from the scene's test API, the
+  // same source the walking e2e scripts read.
+  const submitStandee = async () => {
+    const line = standeeLine.trim()
+    const deploy = deployStandeeRef.current
+    if (!line || !mapContext || !deploy) return
+    const tile = (window as unknown as { __game?: { playerTile?: () => { x: number; y: number } } })
+      .__game?.playerTile?.()
+    if (!tile) return
+    setDeploying(true)
+    const created = await deploy({ slug: mapContext.slug, x: tile.x, y: tile.y, message: line }).catch(
+      () => null,
+    )
+    setDeploying(false)
+    if (created) {
+      bus.emit('standeeDeployed', created)
+      setStandeeLine('')
+    }
+  }
+
   // Dynamic topbar label — community title while inside a house,
   // "ODT VILLE" when in the town.
   const activeCommunity =
@@ -482,6 +550,34 @@ export default function PhaserGame({
                 {isFullscreen ? '⊟ EXIT' : '⛶ FULL'}
               </button>
             </div>
+
+            {mapContext?.multiplayer && onDeployStandee && (
+              <div className="overlay-slot overlay-standee">
+                <input
+                  type="text"
+                  className="standee-input"
+                  value={standeeLine}
+                  maxLength={80}
+                  placeholder="Leave a standee…"
+                  onChange={(e) => setStandeeLine(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      void submitStandee()
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  className="standee-btn"
+                  disabled={deploying || !standeeLine.trim()}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => void submitStandee()}
+                >
+                  {deploying ? '…' : 'Leave standee'}
+                </button>
+              </div>
+            )}
 
             <div className="overlay-slot overlay-bl">
               <MobileDpad onPress={onDpadPress} onRelease={onDpadRelease} />

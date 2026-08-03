@@ -5,6 +5,7 @@ import { cameraBounds } from '../canvasLayout.ts'
 import { isTransitioning } from '../../transition.ts'
 import { spawnTile, mapWalkable, entityBlockedFor, entityEdgeBlockedFor, entityDoorCells, entityLadderFor, entityOverhangFor, entityForegroundFor, mapPlayerDepth, slidePlayerDepth, feetWorldXY } from '../mapWalk.ts'
 import { spawnNpcs, npcBlockedFor, sortNpcs } from '../mapNpcs.ts'
+import { spawnStandees, sortStandees } from '../mapStandees.ts'
 import {
   CHAR_SHEET_KEY,
   preloadCharacter,
@@ -90,6 +91,11 @@ export default class MapScene extends Phaser.Scene {
     // The placed NPCs, alive (#295): the kernel's stamps rigged and animating,
     // each holding the cell it actually stands on.
     this.npcs = spawnNpcs(this)
+    // Standees, the runtime-placed peer cutouts (#369, ADR-0015): static effigies
+    // the shell handed over the registry, resolved by reference. Deliberately NOT
+    // folded into `walkable` below — a Standee never blocks, so the avatar walks
+    // straight through its cell.
+    this.standees = spawnStandees(this)
     // A placed NPC's baked walk_mask is only its authored *starting* cell (#294),
     // so it is skipped here — the live entity speaks for where an NPC blocks, and
     // keeps doing so once something walks it. Unlike a building's mask, a person
@@ -160,6 +166,9 @@ export default class MapScene extends Phaser.Scene {
     // NPCs sort against the avatar's row rather than the flat entity band (#295)
     // — one standing further south covers it, one further north stands behind.
     sortNpcs(this.npcs, this.playerTile.y)
+    // Standees sort by the very same rule (#369): a cutout is character-shaped,
+    // so it covers/reveals the avatar exactly as a placed NPC does.
+    sortStandees(this.standees, this.playerTile.y)
 
     this.cursors = this.input.keyboard.createCursorKeys()
     this.wasd = this.input.keyboard.addKeys({
@@ -186,15 +195,26 @@ export default class MapScene extends Phaser.Scene {
       if (this.dpadDir === d) this.dpadDir = null
     }
     this._onABtn = () => this.pressA()
+    // Deploy affordance (#369): the shell owns the write (the game imports no
+    // data service, ADR-0004) and echoes the created Standee back on the bus. We
+    // stand the deployer's own cutout up at once, so it appears without a reload.
+    this._onStandeeDeployed = (s) => this.addOwnStandee(s)
     bus.on('dpadPress', this._onDpadPress)
     bus.on('dpadRelease', this._onDpadRelease)
     bus.on('aButton', this._onABtn)
+    bus.on('standeeDeployed', this._onStandeeDeployed)
+    // Tell the shell overlay which map we're on, so the deploy control shows
+    // only on a multiplayer map and knows the slug to POST to. Standalone MapPage
+    // has no overlay, so nothing listens; leaving emits `mapLeft` to hide it.
+    bus.emit('mapEntered', { slug: map.slug, multiplayer: Boolean(map.multiplayer) })
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.input.keyboard.off('keydown-ENTER', this.pressA, this)
       this.input.keyboard.off('keydown-SPACE', this.pressA, this)
       bus.off('dpadPress', this._onDpadPress)
       bus.off('dpadRelease', this._onDpadRelease)
       bus.off('aButton', this._onABtn)
+      bus.off('standeeDeployed', this._onStandeeDeployed)
+      bus.emit('mapLeft')
     })
 
     // The camera inside a building behaves exactly as outside (#261): 1:1
@@ -281,6 +301,25 @@ export default class MapScene extends Phaser.Scene {
     for (const ev of interactZoneEvents(this.playerTile, faced, this._bakedMap?.zones)) {
       onZone(ev.trigger, ev.zone)
     }
+  }
+
+  // Stand up the deployer's own cutout the instant a deploy succeeds (#369), so
+  // it appears without a reload. It reuses the avatar's already-rigged sheet —
+  // which *is* the owner's rig, by definition — so no fetch is needed; a later
+  // map load resolves every cutout by reference through the registry instead.
+  // Never blocks and never animates, exactly like a loaded Standee.
+  addOwnStandee({ id, x, y, message = '' }) {
+    if (!this.standees) return
+    const wx = (x + 0.5) * TILE
+    const wy = (y + 1) * TILE
+    const sprite = this.usingManifest
+      ? this.add
+          .sprite(wx, wy, CHAR_SHEET_KEY, this.charDir.down.idleFrame)
+          .setOrigin(0.5, 1)
+          .setScale(characterScale(this._charManifest))
+      : this.add.image(wx, wy, `player.down.0`).setOrigin(0.5, 1).setDisplaySize(TILE, TILE * 2)
+    this.standees.push({ id, message, tile: { x, y }, sprite })
+    sortStandees(this.standees, this.playerTile.y)
   }
 
   sendPosition() {
@@ -523,6 +562,8 @@ export default class MapScene extends Phaser.Scene {
         // Re-sort the NPCs against the row being stepped onto, so walking past
         // one swaps who covers whom for the whole slide (#295).
         sortNpcs(this.npcs, t.y)
+        // Standee cutouts re-sort against the same row (#369).
+        sortStandees(this.standees, t.y)
         // Climb while stepping onto a placed object's ladder cell (#211); the
         // rig falls back to walk when the character authors no climb frames.
         if (this.usingManifest) applyFacing(this.player, this.charDir, dir, true, this.isLadder(t.x, t.y))

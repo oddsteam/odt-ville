@@ -99,6 +99,12 @@ export type NpcRig = {
 // Texture key for a placed NPC's rig sheet, alongside `obj.<id>` for props.
 export const npcSheetKey = (npcId: number) => `npc.${npcId}`
 
+// Texture key for a Standee's rig sheet (#369, ADR-0015). A Standee is not baked
+// into the document — the shell resolves the owner's rig by reference and hands
+// the list over the registry (`bakedStandees`), the same boot-input timing as
+// `bakedNpcs`; this only names the sheet the runtime loads for it.
+export const standeeSheetKey = (standeeId: number) => `standee.${standeeId}`
+
 // One stamp for a placed NPC: the idle frame for its authored facing, resolved
 // through the same kernel helper the game's character rig uses, so the pose an
 // author sees can't drift from the one the runtime shows. Sized off the frame at
@@ -243,6 +249,18 @@ export function preloadBakedMap(scene: Scene) {
   for (const n of npcs) {
     const src = n.manifest ? resolveSheetSrc(n.manifest) : ''
     if (src) scene.load.image(npcSheetKey(n.id), src)
+  }
+  // Standees (#369, ADR-0015): runtime-placed cutouts the shell resolves by
+  // reference and hands over the registry (`bakedStandees`) — read alongside the
+  // map, never baked into it, so they load here beside the NPC rigs rather than
+  // through bakedDraws. A Standee whose owner has no rig loads nothing; the game
+  // layer (mapStandees) draws the bundled fallback for it rather than crashing.
+  const standees: Array<{ id: number; manifest: NpcRig | null }> =
+    scene.registry.get('bakedStandees') || []
+  scene._bakedStandees = standees
+  for (const s of standees) {
+    const src = s.manifest ? resolveSheetSrc(s.manifest) : ''
+    if (src) scene.load.image(standeeSheetKey(s.id), src)
   }
 }
 

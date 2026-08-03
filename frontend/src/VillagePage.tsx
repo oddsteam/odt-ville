@@ -8,6 +8,7 @@ import { openGatePopup, awaitGateResult } from './posture/popup.ts'
 import { CALLBACK_PATH } from './posture/callback.ts'
 import { loadTown as loadTownData, townErrorMessage } from './townLoader.ts'
 import { MapsService } from './maps/service.ts'
+import { StandeesWrite } from './standees/write.ts'
 import { loadMapBundle } from './maps/target.ts'
 import { runEdge } from './lib/runEdge.ts'
 import { subscribeAuthToken } from './lib/authToken.ts'
@@ -204,16 +205,33 @@ export default function VillagePage() {
         // Objects + placed-NPC rigs from the shared helper (#303), the same
         // bundle MapPage's route loader assembles — so neither path can drop a
         // per-target input the other keeps.
-        const { objects, bakedNpcs } = await loadMapBundle(map, npcs)
+        const { objects, bakedNpcs, bakedStandees } = await loadMapBundle(map, npcs)
         const presence = await presenceRef.current.open(map)
         const voice = await voiceRef.current.open(map)
-        return { map, objects, bakedNpcs, presence, voice }
+        return { map, objects, bakedNpcs, bakedStandees, presence, voice }
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e))
         return null
       }
     },
     [npcs],
+  )
+
+  // Deploy a Standee where the avatar stands (#369, ADR-0015). The shell owns
+  // the durable write so the game black box imports no data service (ADR-0004);
+  // PhaserGame's overlay collects the short line and the cell and calls in here,
+  // then echoes the created Standee to the scene so the cutout appears at once.
+  // A refusal (e.g. deploying on a solo map) surfaces on the error banner.
+  const handleDeployStandee = useCallback(
+    async ({ slug, x, y, message }: { slug: string; x: number; y: number; message: string }) => {
+      try {
+        return await runEdge(StandeesWrite.deploy(slug, { x, y, message }))
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e))
+        return null
+      }
+    },
+    [],
   )
 
   // Each board's "open content list" action. The game module knows nothing
@@ -323,6 +341,7 @@ export default function VillagePage() {
         onEncounter={handleEncounter}
         onRequestEntry={handleRequestEntry}
         onPortal={handlePortal}
+        onDeployStandee={handleDeployStandee}
         trainerDefeated={trainerDefeated}
         onTrainerDefeated={() => setTrainerDefeated(true)}
       />

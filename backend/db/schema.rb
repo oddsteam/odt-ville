@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_02_000001) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_03_000001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -135,6 +135,18 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_02_000001) do
     t.index ["name"], name: "index_monsters_on_name", unique: true
   end
 
+  create_table "standees", force: :cascade do |t|
+    t.integer "cell_x", null: false
+    t.integer "cell_y", null: false
+    t.datetime "created_at", null: false
+    t.bigint "map_id", null: false
+    t.string "message", null: false
+    t.datetime "updated_at", null: false
+    t.bigint "user_id", null: false
+    t.index ["map_id"], name: "index_standees_on_map_id"
+    t.index ["user_id"], name: "index_standees_on_user_id"
+  end
+
   create_table "terrains", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.string "name", null: false
@@ -212,6 +224,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_02_000001) do
   add_foreign_key "houses", "tile_objects", on_delete: :nullify
   add_foreign_key "maps_map_memberships", "maps"
   add_foreign_key "maps_map_memberships", "users"
+  add_foreign_key "standees", "maps", on_delete: :cascade
+  add_foreign_key "standees", "users", on_delete: :cascade
   add_foreign_key "user_content_states", "content_items"
   add_foreign_key "user_content_states", "users"
   add_foreign_key "user_location_states", "companies"

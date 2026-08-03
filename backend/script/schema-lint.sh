@@ -36,11 +36,15 @@ existing_tables=(
   boards character_manifests companies content_items ground_tiles houses
   maps monsters terrains tile_objects user_content_states
   user_location_states users
+  # A new module's primary table takes the module name (as `maps` does for the
+  # Maps module); its secondary tables carry the `standees_` prefix below.
+  standees
 )
 
 # One prefix per domain module (see the module map in CONTEXT.md / ADR-0010).
 prefixes=(
   org_ catalog_ communities_ maps_ auth_ viewer_ game_session_ character_ posture_
+  standees_
 )
 
 # Today's nine foreign keys, as "from_table|to_table". Adding a legitimate FK
@@ -53,6 +57,8 @@ fk_allowlist=(
   "houses|tile_objects"
   "maps_map_memberships|maps"
   "maps_map_memberships|users"
+  "standees|maps"
+  "standees|users"
   "user_content_states|content_items"
   "user_content_states|users"
   "user_location_states|companies"
