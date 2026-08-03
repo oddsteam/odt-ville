@@ -19,7 +19,7 @@ module Api
         def index
           standees = ::Standees::Standee.where(map_id: @map.id)
                                         .includes(user: :character_manifest).order(:id)
-          render json: standees.map { |s| ::Standees::StandeeSerializer.call(s) }
+          render json: standees.map { |s| ::Standees::StandeeSerializer.call(s, viewer: current_user) }
         end
 
         # POST /api/v1/maps/:slug/standees — deploy a Standee at the caller's
@@ -49,7 +49,22 @@ module Api
             detail: deploy_params[:detail],
             reply_link: deploy_params[:reply_link]
           )
-          render json: ::Standees::StandeeSerializer.call(standee), status: :created
+          render json: ::Standees::StandeeSerializer.call(standee, viewer: current_user), status: :created
+        end
+
+        # DELETE /api/v1/standees/:id — the owner picks up their own Standee
+        # (#370). Only the owner may: there is no per-target authorization by
+        # role (#279 — roles live in the caller's JWT, not our DB), so the one
+        # check is "is this yours". Deleting the row frees a budget slot at once,
+        # so the owner can redeploy immediately (the cap counts live rows, #371).
+        def destroy
+          standee = ::Standees::Standee.find(params[:id])
+          unless standee.user_id == current_user.id
+            return render json: { error: "You can only pick up your own Standee" }, status: :forbidden
+          end
+
+          standee.destroy
+          head :no_content
         end
 
         # GET /api/v1/standees/mine — the caller's Standees across every map,

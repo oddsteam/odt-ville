@@ -157,6 +157,7 @@ export type PhaserGameProps = {
     ownerName: string | null
     ownerAvatarUrl: string | null
     replyLink: string | null
+    mine: boolean
   }) => Promise<void>
   // The caller's world-wide Standee budget (#371): the count out, the cap,
   // whether a deploy is allowed, and the located refusal when at the cap. A
@@ -547,6 +548,7 @@ export default function PhaserGame({
       ownerName: string | null
       ownerAvatarUrl: string | null
       replyLink: string | null
+      mine: boolean
     }) => {
       const handler = readStandeeRef.current
       if (!handler) {

@@ -155,6 +155,55 @@ module Api
         end
       end
 
+      # --- Pickup: the owner takes their own cutout back (#370, ADR-0015) ----
+
+      test "the owner picks up their own Standee — the row is gone and the slot freed" do
+        plaza = make_map(slug: "plaza")
+        standee = ::Standees::Standee.create!(map: plaza, user: @user, cell_x: 3, cell_y: 5, message: "mine")
+
+        assert_difference "::Standees::Standee.count", -1 do
+          delete "/api/v1/standees/#{standee.id}", headers: auth(@user)
+        end
+
+        assert_response :no_content
+        assert_nil ::Standees::Standee.find_by(id: standee.id)
+      end
+
+      test "a non-owner may not pick up someone else's Standee" do
+        _, other = setup_company
+        plaza = make_map(slug: "plaza")
+        standee = ::Standees::Standee.create!(map: plaza, user: other, cell_x: 3, cell_y: 5, message: "theirs")
+
+        assert_no_difference "::Standees::Standee.count" do
+          delete "/api/v1/standees/#{standee.id}", headers: auth(@user)
+        end
+
+        assert_response :forbidden
+        assert ::Standees::Standee.exists?(standee.id)
+      end
+
+      test "picking up an unknown Standee returns 404" do
+        delete "/api/v1/standees/999999", headers: auth(@user)
+        assert_response :not_found
+      end
+
+      test "index flags the caller's own Standees as mine" do
+        # The affordance differs by who is asking (#370): press-A offers pick up
+        # on your own cutout, reply on someone else's — so index tells the client
+        # which is which.
+        _, other = setup_company
+        plaza = make_map(slug: "plaza")
+        ::Standees::Standee.create!(map: plaza, user: @user, cell_x: 1, cell_y: 1, message: "mine")
+        ::Standees::Standee.create!(map: plaza, user: other, cell_x: 2, cell_y: 2, message: "theirs")
+
+        get "/api/v1/maps/plaza/standees", headers: auth(@user)
+
+        assert_response :success
+        by_message = json.to_h { |s| [s[:message], s[:mine]] }
+        assert_equal true, by_message["mine"]
+        assert_equal false, by_message["theirs"]
+      end
+
       test "deploy and index inherit the map's access gate" do
         make_map(slug: "staff-room", policy: { "kind" => "claim", "role" => "staff" })
 

@@ -15,9 +15,15 @@ import { attribution, replyHref, shortLine, type Placard } from './placard.ts'
 export default function PlacardPanel({
   placard,
   onClose,
+  onPickUp,
 }: {
   placard: Placard
   onClose: () => void
+  // Present only where the shell owns the pickup write (#370). On your own
+  // cutout it offers *pick up* where a visitor is offered *reply* — the same
+  // press-A, a different affordance by who is asking. Absent (e.g. a read-only
+  // surface) simply shows no pickup button.
+  onPickUp?: () => void
 }) {
   // Escape closes, like any modal takeover; the game resumes on close.
   useEffect(() => {
@@ -32,7 +38,9 @@ export default function PlacardPanel({
   // The reply link becomes a button only when it is a real http(s) address
   // (#373) — a missing, malformed or non-web link simply has none, and the
   // Placard still says its piece. Opens in a new tab, like the board shortcut.
-  const reply = placard.replyLink ? replyHref(placard.replyLink) : null
+  // Suppressed on your own cutout (#370): there the affordance is pick up, not
+  // reply — you don't reply to your own announcement.
+  const reply = !placard.mine && placard.replyLink ? replyHref(placard.replyLink) : null
 
   return (
     <div className="placard-scrim" onClick={onClose}>
@@ -61,6 +69,11 @@ export default function PlacardPanel({
           >
             Reply where they’re planning it →
           </a>
+        )}
+        {placard.mine && onPickUp && (
+          <button type="button" className="placard-pickup" onClick={onPickUp}>
+            Pick up
+          </button>
         )}
       </div>
     </div>

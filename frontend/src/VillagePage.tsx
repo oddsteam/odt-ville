@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import VillageGame from './game/VillageGame.tsx'
+import bus from './game/phaser/bus.js'
 import DailyBriefShortcut from './communities/DailyBriefShortcut.tsx'
 import { saveGameSession } from './game-session/client.js'
 import { startPosture, confirmPosture } from './posture/client.ts'
@@ -288,6 +289,23 @@ export default function VillagePage() {
     [],
   )
 
+  // Pick up your own cutout (#370): the shell owns the durable DELETE, then
+  // echoes the id to the scene so the cutout vanishes without a reload, and
+  // refreshes the world-wide budget so the freed slot shows at once. The panel
+  // closes either way — a refusal surfaces on the error banner.
+  const handlePickUpStandee = useCallback(async () => {
+    if (!placard) return
+    try {
+      await runEdge(StandeesWrite.pickUp(placard.id))
+      bus.emit('standeePickedUp', placard.id)
+      setMyStandees(await runEdge(StandeesService.mine()).catch(() => null))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      placardCloseRef.current?.()
+    }
+  }, [placard])
+
   // Each board's "open content list" action. The game module knows nothing
   // about this; it just emits the board id and the page decides.
   const handleOpenBoard = useCallback(
@@ -413,7 +431,11 @@ export default function VillagePage() {
       />
 
       {placard && (
-        <PlacardPanel placard={placard} onClose={() => placardCloseRef.current?.()} />
+        <PlacardPanel
+          placard={placard}
+          onClose={() => placardCloseRef.current?.()}
+          onPickUp={handlePickUpStandee}
+        />
       )}
     </>
   )

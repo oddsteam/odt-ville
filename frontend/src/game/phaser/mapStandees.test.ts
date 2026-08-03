@@ -127,6 +127,7 @@ describe('standeeAt / placardOf', () => {
     ownerName: null,
     ownerAvatarUrl: null,
     replyLink: null,
+    mine: false,
     tile: { x, y },
     sprite: fakeSprite(),
     ...extra,
@@ -138,13 +139,14 @@ describe('standeeAt / placardOf', () => {
     expect(standeeAt(standees, { x: 9, y: 9 })).toBeUndefined()
   })
 
-  it('strips the Placard the shell renders from the live cutout', () => {
+  it('strips the Placard the shell renders from the live cutout, ownership included', () => {
     const s = live(7, 1, 1, {
       message: 'Board games at 4',
       detail: 'Kitchen, bring a game',
       ownerName: 'Ada Lovelace',
       ownerAvatarUrl: '/api/v1/users/abc/avatar',
       replyLink: 'https://basecamp.com/1/campfire/2',
+      mine: true,
     })
     expect(placardOf(s)).toEqual({
       id: 7,
@@ -153,13 +155,16 @@ describe('standeeAt / placardOf', () => {
       ownerName: 'Ada Lovelace',
       ownerAvatarUrl: '/api/v1/users/abc/avatar',
       replyLink: 'https://basecamp.com/1/campfire/2',
+      // The affordance differs by who is asking (#370): the shell offers pick
+      // up on your own cutout, reply on someone else's.
+      mine: true,
     })
   })
 })
 
 describe('sortStandees', () => {
   it('draws a Standee south of the avatar over it, one north behind, by the NPC rule', () => {
-    const base = { detail: null, ownerName: null, ownerAvatarUrl: null, replyLink: null }
+    const base = { detail: null, ownerName: null, ownerAvatarUrl: null, replyLink: null, mine: false }
     const north: LiveStandee = { id: 1, message: 'a', tile: { x: 0, y: 1 }, sprite: fakeSprite(), ...base }
     const south: LiveStandee = { id: 2, message: 'b', tile: { x: 0, y: 5 }, sprite: fakeSprite(), ...base }
 

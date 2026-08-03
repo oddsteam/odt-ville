@@ -48,6 +48,9 @@ async function loadStandees(map: BakedMap) {
       // The reply link the owner supplied (#373): carried through as plain data
       // for the shell's Placard button; `replyHref` gates the click-through.
       replyLink: s.reply_link,
+      // Whether the caller owns this cutout (#370): drives the pick-up affordance
+      // on press-A, resolved server-side against the authenticated caller.
+      mine: s.mine,
       manifest: s.character_manifest_id != null ? await loadManifestById(s.character_manifest_id) : null,
     })),
   )

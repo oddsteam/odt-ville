@@ -206,6 +206,9 @@ export default class MapScene extends Phaser.Scene {
     // data service, ADR-0004) and echoes the created Standee back on the bus. We
     // stand the deployer's own cutout up at once, so it appears without a reload.
     this._onStandeeDeployed = (s) => this.addOwnStandee(s)
+    // The owner picked up their own cutout (#370): the shell owns the DELETE and
+    // echoes the id so we drop the sprite at once, without a reload.
+    this._onStandeePickedUp = (id) => this.removeStandee(id)
     // The shell closed a Placard panel (#372): resume input in place. The
     // avatar never moved while reading, so "exactly where they were" is free.
     this._onStandeeClosed = () => {
@@ -215,6 +218,7 @@ export default class MapScene extends Phaser.Scene {
     bus.on('dpadRelease', this._onDpadRelease)
     bus.on('aButton', this._onABtn)
     bus.on('standeeDeployed', this._onStandeeDeployed)
+    bus.on('standeePickedUp', this._onStandeePickedUp)
     bus.on('standeeClosed', this._onStandeeClosed)
     // Tell the shell overlay which map we're on, so the deploy control shows
     // only on a multiplayer map and knows the slug to POST to. Standalone MapPage
@@ -227,6 +231,7 @@ export default class MapScene extends Phaser.Scene {
       bus.off('dpadRelease', this._onDpadRelease)
       bus.off('aButton', this._onABtn)
       bus.off('standeeDeployed', this._onStandeeDeployed)
+      bus.off('standeePickedUp', this._onStandeePickedUp)
       bus.off('standeeClosed', this._onStandeeClosed)
       bus.emit('mapLeft')
     })
@@ -346,7 +351,8 @@ export default class MapScene extends Phaser.Scene {
           .setScale(characterScale(this._charManifest))
       : this.add.image(wx, wy, `player.down.0`).setOrigin(0.5, 1).setDisplaySize(TILE, TILE * 2)
     // Carry the Placard the server echoed back (#372) so pressing A on your own
-    // fresh cutout reads it too — the same shape a loaded Standee holds.
+    // fresh cutout reads it too — the same shape a loaded Standee holds. It is
+    // yours by definition, so `mine` is true: press-A offers pick up on it (#370).
     this.standees.push({
       id,
       message,
@@ -354,10 +360,23 @@ export default class MapScene extends Phaser.Scene {
       ownerName: owner_name,
       ownerAvatarUrl: owner_avatar_url,
       replyLink: reply_link,
+      mine: true,
       tile: { x, y },
       sprite,
     })
     sortStandees(this.standees, this.playerTile.y)
+  }
+
+  // Take a picked-up cutout off the map the instant its owner confirms (#370),
+  // so it disappears without a reload — the mirror of addOwnStandee. The shell
+  // owns the durable DELETE and echoes the id back on the bus; we drop the
+  // sprite and the entry. Unknown id is a no-op (already gone).
+  removeStandee(id) {
+    if (!this.standees) return
+    const i = this.standees.findIndex((s) => s.id === id)
+    if (i === -1) return
+    this.standees[i].sprite?.destroy()
+    this.standees.splice(i, 1)
   }
 
   sendPosition() {

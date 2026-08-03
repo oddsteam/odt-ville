@@ -7,13 +7,18 @@ module Standees
   module StandeeSerializer
     module_function
 
-    def call(standee)
+    def call(standee, viewer: nil)
       owner = standee.user
       {
         id: standee.id,
         x: standee.cell_x,
         y: standee.cell_y,
         message: standee.message,
+        # Whether the caller owns this Standee (#370): press-A offers *pick up*
+        # on your own cutout where it offers *reply* on someone else's, so the
+        # runtime is told which is which. Resolved against the authenticated
+        # caller — false when serialized without a viewer.
+        mine: viewer.present? && standee.user_id == viewer.id,
         # The Placard's detail body (#372), revealed on press-A; null when the
         # owner left only a short line.
         detail: standee.detail,
