@@ -128,6 +128,64 @@ module Api
         deploy("does-not-exist")
         assert_response :not_found
       end
+
+      # --- Budget: 3 across all maps (#371, ADR-0015) ---------------------
+
+      # Fill the caller's world-wide budget to the cap, spread across two maps so
+      # the count is proven to span maps rather than being per-map.
+      def fill_budget
+        plaza = make_map(slug: "plaza")
+        grove = make_map(slug: "grove")
+        ::Standees::Standee.create!(map: plaza, user: @user, cell_x: 3, cell_y: 5, message: "one")
+        ::Standees::Standee.create!(map: grove, user: @user, cell_x: 2, cell_y: 2, message: "two")
+        ::Standees::Standee.create!(map: plaza, user: @user, cell_x: 1, cell_y: 1, message: "three")
+      end
+
+      test "deploy at the cap is refused with a located pointer and no new row" do
+        fill_budget
+
+        assert_no_difference "::Standees::Standee.count" do
+          deploy("plaza", message: "one too many")
+        end
+
+        assert_response :unprocessable_entity
+        # The refusal names where the existing Standees are standing.
+        assert_match "Plaza (3, 5)", json[:error]
+        assert_match "Grove (2, 2)", json[:error]
+      end
+
+      test "another employee's Standees do not consume my budget" do
+        _, other = setup_company
+        plaza = make_map(slug: "plaza")
+        3.times { |i| ::Standees::Standee.create!(map: plaza, user: other, cell_x: i, cell_y: 0, message: "theirs") }
+
+        assert_difference "::Standees::Standee.count", 1 do
+          deploy("plaza")
+        end
+        assert_response :created
+      end
+
+      test "mine returns the caller's Standees across all maps with the cap" do
+        fill_budget
+
+        get "/api/v1/standees/mine", headers: auth(@user)
+
+        assert_response :success
+        assert_equal 3, json[:cap]
+        assert_equal 3, json[:out]
+        # Every map the caller has a Standee on is named, with its cell.
+        titles = json[:standees].map { |s| s[:map_title] }
+        assert_equal ["Plaza", "Grove", "Plaza"], titles
+        assert_equal ["plaza", "grove", "plaza"], json[:standees].map { |s| s[:map_slug] }
+      end
+
+      test "mine is empty for an employee with none out" do
+        get "/api/v1/standees/mine", headers: auth(@user)
+
+        assert_response :success
+        assert_equal 0, json[:out]
+        assert_equal [], json[:standees]
+      end
     end
   end
 end

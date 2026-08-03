@@ -46,6 +46,7 @@ export default function VillageGame({
   onRequestEntry,
   onPortal,
   onDeployStandee,
+  standeeBudget,
   trainerDefeated,
   onTrainerDefeated,
 }: PhaserGameProps) {
@@ -69,6 +70,7 @@ export default function VillageGame({
       onRequestEntry={onRequestEntry}
       onPortal={onPortal}
       onDeployStandee={onDeployStandee}
+      standeeBudget={standeeBudget}
       trainerDefeated={trainerDefeated}
       onTrainerDefeated={onTrainerDefeated}
     />

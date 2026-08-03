@@ -151,6 +151,9 @@ Rails.application.routes.draw do
       scope module: :standees do
         get "maps/:slug/standees", to: "standees#index"
         post "maps/:slug/standees", to: "standees#create"
+        # The caller's own Standees across every map, for the world-wide budget
+        # of 3 (#371) — not scoped to a map, so it carries no slug.
+        get "standees/mine", to: "standees#mine"
       end
     end
   end

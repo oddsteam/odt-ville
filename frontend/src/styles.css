@@ -658,10 +658,35 @@ button:disabled {
   left: 50%;
   transform: translateX(-50%);
   display: flex;
+  flex-direction: column;
+  align-items: center;
   gap: 4px;
   padding: 4px;
   background: rgba(11, 13, 18, 0.78);
   border: 2px solid var(--ink);
+}
+
+/* The input + button row (#371): stacked under the "N of 3 out" budget line. */
+.standee-form {
+  display: flex;
+  gap: 4px;
+}
+
+/* The world-wide budget of 3 (#371): "N of 3 out" over the deploy form, and the
+   located refusal that replaces the form at the cap. */
+.standee-budget {
+  margin: 0;
+  font-size: 8px;
+  color: var(--paper);
+}
+
+.standee-refusal {
+  margin: 0;
+  max-width: 200px;
+  font-size: 8px;
+  line-height: 1.4;
+  color: #ffd9a0;
+  text-align: center;
 }
 
 .standee-input {

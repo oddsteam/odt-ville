@@ -11,7 +11,7 @@ module Api
       # Leading-colon `::Standees::` reaches the domain module — inside
       # Api::V1::Standees a bare `Standees` would resolve to this namespace.
       class StandeesController < BaseController
-        before_action :load_map
+        before_action :load_map, only: [:index, :create]
 
         # GET /api/v1/maps/:slug/standees — the Standees standing on this map.
         # Queried by map_id rather than through a reverse association, so the
@@ -32,6 +32,13 @@ module Api
                           status: :unprocessable_entity
           end
 
+          # The world-wide budget of 3 (#371): at the cap the deploy is refused
+          # with a pointer to the Standees already out — never a silent replace.
+          budget = ::Standees::Budget.for(current_user)
+          unless budget.allows?
+            return render json: { error: budget.refusal }, status: :unprocessable_entity
+          end
+
           standee = ::Standees::Standee.create!(
             map: @map,
             user: current_user,
@@ -40,6 +47,20 @@ module Api
             message: deploy_params[:message]
           )
           render json: ::Standees::StandeeSerializer.call(standee), status: :created
+        end
+
+        # GET /api/v1/standees/mine — the caller's Standees across every map,
+        # with the world-wide cap and the count already out (#371). Feeds the
+        # deploy affordance's "N of 3 out" before the employee writes anything,
+        # so they are never asked to fill in a form they cannot submit. Not
+        # scoped to a map, so it skips `load_map`.
+        def mine
+          budget = ::Standees::Budget.for(current_user)
+          render json: {
+            cap: ::Standees::Budget::CAP,
+            out: budget.out,
+            standees: budget.standees.map { |s| ::Standees::StandeeSerializer.mine(s) }
+          }
         end
 
         private

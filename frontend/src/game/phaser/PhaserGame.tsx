@@ -130,6 +130,16 @@ export type PhaserGameProps = {
     y: number
     message: string
   }) => Promise<{ id: number; x: number; y: number; message: string } | null>
+  // The caller's world-wide Standee budget (#371): the count out, the cap,
+  // whether a deploy is allowed, and the located refusal when at the cap. A
+  // plain display shape resolved by the shell — no standees/ import enters the
+  // game black box (ADR-0004). Null until loaded: the affordance shows the form.
+  standeeBudget?: {
+    out: number
+    cap: number
+    allowed: boolean
+    reason: string | null
+  } | null
   trainerDefeated: boolean
   onTrainerDefeated: () => void
 }
@@ -153,6 +163,7 @@ export default function PhaserGame({
   onRequestEntry,
   onPortal,
   onDeployStandee,
+  standeeBudget,
   trainerDefeated,
   onTrainerDefeated,
 }: PhaserGameProps) {
@@ -553,29 +564,44 @@ export default function PhaserGame({
 
             {mapContext?.multiplayer && onDeployStandee && (
               <div className="overlay-slot overlay-standee">
-                <input
-                  type="text"
-                  className="standee-input"
-                  value={standeeLine}
-                  maxLength={80}
-                  placeholder="Leave a standee…"
-                  onChange={(e) => setStandeeLine(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault()
-                      void submitStandee()
-                    }
-                  }}
-                />
-                <button
-                  type="button"
-                  className="standee-btn"
-                  disabled={deploying || !standeeLine.trim()}
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => void submitStandee()}
-                >
-                  {deploying ? '…' : 'Leave standee'}
-                </button>
+                {/* The world-wide budget of 3 (#371): "N of 3 out" before the
+                    employee writes anything. At the cap the form is replaced by
+                    the located refusal — never asked to fill a form they can't
+                    submit — pointing at where their Standees already stand. */}
+                {standeeBudget && (
+                  <p className="standee-budget">
+                    {standeeBudget.out} of {standeeBudget.cap} out
+                  </p>
+                )}
+                {standeeBudget && !standeeBudget.allowed ? (
+                  <p className="standee-refusal">{standeeBudget.reason}</p>
+                ) : (
+                  <div className="standee-form">
+                    <input
+                      type="text"
+                      className="standee-input"
+                      value={standeeLine}
+                      maxLength={80}
+                      placeholder="Leave a standee…"
+                      onChange={(e) => setStandeeLine(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          void submitStandee()
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="standee-btn"
+                      disabled={deploying || !standeeLine.trim()}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => void submitStandee()}
+                    >
+                      {deploying ? '…' : 'Leave standee'}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 

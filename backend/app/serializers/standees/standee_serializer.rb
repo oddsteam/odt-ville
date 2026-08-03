@@ -16,5 +16,19 @@ module Standees
         character_manifest_id: standee.character_manifest_id
       }
     end
+
+    # The owner's view of one of their own Standees, for the budget list (#371).
+    # Carries the map it stands on (slug + title) so the client can name where
+    # each Standee is — the same located pointer the write-path refusal gives.
+    def mine(standee)
+      {
+        id: standee.id,
+        map_slug: standee.map.slug,
+        map_title: standee.map.title,
+        x: standee.cell_x,
+        y: standee.cell_y,
+        message: standee.message
+      }
+    end
   end
 end

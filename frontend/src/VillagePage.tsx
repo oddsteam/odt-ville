@@ -9,6 +9,9 @@ import { CALLBACK_PATH } from './posture/callback.ts'
 import { loadTown as loadTownData, townErrorMessage } from './townLoader.ts'
 import { MapsService } from './maps/service.ts'
 import { StandeesWrite } from './standees/write.ts'
+import { StandeesService } from './standees/service.ts'
+import { standeeBudget } from './standees/budget.ts'
+import type { MyStandees } from './standees/schema.ts'
 import { loadMapBundle } from './maps/target.ts'
 import { runEdge } from './lib/runEdge.ts'
 import { subscribeAuthToken } from './lib/authToken.ts'
@@ -73,6 +76,11 @@ export default function VillagePage() {
   // The NPC catalog (#259) — identity + sprite for trainer-Zone duels on
   // authored interiors. Best-effort: empty means a trainer zone duels nobody.
   const [npcs, setNpcs] = useState<readonly Npc[]>([])
+  // The caller's world-wide Standee budget (#371, ADR-0015): their Standees
+  // across every map plus the cap, so the deploy affordance can show "N of 3
+  // out" and refuse — with a located pointer — before anything is typed. Null
+  // until fetched; a failed fetch just hides the count, never blocks deploying.
+  const [myStandees, setMyStandees] = useState<MyStandees | null>(null)
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -90,6 +98,9 @@ export default function VillagePage() {
     setGroundTiles(town.groundTiles)
     setCharacterManifest(town.characterManifest)
     setNpcs(town.npcs)
+    // Best-effort: the budget is a pure overlay enhancement, so a failure here
+    // must never blank the town.
+    setMyStandees(await runEdge(StandeesService.mine()).catch(() => null))
   }, [])
 
   useEffect(() => {
@@ -225,7 +236,10 @@ export default function VillagePage() {
   const handleDeployStandee = useCallback(
     async ({ slug, x, y, message }: { slug: string; x: number; y: number; message: string }) => {
       try {
-        return await runEdge(StandeesWrite.deploy(slug, { x, y, message }))
+        const created = await runEdge(StandeesWrite.deploy(slug, { x, y, message }))
+        // Refresh the world-wide budget so "N of 3 out" reflects the new cutout.
+        setMyStandees(await runEdge(StandeesService.mine()).catch(() => null))
+        return created
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e))
         return null
@@ -308,6 +322,16 @@ export default function VillagePage() {
 
   if (!communities || !session) return null
 
+  // A plain display payload for the deploy affordance (#371): the count out, the
+  // cap, whether a deploy is allowed, and the located refusal — the pure budget
+  // arithmetic resolved here so the game black box receives no standees/ import
+  // (ADR-0004). Null until the budget loads: the affordance then just shows the
+  // form, never blocking a deploy on a failed budget fetch.
+  const budget = myStandees && standeeBudget(myStandees.standees, myStandees.cap)
+  const standeeBudgetView = budget
+    ? { out: budget.out, cap: myStandees!.cap, allowed: budget.allowed, reason: budget.reason }
+    : null
+
   return (
     <>
       {error && (
@@ -342,6 +366,7 @@ export default function VillagePage() {
         onRequestEntry={handleRequestEntry}
         onPortal={handlePortal}
         onDeployStandee={handleDeployStandee}
+        standeeBudget={standeeBudgetView}
         trainerDefeated={trainerDefeated}
         onTrainerDefeated={() => setTrainerDefeated(true)}
       />

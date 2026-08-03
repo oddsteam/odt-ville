@@ -9,11 +9,17 @@ import * as Schema from 'effect/Schema'
 
 import { DecodeError, Http } from '../lib/http.ts'
 import type { HttpError } from '../lib/http.ts'
-import { Standee } from './schema.ts'
+import { Standee, MyStandees } from './schema.ts'
 
 const decodeStandees = (path: string) => (raw: unknown) =>
   Effect.mapError(
     Schema.decodeUnknown(Schema.Array(Standee))(raw),
+    (e) => new DecodeError({ path, reason: e instanceof Error ? e.message : String(e) }),
+  )
+
+const decodeMine = (path: string) => (raw: unknown) =>
+  Effect.mapError(
+    Schema.decodeUnknown(MyStandees)(raw),
     (e) => new DecodeError({ path, reason: e instanceof Error ? e.message : String(e) }),
   )
 
@@ -27,4 +33,14 @@ export const list = (mapSlug: string): Effect.Effect<readonly Standee[], HttpErr
     return yield* decodeStandees(path)(raw)
   })
 
-export const StandeesService = { list } as const
+// GET /standees/mine -> the caller's Standees across every map, plus the cap and
+// count out, for the deploy affordance's world-wide budget of 3 (#371).
+export const mine = (): Effect.Effect<MyStandees, HttpError, Http> =>
+  Effect.gen(function* () {
+    const http = yield* Http
+    const path = `/standees/mine`
+    const raw = yield* http.get(path)
+    return yield* decodeMine(path)(raw)
+  })
+
+export const StandeesService = { list, mine } as const

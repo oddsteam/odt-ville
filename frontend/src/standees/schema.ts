@@ -29,3 +29,25 @@ export const NewStandee = Schema.Struct({
   message: Schema.String,
 })
 export type NewStandee = Schema.Schema.Type<typeof NewStandee>
+
+// One of the caller's own Standees from GET /standees/mine — carries the map it
+// stands on (slug + title) so the budget's refusal can name where each one is.
+export const MyStandee = Schema.Struct({
+  id: Schema.Number,
+  map_slug: Schema.String,
+  map_title: Schema.String,
+  x: Schema.Number,
+  y: Schema.Number,
+  message: Schema.String,
+})
+export type MyStandee = Schema.Schema.Type<typeof MyStandee>
+
+// GET /standees/mine — the world-wide budget of 3 (#371): the cap, how many are
+// out, and each Standee, so the deploy affordance shows "N of 3 out" and the
+// located refusal before the employee writes anything.
+export const MyStandees = Schema.Struct({
+  cap: Schema.Number,
+  out: Schema.Number,
+  standees: Schema.Array(MyStandee),
+})
+export type MyStandees = Schema.Schema.Type<typeof MyStandees>
