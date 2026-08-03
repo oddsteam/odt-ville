@@ -108,6 +108,7 @@ canonical map.
 | **character** | `src/character/` | `Character::` | `character_manifests` |
 | **posture** | `src/posture/` | `Posture::` | — |
 | **cards** | *(none — the badge renders inside `game`)* | `Cards::` | — *(in-memory; Eira is the store of record)* |
+| **standees** | `src/standees/` | `Standees::` | `standees` |
 
 Frontend-only modules (no server state, no backend counterpart — legal and
 expected): `game`, `kernel`, `lib`, the three mappers

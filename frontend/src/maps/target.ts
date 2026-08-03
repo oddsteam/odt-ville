@@ -7,17 +7,48 @@
 import { runEdge } from '../lib/runEdge.ts'
 import { TileObjectsService } from '../catalog/tileObjects/service.ts'
 import { objectIdsFrom } from './props.ts'
-import { loadNpcRigs } from '../character/service.ts'
+import { loadNpcRigs, loadManifestById } from '../character/service.ts'
+import { StandeesService } from '../standees/service.ts'
 import type { BakedMap } from '../kernel/schema.ts'
 import type { Npc } from '../catalog/npcs/schema.ts'
 
 // The per-target inputs a loaded map needs at boot: the tile objects its
-// entities reference (ADR-0008) and the rigs its placed NPCs draw from (#294).
-// The map is passed in, not fetched, because the two paths obtain it
-// differently (a slug via MapsService, or the editor's stashed draft).
+// entities reference (ADR-0008), the rigs its placed NPCs draw from (#294), and
+// the Standees standing on it (#369, ADR-0015) with their owners' rigs resolved
+// by reference. The map is passed in, not fetched, because the two paths obtain
+// it differently (a slug via MapsService, or the editor's stashed draft).
 export async function loadMapBundle(map: BakedMap, npcs: readonly Npc[]) {
   const objects = await runEdge(TileObjectsService.getMany(objectIdsFrom(map.entities)))
   const placed = new Set(map.entities.filter((e) => e.kind === 'npc').map((e) => e.npc_id))
   const bakedNpcs = await loadNpcRigs(npcs.filter((n) => placed.has(n.id)))
-  return { objects, bakedNpcs }
+  const bakedStandees = await loadStandees(map)
+  return { objects, bakedNpcs, bakedStandees }
+}
+
+// The Standees for a map, each carrying its owner's rig resolved by reference
+// (`character_manifest_id → manifest`, never a copy — ADR-0015). Standees live on
+// multiplayer maps only, so a solo target skips the fetch entirely. A dangling
+// owner (no manifest) rides through with `manifest: null`; the game layer draws
+// the bundled fallback for it rather than crashing.
+async function loadStandees(map: BakedMap) {
+  if (!map.multiplayer) return []
+  const standees = await runEdge(StandeesService.list(map.slug)).catch(() => [])
+  return Promise.all(
+    standees.map(async (s) => ({
+      id: s.id,
+      x: s.x,
+      y: s.y,
+      message: s.message,
+      // The full Placard (#372): the detail body and who left it, carried
+      // through as plain data so the game can echo it on press-A without ever
+      // rendering the panel or importing a data service (ADR-0004).
+      detail: s.detail,
+      ownerName: s.owner_name,
+      ownerAvatarUrl: s.owner_avatar_url,
+      // The reply link the owner supplied (#373): carried through as plain data
+      // for the shell's Placard button; `replyHref` gates the click-through.
+      replyLink: s.reply_link,
+      manifest: s.character_manifest_id != null ? await loadManifestById(s.character_manifest_id) : null,
+    })),
+  )
 }

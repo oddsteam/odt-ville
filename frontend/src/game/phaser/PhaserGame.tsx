@@ -109,7 +109,65 @@ export type PhaserGameProps = {
     // the registry exactly as it does on the standalone /maps/:slug page.
     // `voice` (#287) rides the same bundle: the proximity-voice mesh for a
     // multiplayer target, or null for a solo map.
-  }) => Promise<{ map: unknown; objects: unknown; bakedNpcs?: unknown; presence?: unknown; voice?: unknown } | null>
+  }) => Promise<{
+    map: unknown
+    objects: unknown
+    bakedNpcs?: unknown
+    // The Standees standing on the target (#369, ADR-0015) — resolved by the
+    // shell like bakedNpcs, so the portal path can't drop them (the #294/#295 trap).
+    bakedStandees?: unknown
+    presence?: unknown
+    voice?: unknown
+  } | null>
+  // Deploy a Standee (#369, ADR-0015): the overlay's deploy control calls in
+  // here so the write stays out of the game black box (ADR-0004) — the shell
+  // owns the POST and the outbound data service. Resolves to the created Standee
+  // (echoed onto the bus so the scene stands the cutout up at once) or null on a
+  // refusal. Absent on shells that don't offer deploying (e.g. the town-only page).
+  onDeployStandee?: (payload: {
+    slug: string
+    x: number
+    y: number
+    message: string
+    // The Placard's optional detail body (#372) — the longer text revealed on
+    // press-A. Absent leaves a short-line-only Placard.
+    detail?: string
+    // The optional reply link (#373) — a campfire or thread. Absent leaves a
+    // Placard with no reply button.
+    reply?: string
+  }) => Promise<{
+    id: number
+    x: number
+    y: number
+    message: string
+    detail?: string | null
+    reply_link?: string | null
+    owner_name?: string | null
+    owner_avatar_url?: string | null
+  } | null>
+  // Pressing A on a Standee (#372): the game emits the Placard it carries and
+  // the shell mounts the full-bleed detail panel, resolving this when the reader
+  // closes it — PhaserGame then tells the scene to resume input. The seam
+  // mirrors onEnterCommunity: a semantic event out, no panel inside the black
+  // box. Absent on shells that don't render Placards (input resumes at once).
+  onReadStandee?: (placard: {
+    id: number
+    message: string
+    detail: string | null
+    ownerName: string | null
+    ownerAvatarUrl: string | null
+    replyLink: string | null
+  }) => Promise<void>
+  // The caller's world-wide Standee budget (#371): the count out, the cap,
+  // whether a deploy is allowed, and the located refusal when at the cap. A
+  // plain display shape resolved by the shell — no standees/ import enters the
+  // game black box (ADR-0004). Null until loaded: the affordance shows the form.
+  standeeBudget?: {
+    out: number
+    cap: number
+    allowed: boolean
+    reason: string | null
+  } | null
   trainerDefeated: boolean
   onTrainerDefeated: () => void
 }
@@ -132,6 +190,9 @@ export default function PhaserGame({
   onEncounter,
   onRequestEntry,
   onPortal,
+  onDeployStandee,
+  onReadStandee,
+  standeeBudget,
   trainerDefeated,
   onTrainerDefeated,
 }: PhaserGameProps) {
@@ -139,6 +200,18 @@ export default function PhaserGame({
   const shellRef = useRef<HTMLDivElement>(null)
   const gameRef = useRef<Phaser.Game | null>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
+  // Which map the game is currently showing (#369), learned from the scene over
+  // the bus — the deploy control shows only on a multiplayer map and POSTs to
+  // this slug. Null in the town / on a solo map.
+  const [mapContext, setMapContext] = useState<{ slug: string; multiplayer: boolean } | null>(null)
+  const [standeeLine, setStandeeLine] = useState('')
+  const [standeeDetail, setStandeeDetail] = useState('')
+  const [standeeReply, setStandeeReply] = useState('')
+  const [deploying, setDeploying] = useState(false)
+  const deployStandeeRef = useRef(onDeployStandee)
+  deployStandeeRef.current = onDeployStandee
+  const readStandeeRef = useRef(onReadStandee)
+  readStandeeRef.current = onReadStandee
 
   const enterCommunityRef = useRef(onEnterCommunity)
   enterCommunityRef.current = onEnterCommunity
@@ -221,6 +294,7 @@ export default function PhaserGame({
         map: loaded.map,
         objects: loaded.objects,
         bakedNpcs: loaded.bakedNpcs ?? [],
+        bakedStandees: loaded.bakedStandees ?? [],
         entrySpawnId: portal.entrySpawnId,
         presence: loaded.presence ?? null,
         voice: loaded.voice ?? null,
@@ -444,6 +518,85 @@ export default function PhaserGame({
   const onDpadRelease = (dir: string) => bus.emit('dpadRelease', dir)
   const onAButton = () => bus.emit('aButton')
 
+  // Track which map the scene is on so the deploy control (#369) appears only on
+  // a multiplayer map. MapScene emits `mapEntered`/`mapLeft` around its lifetime.
+  useEffect(() => {
+    const entered = (ctx: { slug: string; multiplayer: boolean }) => setMapContext(ctx)
+    const left = () => {
+      setMapContext(null)
+      setStandeeLine('')
+      setStandeeDetail('')
+    }
+    bus.on('mapEntered', entered)
+    bus.on('mapLeft', left)
+    return () => {
+      bus.off('mapEntered', entered)
+      bus.off('mapLeft', left)
+    }
+  }, [])
+
+  // Press-A-to-read (#372): the scene emits the Placard and has already paused
+  // its own input; the shell mounts the panel via onReadStandee and resolves
+  // when the reader closes it. Emit `standeeClosed` back so the scene resumes —
+  // and emit it at once when no shell handler is wired, so input never sticks.
+  useEffect(() => {
+    const onRead = (placard: {
+      id: number
+      message: string
+      detail: string | null
+      ownerName: string | null
+      ownerAvatarUrl: string | null
+      replyLink: string | null
+    }) => {
+      const handler = readStandeeRef.current
+      if (!handler) {
+        bus.emit('standeeClosed')
+        return
+      }
+      handler(placard).finally(() => bus.emit('standeeClosed'))
+    }
+    bus.on('readStandee', onRead)
+    return () => {
+      bus.off('readStandee', onRead)
+    }
+  }, [])
+
+  // Deploy a Standee where the avatar stands (#369): the shell owns the write,
+  // and on success the created Standee rides the bus so the scene stands the
+  // cutout up without a reload. The cell comes from the scene's test API, the
+  // same source the walking e2e scripts read.
+  const submitStandee = async () => {
+    const line = standeeLine.trim()
+    const deploy = deployStandeeRef.current
+    if (!line || !mapContext || !deploy) return
+    const tile = (window as unknown as { __game?: { playerTile?: () => { x: number; y: number } } })
+      .__game?.playerTile?.()
+    if (!tile) return
+    const detail = standeeDetail.trim()
+    const reply = standeeReply.trim()
+    setDeploying(true)
+    const created = await deploy({
+      slug: mapContext.slug,
+      x: tile.x,
+      y: tile.y,
+      message: line,
+      detail: detail || undefined,
+      reply: reply || undefined,
+    }).catch(() => null)
+    setDeploying(false)
+    if (created) {
+      bus.emit('standeeDeployed', created)
+      setStandeeLine('')
+      setStandeeDetail('')
+      setStandeeReply('')
+      // Hand the keyboard back to the game. The deploy button suppresses its
+      // own mousedown so clicking it never steals focus mid-typing — which
+      // means focus is still in the form here, and without this the avatar
+      // stays frozen until you happen to click the map.
+      ;(document.activeElement as HTMLElement | null)?.blur()
+    }
+  }
+
   // Dynamic topbar label — community title while inside a house,
   // "ODT VILLE" when in the town.
   const activeCommunity =
@@ -482,6 +635,88 @@ export default function PhaserGame({
                 {isFullscreen ? '⊟ EXIT' : '⛶ FULL'}
               </button>
             </div>
+
+            {mapContext?.multiplayer && onDeployStandee && (
+              <div className="overlay-slot overlay-standee">
+                {/* The world-wide budget of 3 (#371): "N of 3 out" before the
+                    employee writes anything. At the cap the form is replaced by
+                    the located refusal — never asked to fill a form they can't
+                    submit — pointing at where their Standees already stand. */}
+                {standeeBudget && (
+                  <p className="standee-budget">
+                    {standeeBudget.out} of {standeeBudget.cap} out
+                  </p>
+                )}
+                {standeeBudget && !standeeBudget.allowed ? (
+                  <p className="standee-refusal">{standeeBudget.reason}</p>
+                ) : (
+                  // Phaser's keyboard plugin listens on `window` and *captures*
+                  // the keys a scene binds — W/A/S/D, SPACE, ENTER — so while a
+                  // field here has focus those keystrokes never reach the input
+                  // and walk the avatar instead. Nothing else in the game
+                  // overlay takes typed text, so this is the first place it
+                  // bites. Silence the game's keyboard for as long as the form
+                  // holds focus; onFocus/onBlur bubble, so the wrapper covers
+                  // all three fields.
+                  <div
+                    className="standee-form"
+                    onFocus={() => {
+                      const kb = gameRef.current?.input?.keyboard
+                      if (kb) kb.enabled = false
+                    }}
+                    onBlur={() => {
+                      const kb = gameRef.current?.input?.keyboard
+                      if (kb) kb.enabled = true
+                    }}
+                  >
+                    <input
+                      type="text"
+                      className="standee-input"
+                      value={standeeLine}
+                      maxLength={60}
+                      placeholder="Short line…"
+                      onChange={(e) => setStandeeLine(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          void submitStandee()
+                        }
+                      }}
+                    />
+                    {/* The Placard's detail body (#372): the time, the place,
+                        what to bring — revealed on press-A, kept off the map so
+                        the short line over the head stays a glance. Optional. */}
+                    <textarea
+                      className="standee-detail"
+                      value={standeeDetail}
+                      maxLength={500}
+                      rows={3}
+                      placeholder="Details (optional)…"
+                      onChange={(e) => setStandeeDetail(e.target.value)}
+                    />
+                    {/* The reply link (#373): a campfire or thread where the
+                        conversation happens, so interested people land in one
+                        place. Optional; only an http(s) link becomes a button. */}
+                    <input
+                      type="url"
+                      className="standee-input"
+                      value={standeeReply}
+                      placeholder="Reply link (optional)…"
+                      onChange={(e) => setStandeeReply(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="standee-btn"
+                      disabled={deploying || !standeeLine.trim()}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => void submitStandee()}
+                    >
+                      {deploying ? '…' : 'Leave standee'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="overlay-slot overlay-bl">
               <MobileDpad onPress={onDpadPress} onRelease={onDpadRelease} />

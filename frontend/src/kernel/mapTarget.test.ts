@@ -11,12 +11,13 @@ describe('applyMapTarget', () => {
     const calls: Record<string, unknown> = {}
     applyMapTarget(
       { set: (k, v) => (calls[k] = v) },
-      { map: 'M', objects: 'O', bakedNpcs: 'N', entrySpawnId: 's', presence: 'P', voice: 'V' },
+      { map: 'M', objects: 'O', bakedNpcs: 'N', bakedStandees: 'S', entrySpawnId: 's', presence: 'P', voice: 'V' },
     )
     expect(calls).toEqual({
       bakedMap: 'M',
       bakedObjects: 'O',
       bakedNpcs: 'N',
+      bakedStandees: 'S',
       entrySpawnId: 's',
       presence: 'P',
       voice: 'V',

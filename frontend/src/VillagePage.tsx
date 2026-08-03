@@ -8,6 +8,12 @@ import { openGatePopup, awaitGateResult } from './posture/popup.ts'
 import { CALLBACK_PATH } from './posture/callback.ts'
 import { loadTown as loadTownData, townErrorMessage } from './townLoader.ts'
 import { MapsService } from './maps/service.ts'
+import { StandeesWrite } from './standees/write.ts'
+import { StandeesService } from './standees/service.ts'
+import { standeeBudget } from './standees/budget.ts'
+import PlacardPanel from './standees/PlacardPanel.tsx'
+import type { Placard } from './standees/placard.ts'
+import type { MyStandees } from './standees/schema.ts'
 import { loadMapBundle } from './maps/target.ts'
 import { runEdge } from './lib/runEdge.ts'
 import { subscribeAuthToken } from './lib/authToken.ts'
@@ -72,6 +78,16 @@ export default function VillagePage() {
   // The NPC catalog (#259) — identity + sprite for trainer-Zone duels on
   // authored interiors. Best-effort: empty means a trainer zone duels nobody.
   const [npcs, setNpcs] = useState<readonly Npc[]>([])
+  // The caller's world-wide Standee budget (#371, ADR-0015): their Standees
+  // across every map plus the cap, so the deploy affordance can show "N of 3
+  // out" and refuse — with a located pointer — before anything is typed. Null
+  // until fetched; a failed fetch just hides the count, never blocks deploying.
+  const [myStandees, setMyStandees] = useState<MyStandees | null>(null)
+  // The Placard currently open in the full-bleed panel (#372), or null. Set when
+  // the game reports a press-A on a Standee; cleared on close, which also
+  // resolves the pending read so the game resumes input where it stood.
+  const [placard, setPlacard] = useState<Placard | null>(null)
+  const placardCloseRef = useRef<(() => void) | null>(null)
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -89,6 +105,9 @@ export default function VillagePage() {
     setGroundTiles(town.groundTiles)
     setCharacterManifest(town.characterManifest)
     setNpcs(town.npcs)
+    // Best-effort: the budget is a pure overlay enhancement, so a failure here
+    // must never blank the town.
+    setMyStandees(await runEdge(StandeesService.mine()).catch(() => null))
   }, [])
 
   useEffect(() => {
@@ -204,16 +223,69 @@ export default function VillagePage() {
         // Objects + placed-NPC rigs from the shared helper (#303), the same
         // bundle MapPage's route loader assembles — so neither path can drop a
         // per-target input the other keeps.
-        const { objects, bakedNpcs } = await loadMapBundle(map, npcs)
+        const { objects, bakedNpcs, bakedStandees } = await loadMapBundle(map, npcs)
         const presence = await presenceRef.current.open(map)
         const voice = await voiceRef.current.open(map)
-        return { map, objects, bakedNpcs, presence, voice }
+        return { map, objects, bakedNpcs, bakedStandees, presence, voice }
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e))
         return null
       }
     },
     [npcs],
+  )
+
+  // Deploy a Standee where the avatar stands (#369, ADR-0015). The shell owns
+  // the durable write so the game black box imports no data service (ADR-0004);
+  // PhaserGame's overlay collects the short line and the cell and calls in here,
+  // then echoes the created Standee to the scene so the cutout appears at once.
+  // A refusal (e.g. deploying on a solo map) surfaces on the error banner.
+  const handleDeployStandee = useCallback(
+    async ({
+      slug,
+      x,
+      y,
+      message,
+      detail,
+      reply,
+    }: {
+      slug: string
+      x: number
+      y: number
+      message: string
+      detail?: string
+      reply?: string
+    }) => {
+      try {
+        const created = await runEdge(
+          StandeesWrite.deploy(slug, { x, y, message, detail, reply_link: reply }),
+        )
+        // Refresh the world-wide budget so "N of 3 out" reflects the new cutout.
+        setMyStandees(await runEdge(StandeesService.mine()).catch(() => null))
+        return created
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e))
+        return null
+      }
+    },
+    [],
+  )
+
+  // A press-A on a Standee (#372): the game emits the Placard; the shell mounts
+  // the full-bleed detail panel. The returned promise resolves when the reader
+  // closes it, which is PhaserGame's cue to resume the paused input — so the
+  // avatar stays put behind the takeover and picks up exactly where it was.
+  const handleReadStandee = useCallback(
+    (p: Placard) =>
+      new Promise<void>((resolve) => {
+        setPlacard(p)
+        placardCloseRef.current = () => {
+          setPlacard(null)
+          placardCloseRef.current = null
+          resolve()
+        }
+      }),
+    [],
   )
 
   // Each board's "open content list" action. The game module knows nothing
@@ -290,6 +362,16 @@ export default function VillagePage() {
 
   if (!communities || !session) return null
 
+  // A plain display payload for the deploy affordance (#371): the count out, the
+  // cap, whether a deploy is allowed, and the located refusal — the pure budget
+  // arithmetic resolved here so the game black box receives no standees/ import
+  // (ADR-0004). Null until the budget loads: the affordance then just shows the
+  // form, never blocking a deploy on a failed budget fetch.
+  const budget = myStandees && standeeBudget(myStandees.standees, myStandees.cap)
+  const standeeBudgetView = budget
+    ? { out: budget.out, cap: myStandees!.cap, allowed: budget.allowed, reason: budget.reason }
+    : null
+
   return (
     <>
       {error && (
@@ -323,9 +405,16 @@ export default function VillagePage() {
         onEncounter={handleEncounter}
         onRequestEntry={handleRequestEntry}
         onPortal={handlePortal}
+        onDeployStandee={handleDeployStandee}
+        onReadStandee={handleReadStandee}
+        standeeBudget={standeeBudgetView}
         trainerDefeated={trainerDefeated}
         onTrainerDefeated={() => setTrainerDefeated(true)}
       />
+
+      {placard && (
+        <PlacardPanel placard={placard} onClose={() => placardCloseRef.current?.()} />
+      )}
     </>
   )
 }

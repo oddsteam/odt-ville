@@ -8,6 +8,9 @@ import { MapsService, takeDraft, travel } from './maps/service.ts'
 import { loadMapBundle } from './maps/target.ts'
 import { applyMapTarget } from './kernel/mapTarget.ts'
 import { warp } from './game/transition.ts'
+import bus from './game/phaser/bus.js'
+import PlacardPanel from './standees/PlacardPanel.tsx'
+import type { Placard } from './standees/placard.ts'
 import { MonstersService } from './catalog/monsters/service.ts'
 import { NpcsService } from './catalog/npcs/service.ts'
 import { pickWild, wildStepGate } from './game/encounters.js'
@@ -44,6 +47,10 @@ export default function MapPage({ draft = false }: { draft?: boolean }) {
   // Bumped by the dev switcher so the load re-runs after the active user
   // changes — the first paint fetches before a user is picked and 401s.
   const [reloadKey, setReloadKey] = useState(0)
+  // The Placard open in the full-bleed panel (#372), or null. The scene emits
+  // `readStandee` on a press-A; the shell renders the panel and, on close,
+  // emits `standeeClosed` so the paused scene resumes input where it stood.
+  const [placard, setPlacard] = useState<Placard | null>(null)
 
   // The user's character manifest (#155) rides along with the map load so it
   // is already in hand when Phaser boots (loadMyManifest owns its own
@@ -59,6 +66,10 @@ export default function MapPage({ draft = false }: { draft?: boolean }) {
   // The rigs the map's placed NPCs draw from (#294) — resolved shell-side and
   // handed to the shared renderer through the registry, like `bakedObjects`.
   const npcRigsRef = useRef<readonly { id: number; manifest: unknown }[]>([])
+  // The Standees standing on the map (#369, ADR-0015), each with its owner's rig
+  // resolved by reference — handed to the runtime through the registry like the
+  // NPC rigs. Empty on solo maps (Standees live on multiplayer maps only).
+  const standeesRef = useRef<readonly unknown[]>([])
   // The viewer's stable Keycloak id (#88) — presence filters its own echoed
   // frames by it. Only fetched for multiplayer maps; null keeps presence off.
   const ownIdRef = useRef<string | null>(null)
@@ -82,7 +93,7 @@ export default function MapPage({ draft = false }: { draft?: boolean }) {
         const npcs = await runEdge(NpcsService.list()).catch(() => [] as readonly Npc[])
         // Objects + placed-NPC rigs assembled by the shared helper (#303), the
         // same bundle the portal path loads.
-        const { objects, bakedNpcs } = await loadMapBundle(m, npcs)
+        const { objects, bakedNpcs, bakedStandees } = await loadMapBundle(m, npcs)
         const viewer = m.multiplayer ? await runEdge(ViewerService.get()).catch(() => null) : null
         if (!active) return
         ownIdRef.current = viewer?.user.external_id ?? null
@@ -90,6 +101,7 @@ export default function MapPage({ draft = false }: { draft?: boolean }) {
         objectsRef.current = objects
         npcsRef.current = npcs
         npcRigsRef.current = bakedNpcs
+        standeesRef.current = bakedStandees
         setMap(m)
       })
       .catch((e) => active && setError(e instanceof Error ? e.message : String(e)))
@@ -105,6 +117,22 @@ export default function MapPage({ draft = false }: { draft?: boolean }) {
     }),
     [],
   )
+
+  // Press-A-to-read the Placard (#372): the scene (which has already paused its
+  // own input) emits the note; the shell mounts the panel. This route wires the
+  // game itself rather than through PhaserGame, so it listens on the bus the
+  // scene uses and reports the close back the same way.
+  useEffect(() => {
+    const onRead = (p: Placard) => setPlacard(p)
+    bus.on('readStandee', onRead)
+    return () => {
+      bus.off('readStandee', onRead)
+    }
+  }, [])
+  const closePlacard = () => {
+    setPlacard(null)
+    bus.emit('standeeClosed')
+  }
 
   // Boot Phaser once the baked map is loaded. The map goes into the registry as
   // `bakedMap` so MapScene reads it in preload(), the same boot-input timing the
@@ -147,6 +175,7 @@ export default function MapPage({ draft = false }: { draft?: boolean }) {
       map,
       objects: objectsRef.current,
       bakedNpcs: npcRigsRef.current,
+      bakedStandees: standeesRef.current,
       entrySpawnId: entrySpawnIdRef.current,
       presence: presence
         ? { ownId: ownIdRef.current, loadManifest: loadManifestById, ...presence }
@@ -246,6 +275,7 @@ export default function MapPage({ draft = false }: { draft?: boolean }) {
         </div>
         {zoneNotice && <div className="gb-topbar">{zoneNotice}</div>}
       </div>
+      {placard && <PlacardPanel placard={placard} onClose={closePlacard} />}
     </div>
   )
 }
