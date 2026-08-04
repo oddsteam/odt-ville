@@ -5,7 +5,7 @@ import { cameraBounds } from '../canvasLayout.ts'
 import { isTransitioning } from '../../transition.ts'
 import { spawnTile, mapWalkable, entityBlockedFor, entityEdgeBlockedFor, entityDoorCells, entityLadderFor, entityOverhangFor, entityForegroundFor, mapPlayerDepth, slidePlayerDepth, feetWorldXY } from '../mapWalk.ts'
 import { spawnNpcs, npcBlockedFor, sortNpcs } from '../mapNpcs.ts'
-import { spawnStandees, sortStandees, standeeAt, placardOf, addStandee, restandeeRigs } from '../mapStandees.ts'
+import { spawnStandees, sortStandees, standeeAt, placardOf, addStandee, restandeeRigs, cutout } from '../mapStandees.ts'
 import {
   CHAR_SHEET_KEY,
   preloadCharacter,
@@ -343,14 +343,12 @@ export default class MapScene extends Phaser.Scene {
   // Never blocks and never animates, exactly like a loaded Standee.
   addOwnStandee({ id, x, y, message = '', detail = null, reply_link = null, owner_name = null, owner_avatar_url = null }) {
     if (!this.standees) return
-    const wx = (x + 0.5) * TILE
-    const wy = (y + 1) * TILE
-    const sprite = this.usingManifest
-      ? this.add
-          .sprite(wx, wy, CHAR_SHEET_KEY, this.charDir.down.idleFrame)
-          .setOrigin(0.5, 1)
-          .setScale(characterScale(this._charManifest))
-      : this.add.image(wx, wy, `player.down.0`).setOrigin(0.5, 1).setDisplaySize(TILE, TILE * 2)
+    // The same cutout treatment every other path stamps (#376) — effigy, not
+    // colleague — over our own already-rigged sheet.
+    const figure = this.usingManifest
+      ? this.add.sprite(0, 0, CHAR_SHEET_KEY, this.charDir.down.idleFrame).setScale(characterScale(this._charManifest))
+      : null
+    const sprite = cutout(this, { x, y }, figure, message)
     // Carry the Placard the server echoed back (#372) so pressing A on your own
     // fresh cutout reads it too — the same shape a loaded Standee holds. It is
     // yours by definition, so `mine` is true: press-A offers pick up on it (#370).

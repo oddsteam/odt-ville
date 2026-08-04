@@ -35,6 +35,7 @@ function fakeSprite(key = '') {
   s.setScale = (v: number) => ((s.scale = v), s)
   s.setFlipX = (v: boolean) => ((s.flipX = v), s)
   s.setDepth = (d: number) => ((s.depth = d), s)
+  s.setTint = (v: number) => ((s.tint = v), s)
   return s
 }
 
@@ -46,8 +47,37 @@ function fakeImage(key = '') {
   s.setOrigin = (x: number, y: number) => ((s.origin = { x, y }), s)
   s.setDisplaySize = (w: number, h: number) => ((s.size = { w, h }), s)
   s.setDepth = (d: number) => ((s.depth = d), s)
+  s.setTint = (v: number) => ((s.tint = v), s)
   return s
 }
+
+// The cutout treatment's parts (#376): the stand and the bubble are drawn with
+// a Graphics, the bubble's line is a Text, and the whole effigy rides in one
+// container. Structural stand-ins — nothing here asserts on pixels.
+function fakeGraphics() {
+  const g: any = { type: 'graphics', destroyed: false }
+  g.destroy = () => (g.destroyed = true)
+  for (const m of ['fillStyle', 'fillRoundedRect', 'fillTriangle', 'fillEllipse']) g[m] = () => g
+  return g
+}
+
+function fakeText(text: string) {
+  const t: any = { type: 'text', text, width: text.length * 6, height: 14, destroyed: false }
+  t.destroy = () => (t.destroyed = true)
+  t.setOrigin = () => t
+  return t
+}
+
+function fakeContainer(x: number, y: number, list: any[]) {
+  const c: any = { type: 'container', list, depth: 0, pos: { x, y }, destroyed: false }
+  c.destroy = () => ((c.destroyed = true), list.forEach((p) => p.destroy?.()))
+  c.setDepth = (d: number) => ((c.depth = d), c)
+  return c
+}
+
+// The figure inside a cutout — the rig sprite or the bundled still.
+const figureOf = (cutout: any) => cutout.list.find((p: any) => p.type === 'sprite' || p.type === 'image')
+const bubbleOf = (cutout: any) => cutout.list.find((p: any) => p.type === 'text')
 
 // A scene holding the shell's placed Standees plus the (loaded) rig sheets.
 function fakeScene(standees: Array<{ id: number; x: number; y: number; message: string; manifest: any }>) {
@@ -78,6 +108,9 @@ function fakeScene(standees: Array<{ id: number; x: number; y: number; message: 
         created.push(s)
         return s
       },
+      graphics: () => fakeGraphics(),
+      text: (_x: number, _y: number, t: string) => fakeText(t),
+      container: (x: number, y: number, list: any[]) => fakeContainer(x, y, list),
     },
   }
 }
@@ -113,6 +146,46 @@ describe('spawnStandees', () => {
     expect(standees).toHaveLength(1)
     expect(scene.created).toHaveLength(1)
     expect(scene.created[0].type).toBe('image')
+  })
+})
+
+// The effigy treatment (#376): a cutout must never be mistaken for its owner,
+// who may be standing on the same map. The parts that sell that — the stand,
+// the desaturation, the bubble — are judged by eye, deliberately untested; what
+// is tested is that they are *one object*, so every path stamps the same
+// treatment and taking a cutout down takes all of it down.
+describe('the cutout is one effigy, not a loose pile of sprites', () => {
+  it('takes its stand and its bubble down with it when it is picked up', () => {
+    const scene = fakeScene([standee(1, 2, 3)])
+
+    const [live] = spawnStandees(scene)
+    const parts = live.sprite.list
+
+    expect(parts.length).toBeGreaterThan(1)
+    live.sprite.destroy()
+    expect(parts.every((p: any) => p.destroyed)).toBe(true)
+  })
+})
+
+// The Placard's short line, over the cutout's head (#376). Its *shape* — the
+// tail that tells a bubble from a card badge's chip — is judged by eye; what a
+// test can hold is what it says and when it says nothing at all.
+describe('the Placard bubble', () => {
+  it('floats the short line over the cutout, clipped to the width a head allows', () => {
+    const long = 'Board games in the kitchen at four, bring something to share'
+    const scene = fakeScene([standee(1, 2, 3, long)])
+
+    const [live] = spawnStandees(scene)
+
+    expect(bubbleOf(live.sprite).text).toBe(`${long.slice(0, 24)}…`)
+  })
+
+  it('gives a Standee with no line no bubble at all, rather than an empty one', () => {
+    const scene = fakeScene([standee(1, 2, 3, '   ')])
+
+    const [live] = spawnStandees(scene)
+
+    expect(bubbleOf(live.sprite)).toBeUndefined()
   })
 })
 
@@ -210,9 +283,9 @@ describe('mid-scene add and remove', () => {
     const live = addStandee(scene, note(9, 7))
 
     expect(live.tile).toEqual({ x: 3, y: 5 })
-    expect(live.sprite.type).toBe('sprite')
-    expect(live.sprite.frameArg).toBe('idleDown.0')
-    expect(live.sprite.scale).toBe(2)
+    expect(figureOf(live.sprite).type).toBe('sprite')
+    expect(figureOf(live.sprite).frameArg).toBe('idleDown.0')
+    expect(figureOf(live.sprite).scale).toBe(2)
     // Bottom-centre on its cell, exactly like a boot-path cutout.
     expect(live.sprite.pos).toEqual({ x: 3.5 * TILE, y: 6 * TILE })
   })
@@ -220,15 +293,29 @@ describe('mid-scene add and remove', () => {
   it('falls back to the bundled still when the owner has no rig yet, then upgrades', () => {
     const scene = sceneWithPeers()
     const roster = [addStandee(scene, note(9, 7))]
-    expect(roster[0].sprite.type).toBe('image')
+    expect(figureOf(roster[0].sprite).type).toBe('image')
 
     // Their sheet lands a moment later — the fallback is swapped for the rig.
     scene.peerChars.set(7, cutRig)
     restandeeRigs(scene, roster, 0)
 
-    expect(roster[0].sprite.type).toBe('sprite')
-    expect(roster[0].sprite.frameArg).toBe('idleDown.0')
+    expect(figureOf(roster[0].sprite).type).toBe('sprite')
+    expect(figureOf(roster[0].sprite).frameArg).toBe('idleDown.0')
     expect(peerSheetKey(7)).toBe('peer.sheet.7')
+  })
+
+  it('leaves a cutout already wearing its owner’s rig alone — no churn per peer load', () => {
+    // The effigy rides in a container, which carries no texture to compare, so
+    // the sheet it is wearing is tracked on the Standee itself. Without that,
+    // every peer-character load would tear down and rebuild every cutout.
+    const scene = sceneWithPeers([[7, cutRig]])
+    const roster = [addStandee(scene, note(9, 7))]
+    const before = roster[0].sprite
+
+    restandeeRigs(scene, roster, 0)
+
+    expect(roster[0].sprite).toBe(before)
+    expect(before.destroyed).toBe(false)
   })
 
   it('leaves an owner-less cutout on the fallback rather than churning sprites', () => {
