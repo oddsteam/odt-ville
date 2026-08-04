@@ -27,6 +27,10 @@ export const Standee = Schema.Struct({
   owner_name: Schema.NullOr(Schema.String),
   owner_avatar_url: Schema.NullOr(Schema.String),
   character_manifest_id: Schema.NullOr(Schema.Number),
+  // Whether the caller owns this Standee (#370), resolved server-side against the
+  // authenticated caller: press-A offers *pick up* on your own, *reply* on
+  // someone else's — the affordance differs by who is asking, not the key.
+  mine: Schema.Boolean,
 })
 export type Standee = Schema.Schema.Type<typeof Standee>
 

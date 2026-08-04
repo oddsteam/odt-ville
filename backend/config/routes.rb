@@ -154,6 +154,11 @@ Rails.application.routes.draw do
         # The caller's own Standees across every map, for the world-wide budget
         # of 3 (#371) — not scoped to a map, so it carries no slug.
         get "standees/mine", to: "standees#mine"
+        # Pick up a Standee (#370): the owner takes their own cutout back, which
+        # frees a slot at once. Keyed by the Standee id, not the map slug — a
+        # Standee is picked up by identity, and only its owner may (checked in
+        # the action, since roles live in the caller's JWT, not our DB — #279).
+        delete "standees/:id", to: "standees#destroy"
       end
     end
   end

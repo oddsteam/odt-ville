@@ -809,6 +809,20 @@ button:disabled {
   box-shadow: 2px 2px 0 var(--ink);
 }
 
+/* Pick up (#370): the owner's affordance where a visitor gets reply — takes the
+   cutout back off the map. Styled as the same chunky chip, tinted apart. */
+.placard-pickup {
+  display: inline-block;
+  margin-top: 12px;
+  padding: 5px 8px;
+  font-size: 10px;
+  color: var(--ink);
+  cursor: pointer;
+  background: #ffd7d7;
+  border: 2px solid var(--ink);
+  box-shadow: 2px 2px 0 var(--ink);
+}
+
 /* D-pad */
 .dpad {
   display: grid;

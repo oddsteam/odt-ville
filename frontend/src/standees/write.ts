@@ -29,4 +29,13 @@ export const deploy = (
     return yield* decodeStandee(path)(raw)
   })
 
-export const StandeesWrite = { deploy } as const
+// DELETE /standees/:id -> pick up your own Standee (#370). Owner-only server-side
+// (a non-owner is refused with 403); on success the slot is freed at once, so
+// the owner can redeploy immediately. No body comes back — a 204.
+export const pickUp = (id: number): Effect.Effect<void, HttpError, Http> =>
+  Effect.gen(function* () {
+    const http = yield* Http
+    yield* http.del(`/standees/${id}`)
+  })
+
+export const StandeesWrite = { deploy, pickUp } as const

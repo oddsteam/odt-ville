@@ -30,6 +30,9 @@ export interface LiveStandee {
   ownerName: string | null
   ownerAvatarUrl: string | null
   replyLink: string | null
+  // Whether the viewer owns this cutout (#370): press-A offers *pick up* on your
+  // own, *reply* on someone else's — the affordance differs by who is asking.
+  mine: boolean
   tile: { x: number; y: number }
   sprite: any
 }
@@ -44,6 +47,9 @@ export interface Placard {
   ownerName: string | null
   ownerAvatarUrl: string | null
   replyLink: string | null
+  // Ownership rides through so the shell shows *pick up* on the owner's own
+  // cutout and *reply* on anyone else's (#370).
+  mine: boolean
 }
 
 // What the shell places over the registry: the cell, the Placard (short line +
@@ -58,6 +64,7 @@ type BakedStandee = {
   ownerName?: string | null
   ownerAvatarUrl?: string | null
   replyLink?: string | null
+  mine?: boolean
   manifest: unknown
 }
 
@@ -78,6 +85,7 @@ export function spawnStandees(scene: Scene): LiveStandee[] {
     ownerName: s.ownerName ?? null,
     ownerAvatarUrl: s.ownerAvatarUrl ?? null,
     replyLink: s.replyLink ?? null,
+    mine: s.mine ?? false,
     tile: { x: s.x, y: s.y },
     sprite: stampStandee(scene, s),
   }))
@@ -103,6 +111,7 @@ export function placardOf(s: LiveStandee): Placard {
     ownerName: s.ownerName,
     ownerAvatarUrl: s.ownerAvatarUrl,
     replyLink: s.replyLink,
+    mine: s.mine,
   }
 }
 

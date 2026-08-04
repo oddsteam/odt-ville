@@ -10,6 +10,7 @@ import { applyMapTarget } from './kernel/mapTarget.ts'
 import { warp } from './game/transition.ts'
 import bus from './game/phaser/bus.js'
 import PlacardPanel from './standees/PlacardPanel.tsx'
+import { StandeesWrite } from './standees/write.ts'
 import type { Placard } from './standees/placard.ts'
 import { MonstersService } from './catalog/monsters/service.ts'
 import { NpcsService } from './catalog/npcs/service.ts'
@@ -132,6 +133,21 @@ export default function MapPage({ draft = false }: { draft?: boolean }) {
   const closePlacard = () => {
     setPlacard(null)
     bus.emit('standeeClosed')
+  }
+  // Pick up your own cutout (#370): the shell owns the DELETE, then echoes the
+  // id so the scene drops the cutout without a reload. Same seam as the village
+  // shell — a Standee is picked up wherever you can read one. Closes on either
+  // outcome; a refusal leaves the notice bar to surface it.
+  const pickUpPlacard = async () => {
+    if (!placard) return
+    try {
+      await runEdge(StandeesWrite.pickUp(placard.id))
+      bus.emit('standeePickedUp', placard.id)
+    } catch (e) {
+      setZoneNotice(e instanceof Error ? e.message : String(e))
+    } finally {
+      closePlacard()
+    }
   }
 
   // Boot Phaser once the baked map is loaded. The map goes into the registry as
@@ -275,7 +291,7 @@ export default function MapPage({ draft = false }: { draft?: boolean }) {
         </div>
         {zoneNotice && <div className="gb-topbar">{zoneNotice}</div>}
       </div>
-      {placard && <PlacardPanel placard={placard} onClose={closePlacard} />}
+      {placard && <PlacardPanel placard={placard} onClose={closePlacard} onPickUp={pickUpPlacard} />}
     </div>
   )
 }

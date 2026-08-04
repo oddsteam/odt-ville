@@ -21,6 +21,9 @@ export interface Placard {
   // The place to reply the owner supplied (#373): a campfire, a thread. Raw as
   // stored — `replyHref` gates whether it ever becomes a clickable button.
   replyLink: string | null
+  // Whether the viewer owns this Standee (#370): the panel offers *pick up* on
+  // your own cutout where it offers *reply* on someone else's.
+  mine: boolean
 }
 
 // The short line, clipped to the display cap. At or under the cap it rides
