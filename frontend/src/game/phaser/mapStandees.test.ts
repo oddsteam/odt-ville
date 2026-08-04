@@ -12,6 +12,7 @@ import {
   placardOf,
   addStandee,
   restandeeRigs,
+  expiredStandees,
   type LiveStandee,
 } from './mapStandees.ts'
 import { applyStandeeFrame, type StandeeNote } from '../standees.ts'
@@ -218,6 +219,7 @@ describe('standeeAt / placardOf', () => {
     ownerAvatarUrl: null,
     replyLink: null,
     mine: false,
+    expiresAt: '2026-08-09T08:00:00.000Z',
     tile: { x, y },
     sprite: fakeSprite(),
     ...extra,
@@ -248,7 +250,38 @@ describe('standeeAt / placardOf', () => {
       // The affordance differs by who is asking (#370): the shell offers pick
       // up on your own cutout, reply on someone else's.
       mine: true,
+      // When it goes (#374), so the panel can date "Sunday".
+      expiresAt: '2026-08-09T08:00:00.000Z',
     })
+  })
+})
+
+// Expiry (#374): a Standee retires itself. No sweeper job, no server tick — the
+// scene holds each cutout's expiry and takes it down the moment it passes, so
+// one dying while you stand in front of it just goes.
+describe('expiredStandees', () => {
+  const at = Date.parse('2026-08-09T08:00:00.000Z')
+  const held = (id: number, expiresAt: string) => ({ id, expiresAt })
+
+  it('names only the cutouts past their moment, inclusive at the boundary', () => {
+    const roster = [
+      held(1, '2026-08-09T08:00:00.000Z'),
+      held(2, '2026-08-09T07:59:59.999Z'),
+      held(3, '2026-08-10T08:00:00.000Z'),
+    ]
+
+    // At the very moment it falls due the Standee still stands — the same
+    // inclusive boundary the server's load scope uses, so the two never
+    // disagree by a tick.
+    expect(expiredStandees(roster, at).map((s) => s.id)).toEqual([2])
+    expect(expiredStandees(roster, at + 1).map((s) => s.id)).toEqual([1, 2])
+  })
+
+  it('leaves a cutout with no or an unreadable expiry standing', () => {
+    // A missing stamp must never silently delete someone's Standee.
+    const roster = [{ id: 1, expiresAt: undefined }, held(2, 'not a date')]
+
+    expect(expiredStandees(roster, at)).toEqual([])
   })
 })
 
@@ -260,6 +293,7 @@ describe('mid-scene add and remove', () => {
     id,
     message: 'Board games at 4',
     detail: null,
+    expiresAt: '2026-08-09T08:00:00.000Z',
     ownerName: 'Ada Lovelace',
     ownerAvatarUrl: null,
     replyLink: null,
@@ -350,7 +384,14 @@ describe('mid-scene add and remove', () => {
 
 describe('sortStandees', () => {
   it('draws a Standee south of the avatar over it, one north behind, by the NPC rule', () => {
-    const base = { detail: null, ownerName: null, ownerAvatarUrl: null, replyLink: null, mine: false }
+    const base = {
+      detail: null,
+      ownerName: null,
+      ownerAvatarUrl: null,
+      replyLink: null,
+      mine: false,
+      expiresAt: '2026-08-09T08:00:00.000Z',
+    }
     const north: LiveStandee = { id: 1, message: 'a', tile: { x: 0, y: 1 }, sprite: fakeSprite(), ...base }
     const south: LiveStandee = { id: 2, message: 'b', tile: { x: 0, y: 5 }, sprite: fakeSprite(), ...base }
 

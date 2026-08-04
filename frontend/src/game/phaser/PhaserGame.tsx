@@ -20,6 +20,14 @@ import type { GroundTile } from '../../catalog/groundTiles/schema.ts'
 import type { MonsterPoolEntry } from '../../catalog/monsters/schema.ts'
 import type { Npc } from '../../catalog/npcs/schema.ts'
 
+// The Standee expiry window the deploy form offers (#374): a week by default,
+// a month at most. Literals rather than an import — the game black box takes no
+// standees/ import (ADR-0004), the same reason the budget arrives as a plain
+// shape — and the backend (`Standees::Standee::DEFAULT_DAYS`/`MAX_DAYS`) stays
+// the enforcement point; this only keeps the form from asking for a refusal.
+const STANDEE_DEFAULT_DAYS = 7
+const STANDEE_MAX_DAYS = 30
+
 // Player walks — rpg-char-01 sprite sheet from the pokemon-js external
 // assets. 32×32 PNGs, rows = direction (r0 down, r1 left, r2 right,
 // r3 up), columns = frame (c0 still, c1 step-A, c2 step-B). DOM engine
@@ -135,6 +143,9 @@ export type PhaserGameProps = {
     // The optional reply link (#373) — a campfire or thread. Absent leaves a
     // Placard with no reply button.
     reply?: string
+    // How long the cutout stands, in days (#374). Absent takes the server's
+    // default of 7; beyond its cap of 30 it refuses rather than clamps.
+    expiresDays?: number
   }) => Promise<{
     id: number
     x: number
@@ -142,6 +153,7 @@ export type PhaserGameProps = {
     message: string
     detail?: string | null
     reply_link?: string | null
+    expires_at?: string
     owner_name?: string | null
     owner_avatar_url?: string | null
   } | null>
@@ -158,6 +170,7 @@ export type PhaserGameProps = {
     ownerAvatarUrl: string | null
     replyLink: string | null
     mine: boolean
+    expiresAt: string
   }) => Promise<void>
   // The caller's world-wide Standee budget (#371): the count out, the cap,
   // whether a deploy is allowed, and the located refusal when at the cap. A
@@ -208,6 +221,11 @@ export default function PhaserGame({
   const [standeeLine, setStandeeLine] = useState('')
   const [standeeDetail, setStandeeDetail] = useState('')
   const [standeeReply, setStandeeReply] = useState('')
+  // How long the cutout stands (#374), in days. A Standee is time-bound by
+  // construction, so this defaults to a week and the field refuses to go past a
+  // month — the backend enforces the same window, and refuses rather than
+  // clamps, so a form that can't ask for 31 never gets that refusal.
+  const [standeeDays, setStandeeDays] = useState(STANDEE_DEFAULT_DAYS)
   const [deploying, setDeploying] = useState(false)
   const deployStandeeRef = useRef(onDeployStandee)
   deployStandeeRef.current = onDeployStandee
@@ -549,6 +567,7 @@ export default function PhaserGame({
       ownerAvatarUrl: string | null
       replyLink: string | null
       mine: boolean
+      expiresAt: string
     }) => {
       const handler = readStandeeRef.current
       if (!handler) {
@@ -584,6 +603,7 @@ export default function PhaserGame({
       message: line,
       detail: detail || undefined,
       reply: reply || undefined,
+      expiresDays: standeeDays,
     }).catch(() => null)
     setDeploying(false)
     if (created) {
@@ -591,6 +611,7 @@ export default function PhaserGame({
       setStandeeLine('')
       setStandeeDetail('')
       setStandeeReply('')
+      setStandeeDays(STANDEE_DEFAULT_DAYS)
       // Hand the keyboard back to the game. The deploy button suppresses its
       // own mousedown so clicking it never steals focus mid-typing — which
       // means focus is still in the form here, and without this the avatar
@@ -706,6 +727,24 @@ export default function PhaserGame({
                       placeholder="Reply link (optional)…"
                       onChange={(e) => setStandeeReply(e.target.value)}
                     />
+                    {/* How long it stands (#374). A Standee is time-bound by
+                        construction — peer clutter has no gardener, so a cutout
+                        decays instead of accumulating. `max` is the native
+                        guard; the backend refuses anything past it too. */}
+                    <label className="standee-days">
+                      Stands for
+                      <input
+                        type="number"
+                        className="standee-days-input"
+                        value={standeeDays}
+                        min={1}
+                        max={STANDEE_MAX_DAYS}
+                        onChange={(e) =>
+                          setStandeeDays(Math.min(Number(e.target.value) || 1, STANDEE_MAX_DAYS))
+                        }
+                      />
+                      days
+                    </label>
                     <button
                       type="button"
                       className="standee-btn"

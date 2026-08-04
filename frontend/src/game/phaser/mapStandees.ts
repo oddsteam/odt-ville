@@ -35,6 +35,10 @@ export interface LiveStandee {
   // Whether the viewer owns this cutout (#370): press-A offers *pick up* on your
   // own, *reply* on someone else's — the affordance differs by who is asking.
   mine: boolean
+  // When this cutout retires itself (#374), ISO-8601 off the server. Held here
+  // rather than asked for, so a Standee dying while you stand in front of it
+  // just goes — no sweeper job, no server tick, no round trip.
+  expiresAt: string
   tile: { x: number; y: number }
   // The whole effigy — figure, stand and Placard bubble in one container (#376)
   // — so it sorts and dies as one object.
@@ -61,6 +65,9 @@ export interface Placard {
   // Ownership rides through so the shell shows *pick up* on the owner's own
   // cutout and *reply* on anyone else's (#370).
   mine: boolean
+  // When it retires (#374), so the panel can date the note: "Sunday" in a
+  // message is otherwise ambiguous.
+  expiresAt: string
 }
 
 // What the shell places over the registry: the cell, the Placard (short line +
@@ -76,6 +83,7 @@ type BakedStandee = {
   ownerAvatarUrl?: string | null
   replyLink?: string | null
   mine?: boolean
+  expiresAt?: string
   manifest: unknown
 }
 
@@ -125,6 +133,7 @@ export function spawnStandees(scene: Scene): LiveStandee[] {
     ownerAvatarUrl: s.ownerAvatarUrl ?? null,
     replyLink: s.replyLink ?? null,
     mine: s.mine ?? false,
+    expiresAt: s.expiresAt ?? '',
     tile: { x: s.x, y: s.y },
     sprite: stampStandee(scene, s),
   }))
@@ -249,7 +258,23 @@ export function placardOf(s: LiveStandee): Placard {
     ownerAvatarUrl: s.ownerAvatarUrl,
     replyLink: s.replyLink,
     mine: s.mine,
+    expiresAt: s.expiresAt,
   }
+}
+
+// The cutouts whose moment has passed (#374) — the scene's whole retirement
+// mechanism, run off the clock it already ticks. Inclusive at the boundary, so
+// it agrees with the server's load scope rather than retiring a Standee the
+// next load would still return; a missing or unreadable stamp leaves the cutout
+// standing, because a bad date must never silently delete someone's Standee.
+export function expiredStandees<T extends { expiresAt?: string }>(
+  standees: ReadonlyArray<T>,
+  now: number,
+): T[] {
+  return standees.filter((s) => {
+    const at = Date.parse(s.expiresAt || '')
+    return !Number.isNaN(at) && now > at
+  })
 }
 
 // One cutout. With a loaded rig sheet, the owner's idle-down frame sliced from

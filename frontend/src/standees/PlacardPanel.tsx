@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import Avatar from '../viewer/Avatar.tsx'
-import { attribution, replyHref, shortLine, type Placard } from './placard.ts'
+import { attribution, expiryNote, replyHref, shortLine, type Placard } from './placard.ts'
 
 // The full Placard, opened by pressing A on a Standee (#372, ADR-0015). The
 // game detects the press and emits the note over a semantic seam; the *shell*
@@ -60,6 +60,10 @@ export default function PlacardPanel({
         </div>
         <p className="placard-line">{shortLine(placard.message)}</p>
         {placard.detail && <p className="placard-detail">{placard.detail}</p>}
+        {/* When the cutout goes (#374). The note says "Sunday"; this says which
+            Sunday — a Standee is time-bound, and the reader has to know by
+            when. */}
+        <p className="placard-expiry">{expiryNote(placard.expiresAt)}</p>
         {reply && (
           <a
             className="placard-reply"

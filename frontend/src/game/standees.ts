@@ -20,6 +20,9 @@ export interface StandeeNote {
   // Always false on the wire: a fanout carries no per-recipient view, and every
   // recipient left after own-echo suppression is by definition not the owner.
   mine: boolean
+  // When the cutout retires itself (#374) — carried so a Standee that arrives
+  // mid-scene expires on the same terms as one that was there at boot.
+  expiresAt: string
   tile: { x: number; y: number }
   manifestId: number | null
 }
@@ -32,6 +35,7 @@ interface WireStandee {
   message: string
   detail: string | null
   reply_link: string | null
+  expires_at: string
   owner_name: string | null
   owner_avatar_url: string | null
   character_manifest_id: number | null
@@ -83,6 +87,7 @@ export function applyStandeeFrame<T extends { id: number }>(
       ownerAvatarUrl: s.owner_avatar_url ?? null,
       replyLink: s.reply_link ?? null,
       mine: false,
+      expiresAt: s.expires_at ?? '',
       tile: { x: s.x, y: s.y },
       manifestId: s.character_manifest_id ?? null,
     },

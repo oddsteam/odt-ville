@@ -249,6 +249,7 @@ export default function VillagePage() {
       message,
       detail,
       reply,
+      expiresDays,
     }: {
       slug: string
       x: number
@@ -256,10 +257,19 @@ export default function VillagePage() {
       message: string
       detail?: string
       reply?: string
+      // How long the cutout stands (#374) — absent takes the server's default.
+      expiresDays?: number
     }) => {
       try {
         const created = await runEdge(
-          StandeesWrite.deploy(slug, { x, y, message, detail, reply_link: reply }),
+          StandeesWrite.deploy(slug, {
+            x,
+            y,
+            message,
+            detail,
+            reply_link: reply,
+            expires_days: expiresDays,
+          }),
         )
         // Refresh the world-wide budget so "N of 3 out" reflects the new cutout.
         setMyStandees(await runEdge(StandeesService.mine()).catch(() => null))

@@ -51,6 +51,10 @@ async function loadStandees(map: BakedMap) {
       // Whether the caller owns this cutout (#370): drives the pick-up affordance
       // on press-A, resolved server-side against the authenticated caller.
       mine: s.mine,
+      // When the cutout retires itself (#374). Carried into the scene so it can
+      // take the Standee down the moment it passes, with no round trip — the
+      // load already excluded the ones past it.
+      expiresAt: s.expires_at,
       manifest: s.character_manifest_id != null ? await loadManifestById(s.character_manifest_id) : null,
     })),
   )

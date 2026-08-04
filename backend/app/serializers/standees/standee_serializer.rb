@@ -29,6 +29,10 @@ module Standees
         # Who left it, for the full Placard (#372): the owner's name and face.
         # The face rides the same avatar proxy path the header uses (ADR-0012 —
         # never Basecamp's URL), and is null when the owner has no avatar.
+        # When this cutout retires itself (#374). The client holds it so it can
+        # take the Standee down the moment it passes, with no round trip — and
+        # the Placard can say which Sunday "Sunday" meant.
+        expires_at: standee.expires_at.iso8601,
         owner_name: owner&.name,
         owner_avatar_url: owner&.avatar_url && "/api/v1/users/#{owner.external_id}/avatar",
         character_manifest_id: standee.character_manifest_id
