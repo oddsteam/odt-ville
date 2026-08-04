@@ -5,7 +5,7 @@ import { cameraBounds } from '../canvasLayout.ts'
 import { isTransitioning } from '../../transition.ts'
 import { spawnTile, mapWalkable, entityBlockedFor, entityEdgeBlockedFor, entityDoorCells, entityLadderFor, entityOverhangFor, entityForegroundFor, mapPlayerDepth, slidePlayerDepth, feetWorldXY } from '../mapWalk.ts'
 import { spawnNpcs, npcBlockedFor, sortNpcs } from '../mapNpcs.ts'
-import { spawnStandees, sortStandees, standeeAt, placardOf } from '../mapStandees.ts'
+import { spawnStandees, sortStandees, standeeAt, placardOf, addStandee, restandeeRigs } from '../mapStandees.ts'
 import {
   CHAR_SHEET_KEY,
   preloadCharacter,
@@ -18,6 +18,7 @@ import { resolveSheetSrc } from '../../../kernel/characterManifest.js'
 import bus from '../bus.js'
 import { deltaFor, resolveDirection, stepTile } from '../movement.ts'
 import { applyFrame, pruneOutOfRange } from '../../presence.ts'
+import { applyStandeeFrame } from '../../standees.ts'
 import { loadAvatar } from '../peerAvatar.ts'
 import { badgeText, cardHref, statusColor } from '../cardBadge.ts'
 import { interactZoneEvents, sightZoneEvents, zoneEvents } from '../../../kernel/zones.ts'
@@ -274,7 +275,7 @@ export default class MapScene extends Phaser.Scene {
     // audio to pod peers. Absent means voice off, not an error.
     this.voice = this.registry.get('voice') || null
     if (this.presence) {
-      this.presence.onFrame((frame) => this.presenceFrame(frame))
+      this.presence.onFrame((frame) => this.wireFrame(frame))
       this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.presence.onFrame(null))
       // Announce our spawn; peers echo their own positions back (stateless
       // roster sync — see presence.ts).
@@ -435,6 +436,33 @@ export default class MapScene extends Phaser.Scene {
     this.cardBadges.set(userId, badge)
   }
 
+  // One cable subscription carries every stream this map opened — the per-cell
+  // presence frames, the shared card stream, and the map-wide standee stream
+  // (#375) — so frames are sorted by type here and folded by their own module.
+  wireFrame(frame) {
+    if (String(frame?.type).startsWith('standee:')) this.standeeFrame(frame)
+    else this.presenceFrame(frame)
+  }
+
+  // Someone deployed or picked up a Standee while we were standing here (#375):
+  // stand the cutout up, or take it down, without a reload. Our own echoes fold
+  // to 'none' — our cutout already went up on the write that broadcast this.
+  standeeFrame(frame) {
+    if (!this.standees) return
+    const result = applyStandeeFrame(this.standees, frame, this.presence.ownId)
+    if (result.action === 'remove') {
+      result.standee.sprite?.destroy()
+      return
+    }
+    if (result.action !== 'add') return
+    // The owner is usually a peer standing right there, whose rig is already
+    // cut; if not, this kicks off the one-time fetch and the cutout upgrades
+    // from the bundled fallback when it settles.
+    this.loadPeerCharacter(result.standee.manifestId)
+    this.standees.push(addStandee(this, result.standee))
+    sortStandees(this.standees, this.playerTile.y)
+  }
+
   // Fold one presence frame into the roster and render the outcome: spawn a
   // labelled avatar, tween a known one to its new tile, or drop a leaver.
   // Each frame names its sender's character (#266), so a first sighting also
@@ -524,6 +552,9 @@ export default class MapScene extends Phaser.Scene {
     const settle = (stills) => {
       this.peerChars.set(manifestId, stills)
       this.refreshPeers()
+      // A cutout raised by someone out of range (#375) came up on the bundled
+      // fallback while this was in flight — swap in their real rig now.
+      restandeeRigs(this, this.standees || [], this.playerTile.y)
     }
     Promise.resolve(fetchManifest(manifestId))
       .then((manifest) => {
