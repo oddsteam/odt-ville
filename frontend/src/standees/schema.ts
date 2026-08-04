@@ -24,6 +24,10 @@ export const Standee = Schema.Struct({
   // conversation happens, null when none. Stored raw; the shell's Placard gates
   // whether it becomes a clickable button (http(s) only).
   reply_link: Schema.NullOr(Schema.String),
+  // When the Standee retires itself (#374), ISO-8601. The client holds it so a
+  // cutout that dies while you stand in front of it just goes, with no server
+  // round trip — the load query has already excluded the ones past it.
+  expires_at: Schema.String,
   owner_name: Schema.NullOr(Schema.String),
   owner_avatar_url: Schema.NullOr(Schema.String),
   character_manifest_id: Schema.NullOr(Schema.Number),
@@ -45,6 +49,9 @@ export const NewStandee = Schema.Struct({
   // The optional reply link (#373): a campfire or thread the owner pastes so
   // interested people land in one conversation, not three separate pings.
   reply_link: Schema.optional(Schema.String),
+  // How long the cutout stands, in days (#374). Absent takes the server's
+  // default of 7; beyond its cap of 30 is refused, not clamped.
+  expires_days: Schema.optional(Schema.Number),
 })
 export type NewStandee = Schema.Schema.Type<typeof NewStandee>
 

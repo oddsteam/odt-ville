@@ -16,6 +16,7 @@ describe('applyStandeeFrame', () => {
     mine: false,
     detail: null,
     reply_link: null,
+    expires_at: '2026-08-09T08:00:00.000Z',
     owner_name: 'Ada Lovelace',
     owner_avatar_url: '/api/v1/users/peer-1/avatar',
     character_manifest_id: 7,
@@ -35,6 +36,7 @@ describe('applyStandeeFrame', () => {
     ownerAvatarUrl: null,
     replyLink: null,
     mine: false,
+    expiresAt: '2026-08-09T08:00:00.000Z',
     tile: { x: 0, y: 0 },
     manifestId: null,
   })
@@ -54,6 +56,9 @@ describe('applyStandeeFrame', () => {
         ownerAvatarUrl: '/api/v1/users/peer-1/avatar',
         replyLink: null,
         mine: false,
+        // The expiry rides through (#374) so a mid-scene arrival retires
+        // itself on the same terms as one that was there at boot.
+        expiresAt: '2026-08-09T08:00:00.000Z',
         tile: { x: 3, y: 5 },
         manifestId: 7,
       },

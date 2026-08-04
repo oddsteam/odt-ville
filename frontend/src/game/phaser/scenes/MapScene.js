@@ -5,7 +5,7 @@ import { cameraBounds } from '../canvasLayout.ts'
 import { isTransitioning } from '../../transition.ts'
 import { spawnTile, mapWalkable, entityBlockedFor, entityEdgeBlockedFor, entityDoorCells, entityLadderFor, entityOverhangFor, entityForegroundFor, mapPlayerDepth, slidePlayerDepth, feetWorldXY } from '../mapWalk.ts'
 import { spawnNpcs, npcBlockedFor, sortNpcs } from '../mapNpcs.ts'
-import { spawnStandees, sortStandees, standeeAt, placardOf, addStandee, restandeeRigs, cutout } from '../mapStandees.ts'
+import { spawnStandees, sortStandees, standeeAt, placardOf, addStandee, restandeeRigs, expiredStandees, cutout } from '../mapStandees.ts'
 import {
   CHAR_SHEET_KEY,
   preloadCharacter,
@@ -298,6 +298,11 @@ export default class MapScene extends Phaser.Scene {
   }
 
   update() {
+    // A Standee retires itself when its moment passes (#374) — off the clock
+    // this loop already runs on, so there is no sweeper job and no server tick.
+    // Ahead of the input guards below: a cutout dying while you stand reading
+    // in front of it still goes.
+    for (const s of expiredStandees(this.standees || [], Date.now())) this.removeStandee(s.id)
     // Mid-warp (#254): a held direction key would otherwise bank a step the
     // instant the new map lands. The fade-in covers arrival, so refuse input
     // until it lifts.
@@ -341,7 +346,7 @@ export default class MapScene extends Phaser.Scene {
   // which *is* the owner's rig, by definition — so no fetch is needed; a later
   // map load resolves every cutout by reference through the registry instead.
   // Never blocks and never animates, exactly like a loaded Standee.
-  addOwnStandee({ id, x, y, message = '', detail = null, reply_link = null, owner_name = null, owner_avatar_url = null }) {
+  addOwnStandee({ id, x, y, message = '', detail = null, reply_link = null, expires_at = '', owner_name = null, owner_avatar_url = null }) {
     if (!this.standees) return
     // The same cutout treatment every other path stamps (#376) — effigy, not
     // colleague — over our own already-rigged sheet.
@@ -360,6 +365,9 @@ export default class MapScene extends Phaser.Scene {
       ownerAvatarUrl: owner_avatar_url,
       replyLink: reply_link,
       mine: true,
+      // Our own cutout expires on the same terms as anyone else's (#374): the
+      // server stamped the window, and this scene retires it when it passes.
+      expiresAt: expires_at,
       tile: { x, y },
       sprite,
     })

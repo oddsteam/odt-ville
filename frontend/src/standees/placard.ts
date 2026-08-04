@@ -24,6 +24,10 @@ export interface Placard {
   // Whether the viewer owns this Standee (#370): the panel offers *pick up* on
   // your own cutout where it offers *reply* on someone else's.
   mine: boolean
+  // When this cutout retires itself (#374), ISO-8601 as the server stamped it.
+  // The panel dates the note — "Sunday" in a message is otherwise ambiguous —
+  // and the runtime takes the cutout down off this alone, with no round trip.
+  expiresAt: string
 }
 
 // The short line, clipped to the display cap. At or under the cap it rides
@@ -46,6 +50,31 @@ export function replyHref(url: string): string | null {
   } catch {
     return null
   }
+}
+
+// Whether a Standee's moment has passed (#374). Inclusive at the boundary, so
+// this agrees with the server's `expires_at >= now` load scope rather than
+// retiring a cutout the load query would still have returned. An unparseable
+// stamp is treated as still standing: a bad date must never silently delete
+// someone's Standee — the next load settles it.
+export function hasExpired(expiresAt: string, now: number = Date.now()): boolean {
+  const at = Date.parse(expiresAt)
+  return Number.isNaN(at) ? false : now > at
+}
+
+// When the Standee goes, for the detail panel. The message says "Sunday"; this
+// says *which* Sunday, in the reader's own locale. Past its moment it reads
+// "Expired" — a Placard can still be open when its Standee retires.
+export function expiryNote(expiresAt: string, now: number = Date.now()): string {
+  if (hasExpired(expiresAt, now)) return 'Expired'
+  const when = new Date(expiresAt).toLocaleString(undefined, {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+  return `Expires ${when}`
 }
 
 // The Placard's byline — who left it, for the detail panel. A blank or missing

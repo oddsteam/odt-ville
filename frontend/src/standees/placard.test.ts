@@ -3,7 +3,7 @@
 // the overhead bubble both lean on.
 
 import { describe, expect, it } from 'vitest'
-import { SHORT_LINE_MAX, shortLine, attribution, replyHref } from './placard.ts'
+import { SHORT_LINE_MAX, shortLine, attribution, replyHref, hasExpired, expiryNote } from './placard.ts'
 
 describe('shortLine', () => {
   it('passes a line at or under the cap through unchanged', () => {
@@ -40,6 +40,47 @@ describe('attribution', () => {
   it('falls back to "someone" for a blank or missing name', () => {
     expect(attribution('')).toBe('— someone')
     expect(attribution('   ')).toBe('— someone')
+  })
+})
+
+// Expiry (#374): a Standee is time-bound, and the boundary is the interesting
+// part — the client retires the cutout off this comparison alone, with no
+// server round trip, so a moment either side of it must not disagree.
+describe('hasExpired', () => {
+  const EXPIRY = '2026-08-09T08:00:00.000Z'
+  const at = Date.parse(EXPIRY)
+
+  it('is not expired a moment before, nor at the very moment it falls due', () => {
+    expect(hasExpired(EXPIRY, at - 1)).toBe(false)
+    // Inclusive, matching the server's `expires_at >= now` load scope, so the
+    // cutout never vanishes a tick before the load query would have dropped it.
+    expect(hasExpired(EXPIRY, at)).toBe(false)
+  })
+
+  it('is expired a millisecond after it falls due', () => {
+    expect(hasExpired(EXPIRY, at + 1)).toBe(true)
+  })
+
+  it('treats an unparseable expiry as still standing, never a silent vanish', () => {
+    expect(hasExpired('not a date', at)).toBe(false)
+  })
+})
+
+describe('expiryNote', () => {
+  const EXPIRY = '2026-08-09T08:00:00.000Z'
+  const at = Date.parse(EXPIRY)
+
+  it('names the day it goes, so "Sunday" in the message is unambiguous', () => {
+    const note = expiryNote(EXPIRY, at - 1)
+    expect(note.startsWith('Expires ')).toBe(true)
+    // The weekday and the date, as the reader's own locale writes them.
+    const local = new Date(EXPIRY)
+    expect(note).toContain(local.toLocaleDateString(undefined, { weekday: 'long' }))
+    expect(note).toContain(String(local.getDate()))
+  })
+
+  it('says so plainly once the moment has passed', () => {
+    expect(expiryNote(EXPIRY, at + 1)).toBe('Expired')
   })
 })
 

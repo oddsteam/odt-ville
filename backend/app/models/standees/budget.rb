@@ -13,9 +13,10 @@ module Standees
     CAP = 3
 
     # The caller's Standees across all maps, newest last, with the map preloaded
-    # so `refusal` can name it without an N+1.
+    # so `refusal` can name it without an N+1. Only the ones still standing: an
+    # expired Standee consumes no budget (#374), so its slot frees itself.
     def self.for(user)
-      new(::Standees::Standee.where(user_id: user.id).includes(:map).order(:id).to_a)
+      new(::Standees::Standee.live.where(user_id: user.id).includes(:map).order(:id).to_a)
     end
 
     attr_reader :standees

@@ -28,9 +28,10 @@ module Api
         )
       end
 
-      def deploy(slug, x: 3, y: 5, message: "Jogging Sunday 8am, anyone?", detail: nil, reply_link: nil, user: @user, roles: [])
+      def deploy(slug, x: 3, y: 5, message: "Jogging Sunday 8am, anyone?", detail: nil, reply_link: nil, expires_days: nil, user: @user, roles: [])
         post "/api/v1/maps/#{slug}/standees",
-             params: { x: x, y: y, message: message, detail: detail, reply_link: reply_link },
+             params: { x: x, y: y, message: message, detail: detail, reply_link: reply_link,
+                       expires_days: expires_days },
              headers: auth(user, roles: roles), as: :json
       end
 
@@ -117,6 +118,64 @@ module Api
 
         assert_response :created
         assert_nil json[:reply_link]
+      end
+
+      # --- Expiry: a cutout retires itself (#374, ADR-0015) -----------------
+
+      test "deploy defaults the expiry to seven days out" do
+        make_map(slug: "plaza")
+
+        deploy("plaza")
+
+        assert_response :created
+        assert_in_delta 7.days.from_now, ::Standees::Standee.find(json[:id]).expires_at, 60
+        # The client holds the expiry, so it can retire the cutout itself.
+        assert_equal ::Standees::Standee.find(json[:id]).expires_at.iso8601, json[:expires_at]
+      end
+
+      test "deploy honours an owner-chosen window inside the cap" do
+        make_map(slug: "plaza")
+
+        deploy("plaza", expires_days: 30)
+
+        assert_response :created
+        assert_in_delta 30.days.from_now, ::Standees::Standee.find(json[:id]).expires_at, 60
+      end
+
+      test "deploy refuses a window beyond the thirty-day cap" do
+        make_map(slug: "plaza")
+
+        assert_no_difference "::Standees::Standee.count" do
+          deploy("plaza", expires_days: 31)
+        end
+
+        assert_response :unprocessable_entity
+        assert json[:error].present?
+      end
+
+      test "deploy refuses a window of nothing at all" do
+        make_map(slug: "plaza")
+
+        assert_no_difference "::Standees::Standee.count" do
+          deploy("plaza", expires_days: 0)
+        end
+
+        assert_response :unprocessable_entity
+      end
+
+      test "index excludes a Standee whose expiry has passed" do
+        # No sweeper and no server tick (#374): the row stays, the load query
+        # simply stops returning it the moment it is past.
+        plaza = make_map(slug: "plaza")
+        ::Standees::Standee.create!(map: plaza, user: @user, cell_x: 1, cell_y: 1, message: "live",
+                                    expires_at: 1.hour.from_now)
+        ::Standees::Standee.create!(map: plaza, user: @user, cell_x: 2, cell_y: 2, message: "gone",
+                                    expires_at: 1.second.ago)
+
+        get "/api/v1/maps/plaza/standees", headers: auth(@user)
+
+        assert_response :success
+        assert_equal ["live"], json.map { |s| s[:message] }
       end
 
       test "index returns only the standees on that map" do
@@ -260,6 +319,22 @@ module Api
           deploy("plaza")
         end
         assert_response :created
+      end
+
+      test "an expired Standee consumes no budget" do
+        # Expiry frees the slot on its own (#374) — the cap counts what is still
+        # standing, so an owner at the cap can deploy again once one has retired.
+        fill_budget
+        ::Standees::Standee.order(:id).first.update!(expires_at: 1.second.ago)
+
+        assert_difference "::Standees::Standee.count", 1 do
+          deploy("plaza", message: "the freed slot")
+        end
+        assert_response :created
+
+        get "/api/v1/standees/mine", headers: auth(@user)
+        assert_equal 3, json[:out]
+        assert_not_includes json[:standees].map { |s| s[:message] }, "one"
       end
 
       test "mine returns the caller's Standees across all maps with the cap" do

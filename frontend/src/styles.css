@@ -715,6 +715,26 @@ button:disabled {
   border: 2px solid var(--ink);
 }
 
+/* How long the cutout stands (#374) — a Standee is time-bound by construction,
+   so the window sits in the form beside the note rather than behind a setting. */
+.standee-days {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 8px;
+  color: var(--paper);
+}
+
+.standee-days-input {
+  width: 40px;
+  padding: 3px 5px;
+  font-family: inherit;
+  font-size: 8px;
+  color: var(--ink);
+  background: var(--paper);
+  border: 2px solid var(--ink);
+}
+
 .standee-btn {
   padding: 3px 6px;
   font-size: 8px;
@@ -793,6 +813,14 @@ button:disabled {
   font-size: 10px;
   line-height: 1.5;
   white-space: pre-wrap;
+}
+
+/* When the Standee retires itself (#374) — quieter than the note, but on the
+   Placard, because "Sunday" needs a date to be unambiguous. */
+.placard-expiry {
+  margin: 8px 0 0;
+  font-size: 9px;
+  opacity: 0.7;
 }
 
 /* The reply link (#373): the place to take the conversation, named as a place

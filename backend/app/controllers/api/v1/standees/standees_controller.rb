@@ -17,7 +17,7 @@ module Api
         # Queried by map_id rather than through a reverse association, so the
         # dependency runs one way (Standees → Maps), never back.
         def index
-          standees = ::Standees::Standee.where(map_id: @map.id)
+          standees = ::Standees::Standee.live.where(map_id: @map.id)
                                         .includes(user: :character_manifest).order(:id)
           render json: standees.map { |s| ::Standees::StandeeSerializer.call(s, viewer: current_user) }
         end
@@ -40,6 +40,15 @@ module Api
             return render json: { error: budget.refusal }, status: :unprocessable_entity
           end
 
+          # The expiry window (#374): 7 days unless the owner said otherwise, and
+          # never past 30. Refused rather than clamped — a Standee standing for a
+          # week when its owner asked for a year is not what they deployed.
+          expires_at = ::Standees::Standee.expiry_in(deploy_params[:expires_days])
+          unless expires_at
+            return render json: { error: "A Standee can stand for 1 to #{::Standees::Standee::MAX_DAYS} days" },
+                          status: :unprocessable_entity
+          end
+
           standee = ::Standees::Standee.create!(
             map: @map,
             user: current_user,
@@ -47,7 +56,8 @@ module Api
             cell_y: deploy_params[:y],
             message: deploy_params[:message],
             detail: deploy_params[:detail],
-            reply_link: deploy_params[:reply_link]
+            reply_link: deploy_params[:reply_link],
+            expires_at: expires_at
           )
           broadcast(@map.id, type: "standee:deploy", standee: ::Standees::StandeeSerializer.call(standee))
           render json: ::Standees::StandeeSerializer.call(standee, viewer: current_user), status: :created
@@ -107,7 +117,7 @@ module Api
         end
 
         def deploy_params
-          params.permit(:x, :y, :message, :detail, :reply_link)
+          params.permit(:x, :y, :message, :detail, :reply_link, :expires_days)
         end
       end
     end
