@@ -39,17 +39,22 @@ services:
       # (~/apps/odt-ville/.env), which the `git reset --hard origin/main` in
       # scripts/deploy-homeserver.sh never touches — same mechanism as the local .env.
       #
+      # The SFU is self-hosted on ODDS infrastructure at wss://livekit.odt.co.th
+      # (livekit/livekit-server behind Caddy on ubuntu@10.11.0.145, config in
+      # ~/livekit/livekit.yaml). It replaced the LiveKit Cloud project
+      # odt-ville-txx9pr5x on 2026-08-05.
+      #
       # First-time setup / ROTATION (do this on the homeserver):
-      #   1. Mint a fresh key+secret in the LiveKit Cloud dashboard
-      #      (project odt-ville-txx9pr5x → Settings → Keys).
+      #   1. On the LiveKit host, add a SECOND entry under `keys:` in
+      #      ~/livekit/livekit.yaml and restart it (docker compose restart).
       #   2. Edit ~/apps/odt-ville/.env on the homeserver:
       #        LIVEKIT_API_KEY=…
       #        LIVEKIT_API_SECRET=…
-      #        VITE_LIVEKIT_URL=wss://odt-ville-txx9pr5x.livekit.cloud
+      #        VITE_LIVEKIT_URL=wss://livekit.odt.co.th
       #   3. Redeploy from your Mac: scripts/deploy-homeserver.sh — it rebuilds the
-      #      frontend (so the URL re-inlines) and restarts the backend (so it reads
-      #      the new secret).
-      #   4. Revoke the OLD key in the dashboard once the deploy verifies.
+      #      frontend (so the URL re-inlines) and recreates the backend (so it reads
+      #      the new secret; a bare `restart` keeps the stale env).
+      #   4. Delete the OLD key from livekit.yaml once the deploy verifies.
       # The URL is safe in the client bundle by design; the key/secret must never be
       # VITE_-prefixed. Verify after a build: `grep -r LIVEKIT frontend/dist` should
       # surface only the wss:// URL, never the key or secret.
