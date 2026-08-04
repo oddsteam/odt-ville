@@ -49,6 +49,7 @@ module Api
             detail: deploy_params[:detail],
             reply_link: deploy_params[:reply_link]
           )
+          broadcast(@map.id, type: "standee:deploy", standee: ::Standees::StandeeSerializer.call(standee))
           render json: ::Standees::StandeeSerializer.call(standee, viewer: current_user), status: :created
         end
 
@@ -64,6 +65,7 @@ module Api
           end
 
           standee.destroy
+          broadcast(standee.map_id, type: "standee:pickup", id: standee.id)
           head :no_content
         end
 
@@ -82,6 +84,20 @@ module Api
         end
 
         private
+
+        # Tell the map a cutout went up or came down (#375), so it appears and
+        # vanishes for everyone standing there without a reload. Reached only
+        # after a successful write — a refused deploy or a non-owner's pick-up
+        # broadcasts nothing. The Standee is serialized without a viewer — one
+        # fanout cannot carry a per-recipient `mine` — which is sound because
+        # `userId` makes every client drop its own echo, and every recipient
+        # left is by definition not the owner.
+        def broadcast(map_id, frame)
+          ActionCable.server.broadcast(
+            PresenceChannel.standee_stream(map_id),
+            frame.merge(userId: current_user.external_id)
+          )
+        end
 
         def load_map
           @map = ::Maps::Map.find_by!(slug: params[:slug])

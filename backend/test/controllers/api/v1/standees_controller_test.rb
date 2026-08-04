@@ -7,6 +7,9 @@ module Api
     # caller's cell, refuse on a solo map, index only that map's rows, and cascade
     # with both the owner and the map.
     class StandeesControllerTest < ActionDispatch::IntegrationTest
+      # Live cutouts (#375): deploy/pickup broadcast on the map's standee stream.
+      include ActionCable::TestHelper
+
       setup do
         @company, @user = setup_company
       end
@@ -279,6 +282,56 @@ module Api
         assert_response :success
         assert_equal 0, json[:out]
         assert_equal [], json[:standees]
+      end
+
+      # Live cutouts (#375): the write stays the durable REST write it always
+      # was; the broadcast is a *consequence* of it, so everyone standing on the
+      # map sees the cutout go up (or come down) without a reload.
+      test "a successful deploy broadcasts the new Standee on the map's standee stream" do
+        map = make_map(slug: "plaza")
+
+        assert_broadcasts PresenceChannel.standee_stream(map.id), 1 do
+          deploy("plaza", message: "Board games at 4")
+        end
+
+        frame = broadcasts(PresenceChannel.standee_stream(map.id)).last.then { |f| JSON.parse(f).deep_symbolize_keys }
+        assert_equal "standee:deploy", frame[:type]
+        # The owner's own id rides along so their own echo is suppressed client
+        # side — their cutout is already standing.
+        assert_equal @user.external_id, frame[:userId]
+        assert_equal "Board games at 4", frame[:standee][:message]
+      end
+
+      test "a refused deploy broadcasts nothing" do
+        map = make_map(slug: "hometown", multiplayer: false)
+
+        assert_no_broadcasts PresenceChannel.standee_stream(map.id) do
+          deploy("hometown")
+        end
+      end
+
+      test "a pick-up broadcasts the removal on the map's standee stream" do
+        map = make_map(slug: "plaza")
+        standee = ::Standees::Standee.create!(map: map, user: @user, cell_x: 1, cell_y: 2, message: "mine")
+
+        assert_broadcasts PresenceChannel.standee_stream(map.id), 1 do
+          delete "/api/v1/standees/#{standee.id}", headers: auth(@user)
+        end
+
+        frame = broadcasts(PresenceChannel.standee_stream(map.id)).last.then { |f| JSON.parse(f).deep_symbolize_keys }
+        assert_equal "standee:pickup", frame[:type]
+        assert_equal standee.id, frame[:id]
+      end
+
+      test "a refused pick-up broadcasts nothing" do
+        map = make_map(slug: "plaza")
+        _, other = setup_company
+        standee = ::Standees::Standee.create!(map: map, user: other, cell_x: 1, cell_y: 2, message: "theirs")
+
+        assert_no_broadcasts PresenceChannel.standee_stream(map.id) do
+          delete "/api/v1/standees/#{standee.id}", headers: auth(@user)
+        end
+        assert_response :forbidden
       end
     end
   end

@@ -14,6 +14,8 @@ import { TILE } from '../constants.js'
 import { standeeSheetKey, MAP_ENTITY_DEPTH } from '../../kernel/mapRenderer.ts'
 import { framesForFacing, characterScale } from '../../kernel/characterManifest.js'
 import { npcDepth } from './mapNpcs.ts'
+import { peerSheetKey } from './characterRig.js'
+import type { StandeeNote } from '../standees.ts'
 
 // The Phaser scene, structurally — same loose convention as the renderers.
 type Scene = any
@@ -35,6 +37,10 @@ export interface LiveStandee {
   mine: boolean
   tile: { x: number; y: number }
   sprite: any
+  // The owner's rig, by reference (#375). Only a live arrival carries one — the
+  // boot path resolved its cutout's sheet before the scene ever started, so
+  // there is nothing left to look up.
+  manifestId?: number | null
 }
 
 // The full Placard a press-A reveals (#372): the short line, the detail body,
@@ -89,6 +95,54 @@ export function spawnStandees(scene: Scene): LiveStandee[] {
     tile: { x: s.x, y: s.y },
     sprite: stampStandee(scene, s),
   }))
+}
+
+// A Standee that arrived after boot (#375) — someone deployed one while we were
+// standing here. The boot path preloads a cutout's own sheet; a live arrival has
+// none, so it borrows the peer-character cache the scene already keeps by
+// manifest id (#266): the owner is usually a peer standing right there, whose
+// rig is already cut. Until it is (or if they have none), the bundled fallback
+// stands — the same graceful degradation a dangling owner gets — and
+// `restandeeRigs` swaps in the real one the moment the sheet lands.
+export function addStandee(scene: Scene, note: StandeeNote): LiveStandee {
+  return { ...note, sprite: stampLive(scene, note) }
+}
+
+// Re-stamp the live arrivals whose owner's rig has landed since. Called when a
+// peer character settles, mirroring `refreshPeers` — a cutout raised by someone
+// out of range comes up as the fallback and upgrades itself a moment later.
+export function restandeeRigs(scene: Scene, standees: LiveStandee[], avatarRow: number) {
+  for (const s of standees) {
+    const key = s.manifestId != null && peerSheetKey(s.manifestId)
+    if (!key || !rigOf(scene, s.manifestId) || s.sprite?.texture?.key === key) continue
+    s.sprite?.destroy()
+    s.sprite = stampLive(scene, s)
+  }
+  sortStandees(standees, avatarRow)
+}
+
+const rigOf = (scene: Scene, manifestId: number | null | undefined) =>
+  manifestId == null ? null : scene.peerChars?.get(manifestId) || null
+
+// The owner's idle-down frame off their peer sheet, or the bundled still. Static
+// — a Standee is an effigy — and bottom-centre on its cell, exactly like the
+// boot-path cutout and the deployer's own (MapScene.addOwnStandee).
+function stampLive(scene: Scene, note: { tile: { x: number; y: number }; manifestId?: number | null }) {
+  const wx = (note.tile.x + 0.5) * TILE
+  const wy = (note.tile.y + 1) * TILE
+  const rig = rigOf(scene, note.manifestId)
+  if (rig) {
+    return scene.add
+      .sprite(wx, wy, peerSheetKey(note.manifestId), rig.charDir.down.idleFrame)
+      .setOrigin(0.5, 1)
+      .setScale(rig.scale)
+      .setDepth(MAP_ENTITY_DEPTH)
+  }
+  return scene.add
+    .image(wx, wy, FALLBACK_FRAME)
+    .setOrigin(0.5, 1)
+    .setDisplaySize(TILE, TILE * 2)
+    .setDepth(MAP_ENTITY_DEPTH)
 }
 
 // The Standee whose cell matches `tile`, or undefined — the press-A lookup

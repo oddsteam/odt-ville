@@ -16,6 +16,17 @@ class PresenceChannel < ApplicationCable::Channel
   # outside their roster, so the fanout costs nothing visible.
   CARD_STREAM = "cards"
 
+  # Standees, live (#375): one stream per map, deliberately unpartitioned like
+  # the card stream above. A deploy is a handful of frames a day against a
+  # movement frame every step, so map-wide fanout costs nothing — and a Standee
+  # raised across the plaza should go up for everyone standing on it, not only
+  # for whoever happens to share the deployer's cell. The writer is the REST
+  # controller, which is why this is public: the broadcast is a consequence of
+  # a durable write, never the mechanism of it.
+  def self.standee_stream(map_id)
+    "standees:map:#{map_id}"
+  end
+
   def subscribed
     map = ::Maps::Map.find_by(slug: params[:slug])
     # The room join rides the same gate as list/load (#83) — and a solo map
@@ -30,6 +41,7 @@ class PresenceChannel < ApplicationCable::Channel
     # a signal only reaches a target who is actually here.
     stream_from signal_stream(current_user.external_id)
     stream_from CARD_STREAM
+    stream_from self.class.standee_stream(@map_id)
     # World entry (#318): one bulk read of Eira's board before any frame moves,
     # so a card someone picked up while we were down is already on their avatar
     # when the first move frame stamps it. Not polling — the card stream keeps

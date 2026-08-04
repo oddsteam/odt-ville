@@ -71,6 +71,27 @@ class PresenceChannelTest < ActionCable::Channel::TestCase
     assert_has_stream PresenceChannel::CARD_STREAM
   end
 
+  # Standees, live (#375): one stream per map, deliberately unpartitioned like
+  # the card stream — a deploy is rarer than a card change, rarer still than a
+  # movement frame, so map-wide fanout costs nothing and a cutout raised across
+  # the plaza is seen by everyone standing on it. Same join gate as the cells.
+  test "subscribing attaches the map-wide standee stream" do
+    map = make_map
+
+    join(map)
+
+    assert_has_stream PresenceChannel.standee_stream(map.id)
+  end
+
+  test "a rejected join attaches no standee stream" do
+    map = make_map(multiplayer: false)
+
+    join(map)
+
+    assert subscription.rejected?
+    assert_has_no_stream PresenceChannel.standee_stream(map.id)
+  end
+
   # World entry (#318): the card stream only carries changes going forward, so
   # a card picked up while everyone was offline needs a bulk read to appear.
   # One read for the whole world — never one per avatar, never polling — and
