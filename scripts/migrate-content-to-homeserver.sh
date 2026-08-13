@@ -2,16 +2,15 @@
 # Push authored content from the LOCAL dev Postgres to the homeserver Postgres.
 #
 # Why this exists: mutagen mirrors the file tree but NOT the database, so local
-# and homeserver each have their own Postgres. This copies the content you author
-# locally (props, flowers, monsters, characters, maps, boards, announcements) up
-# to the homeserver, where the app reads it live.
+# and homeserver each have their own Postgres. This copies the house-independent
+# content you author locally (maps, ground tiles, monsters, characters, and the
+# props/flowers in tile_objects) up to the homeserver, where the app reads it live.
 #
-# Intentionally EXCLUDED: companies + houses. Houses are tied to the posture-login
-# service on the homeserver (entry_gate / posture_set_id), so they're managed
-# there and must not be clobbered from local. `boards` FK to `houses`, so the
-# local board rows must reference house IDs that already exist on the homeserver
-# (true as long as the houses were migrated once and their IDs haven't changed) —
-# the script verifies this in a preflight check before truncating anything.
+# Intentionally EXCLUDED: companies, houses, boards, content_items. Houses are
+# tied to the posture-login service on the homeserver and are managed there with
+# their own IDs; boards + content_items are house-bound (they FK to houses), so
+# they belong with whatever houses exist on the homeserver, not the local set.
+# Only the house-independent asset library is pushed.
 #
 # `tile_objects.overhang` only exists in the local DB (phantom drift from the
 # unmerged #44 branch), so tile_objects is copied with an explicit column list
@@ -33,9 +32,9 @@ REMOTE_DIR="${REMOTE_DIR:-apps/odt-ville}"
 DB_USER="${DB_USER:-postgres}"
 DB_NAME="${DB_NAME:-one_rev_village_development}"
 
-# Tables to migrate, in FK-safe order (parents before children). boards ->
-# content_items is the only intra-set dependency; the rest are independent.
-TABLES=(maps ground_tiles monsters character_manifests tile_objects boards content_items)
+# Tables to migrate. All are house-independent and have no FK dependencies on
+# each other, so order and cascade don't matter here.
+TABLES=(maps ground_tiles monsters character_manifests tile_objects)
 
 # tile_objects minus the local-only `overhang` column.
 TILE_OBJECT_COLS="id,active,created_at,door_dx,door_dy,edge_mask,fg_mask,footprint_h,footprint_w,image,kind,name,updated_at,walk_mask"
@@ -68,30 +67,13 @@ counts_query() {
 
 echo "==> Migrating content to $SSH_HOST:$REMOTE_DIR"
 echo "    tables:   ${TABLES[*]}"
-echo "    excluded: companies, houses (posture-login managed)"
-echo
-
-# --- preflight: every local board's house_id must exist on the homeserver -----
-# Done as a bash set-difference (no SQL EXCEPT / VALUES list to quote remotely).
-echo "==> Preflight: local boards must reference houses that exist remotely"
-LOCAL_HOUSE_IDS="$(local_psql -At -c "select distinct house_id from boards order by house_id")"
-REMOTE_HOUSE_IDS="$(echo "select id from houses;" | remote_psql -At)"
-missing=""
-for h in $LOCAL_HOUSE_IDS; do
-  grep -qxF "$h" <<< "$REMOTE_HOUSE_IDS" || missing+="$h "
-done
-if [ -n "${missing% }" ]; then
-  echo "!! ABORT: local boards reference house IDs not present on the homeserver: ${missing% }" >&2
-  echo "   The homeserver houses changed. Reconcile houses first, then re-run." >&2
-  exit 1
-fi
-echo "    OK (houses: ${LOCAL_HOUSE_IDS//$'\n'/ })"
+echo "    excluded: companies, houses, boards, content_items (homeserver-managed)"
 echo
 
 # --- confirm ------------------------------------------------------------------
 if [ "$ASSUME_YES" -ne 1 ]; then
-  echo "This TRUNCATEs ${TABLES[*]} on the homeserver (CASCADE clears dependent"
-  echo "user_content_states) and reloads them from local. A backup is taken first."
+  echo "This TRUNCATEs and reloads ${TABLES[*]} on the homeserver from local."
+  echo "A full backup is taken first."
   read -r -p "Proceed? [y/N] " ans
   [[ "$ans" =~ ^[Yy]$ ]] || { echo "Aborted."; exit 1; }
 fi
