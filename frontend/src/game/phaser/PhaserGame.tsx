@@ -8,6 +8,7 @@ import MobileDpad from '../MobileDpad.tsx'
 import PerfStallNotice from '../PerfStallNotice.tsx'
 import bus from './bus.js'
 import { villageZone } from './villageZone.ts'
+import { silenceKeyboard } from './gameKeyboard.ts'
 import { applyMapTarget } from '../../kernel/mapTarget.ts'
 import { warp } from '../transition.ts'
 import { trainerOpponent } from './trainerDuel.ts'
@@ -218,6 +219,11 @@ export default function PhaserGame({
   // the bus — the deploy control shows only on a multiplayer map and POSTs to
   // this slug. Null in the town / on a solo map.
   const [mapContext, setMapContext] = useState<{ slug: string; multiplayer: boolean } | null>(null)
+  // The deploy form is summoned, not permanent (#380): a rare action (3 cutouts
+  // a week) has no business covering the map, and a text input mounted over the
+  // game is a permanent fight with Phaser's keyboard capture. Open is a state
+  // the shell owns — the keyboard follows it, not DOM focus.
+  const [standeeOpen, setStandeeOpen] = useState(false)
   const [standeeLine, setStandeeLine] = useState('')
   const [standeeDetail, setStandeeDetail] = useState('')
   const [standeeReply, setStandeeReply] = useState('')
@@ -543,6 +549,7 @@ export default function PhaserGame({
     const entered = (ctx: { slug: string; multiplayer: boolean }) => setMapContext(ctx)
     const left = () => {
       setMapContext(null)
+      setStandeeOpen(false)
       setStandeeLine('')
       setStandeeDetail('')
     }
@@ -582,6 +589,23 @@ export default function PhaserGame({
     }
   }, [])
 
+  // While the deploy panel is open the game's keyboard is silent and Escape
+  // dismisses it (#380). One effect, so every close path — deploying,
+  // cancelling, dismissing, walking out of the map — hands the keyboard back
+  // through the same cleanup.
+  useEffect(() => {
+    if (!standeeOpen) return
+    const restore = silenceKeyboard(gameRef.current?.input?.keyboard)
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setStandeeOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      restore()
+    }
+  }, [standeeOpen])
+
   // Deploy a Standee where the avatar stands (#369): the shell owns the write,
   // and on success the created Standee rides the bus so the scene stands the
   // cutout up without a reload. The cell comes from the scene's test API, the
@@ -612,11 +636,9 @@ export default function PhaserGame({
       setStandeeDetail('')
       setStandeeReply('')
       setStandeeDays(STANDEE_DEFAULT_DAYS)
-      // Hand the keyboard back to the game. The deploy button suppresses its
-      // own mousedown so clicking it never steals focus mid-typing — which
-      // means focus is still in the form here, and without this the avatar
-      // stays frozen until you happen to click the map.
-      ;(document.activeElement as HTMLElement | null)?.blur()
+      // Closing returns the map to being the map — and the effect's cleanup
+      // hands the keyboard back, so the avatar walks again straight away.
+      setStandeeOpen(false)
     }
   }
 
@@ -647,6 +669,20 @@ export default function PhaserGame({
 
             <div className="overlay-slot overlay-tr">
               {dailyBrief}
+              {/* Summons the deploy form (#380). Sits with the Daily Brief and
+                  fullscreen affordances, on a multiplayer map only — the same
+                  condition the form itself carried when it was always on. */}
+              {mapContext?.multiplayer && onDeployStandee && !standeeOpen && (
+                <button
+                  type="button"
+                  className="standee-open-btn"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => setStandeeOpen(true)}
+                  title="Leave a Standee here"
+                >
+                  🪧 Standee
+                </button>
+              )}
               <button
                 type="button"
                 className="fullscreen-btn"
@@ -659,8 +695,12 @@ export default function PhaserGame({
               </button>
             </div>
 
-            {mapContext?.multiplayer && onDeployStandee && (
-              <div className="overlay-slot overlay-standee">
+            {standeeOpen && mapContext?.multiplayer && onDeployStandee && (
+              <div
+                className="overlay-slot overlay-standee"
+                role="dialog"
+                aria-label="Leave a Standee"
+              >
                 {/* The world-wide budget of 3 (#371): "N of 3 out" before the
                     employee writes anything. At the cap the form is replaced by
                     the located refusal — never asked to fill a form they can't
@@ -673,28 +713,16 @@ export default function PhaserGame({
                 {standeeBudget && !standeeBudget.allowed ? (
                   <p className="standee-refusal">{standeeBudget.reason}</p>
                 ) : (
-                  // Phaser's keyboard plugin listens on `window` and *captures*
-                  // the keys a scene binds — W/A/S/D, SPACE, ENTER — so while a
-                  // field here has focus those keystrokes never reach the input
-                  // and walk the avatar instead. Nothing else in the game
-                  // overlay takes typed text, so this is the first place it
-                  // bites. Silence the game's keyboard for as long as the form
-                  // holds focus; onFocus/onBlur bubble, so the wrapper covers
-                  // all three fields.
-                  <div
-                    className="standee-form"
-                    onFocus={() => {
-                      const kb = gameRef.current?.input?.keyboard
-                      if (kb) kb.enabled = false
-                    }}
-                    onBlur={() => {
-                      const kb = gameRef.current?.input?.keyboard
-                      if (kb) kb.enabled = true
-                    }}
-                  >
+                  // The game's keyboard is already silent for as long as this
+                  // panel is open (#380), so typing here reaches the fields
+                  // instead of walking the avatar.
+                  <div className="standee-form">
                     <input
                       type="text"
                       className="standee-input"
+                      // The panel exists only because you asked for it, so land
+                      // in the field you asked for rather than making you click.
+                      autoFocus
                       value={standeeLine}
                       maxLength={60}
                       placeholder="Short line…"
@@ -756,6 +784,16 @@ export default function PhaserGame({
                     </button>
                   </div>
                 )}
+                {/* Leaving without deploying — offered at the cap too, so the
+                    refusal is something you can walk away from. */}
+                <button
+                  type="button"
+                  className="standee-btn"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => setStandeeOpen(false)}
+                >
+                  Close
+                </button>
               </div>
             )}
 
