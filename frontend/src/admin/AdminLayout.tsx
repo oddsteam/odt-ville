@@ -15,6 +15,7 @@ const TOOLS = [
   { to: 'monsters', label: 'Monsters' },
   { to: 'npcs', label: 'NPCs' },
   { to: 'maps', label: 'Maps' },
+  { to: 'employees', label: 'Employees' },
 ]
 
 export default function AdminLayout() {
