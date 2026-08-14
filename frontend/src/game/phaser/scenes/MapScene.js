@@ -3,7 +3,7 @@ import { preloadBakedMap, renderBakedMap } from '../../../kernel/mapRenderer.ts'
 import { MOVE_MS, TILE } from '../../constants.js'
 import { cameraBounds } from '../canvasLayout.ts'
 import { isTransitioning } from '../../transition.ts'
-import { spawnTile, mapWalkable, entityBlockedFor, entityEdgeBlockedFor, entityDoorCells, entityLadderFor, entityOverhangFor, entityForegroundFor, mapPlayerDepth, slidePlayerDepth, feetWorldXY } from '../mapWalk.ts'
+import { spawnTile, mapWalkable, entityBlockedFor, entityEdgeBlockedFor, entityDoorCells, entityLadderFor, entityOverhangFor, entityForegroundFor, mapPlayerDepth, slidePlayerDepth, peerDepth, peerSlideDepth, feetWorldXY } from '../mapWalk.ts'
 import { spawnNpcs, npcBlockedFor, sortNpcs } from '../mapNpcs.ts'
 import { spawnStandees, sortStandees, standeeAt, placardOf, addStandee, restandeeRigs, expiredStandees, cutout } from '../mapStandees.ts'
 import {
@@ -473,6 +473,18 @@ export default class MapScene extends Phaser.Scene {
   // labelled avatar, tween a known one to its new tile, or drop a leaver.
   // Each frame names its sender's character (#266), so a first sighting also
   // kicks off that manifest's one-time load.
+  // Re-sort every peer against the row the local avatar is on (or stepping to),
+  // the same rule and same trigger point as sortNpcs/sortStandees (#403): the
+  // local row is the sort key, so walking past a peer swaps who covers whom. An
+  // overhang / foreground peer keeps its walk-under band regardless (#402).
+  sortPeers(avatarRow) {
+    for (const [userId, state] of this.remoteRoster) {
+      this.remoteSprites
+        .get(userId)
+        ?.setDepth(peerDepth(state.y, avatarRow, this.isOverhang(state.x, state.y), this.isForeground(state.x, state.y)))
+    }
+  }
+
   presenceFrame(frame) {
     // Snapshot the peer's tile before applyFrame folds the new one in: a move's
     // depth slide needs where they stepped *from* (#402), and applyFrame
@@ -504,11 +516,13 @@ export default class MapScene extends Phaser.Scene {
         .text(0, NAMEPLATE_Y, state.name, { fontSize: '12px', color: '#ffffff', backgroundColor: '#000000aa' })
         .setOrigin(0.5, 0)
       const remote = this.add.container(feet.x, feet.y, [img, label])
-      // A peer takes the same depth rule the local avatar does (#402): behind an
-      // object's art on an overhang cell (#210), under the masked canopy on a
-      // foreground cell (#168), the flat player band otherwise — the same call
-      // the avatar makes on arrival, not the old flat mapPlayerDepth(false).
-      remote.setDepth(mapPlayerDepth(this.isOverhang(state.x, state.y), this.isForeground(state.x, state.y)))
+      // A peer sorts against the local avatar's row like a placed NPC (#403):
+      // south covers, north draws behind — and an overhang / foreground cell
+      // still wins where it applies (#402: behind an object's art on an overhang
+      // cell #210, under the masked canopy on a foreground cell #168).
+      remote.setDepth(
+        peerDepth(state.y, this.playerTile.y, this.isOverhang(state.x, state.y), this.isForeground(state.x, state.y)),
+      )
       this.remoteSprites.set(frame.userId, remote)
       this.applyPeerLook(remote, state)
       // The spawn frame carries their card, so someone who picked one up while
@@ -532,13 +546,14 @@ export default class MapScene extends Phaser.Scene {
     // finished would otherwise let the stale onComplete idle a walking peer.
     this.tweens.killTweensOf(remote)
     this.applyPeerLook(remote, state, true)
-    // Re-derive depth on the move, exactly as the local avatar does each step
-    // (#402): hold the walk-under band for the whole slide while either end of
-    // the step overhangs — so a peer stepping out of an overhang cell doesn't
-    // pop over the art it is still standing in front of — then settle to the
-    // landed cell's own depth on arrival.
+    // Re-derive depth on the move, exactly as the local avatar does each step:
+    // hold the walk-under band for the whole slide while either end of the step
+    // overhangs (#402) — so a peer stepping out of an overhang cell doesn't pop
+    // over the art it is still standing in front of — otherwise sort against the
+    // local avatar's row (#403), keyed on the destination cell. onComplete
+    // settles to the landed cell's own depth.
     const to = { x: state.x, y: state.y }
-    remote.setDepth(slidePlayerDepth(prev ?? to, to, this.isOverhang, this.isForeground))
+    remote.setDepth(peerSlideDepth(prev ?? to, to, this.playerTile.y, this.isOverhang, this.isForeground))
     this.tweens.add({
       targets: remote,
       x: feet.x,
@@ -546,7 +561,7 @@ export default class MapScene extends Phaser.Scene {
       duration: MOVE_MS,
       onComplete: () => {
         this.applyPeerLook(remote, state, false)
-        remote.setDepth(mapPlayerDepth(this.isOverhang(to.x, to.y), this.isForeground(to.x, to.y)))
+        remote.setDepth(peerDepth(to.y, this.playerTile.y, this.isOverhang(to.x, to.y), this.isForeground(to.x, to.y)))
       },
     })
   }
@@ -676,6 +691,9 @@ export default class MapScene extends Phaser.Scene {
         sortNpcs(this.npcs, t.y)
         // Standee cutouts re-sort against the same row (#369).
         sortStandees(this.standees, t.y)
+        // Peers sort against the same row too (#403) — the local avatar is the
+        // sort key, so stepping past a peer swaps who covers whom.
+        this.sortPeers(t.y)
         // Climb while stepping onto a placed object's ladder cell (#211); the
         // rig falls back to walk when the character authors no climb frames.
         if (this.usingManifest) applyFacing(this.player, this.charDir, dir, true, this.isLadder(t.x, t.y))

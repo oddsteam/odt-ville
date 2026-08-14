@@ -16,6 +16,8 @@ import {
   entityForegroundFor,
   mapPlayerDepth,
   slidePlayerDepth,
+  peerDepth,
+  peerSlideDepth,
   spawnTile,
   MAP_PLAYER_DEPTH,
   MAP_PLAYER_OVERHANG_DEPTH,
@@ -234,6 +236,57 @@ describe('slidePlayerDepth', () => {
 
   it('stays above the entity band when neither end overhangs', () => {
     expect(slidePlayerDepth({ x: 0, y: 0 }, { x: 1, y: 0 }, never, never)).toBe(MAP_PLAYER_DEPTH)
+  })
+})
+
+describe('peerDepth', () => {
+  // A peer avatar sorts against the local avatar's row exactly as a placed NPC
+  // does (#403): south covers, north draws behind — and the row delta is the
+  // whole key, so two peers on different rows also order against each other.
+  it('draws a peer south of the local avatar over it, one north behind it', () => {
+    expect(peerDepth(5, 3, false, false)).toBeGreaterThan(MAP_PLAYER_DEPTH)
+    expect(peerDepth(1, 3, false, false)).toBeLessThan(MAP_PLAYER_DEPTH)
+  })
+
+  it('sits a peer on the local avatar’s own row in the flat band', () => {
+    expect(peerDepth(3, 3, false, false)).toBe(MAP_PLAYER_DEPTH)
+  })
+
+  it('orders two peers on the same side by their own rows', () => {
+    // Both south of the avatar (row 0); the further-south peer draws in front.
+    expect(peerDepth(5, 0, false, false)).toBeGreaterThan(peerDepth(2, 0, false, false))
+  })
+
+  it('lets an overhang cell win over the row rule — a peer under art stays under it', () => {
+    // Far south (would draw well in front) but standing under an object's art.
+    expect(peerDepth(9, 0, true, false)).toBe(MAP_PLAYER_OVERHANG_DEPTH)
+  })
+
+  it('lets a foreground cell win over the row rule', () => {
+    expect(peerDepth(9, 0, false, true)).toBe(MAP_PLAYER_FOREGROUND_DEPTH)
+  })
+
+  it('lets overhang win when a cell is both', () => {
+    expect(peerDepth(9, 0, true, true)).toBe(MAP_PLAYER_OVERHANG_DEPTH)
+  })
+})
+
+describe('peerSlideDepth', () => {
+  const overhangAt = (ox: number, oy: number) => (x: number, y: number) => x === ox && y === oy
+  const never = () => false
+
+  it('sorts a plain step against the local avatar’s row, keyed on the destination', () => {
+    // Stepping to row 5 while the avatar is on row 3 → south → covers it.
+    const d = peerSlideDepth({ x: 2, y: 4 }, { x: 2, y: 5 }, 3, never, never)
+    expect(d).toBe(peerDepth(5, 3, false, false))
+    expect(d).toBeGreaterThan(MAP_PLAYER_DEPTH)
+  })
+
+  it('holds the walk-under band while either end of the step overhangs', () => {
+    const out = peerSlideDepth({ x: 2, y: 2 }, { x: 2, y: 1 }, 3, overhangAt(2, 2), never)
+    expect(out).toBe(MAP_PLAYER_OVERHANG_DEPTH)
+    const into = peerSlideDepth({ x: 2, y: 1 }, { x: 2, y: 2 }, 3, overhangAt(2, 2), never)
+    expect(into).toBe(MAP_PLAYER_OVERHANG_DEPTH)
   })
 })
 

@@ -50,6 +50,8 @@ function fakeScene() {
     // A plain map: peers depth-sort against nothing here — faces are the subject.
     isOverhang: () => false,
     isForeground: () => false,
+    // The local avatar's row, the peer depth sort key (#403) — irrelevant here.
+    playerTile: { x: 0, y: 0 },
     presence: { ownId: 'me', send() {} },
     loadPeerCharacter() {},
     sendPosition() {},

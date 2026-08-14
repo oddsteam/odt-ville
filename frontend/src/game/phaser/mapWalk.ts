@@ -162,6 +162,46 @@ export function slidePlayerDepth(
   )
 }
 
+// A peer avatar's depth (#403). A peer is character-shaped exactly like a placed
+// NPC, so it sorts against the local avatar's row the same way (`npcDepth`): a
+// peer on a row further south covers the avatar, one further north draws behind.
+// The row delta is the whole key rather than a two-way front/behind flag, so two
+// peers on different rows also order against each other — the "sort against each
+// other by row" half of the issue. An overhang or foreground cell still wins
+// (#402): a peer standing under an object's art stays under it whatever its row,
+// so mapPlayerDepth's walk-under / masked bands take precedence exactly as they
+// do for the local avatar.
+export function peerDepth(
+  peerRow: number,
+  avatarRow: number,
+  isOverhang: boolean,
+  isForeground = false,
+): number {
+  if (isOverhang || isForeground) return mapPlayerDepth(isOverhang, isForeground)
+  return MAP_PLAYER_DEPTH + (peerRow - avatarRow)
+}
+
+// The depth to hold for a whole peer tile-step. Mirrors `slidePlayerDepth`: while
+// either end of the step overhangs (or is foreground) the walk-under / masked
+// band holds for the whole slide, so a peer stepping out of an overhang cell does
+// not pop over the art it is still in front of; otherwise the peer sorts against
+// the local avatar's row, keyed on the destination cell it is stepping onto —
+// the same row the local avatar's own step re-sorts NPCs against.
+export function peerSlideDepth(
+  from: Tile,
+  to: Tile,
+  avatarRow: number,
+  isOverhang: (x: number, y: number) => boolean,
+  isForeground: (x: number, y: number) => boolean,
+): number {
+  return peerDepth(
+    to.y,
+    avatarRow,
+    isOverhang(from.x, from.y) || isOverhang(to.x, to.y),
+    isForeground(from.x, from.y) || isForeground(to.x, to.y),
+  )
+}
+
 // The impassable cell borders a set of placed entities contribute, as a fast
 // transition-aware predicate (#53, #207). Each entity may carry an `edge_mask`
 // footprint anchored at its (x,y): one hex digit per cell packing the four

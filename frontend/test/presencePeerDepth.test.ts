@@ -39,6 +39,11 @@ function fakeScene(overhang: string[] = [], fg: string[] = []) {
     remoteSprites: new Map(),
     cardBadges: new Map(),
     avatarsAsked: new Set(),
+    // The local avatar shares the peers' rows here (row 4), so peer-vs-local row
+    // sorting (#403) leaves the plain-cell depth at the flat band — these cases
+    // isolate the overhang / foreground rule (#402). The peer↔row sort has its
+    // own scene test (presencePeerSort).
+    playerTile: { x: 0, y: 4 },
     presence: { ownId: 'me', send() {} },
     isOverhang: (x: number, y: number) => overhang.includes(`${x},${y}`),
     isForeground: (x: number, y: number) => fg.includes(`${x},${y}`),
@@ -129,8 +134,9 @@ describe('a peer moving', () => {
     // must not pop over the art it is still standing in front of.
     expect(depthOf(scene)).toBe(MAP_PLAYER_OVERHANG_DEPTH)
     scene.tween.onComplete()
-    // Landed north of the object, it settles back to the flat band.
-    expect(depthOf(scene)).toBe(MAP_PLAYER_DEPTH)
+    // Landed north of the object and north of the local avatar (row 4), so it
+    // settles just behind the player band — the #403 row rule, no longer flat.
+    expect(depthOf(scene)).toBe(MAP_PLAYER_DEPTH - 1)
   })
 
   it('takes the walk-under band from the first frame stepping into an overhang cell', () => {
