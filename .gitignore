@@ -36,3 +36,6 @@ log/
 
 # Tiled editor per-user session state
 *.tiled-session
+
+# One-off talent.odds.team roster export (ADR-0016) — real names/emails, public repo
+backend/db/talent_employees.json

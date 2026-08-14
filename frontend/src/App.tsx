@@ -10,6 +10,7 @@ import TileMapper from './tileMapper/TileMapper.tsx'
 import GroundTileMapper from './groundMapper/GroundTileMapper.tsx'
 import MonstersAdminPage from './admin/MonstersAdminPage.tsx'
 import NpcsAdminPage from './admin/NpcsAdminPage.tsx'
+import EmployeesAdminPage from './org/EmployeesAdminPage.tsx'
 import PostureCallbackPage from './posture/CallbackPage.tsx'
 import MapPage from './MapPage.tsx'
 import CharacterSelectPage from './character/CharacterSelectPage.tsx'
@@ -57,6 +58,9 @@ export default function App() {
           <Route path="ground" element={<GroundTileMapper />} />
           <Route path="monsters" element={<MonstersAdminPage />} />
           <Route path="npcs" element={<NpcsAdminPage />} />
+          {/* The org roster (#388, ADR-0016) — read-only; org data is authored
+              upstream and this app is only ever a consumer of it. */}
+          <Route path="employees" element={<EmployeesAdminPage />} />
           <Route
             path="maps"
             element={

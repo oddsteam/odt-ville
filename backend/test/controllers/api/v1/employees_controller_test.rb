@@ -1,0 +1,47 @@
+require "test_helper"
+
+module Api
+  module V1
+    # GET /api/v1/org/employees (#388): the roster behind /admin/employees.
+    # Admin-gated in full — unlike the catalog reads, this is 500+ colleagues'
+    # names and email addresses, not a list of monsters.
+    class EmployeesControllerTest < ActionDispatch::IntegrationTest
+      setup do
+        @company, @user = setup_company
+      end
+
+      test "returns 403 without the admin realm role" do
+        get "/api/v1/org/employees", headers: auth(@user)
+
+        assert_response :forbidden
+      end
+
+      test "an admin gets the roster, nickname and departure included" do
+        ::Org::Employee.create!(company: @company, email: "b@example.test", name: "Bea Second",
+                                nickname: "Bee", join_date: Date.new(2023, 1, 2))
+        ::Org::Employee.create!(company: @company, email: "a@example.test", name: "Abe First",
+                                nickname: "Abe", join_date: Date.new(2021, 5, 6), left_on: Date.new(2024, 2, 29))
+
+        get "/api/v1/org/employees", headers: auth(@user, roles: %w[admin])
+
+        assert_response :success
+        assert_equal ["Abe First", "Bea Second"], json.map { _1[:name] }
+        abe = json.find { _1[:email] == "a@example.test" }
+        assert_equal "Abe", abe[:nickname]
+        assert_equal "2021-05-06", abe[:join_date]
+        assert_equal "2024-02-29", abe[:left_on]
+        assert_nil json.find { _1[:email] == "b@example.test" }[:left_on]
+      end
+
+      test "the roster is ordered by name" do
+        %w[Zoe Ann Mia].each_with_index do |name, i|
+          ::Org::Employee.create!(company: @company, email: "#{i}@example.test", name: name)
+        end
+
+        get "/api/v1/org/employees", headers: auth(@user, roles: %w[admin])
+
+        assert_equal %w[Ann Mia Zoe], json.map { _1[:name] }
+      end
+    end
+  end
+end

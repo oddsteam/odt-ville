@@ -131,6 +131,13 @@ Rails.application.routes.draw do
         get "voice/token", to: "voice_tokens#show"
       end
 
+      # The Org domain (ADR-0010, #388) — the roster read-model (ADR-0016).
+      # Read-only and admin-gated: assignment happens upstream, and offering
+      # edits here would create changes the next sync silently destroys.
+      scope module: :org do
+        get "org/employees", to: "employees#index"
+      end
+
       # The Maps domain (ADR-0010) — controllers under Api::V1::Maps::, URLs
       # unchanged (`scope module:` nests the controller, not the path).
       scope module: :maps do
