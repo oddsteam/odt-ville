@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_14_000004) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_15_000001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -39,9 +39,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_14_000004) do
     t.datetime "created_at", null: false
     t.jsonb "data", default: {}, null: false
     t.string "name", null: false
+    t.bigint "owner_id"
     t.datetime "updated_at", null: false
     t.index ["active"], name: "index_character_manifests_single_active", unique: true, where: "active"
     t.index ["name"], name: "index_character_manifests_on_name", unique: true
+    t.index ["owner_id"], name: "index_character_manifests_on_owner_id"
   end
 
   create_table "companies", force: :cascade do |t|
@@ -253,6 +255,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_14_000004) do
 
   add_foreign_key "boards", "houses"
   add_foreign_key "catalog_npcs", "character_manifests", on_delete: :nullify
+  add_foreign_key "character_manifests", "users", column: "owner_id", on_delete: :nullify
   add_foreign_key "content_items", "boards"
   add_foreign_key "houses", "companies"
   add_foreign_key "houses", "tile_objects", on_delete: :nullify

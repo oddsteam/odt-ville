@@ -8,15 +8,23 @@ module Api
         before_action -> { require_role!("admin") }, only: %i[create]
 
         # GET /api/v1/character_manifests — roster for pickers (no data blobs).
+        # House-owned by default (#394); `?owner=me` returns the caller's own
+        # personal rows instead, keeping them out of the shared roster.
         def index
-          manifests = ::Character::CharacterManifest.order(:name)
+          scope = params[:owner] == "me" ?
+            ::Character::CharacterManifest.where(owner: current_user) :
+            ::Character::CharacterManifest.house_owned
+          manifests = scope.order(:name)
           render json: manifests.map { |m| ::Character::CharacterManifestSerializer.summary(m) }
         end
 
         # GET /api/v1/character_manifests/:id — full manifest (incl. data blob),
-        # used by the roster to animate each saved character.
+        # used by the roster to animate each saved character. House-owned rows
+        # are readable by anyone; a personal row only by its owner (#394) — a
+        # stranger's row 404s like it doesn't exist.
         def show
-          manifest = ::Character::CharacterManifest.find(params[:id])
+          manifest = ::Character::CharacterManifest
+            .where(owner_id: [nil, current_user.id]).find(params[:id])
           render json: ::Character::CharacterManifestSerializer.call(manifest)
         end
 
