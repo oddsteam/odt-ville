@@ -35,5 +35,9 @@ export const Employee = Schema.Struct({
   // normal state — someone who has not signed in yet, or whose login email
   // differs — not an error and not a permission.
   linked: Schema.Boolean,
+  // Whether the avatar sync can reach a Basecamp face for this person (#391).
+  // False is the queue for the manual pass: their Basecamp address differs from
+  // their org one, so email could never join them and they render the fallback.
+  basecamp_linked: Schema.Boolean,
 })
 export type Employee = Schema.Schema.Type<typeof Employee>

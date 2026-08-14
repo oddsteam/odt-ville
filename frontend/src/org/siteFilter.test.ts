@@ -14,6 +14,7 @@ const person = (name: string, ...sites: string[]): Employee => ({
   join_date: null,
   left_on: null,
   linked: false,
+  basecamp_linked: false,
   sites: sites.map((s) => ({ name: s, kind: 'client' as const })),
 })
 
