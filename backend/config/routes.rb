@@ -136,6 +136,10 @@ Rails.application.routes.draw do
       # edits here would create changes the next sync silently destroys.
       scope module: :org do
         get "org/employees", to: "employees#index"
+        # The one write this read-model allows (#392): a human sets the Basecamp
+        # link email can't. Scoped to that column in the controller, admin-gated.
+        patch "org/employees/:id", to: "employees#update"
+        get "org/basecamp_people", to: "basecamp_people#index"
       end
 
       # The Maps domain (ADR-0010) — controllers under Api::V1::Maps::, URLs

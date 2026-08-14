@@ -18,15 +18,36 @@ module Api
           # `linked` (#390) is a boolean, not the user: the page shows the gap,
           # and shipping the login row here would leak identity into a roster read.
           render json: ::Org::Employee.includes(:sites, :user).order(:name).map { |employee|
-            employee.as_json(
-              only: %i[id email name nickname join_date left_on],
-              include: { sites: { only: %i[name kind] } }
-            ).merge("linked" => employee.user.present?,
-                    # #391: whether the avatar sync can reach a face for this
-                    # person. The id itself stays server-side — the page needs
-                    # the gap, not Basecamp's primary key.
-                    "basecamp_linked" => employee.basecamp_person_id.present?)
+            employee_json(employee)
           }
+        end
+
+        # PATCH /api/v1/org/employees/:id — the sole write (#392): a human links
+        # (or clears) the Basecamp person email can't. `basecamp_person_id` is
+        # the only writable attribute; `permit` on that key alone is the gate.
+        def update
+          employee = ::Org::Employee.find(params[:id])
+          employee.update!(params.permit(:basecamp_person_id))
+          render json: employee_json(employee)
+        end
+
+        private
+
+        def employee_json(employee)
+          # No serializer: the payload IS the row, minus the timestamps and the
+          # tenant. `departed` is deliberately absent — `left_on` is the answer.
+          # Sites ride along read-only — there is no write half to this resource
+          # and #389 says there must not be one; assignment happens upstream.
+          # `linked` (#390) is a boolean, not the user: the page shows the gap,
+          # and shipping the login row here would leak identity into a roster read.
+          employee.as_json(
+            only: %i[id email name nickname join_date left_on],
+            include: { sites: { only: %i[name kind] } }
+          ).merge("linked" => employee.user.present?,
+                  # #391: whether the avatar sync can reach a face for this
+                  # person. The id itself stays server-side — the page needs
+                  # the gap, not Basecamp's primary key.
+                  "basecamp_linked" => employee.basecamp_person_id.present?)
         end
       end
     end

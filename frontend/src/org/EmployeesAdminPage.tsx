@@ -2,14 +2,17 @@ import { useEffect, useState } from 'react'
 import { EmployeesService } from './service.ts'
 import type { Employee } from './schema.ts'
 import { bySite, siteNames } from './siteFilter.ts'
+import { BasecampPersonPicker } from './BasecampPersonPicker.tsx'
 import { runEdge } from '../lib/runEdge.ts'
 
 // The org roster (#388, ADR-0016) — the first page of the `org` frontend module
 // ADR-0010 anticipated.
 //
-// Read-only, and not as a first slice: this app is a downstream consumer of org
-// data, assignment happens upstream, and an edit offered here would be silently
-// destroyed by the next sync. So there are no buttons — deliberately.
+// Read-only over org data: this app is a downstream consumer, assignment happens
+// upstream, and an edit offered here would be silently destroyed by the next
+// sync. The one exception is the Basecamp link (#392) — a fact about our own
+// integration, not about org data, so a human is its authority and the sync
+// preserves it. That is the only column with buttons.
 //
 // The admin-* classes come from admin.css, which AdminLayout imports; this page
 // only ever renders inside that Outlet. Importing the stylesheet here would
@@ -19,10 +22,23 @@ export default function EmployeesAdminPage() {
   const [employees, setEmployees] = useState<readonly Employee[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [site, setSite] = useState('')
+  // Which employee's picker is open, by id — one at a time.
+  const [picking, setPicking] = useState<number | null>(null)
 
   useEffect(() => {
     runEdge(EmployeesService.list()).then(setEmployees, (e: Error) => setError(e.message))
   }, [])
+
+  // Set or clear the Basecamp link (#392) and swap the returned row in place, so
+  // the Basecamp cell reflects it without a reload. The avatar itself resolves
+  // on the next sync, which now reaches this person by the hand-set id.
+  const applyLink = (employeeId: number, basecampPersonId: number | null) => {
+    setPicking(null)
+    runEdge(EmployeesService.linkBasecampPerson(employeeId, basecampPersonId)).then(
+      (updated) => setEmployees((prev) => prev?.map((e) => (e.id === employeeId ? updated : e)) ?? prev),
+      (e: Error) => setError(e.message),
+    )
+  }
 
   if (error) return <p className="admin-msg admin-msg-error">{error}</p>
   if (!employees) return <p className="admin-msg">Loading roster…</p>
@@ -87,8 +103,29 @@ export default function EmployeesAdminPage() {
                     normal, so it reads as a dash rather than a red flag. */}
                 <td>{e.linked ? 'Linked' : '—'}</td>
                 {/* Unlike Login, this gap is work: no link means no face until
-                    someone maps them by hand (#391), so it says so. */}
-                <td>{e.basecamp_linked ? 'Linked' : 'No link'}</td>
+                    someone maps them by hand (#392). Linked rows can be cleared
+                    so a wrong pick is recoverable; unlinked rows open a picker. */}
+                <td>
+                  {e.basecamp_linked ? (
+                    <>
+                      Linked{' '}
+                      <button type="button" onClick={() => applyLink(e.id, null)}>
+                        Clear
+                      </button>
+                    </>
+                  ) : picking === e.id ? (
+                    <>
+                      <BasecampPersonPicker onPick={(pid) => applyLink(e.id, pid)} />
+                      <button type="button" onClick={() => setPicking(null)}>
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <button type="button" onClick={() => setPicking(e.id)}>
+                      Link…
+                    </button>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>

@@ -21,6 +21,17 @@ export const Site = Schema.Struct({
 })
 export type Site = Schema.Schema.Type<typeof Site>
 
+// A Basecamp person the operator can hand-link to an employee (#392), from
+// GET /org/basecamp_people?q=. `avatar` is the rendered face as a data URI —
+// bytes, not Basecamp's signed URL, which stays server-side (ADR-0012) — or
+// null when the upstream face wouldn't fetch.
+export const BasecampPerson = Schema.Struct({
+  id: Schema.Number,
+  name: Schema.String,
+  avatar: Schema.NullOr(Schema.String),
+})
+export type BasecampPerson = Schema.Schema.Type<typeof BasecampPerson>
+
 export const Employee = Schema.Struct({
   id: Schema.Number,
   email: Schema.String,
