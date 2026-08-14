@@ -31,5 +31,9 @@ export const Employee = Schema.Struct({
   // An unordered set — no primary site — that arrives name-ordered so the page
   // does not have to invent one.
   sites: Schema.Array(Site),
+  // Whether a Keycloak login is joined to this person (#390). Unlinked is a
+  // normal state — someone who has not signed in yet, or whose login email
+  // differs — not an error and not a permission.
+  linked: Schema.Boolean,
 })
 export type Employee = Schema.Schema.Type<typeof Employee>

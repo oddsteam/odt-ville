@@ -13,6 +13,7 @@ const person = (name: string, ...sites: string[]): Employee => ({
   nickname: null,
   join_date: null,
   left_on: null,
+  linked: false,
   sites: sites.map((s) => ({ name: s, kind: 'client' as const })),
 })
 

@@ -103,6 +103,26 @@ class RosterImportTest < ActiveSupport::TestCase
     assert_equal({ rows: 6, skipped: 2, created: 0, updated: 4 }, report)
   end
 
+  test "the import backfills users who signed in before the roster existed" do
+    early = user("Current.Person@example.test")
+    stranger = user("contractor@example.test")
+
+    import
+
+    assert_equal Org::Employee.find_by(email: "current.person@example.test"), early.reload.employee
+    assert_nil stranger.reload.employee, "an email off the roster is a normal state, not an error"
+  end
+
+  test "a second run does not unlink or relink an already-linked user" do
+    early = user("current.person@example.test")
+    import
+    linked = early.reload.employee_id
+
+    import
+
+    assert_equal linked, early.reload.employee_id
+  end
+
   test "a departed row with no date is refused rather than read as current" do
     broken = Tempfile.new(["roster", ".json"])
     broken.write([{ "email" => "no.date@example.test", "name" => "N D", "departed" => true, "left_on" => nil }].to_json)
@@ -114,6 +134,10 @@ class RosterImportTest < ActiveSupport::TestCase
   end
 
   private
+
+  def user(email)
+    @company.users.create!(name: "U", role: "branch_employee", external_id: SecureRandom.uuid, email: email)
+  end
 
   def sites_of(email)
     Org::Employee.find_by(email: email).sites.order(:name).pluck(:name)

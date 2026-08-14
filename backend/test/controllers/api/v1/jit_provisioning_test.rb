@@ -41,6 +41,25 @@ module Api
         assert_response :unauthorized
       end
 
+      # #390: the login half of the link. The importer backfills everyone who
+      # already exists; this is how someone added to the roster today connects
+      # on their first sign-in, with no re-import.
+      test "first login links to the person already on the roster" do
+        ada = ::Org::Employee.create!(company: @company, email: "ada@odds.team", name: "Ada Lovelace")
+
+        get "/api/v1/me", headers: auth_email("kc-sub-4", "Ada@ODDS.team")
+
+        assert_response :success
+        assert_equal ada, ::Auth::User.find_by(external_id: "kc-sub-4").employee
+      end
+
+      test "an email that is not on the roster provisions unlinked and is not blocked" do
+        get "/api/v1/me", headers: auth_email("kc-sub-5", "contractor@elsewhere.test")
+
+        assert_response :success
+        assert_nil ::Auth::User.find_by(external_id: "kc-sub-5").employee_id
+      end
+
       test "a returning user re-links by email when their subject changes" do
         existing = @company.users.create!(name: "Carol", role: "branch_manager",
           external_id: "old-sub", email: "carol@odds.team")

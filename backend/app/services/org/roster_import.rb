@@ -40,6 +40,10 @@ module Org
         .group_by { _1["email"].downcase }
         .transform_values { spell(_1) }
       created = people.count { |email, row| upsert(email, row) }
+      # Backfill (#390): everyone already signed in links now instead of waiting
+      # to log in again. Only the unlinked are touched, so a re-run cannot
+      # unlink or relink. Same method the login path calls — one linking rule.
+      ::Auth::User.where(employee_id: nil).find_each(&:link_employee!)
 
       { rows: rows.size, skipped: rows.size - people.size, created: created, updated: people.size - created }
     end

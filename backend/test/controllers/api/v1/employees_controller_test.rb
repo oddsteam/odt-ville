@@ -46,6 +46,20 @@ module Api
         assert_equal [], json.find { _1[:email] == "u@example.test" }[:sites]
       end
 
+      # #390: the gap made visible. Not an error state — an employee with no
+      # user simply has not logged in yet.
+      test "each person says whether a login is linked to them" do
+        signed_in = ::Org::Employee.create!(company: @company, email: "in@example.test", name: "Ida In")
+        ::Org::Employee.create!(company: @company, email: "out@example.test", name: "Otto Out")
+        @company.users.create!(name: "Ida", role: "branch_employee",
+                               external_id: SecureRandom.uuid, email: "in@example.test").link_employee!
+
+        get "/api/v1/org/employees", headers: auth(@user, roles: %w[admin])
+
+        assert_equal signed_in.id, json.find { _1[:linked] }[:id]
+        assert_equal [false], json.reject { _1[:linked] }.map { _1[:linked] }
+      end
+
       test "the roster is ordered by name" do
         %w[Zoe Ann Mia].each_with_index do |name, i|
           ::Org::Employee.create!(company: @company, email: "#{i}@example.test", name: name)

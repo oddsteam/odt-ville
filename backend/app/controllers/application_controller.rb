@@ -57,6 +57,10 @@ class ApplicationController < ActionController::API
     return nil unless user.company
 
     user.save!
+    # #390: connect this login to the roster person, if there is one. Same
+    # method the importer backfill calls, so the two paths cannot drift; no
+    # match is a normal state (contractor, service account) and never blocks.
+    user.link_employee!
     user
   end
 

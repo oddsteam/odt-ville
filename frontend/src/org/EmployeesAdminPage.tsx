@@ -33,7 +33,8 @@ export default function EmployeesAdminPage() {
     <div className="admin-page">
       <h2 className="admin-page-title">Employees</h2>
       <p className="admin-hint">
-        {employees.length} on the roster, {employees.filter((e) => !e.left_on).length} current. Read
+        {employees.length} on the roster, {employees.filter((e) => !e.left_on).length} current,{' '}
+        {employees.filter((e) => e.linked).length} with a login. Read
         from the upstream directory and never edited here — a change made in this app would be
         overwritten by the next sync.
       </p>
@@ -66,6 +67,7 @@ export default function EmployeesAdminPage() {
               <th>Sites</th>
               <th>Joined</th>
               <th>Status</th>
+              <th>Login</th>
             </tr>
           </thead>
           <tbody>
@@ -79,6 +81,9 @@ export default function EmployeesAdminPage() {
                 <td>{e.sites.map((s) => s.name).join(', ') || '—'}</td>
                 <td>{e.join_date ?? '—'}</td>
                 <td>{e.left_on ? `Left ${e.left_on}` : 'Current'}</td>
+                {/* Not a warning: unlinked means "has not signed in", which is
+                    normal, so it reads as a dash rather than a red flag. */}
+                <td>{e.linked ? 'Linked' : '—'}</td>
               </tr>
             ))}
           </tbody>

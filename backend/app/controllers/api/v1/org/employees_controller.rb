@@ -15,10 +15,14 @@ module Api
           # tenant. `departed` is deliberately absent — `left_on` is the answer.
           # Sites ride along read-only — there is no write half to this resource
           # and #389 says there must not be one; assignment happens upstream.
-          render json: ::Org::Employee.includes(:sites).order(:name).as_json(
-            only: %i[id email name nickname join_date left_on],
-            include: { sites: { only: %i[name kind] } }
-          )
+          # `linked` (#390) is a boolean, not the user: the page shows the gap,
+          # and shipping the login row here would leak identity into a roster read.
+          render json: ::Org::Employee.includes(:sites, :user).order(:name).map { |employee|
+            employee.as_json(
+              only: %i[id email name nickname join_date left_on],
+              include: { sites: { only: %i[name kind] } }
+            ).merge("linked" => employee.user.present?)
+          }
         end
       end
     end
