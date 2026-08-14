@@ -60,6 +60,20 @@ module Api
         assert_equal [false], json.reject { _1[:linked] }.map { _1[:linked] }
       end
 
+      # #391: the people the avatar sync's email match never reached, so the
+      # manual pass has something to count. Unlinked means "no face", not "no
+      # account".
+      test "each person says whether a Basecamp person is linked to them" do
+        faced = ::Org::Employee.create!(company: @company, email: "f@example.test", name: "Fay Faced",
+                                        basecamp_person_id: 12)
+        ::Org::Employee.create!(company: @company, email: "n@example.test", name: "Ned Nolink")
+
+        get "/api/v1/org/employees", headers: auth(@user, roles: %w[admin])
+
+        assert_equal faced.id, json.find { _1[:basecamp_linked] }[:id]
+        assert_equal [false], json.reject { _1[:basecamp_linked] }.map { _1[:basecamp_linked] }
+      end
+
       test "the roster is ordered by name" do
         %w[Zoe Ann Mia].each_with_index do |name, i|
           ::Org::Employee.create!(company: @company, email: "#{i}@example.test", name: name)

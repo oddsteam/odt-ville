@@ -34,7 +34,8 @@ export default function EmployeesAdminPage() {
       <h2 className="admin-page-title">Employees</h2>
       <p className="admin-hint">
         {employees.length} on the roster, {employees.filter((e) => !e.left_on).length} current,{' '}
-        {employees.filter((e) => e.linked).length} with a login. Read
+        {employees.filter((e) => e.linked).length} with a login,{' '}
+        {employees.filter((e) => !e.basecamp_linked).length} with no Basecamp link. Read
         from the upstream directory and never edited here — a change made in this app would be
         overwritten by the next sync.
       </p>
@@ -68,6 +69,7 @@ export default function EmployeesAdminPage() {
               <th>Joined</th>
               <th>Status</th>
               <th>Login</th>
+              <th>Basecamp</th>
             </tr>
           </thead>
           <tbody>
@@ -84,6 +86,9 @@ export default function EmployeesAdminPage() {
                 {/* Not a warning: unlinked means "has not signed in", which is
                     normal, so it reads as a dash rather than a red flag. */}
                 <td>{e.linked ? 'Linked' : '—'}</td>
+                {/* Unlike Login, this gap is work: no link means no face until
+                    someone maps them by hand (#391), so it says so. */}
+                <td>{e.basecamp_linked ? 'Linked' : 'No link'}</td>
               </tr>
             ))}
           </tbody>

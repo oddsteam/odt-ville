@@ -21,7 +21,11 @@ module Api
             employee.as_json(
               only: %i[id email name nickname join_date left_on],
               include: { sites: { only: %i[name kind] } }
-            ).merge("linked" => employee.user.present?)
+            ).merge("linked" => employee.user.present?,
+                    # #391: whether the avatar sync can reach a face for this
+                    # person. The id itself stays server-side — the page needs
+                    # the gap, not Basecamp's primary key.
+                    "basecamp_linked" => employee.basecamp_person_id.present?)
           }
         end
       end
