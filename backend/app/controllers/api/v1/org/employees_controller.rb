@@ -13,8 +13,11 @@ module Api
         def index
           # No serializer: the payload IS the row, minus the timestamps and the
           # tenant. `departed` is deliberately absent — `left_on` is the answer.
-          render json: ::Org::Employee.order(:name).as_json(
-            only: %i[id email name nickname join_date left_on]
+          # Sites ride along read-only — there is no write half to this resource
+          # and #389 says there must not be one; assignment happens upstream.
+          render json: ::Org::Employee.includes(:sites).order(:name).as_json(
+            only: %i[id email name nickname join_date left_on],
+            include: { sites: { only: %i[name kind] } }
           )
         end
       end

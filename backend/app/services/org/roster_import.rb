@@ -66,7 +66,17 @@ module Org
         join_date: row["join_date"],
         left_on: row["left_on"]
       )
+      # Assignment, not append: the payload IS the site set (#389).
+      employee.sites = row.fetch("sites", []).map { site(_1) }.uniq
       new_record
+    end
+
+    # Upsert by name — the key. `kind` is read from the export, never re-derived
+    # from the name: upstream's trailing asterisk is already stripped upstream
+    # of us. Memoized so a 500-row import touches each site once.
+    def site(attrs)
+      @sites ||= {}
+      @sites[attrs["name"]] ||= Site.find_or_initialize_by(name: attrs["name"]).tap { _1.update!(kind: attrs["kind"]) }
     end
   end
 end

@@ -12,6 +12,15 @@ import * as Schema from 'effect/Schema'
 //
 // There is no `departed` flag: `left_on` present IS the departure, carried as
 // an ISO date string exactly as the server sends it.
+// A client engagement someone is placed at (#389) — `ttb`, `KTC`. Read-only
+// here in the strongest sense: assignment happens upstream, so there is no
+// decoder for a write shape and no id, only the name that keys it.
+export const Site = Schema.Struct({
+  name: Schema.String,
+  kind: Schema.Literal('client', 'internal'),
+})
+export type Site = Schema.Schema.Type<typeof Site>
+
 export const Employee = Schema.Struct({
   id: Schema.Number,
   email: Schema.String,
@@ -19,5 +28,8 @@ export const Employee = Schema.Struct({
   nickname: Schema.NullOr(Schema.String),
   join_date: Schema.NullOr(Schema.String),
   left_on: Schema.NullOr(Schema.String),
+  // An unordered set — no primary site — that arrives name-ordered so the page
+  // does not have to invent one.
+  sites: Schema.Array(Site),
 })
 export type Employee = Schema.Schema.Type<typeof Employee>

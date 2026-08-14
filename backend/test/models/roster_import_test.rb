@@ -53,13 +53,44 @@ class RosterImportTest < ActiveSupport::TestCase
     assert_nil Org::Employee.find_by(email: "current.person@example.test").left_on
   end
 
-  test "identity and profile are copied, sites are not" do
+  test "identity and profile are copied" do
     import
 
     morgan = Org::Employee.find_by(email: "multisite.person@example.test")
     assert_equal "Morgan Multisite", morgan.name
     assert_equal "Mo", morgan.nickname
     assert_equal @company, morgan.company
+  end
+
+  test "sites are upserted by name with the kind the export carries" do
+    import
+
+    assert_equal [%w[Home internal], %w[Northwind client]], Org::Site.order(:name).pluck(:name, :kind)
+  end
+
+  test "placement is a set: two sites, one, or none" do
+    import
+
+    assert_equal %w[Home Northwind], sites_of("multisite.person@example.test")
+    assert_equal %w[Northwind], sites_of("current.person@example.test")
+    assert_equal [], sites_of("departed.person@example.test")
+  end
+
+  test "a second run adds no duplicate sites and no duplicate placements" do
+    import
+    import
+
+    assert_equal 2, Org::Site.count
+    assert_equal %w[Home Northwind], sites_of("multisite.person@example.test")
+  end
+
+  test "a site dropped upstream disappears: the set is replaced, not merged" do
+    import
+    assert_equal %w[Home Northwind], sites_of("multisite.person@example.test")
+
+    Org::RosterImport.run(path: without_home, company: @company)
+
+    assert_equal %w[Northwind], sites_of("multisite.person@example.test")
   end
 
   test "a second run changes nothing and reports it" do
@@ -80,5 +111,21 @@ class RosterImportTest < ActiveSupport::TestCase
     assert_raises(Org::RosterImport::MissingDeparture) do
       Org::RosterImport.run(path: broken.path, company: @company)
     end
+  end
+
+  private
+
+  def sites_of(email)
+    Org::Employee.find_by(email: email).sites.order(:name).pluck(:name)
+  end
+
+  # The fixture with Morgan's internal placement removed — an upstream removal.
+  def without_home
+    rows = JSON.parse(File.read(FIXTURE))
+    rows.each { _1["sites"] = _1["sites"].reject { |s| s["name"] == "Home" } }
+    trimmed = Tempfile.new(["roster", ".json"])
+    trimmed.write(rows.to_json)
+    trimmed.flush
+    trimmed.path
   end
 end
