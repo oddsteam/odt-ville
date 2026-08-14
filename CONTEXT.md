@@ -101,7 +101,7 @@ canonical map.
 | **catalog** | `src/catalog/` | `Catalog::` | `terrains`, `tile_objects`, `ground_tiles`, `monsters` |
 | **maps** | `src/maps/` | `Maps::` | `maps` |
 | **communities** | `src/communities/` | `Communities::` | `houses`, `boards`, `content_items` |
-| **org** | *(none yet)* | `Org::` | `companies` *(future: `employees`, `teams`, `departments`)* |
+| **org** | `src/org/` | `Org::` | `companies`, `org_employees`, `org_sites`, `org_employee_sites` *(future: `org_teams`, `departments`)* |
 | **auth** | `src/auth/` | `Auth::` | `users` |
 | **viewer** | `src/viewer/` | `Viewer::` | `user_content_states` |
 | **game-session** | `src/game-session/` | `GameSession::` | `user_location_states` |
@@ -117,10 +117,12 @@ pages and the shell files. Each side implements the subset it needs.
 
 **org** is the app's downstream read-model of the organization: `Company`
 is the tenant root that communities/teams/departments hang off; employee
-profiles and the org chart will sync in from an external service (plan:
-Basecamp API) through a dedicated client. Identity ≠ profile: `Auth::User`
-(Keycloak) *links to* a future `Org::Employee` — a person can exist in the
-org chart before ever logging in. Users are *assigned* to teams/departments
+profiles and the org chart sync in one-way from an external service
+(interim: a `talent.odds.team` export; target: an employee-directory service
+over a message queue). Identity ≠ profile: `Auth::User` (Keycloak) *links to*
+`Org::Employee` via nullable `users.employee_id`, joined on lowercased email —
+a person can exist in the org chart before ever logging in. Employees are
+*placed at* Sites (many-to-many); users are *assigned* to teams/departments
 (org); users *choose to follow* communities (communities). _Avoid_: treating
 `Company` as a communities concept, or mastering org data in this app.
 
@@ -329,6 +331,136 @@ short line rides over its head; the rest is revealed on inspect. Inspection
 follows the established seam — the game detects the interact trigger and emits a
 semantic event; the **shell** renders the detail and owns any outbound link, so
 no vendor integration leaks into the game black box.
+
+### Org roster (resolving — 2026-08-13)
+
+The vocabulary of the `org` module's first real tables — the roster the app
+reads so people can be assigned to things *before* they ever log in. Rationale
+in [ADR-0016](docs/adr/0016-org-roster-is-a-replaceable-read-model.md).
+
+**Employee**:
+A person on the company roster, whether or not they have ever signed in. Keyed
+by **lowercased email** — the one identifier every upstream source carries.
+Holds `name`, `nickname`, `email`, `join_date`, `left_on`. Identity and profile
+stay separate (ADR-0010): a **User** is a Keycloak login, an Employee is a
+person; `users.employee_id` links them, nullable on both sides. Someone can be
+an Employee with no User (hasn't logged in yet) or a User with no Employee (not
+on the roster).
+_Avoid_: "user" for a person on the roster, "member" (overloaded with
+`maps_map_memberships`).
+
+**Nickname**:
+What a person is actually called here — `Un`, `Dews`, `ปิ่น Pin`, `หมวยมี่`.
+Not a diminutive of the legal name and not optional decoration: it is the label
+the village should prefer over `name`. Legal name is the fallback, not the
+default.
+
+**Site**:
+A **client engagement an Employee is placed at** — `ttb`, `KTC`, `TISCO`,
+`MedPark`. Not a physical office and not a team. A `kind` distinguishes
+`client` from `internal` (the placements upstream marks with a trailing
+asterisk: `Home*`, `japan*`, `mytrail*`). Placement is genuinely
+**many-to-many** — a person split across two clients is normal — so it lives in
+its own join table, never as a column on Employee. The site set is
+**unordered**: there is no primary site until a feature needs one.
+_Avoid_: "location", "office", "project" (a Project is a separate upstream tag
+type), "team" (a Team is a delivery team like `FINOVA` or `KTB-OneRev`, which
+cuts across sites and lands in its own slice).
+
+**Roster sync**:
+The one-way flow that fills Employee and Site. odt-ville is a **read-model and
+never a source of truth for org data** (ADR-0010): each sync **replaces** an
+Employee's site set from the payload, so an assignment made here would be
+overwritten and is therefore not offered. The admin roster page is read-only
+for sites. Today's source is a one-off export from `talent.odds.team`; the
+durable source is an employee-directory service publishing over a message
+queue, not yet built. Nothing keys on the current source's ids — email and site
+*name* are the keys, so swapping the source is a new consumer, not a migration.
+_Avoid_: "import" for the ongoing flow (it names the temporary scaffolding, not
+the concept).
+
+### Character looks (resolving — 2026-08-14)
+
+A user builds their own avatar by mixing part sheets from an asset pack, instead
+of picking a whole pre-authored character off the roster. Mirrors object
+authoring one-to-one: a **Look** is to a character rig what a **Composition**
+is to object art — instructions in, baked art out. Rationale in
+[ADR-0017](docs/adr/0017-a-look-is-a-recipe-baked-in-the-browser.md) and
+[ADR-0018](docs/adr/0018-parts-ship-as-trimmed-atlases.md).
+
+**Part**:
+One PNG from an asset pack covering a single anatomical layer across *every*
+frame of the sheet — a body, a set of eyes, an outfit, a hairstyle, an
+accessory. Never rendered alone (a body is a naked mannequin, eyes are two
+floating dots); only meaningful stacked. Repo-committed and fetched by **name**
+over HTTP, on ADR-0007's asset contract, so the browser caches the pack once and
+a Look's reference survives a content-migration reload.
+_Avoid_: "layer" (triple-booked — map layers, composition layers — and it names
+the stacking, not the thing).
+
+**Part slot**:
+One rung of the fixed, ordered stack: **body → eyes → outfit → hairstyle →
+accessory**. The order is the pack's, not ours (`CHARACTER_GENERATOR.txt`), and
+it is a painting order — swapping two rungs produces a broken character, not a
+different one. **body** and **eyes** are required (a bodyless Look is nothing; a
+face without eyes reads as broken art, not as a style); **outfit**, **hairstyle**
+and **accessory** are optional, and a hat renders correctly with no hairstyle
+under it. **accessory** takes up to two — the pack's guide says one, but glasses
++ hat verifiably compose, because they occupy different head zones. No conflict
+rules: two hats looks silly, not broken, and nobody keeps it. Per-accessory
+zones (head/face/worn) are the honest fix if it ever matters — 84 parts to tag.
+
+**Part style / variant**:
+The pack's two-level structure: 469 Parts are only **83 styles** — 29
+hairstyles, 33 outfits, 19 accessories, 1 body, 1 eyes — each with 3–10
+**variants** that differ only in colour (skin tone, hair colour, colourway).
+Load-bearing for the picker: nobody scrolls 200 hairstyles, they scroll 29 and
+then pick a colour. A Look stores a variant, never a style alone.
+
+**Adult / kid families**:
+The pack ships parts for two incompatible body geometries. Adult parts on a kid
+body misalign — the eyes land on the chin. Kids are **out of scope**: this is an
+employee app, they are 47 of 469 parts, and including them would add a `family`
+axis to every Part plus cross-family validation, and drag in the pack's one
+composition exception (the two kid pajama outfits need no hairstyle). If they
+ever arrive, they arrive as a **second pack** with their own Sheet layout, which
+this model already supports.
+
+**Look**:
+A user's saved recipe: one Part per Part slot, resolved against a Sheet layout.
+The stored truth of a composed character — ~100 bytes, not pixels. A user holds
+at most **three**. Its baked output is a rig, exactly as object art is a
+Composition's output. Hangs off **User**, not Employee: ADR-0016's roster is a
+replaceable read-model that the sync overwrites, and a Look is authored here and
+supplied by nothing upstream. Employee holds what upstream says about a person;
+a Look is what a person says about themselves.
+_Avoid_: "composition" (taken by object authoring, ADR-0014), "outfit" (that is
+one Part slot, not the whole character).
+
+**Sheet layout**:
+The posture→rect map of an asset **pack**, not of one sheet: which rectangles of
+the grid are `walkDown`, which are `idleUp`, and so on. Every Part in a pack
+shares one Sheet layout, which is what makes mixing work at all — the same rect
+lands on the same body position in all 469 of Modern Interiors' part sheets. It
+is also what keeps baking cheap: bake only the mapped rects (~28 frames), never
+the whole 1792×1312 sheet, which would cost 9.4 MB of GPU memory per character.
+Exists in two forms: the **authored layout** (rects against the original pack
+sheet, mapped in `/admin/sprites`, never shipped) and the **packed layout**
+(rects against the trimmed atlas, emitted by the trim script, what the runtime
+uses). A committed file per pack, referenced by **name** — not a table, on the
+same ADR-0007 reasoning as tilesets: a name survives a content-migration
+reload, and that script *truncates* first, so a DB id is actively unsafe here.
+_Avoid_: "grid" (a manifest's `grid` key is editor-only metadata; the runtime
+slices by explicit rects and ignores it).
+
+**Posture** *(sprite sense)*:
+One named animation slot of a rig — `idleDown`, `walkLeft`, `climbUp` —
+enumerated in `POSTURE_SLOTS`. **Collides with the `posture` domain module**
+(`src/posture/`, `Posture::`), which is the *login gate* and has nothing to do
+with sprites. Both names stay: renaming the module costs a table and a Ruby
+namespace, renaming the sprite sense costs a jsonb key migration across every
+saved manifest. If one ever moves it should be the auth one — "posture-login" is
+the stranger use of the word.
 
 ## Multi-map model (resolving — 2026-06-29)
 
