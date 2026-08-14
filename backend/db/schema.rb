@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_14_000001) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_14_000002) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -135,6 +135,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_14_000001) do
     t.index ["name"], name: "index_monsters_on_name", unique: true
   end
 
+  create_table "org_employee_sites", id: false, force: :cascade do |t|
+    t.bigint "employee_id", null: false
+    t.bigint "site_id", null: false
+    t.index ["employee_id", "site_id"], name: "index_org_employee_sites_on_employee_id_and_site_id", unique: true
+  end
+
   create_table "org_employees", force: :cascade do |t|
     t.bigint "company_id", null: false
     t.datetime "created_at", null: false
@@ -146,6 +152,14 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_14_000001) do
     t.datetime "updated_at", null: false
     t.index ["company_id"], name: "index_org_employees_on_company_id"
     t.index ["email"], name: "index_org_employees_on_email", unique: true
+  end
+
+  create_table "org_sites", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "kind", null: false
+    t.string "name", null: false
+    t.datetime "updated_at", null: false
+    t.index ["name"], name: "index_org_sites_on_name", unique: true
   end
 
   create_table "standees", force: :cascade do |t|

@@ -33,6 +33,19 @@ module Api
         assert_nil json.find { _1[:email] == "b@example.test" }[:left_on]
       end
 
+      test "each person carries their site set, name-ordered and read-only" do
+        placed = ::Org::Employee.create!(company: @company, email: "p@example.test", name: "Pat Placed")
+        placed.sites = [::Org::Site.create!(name: "ttb", kind: "client"),
+                        ::Org::Site.create!(name: "Home", kind: "internal")]
+        ::Org::Employee.create!(company: @company, email: "u@example.test", name: "Uma Unplaced")
+
+        get "/api/v1/org/employees", headers: auth(@user, roles: %w[admin])
+
+        assert_equal [{ name: "Home", kind: "internal" }, { name: "ttb", kind: "client" }],
+                     json.find { _1[:email] == "p@example.test" }[:sites]
+        assert_equal [], json.find { _1[:email] == "u@example.test" }[:sites]
+      end
+
       test "the roster is ordered by name" do
         %w[Zoe Ann Mia].each_with_index do |name, i|
           ::Org::Employee.create!(company: @company, email: "#{i}@example.test", name: name)
