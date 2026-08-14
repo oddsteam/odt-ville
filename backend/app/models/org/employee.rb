@@ -19,6 +19,10 @@ module Org
     # caller that renders them needs an order nobody has to invent.
     has_and_belongs_to_many :sites, -> { order(:name) }, class_name: "Org::Site", join_table: :org_employee_sites
 
+    # The login, if this person has ever signed in (#390). Optional in both
+    # directions — the roster is not an access-control boundary.
+    has_one :user, class_name: "Auth::User", foreign_key: :employee_id, inverse_of: :employee, dependent: :nullify
+
     before_validation { self.email = email&.downcase }
 
     validates :email, presence: true, uniqueness: true
