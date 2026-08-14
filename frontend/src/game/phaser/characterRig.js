@@ -1,4 +1,5 @@
 import { POSTURE_KEYS, resolveSheetSrc, framesForFacing } from '../../kernel/characterManifest.js'
+import { composeLook } from '../../kernel/composeLook.ts'
 
 // The manifest sprite's on-screen scale lives in the kernel beside the tile
 // basis it uses (#295), shared with the map renderer's placed NPCs. Re-exported
@@ -21,11 +22,37 @@ export const CHAR_SHEET_KEY = 'char.sheet'
 // loaded once and shared, so a second scene's call is a no-op.
 export function preloadCharacter(scene) {
   const manifest = scene.registry.get('characterManifest') || null
-  const src = manifest ? resolveSheetSrc(manifest) : ''
-  if (src && !scene.textures.exists(CHAR_SHEET_KEY)) {
+  if (!manifest || scene.textures.exists(CHAR_SHEET_KEY)) return manifest
+  const src = resolveSheetSrc(manifest)
+  if (src) {
     scene.load.image(CHAR_SHEET_KEY, src)
+  } else if (manifest.layout && manifest.parts?.length) {
+    preloadLook(scene, manifest, CHAR_SHEET_KEY)
   }
   return manifest
+}
+
+// Bake a Look (ADR-0017): queue each Part atlas, then on load-complete composite
+// the ones that arrived into a canvas under `sheetKey`, which buildCharacterRig
+// slices exactly like a sheet. A Part that 404s (renamed / dropped from the pack)
+// leaves no texture — we warn and skip its slot rather than draw a broken
+// character; if none arrive we register nothing, so the rig falls back to the
+// bundled stills (usingManifest: false).
+function preloadLook(scene, manifest, sheetKey) {
+  const packDir = `/maps/characters/packs/${manifest.layout.name}/`
+  const parts = manifest.parts.map((name) => ({ name, key: `${sheetKey}.part.${name}`, url: `${packDir}${name}.png` }))
+  for (const p of parts) {
+    if (!scene.textures.exists(p.key)) scene.load.image(p.key, p.url)
+  }
+  scene.load.once('complete', () => {
+    if (scene.textures.exists(sheetKey)) return
+    const images = []
+    for (const p of parts) {
+      if (scene.textures.exists(p.key)) images.push(scene.textures.get(p.key).getSourceImage())
+      else console.warn(`Look: Part "${p.name}" not in pack "${manifest.layout.name}" — slot skipped`)
+    }
+    if (images.length) scene.textures.addCanvas(sheetKey, composeLook(images, manifest.layout))
+  })
 }
 
 // Slice the manifest sheet into named frames, build a looping walk anim per
