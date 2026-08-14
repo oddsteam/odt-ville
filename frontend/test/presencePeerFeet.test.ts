@@ -53,6 +53,11 @@ function fakeScene(peerChars: Map<number | null, unknown>) {
     peerChars,
     remoteRoster: new Map(),
     remoteSprites: new Map(),
+    // A plain map: no overhang, no fg_mask — peers sit in the flat player band.
+    isOverhang: () => false,
+    isForeground: () => false,
+    // The local avatar's row, the peer depth sort key (#403) — irrelevant to feet.
+    playerTile: { x: 0, y: 0 },
     presence: { ownId: 'me', send() {} },
     tweened,
     loadPeerCharacter() {},
