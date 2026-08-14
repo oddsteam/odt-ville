@@ -1,0 +1,101 @@
+// The Look bake (ADR-0017), structurally — no Phaser, no DOM. composeLook is
+// stubbed to a sentinel (it owns a real canvas in the browser; here we only
+// check the rig queues the atlases, composites on load-complete, and degrades a
+// dangling Part to a skipped slot rather than a broken character.
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+
+vi.mock('../../kernel/composeLook.ts', () => ({
+  composeLook: vi.fn((images: any[]) => ({ sentinel: images.length })),
+}))
+
+import { preloadCharacter, CHAR_SHEET_KEY } from './characterRig.js'
+import { composeLook } from '../../kernel/composeLook.ts'
+
+function fakeScene(manifest: any, present: string[] = []) {
+  const textures = new Set(present)
+  const loaded: { key: string; url: string }[] = []
+  const complete: (() => void)[] = []
+  const added: { key: string; canvas: any }[] = []
+  return {
+    loaded,
+    added,
+    fireComplete: () => complete.forEach((cb) => cb()),
+    registry: { get: (k: string) => (k === 'characterManifest' ? manifest : null) },
+    textures: {
+      exists: (k: string) => textures.has(k),
+      get: (k: string) => ({ getSourceImage: () => `img:${k}` }),
+      addCanvas: (k: string, canvas: any) => {
+        textures.add(k)
+        added.push({ key: k, canvas })
+      },
+    },
+    load: {
+      image: (key: string, url: string) => {
+        textures.add(key) // Phaser registers a texture once the bytes arrive
+        loaded.push({ key, url })
+      },
+      once: (evt: string, cb: () => void) => {
+        if (evt === 'complete') complete.push(cb)
+      },
+    },
+  }
+}
+
+const LOOK = {
+  name: 'seed-look',
+  parts: ['body-01', 'eyes-01'],
+  layout: { name: 'modern-interiors', atlas: { width: 256, height: 256 }, postures: {} },
+}
+
+beforeEach(() => vi.clearAllMocks())
+
+describe('preloadCharacter — Look', () => {
+  it('queues one atlas per Part from the pack dir', () => {
+    const scene = fakeScene(LOOK)
+    preloadCharacter(scene)
+    expect(scene.loaded).toEqual([
+      { key: `${CHAR_SHEET_KEY}.part.body-01`, url: '/maps/characters/packs/modern-interiors/body-01.png' },
+      { key: `${CHAR_SHEET_KEY}.part.eyes-01`, url: '/maps/characters/packs/modern-interiors/eyes-01.png' },
+    ])
+  })
+
+  it('composites the loaded atlases into the shared sheet key on load-complete', () => {
+    const scene = fakeScene(LOOK)
+    preloadCharacter(scene)
+    scene.fireComplete()
+    expect(composeLook).toHaveBeenCalledOnce()
+    expect(scene.added).toEqual([{ key: CHAR_SHEET_KEY, canvas: { sentinel: 2 } }])
+  })
+
+  it('degrades a dangling Part to a skipped slot, and warns so a dev sees it', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    // eyes-01 never loads (404 / not in pack): its texture stays absent.
+    const scene = fakeScene(LOOK)
+    scene.load.image = ((key: string, url: string) => {
+      if (key.endsWith('body-01')) scene.textures.addCanvas(key, null) // only body arrives
+      scene.loaded.push({ key, url })
+    }) as any
+    preloadCharacter(scene)
+    scene.fireComplete()
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('eyes-01'))
+    expect(scene.added.at(-1)).toEqual({ key: CHAR_SHEET_KEY, canvas: { sentinel: 1 } })
+    warn.mockRestore()
+  })
+
+  it('skips the whole bake when no Part loads, so the rig falls back to stills', () => {
+    const scene = fakeScene(LOOK)
+    scene.load.image = ((key: string, url: string) => scene.loaded.push({ key, url })) as any // nothing arrives
+    preloadCharacter(scene)
+    scene.fireComplete()
+    expect(scene.added).toEqual([])
+    expect(composeLook).not.toHaveBeenCalled()
+  })
+})
+
+describe('preloadCharacter — sheet manifest unchanged', () => {
+  it('queues the single sheet image under the sheet key', () => {
+    const scene = fakeScene({ name: 'scout', sheet: { path: '/maps/characters/sheets/scout.png' } })
+    preloadCharacter(scene)
+    expect(scene.loaded).toEqual([{ key: CHAR_SHEET_KEY, url: '/maps/characters/sheets/scout.png' }])
+  })
+})

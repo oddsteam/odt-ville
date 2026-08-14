@@ -485,6 +485,37 @@ ActiveRecord::Base.transaction do
     Catalog::Terrain.find_or_create_by!(name: name) { |t| t.priority = priority }
   end
 
+  # One seeded Look (#395, ADR-0017): a CharacterManifest whose recipe is parts +
+  # the packed layout, not a sheet. The browser bakes the Part atlases (served at
+  # /maps/characters/packs/modern-interiors/) into one canvas inside the game — no
+  # image lives here. The packed layout is INLINED, not read from frontend/, on
+  # the "THE BOSS" lesson below: the backend container mounts only ./backend and
+  # cannot see the pack, so a File.read would skip silently. Active + house-owned,
+  # so effective_character_manifest resolves to it and every dev renders as it.
+  # Re-trimming the pack (#393) regenerates layout.json — refresh this to match.
+  look_layout = JSON.parse(<<~JSON)
+    {"version":1,"name":"modern-interiors","grid":{"frameWidth":32,"frameHeight":64},
+     "render":{"originX":0.5,"originY":1,"scale":1},"frameRate":9,"atlas":{"width":256,"height":256},
+     "postures":{
+      "idleDown":[{"x":0,"y":0,"w":32,"h":64}],
+      "walkDown":[{"x":32,"y":0,"w":32,"h":64},{"x":64,"y":0,"w":32,"h":64},{"x":96,"y":0,"w":32,"h":64},{"x":128,"y":0,"w":32,"h":64},{"x":160,"y":0,"w":32,"h":64},{"x":192,"y":0,"w":32,"h":64}],
+      "idleUp":[{"x":224,"y":0,"w":32,"h":64}],
+      "walkUp":[{"x":0,"y":64,"w":32,"h":64},{"x":32,"y":64,"w":32,"h":64},{"x":64,"y":64,"w":32,"h":64},{"x":96,"y":64,"w":32,"h":64},{"x":128,"y":64,"w":32,"h":64},{"x":160,"y":64,"w":32,"h":64}],
+      "idleLeft":[{"x":192,"y":64,"w":32,"h":64}],
+      "walkLeft":[{"x":224,"y":64,"w":32,"h":64},{"x":0,"y":128,"w":32,"h":64},{"x":32,"y":128,"w":32,"h":64},{"x":64,"y":128,"w":32,"h":64},{"x":96,"y":128,"w":32,"h":64},{"x":128,"y":128,"w":32,"h":64}],
+      "idleRight":[{"x":160,"y":128,"w":32,"h":64}],
+      "walkRight":[{"x":192,"y":128,"w":32,"h":64},{"x":224,"y":128,"w":32,"h":64},{"x":0,"y":192,"w":32,"h":64},{"x":32,"y":192,"w":32,"h":64},{"x":64,"y":192,"w":32,"h":64},{"x":96,"y":192,"w":32,"h":64}]
+     }}
+  JSON
+  look = ::Character::CharacterManifest.find_or_initialize_by(name: "look-tracer")
+  look.update!(owner: nil, data: {
+    "version" => 1,
+    "name" => "look-tracer",
+    "parts" => %w[body-01 eyes-01 outfit-01-01 hairstyle-07-03 accessory-15-01],
+    "layout" => look_layout,
+  })
+  look.activate!
+
   # No NPC seed (#260). The old "THE BOSS" row inlined a frontend PNG through a
   # path the backend container cannot see (it mounts only ./backend), so the
   # guard fired silently and the Docker stack never got one — a seed that seeded

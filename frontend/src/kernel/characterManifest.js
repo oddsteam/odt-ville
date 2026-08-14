@@ -89,16 +89,20 @@ export function emptyManifest() {
   }
 }
 
-// Fill in any missing fields so a partial/old manifest still works.
+// Fill in any missing fields so a partial/old manifest still works. A Look
+// (ADR-0017) carries its rects in `layout` instead of top-level `postures`;
+// surface them (and grid/render) so the rig slices a Look exactly like a sheet.
 export function normalizeManifest(m) {
   const base = emptyManifest()
   if (!m || typeof m !== 'object') return base
+  const layout = m.layout || {}
   return {
     ...base,
     ...m,
     sheet: { ...base.sheet, ...(m.sheet || {}) },
-    grid: { ...base.grid, ...(m.grid || {}) },
-    render: { ...base.render, ...(m.render || {}) },
-    postures: { ...base.postures, ...(m.postures || {}) },
+    grid: { ...base.grid, ...(layout.grid || m.grid || {}) },
+    render: { ...base.render, ...(layout.render || m.render || {}) },
+    frameRate: m.frameRate || layout.frameRate || base.frameRate,
+    postures: { ...base.postures, ...(layout.postures || m.postures || {}) },
   }
 }
