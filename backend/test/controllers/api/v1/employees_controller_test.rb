@@ -83,6 +83,42 @@ module Api
 
         assert_equal %w[Ann Mia Zoe], json.map { _1[:name] }
       end
+
+      # #392: the write half this resource otherwise refuses. It is allowed here
+      # and only here because the fact is about our Basecamp integration, not
+      # about org data — a human is the authority for the address email can't join.
+      test "an admin hand-sets the Basecamp person id" do
+        emp = ::Org::Employee.create!(company: @company, email: "h@example.test", name: "Han Hand")
+
+        patch "/api/v1/org/employees/#{emp.id}",
+              params: { basecamp_person_id: 77 }, headers: auth(@user, roles: %w[admin])
+
+        assert_response :success
+        assert_equal 77, emp.reload.basecamp_person_id
+        assert_equal true, json[:basecamp_linked]
+      end
+
+      test "an admin clears a wrong link so a mistake is recoverable" do
+        emp = ::Org::Employee.create!(company: @company, email: "w@example.test", name: "Wanda Wrong",
+                                      basecamp_person_id: 5)
+
+        patch "/api/v1/org/employees/#{emp.id}",
+              params: { basecamp_person_id: nil }, headers: auth(@user, roles: %w[admin])
+
+        assert_response :success
+        assert_nil emp.reload.basecamp_person_id
+        assert_equal false, json[:basecamp_linked]
+      end
+
+      test "the link write is admin-only" do
+        emp = ::Org::Employee.create!(company: @company, email: "g@example.test", name: "Gil Gated")
+
+        patch "/api/v1/org/employees/#{emp.id}",
+              params: { basecamp_person_id: 1 }, headers: auth(@user)
+
+        assert_response :forbidden
+        assert_nil emp.reload.basecamp_person_id
+      end
     end
   end
 end

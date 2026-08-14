@@ -98,6 +98,23 @@ module Basecamp
       assert_equal "https://bc.test/c.png", login.reload.avatar_url
     end
 
+    # The hand-set link (#392) is the one fact the sync must not touch: a human
+    # set it precisely because email can't, so a re-sync that still finds no
+    # email match must leave it — and the avatar — intact, run after run.
+    test "a hand-set link survives repeated syncs that never match on email" do
+      dana = employee(name: "Dana", email: "dana@odds.team", basecamp_person_id: 99)
+      login = user(name: "Dana", email: "dana@odds.team", employee: dana)
+      # Person 99 wears a different address; nobody in the roster carries Dana's.
+      roster = [ { "id" => 99, "email_address" => "dana@personal.test", "avatar_url" => "https://bc.test/d.png" },
+                 { "id" => 5, "email_address" => "someone@odds.team", "avatar_url" => "https://bc.test/s.png" } ]
+
+      sync_against(roster).first.call
+      sync_against(roster).first.call
+
+      assert_equal 99, dana.reload.basecamp_person_id
+      assert_equal "https://bc.test/d.png", login.reload.avatar_url
+    end
+
     # Nobody who has a face today loses one: a login with no employee row still
     # joins on email, exactly as before.
     test "an employee Basecamp doesn't know stays unlinked while email matches still land" do
