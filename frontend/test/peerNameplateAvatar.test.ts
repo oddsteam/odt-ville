@@ -47,6 +47,9 @@ function fakeScene() {
     remoteSprites: new Map(),
     avatarsAsked: new Set(),
     cardBadges: new Map(),
+    // A plain map: peers depth-sort against nothing here — faces are the subject.
+    isOverhang: () => false,
+    isForeground: () => false,
     presence: { ownId: 'me', send() {} },
     loadPeerCharacter() {},
     sendPosition() {},

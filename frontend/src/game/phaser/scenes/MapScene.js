@@ -474,6 +474,10 @@ export default class MapScene extends Phaser.Scene {
   // Each frame names its sender's character (#266), so a first sighting also
   // kicks off that manifest's one-time load.
   presenceFrame(frame) {
+    // Snapshot the peer's tile before applyFrame folds the new one in: a move's
+    // depth slide needs where they stepped *from* (#402), and applyFrame
+    // replaces the roster entry outright.
+    const prev = this.remoteRoster.get(frame.userId)
     const { action, echo } = applyFrame(this.remoteRoster, frame, this.presence.ownId)
     if (echo) this.sendPosition()
     if (action === 'none') return
@@ -500,7 +504,11 @@ export default class MapScene extends Phaser.Scene {
         .text(0, NAMEPLATE_Y, state.name, { fontSize: '12px', color: '#ffffff', backgroundColor: '#000000aa' })
         .setOrigin(0.5, 0)
       const remote = this.add.container(feet.x, feet.y, [img, label])
-      remote.setDepth(mapPlayerDepth(false, false))
+      // A peer takes the same depth rule the local avatar does (#402): behind an
+      // object's art on an overhang cell (#210), under the masked canopy on a
+      // foreground cell (#168), the flat player band otherwise — the same call
+      // the avatar makes on arrival, not the old flat mapPlayerDepth(false).
+      remote.setDepth(mapPlayerDepth(this.isOverhang(state.x, state.y), this.isForeground(state.x, state.y)))
       this.remoteSprites.set(frame.userId, remote)
       this.applyPeerLook(remote, state)
       // The spawn frame carries their card, so someone who picked one up while
@@ -524,12 +532,22 @@ export default class MapScene extends Phaser.Scene {
     // finished would otherwise let the stale onComplete idle a walking peer.
     this.tweens.killTweensOf(remote)
     this.applyPeerLook(remote, state, true)
+    // Re-derive depth on the move, exactly as the local avatar does each step
+    // (#402): hold the walk-under band for the whole slide while either end of
+    // the step overhangs — so a peer stepping out of an overhang cell doesn't
+    // pop over the art it is still standing in front of — then settle to the
+    // landed cell's own depth on arrival.
+    const to = { x: state.x, y: state.y }
+    remote.setDepth(slidePlayerDepth(prev ?? to, to, this.isOverhang, this.isForeground))
     this.tweens.add({
       targets: remote,
       x: feet.x,
       y: feet.y,
       duration: MOVE_MS,
-      onComplete: () => this.applyPeerLook(remote, state, false),
+      onComplete: () => {
+        this.applyPeerLook(remote, state, false)
+        remote.setDepth(mapPlayerDepth(this.isOverhang(to.x, to.y), this.isForeground(to.x, to.y)))
+      },
     })
   }
 
