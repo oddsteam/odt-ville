@@ -28,6 +28,53 @@ module Api
         assert_response :forbidden
       end
 
+      # Ownership + visibility (#394): the index lists house-owned rows only;
+      # a caller's own personal rows are reachable explicitly with ?owner=me.
+
+      test "index lists house-owned manifests and hides personal ones" do
+        ::Character::CharacterManifest.create!(name: "House", data: {})
+        ::Character::CharacterManifest.create!(name: "Mine", data: {}, owner: @user)
+
+        get "/api/v1/character_manifests", headers: auth(@user)
+        assert_response :success
+        assert_equal ["House"], json.map { |m| m[:name] }
+      end
+
+      test "index with owner=me lists the caller's own rows" do
+        _, other = setup_company(name: "Other")
+        mine = ::Character::CharacterManifest.create!(name: "Mine", data: {}, owner: @user)
+        ::Character::CharacterManifest.create!(name: "Theirs", data: {}, owner: other)
+        ::Character::CharacterManifest.create!(name: "House", data: {})
+
+        get "/api/v1/character_manifests", params: { owner: "me" }, headers: auth(@user)
+        assert_response :success
+        assert_equal [mine.id], json.map { |m| m[:id] }
+      end
+
+      test "show resolves the owner's own personal row" do
+        mine = ::Character::CharacterManifest.create!(name: "Mine", data: {}, owner: @user)
+
+        get "/api/v1/character_manifests/#{mine.id}", headers: auth(@user)
+        assert_response :success
+        assert_equal mine.id, json[:id]
+      end
+
+      test "show hides another user's personal row" do
+        _, other = setup_company(name: "Other")
+        theirs = ::Character::CharacterManifest.create!(name: "Theirs", data: {}, owner: other)
+
+        get "/api/v1/character_manifests/#{theirs.id}", headers: auth(@user)
+        assert_response :not_found
+      end
+
+      test "an admin-created manifest stays house-owned" do
+        post "/api/v1/character_manifests",
+             params: { manifest: { name: "Hero" } },
+             as: :json, headers: auth(@user, roles: ["admin"])
+        assert_response :success
+        assert_nil ::Character::CharacterManifest.find_by(name: "Hero").owner_id
+      end
+
       # Per-user selection (#155, ADR-0009): for_me resolves pick -> global
       # active -> 204; select persists the caller's pick.
 
