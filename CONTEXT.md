@@ -445,9 +445,12 @@ lands on the same body position in all 469 of Modern Interiors' part sheets. It
 is also what keeps baking cheap: bake only the mapped rects (~28 frames), never
 the whole 1792×1312 sheet, which would cost 9.4 MB of GPU memory per character.
 Exists in two forms: the **authored layout** (rects against the original pack
-sheet, mapped in `/admin/sprites`, never shipped) and the **packed layout**
-(rects against the trimmed atlas, emitted by the trim script, what the runtime
-uses). A committed file per pack, referenced by **name** — not a table, on the
+sheet, mapped in `/admin/sprites`, never shipped — committed as
+`authored-layout.json` only so the trim is reproducible) and the **packed
+layout** (rects against the trimmed atlas, emitted by `scripts/trim-pack.mjs` as
+`layout.json` beside the atlases, what the runtime uses). Both live under
+`public/maps/characters/packs/<pack>/` and are referenced by **name** — not a
+table, on the
 same ADR-0007 reasoning as tilesets: a name survives a content-migration
 reload, and that script *truncates* first, so a DB id is actively unsafe here.
 _Avoid_: "grid" (a manifest's `grid` key is editor-only metadata; the runtime
