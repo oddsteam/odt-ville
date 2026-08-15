@@ -292,6 +292,128 @@ button:disabled {
   font-size: 8px;
 }
 
+/* ---- Look builder — two-tier part picker (#399) ------------- */
+
+.char-builder {
+  max-width: 900px;
+}
+
+.builder {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 12px;
+}
+
+/* Left: the one big animated preview of the current Look + save/looks. */
+.builder-stage {
+  flex: 0 0 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.builder-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 176px;
+  background: var(--bezel);
+  border: 2px solid var(--bezel-lip);
+  border-radius: 6px;
+}
+
+.builder-save {
+  font-size: 10px;
+}
+
+/* Right: tabs → style grid → colour row. */
+.builder-picker {
+  flex: 1 1 320px;
+  min-width: 280px;
+}
+
+.builder-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.builder-tabs button {
+  font-size: 8px;
+}
+
+.builder-tabs button.is-active {
+  border-color: var(--grass);
+  color: var(--grass);
+}
+
+.builder-grid,
+.builder-variants {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(48px, 1fr));
+  gap: 6px;
+}
+
+.builder-variants {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 2px solid var(--bezel-lip);
+}
+
+/* A tile is a framed thumbnail button; the worn part glows grass, the open
+   style row a paler lip. */
+.builder-tile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  min-height: 52px;
+  background: var(--bezel);
+  border: 2px solid var(--bezel-lip);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.builder-tile.is-open {
+  border-color: var(--paper-dk);
+}
+
+.builder-tile.is-on {
+  border-color: var(--grass);
+  box-shadow: 0 0 0 1px var(--grass);
+}
+
+.builder-none {
+  font-size: 8px;
+  color: var(--paper-dk);
+}
+
+.look-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 8px;
+}
+
+.look-list li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.look-list span {
+  flex: 1;
+}
+
+.look-list button {
+  font-size: 8px;
+}
+
 /* ---- Dev-only user switcher (issue #93) --------------------- */
 
 .dev-switcher {

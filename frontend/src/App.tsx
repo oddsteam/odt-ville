@@ -46,7 +46,7 @@ export default function App() {
         <Route index element={<VillagePage />} />
         {/* Pick which saved character *you* play as (#155, ADR-0009). */}
         <Route path="character" element={<CharacterSelectPage />} />
-        {/* Build & wear a personal Look — the ugly plumbing UI (#398, ADR-0017). */}
+        {/* Build & wear a personal Look — the two-tier part picker (#399, ADR-0017). */}
         <Route path="character/looks" element={<LookBuilderPage />} />
       </Route>
       {/* The admin console is its own standalone shell (mapper-styled, dark) and

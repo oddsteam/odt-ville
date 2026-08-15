@@ -144,6 +144,10 @@ async function main() {
   }
   // Stable key order + trailing newline so the file is diff-friendly & idempotent.
   await writeFile(path.join(packDir, 'layout.json'), JSON.stringify(packed, null, 1) + '\n')
+  // parts.json: the mixable Part names the builder (#399) lists, premades excluded
+  // (they're finished sheets, not recipe Parts). One name per line, diff-friendly.
+  const partNames = parts.map((p) => p.name).filter((n) => !n.startsWith('premade-'))
+  await writeFile(path.join(packDir, 'parts.json'), JSON.stringify(partNames, null, 0) + '\n')
   console.log(`trimmed ${parts.length} parts → ${packDir}`)
 }
 
