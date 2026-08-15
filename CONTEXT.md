@@ -484,7 +484,8 @@ in-app editor — fixed, shared). _Avoid_ calling the authored map a different
 **Placed Entity** — anything a producer drops on a map. Three kinds:
 - **Prop** — decorative art, no trigger. May be **animated**: an ambient
   billboard/video is an animated prop — a *rendering* concern, **not** an
-  interaction.
+  interaction. See *Animated object* below for what "animated" means once the
+  art comes from the catalog rather than a tileset cell.
 - **House** — an enterable building (footprint, walk-mask, door, content
   behind it). *Owns* an entry Zone; is not itself one. Authored maps may mix
   props and houses.
@@ -500,10 +501,70 @@ Tiled-imported map's blockers (building bases, water) are baked into terrain
 gains collision. Placed entities still contribute their own walk-mask
 collision on top. _Avoid_: modelling blocked cells as invisible Props.
 
+### Animated objects (resolving — 2026-08-15)
+
+Why an animated prop and a swinging door are **one** kind and not two, and why
+the frames live on the catalog object, is
+[ADR-0019](docs/adr/0019-animation-is-a-property-of-catalog-art.md).
+
+**Animated object**:
+A saved tile object whose art is a **frame strip** instead of a single still.
+Not a new catalog kind, not a new table, not a new placed kind — a Tile object
+that happens to carry `frame_count > 1`. Everything else about it (footprint,
+walk mask, edge mask, foreground mask, door anchor) means exactly what it means
+on a still object. _Avoid_: "animated prop" as a *kind* — animation is a
+property of the **art**, and a House or a building can carry it too.
+
+**Frame strip**:
+The one PNG holding every frame of an animated object, laid out left-to-right,
+each frame the object's full footprint. It is the object art (`tile_objects.
+image`) — there is no second column and no per-frame blob. Frame size is
+*derived*, never authored: `frameWidth = imageWidth / frame_count`,
+`frameHeight = imageHeight`. Sourced as-is from the art pack's
+`3_Animated_objects/*/spritesheets/` PNGs.
+_Avoid_: **GIF**. The pack ships both, but nothing downstream decodes a GIF —
+not Phaser, not the mask editors, not the palette. A `.gif` in the repo is a
+mistake caught at import, not a supported format.
+
+**Playback**:
+What drives an animated object's playhead — the single field that separates the
+two things that look like one problem:
+- `loop` — time drives it. Runs forever at `fps`, ignores the world. The
+  ambient animated Prop of ADR-0004 (a spell book riffling, a TV, a billboard).
+- `proximity` — the avatar's distance drives it. Plays forward while the avatar
+  is near, reverses when they leave, and holds at either end. A **swinging
+  door**.
+
+Playback is authored on the **catalog object**, not on the placement, for the
+same reason the walk mask is: a door is a door wherever it is placed. _Avoid_:
+per-placement playback — it would let one map's door be a flapping billboard.
+
+**Swinging door**:
+An animated object with `playback: proximity` whose art is a door opening. It
+is **decorative** — its cell is walkable at every frame, exactly like any other
+Prop's. The animation is theatre played *around* a passage that was always open.
+
+Explicitly **not** the **Door anchor** above (`door_dx`/`door_dy`): that is a
+building's authored entry cell, read by `isWalkable`/`playerDepthAt`, and it
+names *where you enter a House*. A Swinging door names *what the art does*, and
+gates nothing. The two can co-exist on one object and never interact.
+
+A door that could **refuse** — locked until a role, an ack, or a posture gate
+(ADR-0001) is satisfied — is a different animal: it needs runtime-mutable
+walkability, which nothing in the map runtime has today (`walk_mask` is baked,
+the collision mask is static). Deliberately deferred, not overlooked. When it
+lands it is a new placed kind with state, **not** a flag on this one.
+
 **Trigger** — the axis that unifies every interaction: `on_enter` (door,
 encounter patch, portal), `on_sight` (trainer duel cone), `on_proximity`,
 `on_interact`. Door-entry, encounter, trainer challenge, and travel are one
 primitive differing only by trigger + payload — not four mechanics. (ADR-0004.)
+
+An animated object never fires a Trigger. A Prop you can *press* is a Prop plus
+an `interact` Zone on its cell — two placed things, per ADR-0004's separation,
+even though the author draws them as one gesture (cf. #250, which seeds a
+portal Zone at a placed building's door). _Avoid_: an `on_interact` field on a
+tile object.
 
 **Bounded contexts** — the **Tile Catalog / Autotile Engine** (a pure,
 map-agnostic *shared kernel*: tile types, autotile rules, the
@@ -621,6 +682,16 @@ and get specced in the multi-map PRD.
   art. A dangling `object_id` renders nothing and warns in the editor;
   legacy `{tileset, frame}` entities stay renderable. ADR-0003 unaffected
   (entity art was always a flat reference). (ADR-0008)
+- **Animation is a property of catalog art, not a kind of placed entity**
+  — added 2026-08-15. A tile object gains `frame_count` + `fps`; `image`
+  becomes the frame strip when `frame_count > 1` (frame size derived from the
+  image, never from the float footprint). One field, `playback`, separates the
+  two things that look like two features: `loop` (ambient billboard) vs
+  `proximity` (a door swinging as you approach). A swinging door is
+  **decorative** — walkable at every frame — so nothing here mutates
+  walkability at runtime; a door that can *refuse* is a deferred, separate
+  placed kind. Interaction still rides an `interact` Zone, never a field on
+  the object. GIF is not a format we accept. (ADR-0019)
 
 ## Where the model is heading
 
