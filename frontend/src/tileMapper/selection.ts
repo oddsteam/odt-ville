@@ -4,12 +4,15 @@
 
 import { TILESETS } from '../catalog/groundTiles/service.ts'
 
-export type Source = 'tileset' | 'upload'
+// 'strip' is the animated-object import (#436): the uploaded PNG is a
+// horizontal frame strip that becomes the art verbatim, not a sheet to pick
+// cells off. It sizes its frames off the same manual Cell input as an upload.
+export type Source = 'tileset' | 'upload' | 'strip'
 
 // The grid's cell size for the current source (#351). A registry tileset carries
 // its own cell, so the Cell input is hidden and ignored in tileset mode.
 export function effectiveCell(source: Source, tilesetName: string, manualCell: number): number {
-  if (source === 'upload') return manualCell
+  if (source !== 'tileset') return manualCell
   return (TILESETS.find((t) => t.name === tilesetName) ?? TILESETS[0]).cell
 }
 

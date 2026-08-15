@@ -17,4 +17,10 @@ describe('effectiveCell', () => {
   it('takes the admin Cell input in upload mode', () => {
     expect(effectiveCell('upload', 'buildings/5_Floor_Modular_Buildings_32x32', 7)).toBe(7)
   })
+
+  // A frame strip (#436) sizes its frames off the same input — its cell is the
+  // art pack's, not any registry sheet's.
+  it('takes the admin Cell input in frame-strip mode', () => {
+    expect(effectiveCell('strip', 'buildings/5_Floor_Modular_Buildings_32x32', 16)).toBe(16)
+  })
 })

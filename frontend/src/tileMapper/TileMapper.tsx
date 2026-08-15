@@ -11,6 +11,7 @@ import {
   ladderCellsFromMask, overhangCellsFromMask, requiresDoorValidation, walkCellsFromMask,
 } from './masks.ts'
 import { maskHasInk } from './foreground.ts'
+import { deriveFrameCount } from './frameStrip.ts'
 import { doorCellFromClick, edgeSideFromClick, effectiveCell, type Source } from './selection.ts'
 import {
   bounds, compositionSheets, flatten, fromComposition, remember, sameBlock, toComposition,
@@ -113,6 +114,15 @@ export default function TileMapper() {
   // step, deliberately not taken yet). `pinned` is the strip's click.
   const [recent, setRecent] = useState<readonly Block[]>([])
   const [pinned, setPinned] = useState<Block | null>(null)
+  // Animated art (#436, ADR-0019). In 'strip' source mode the uploaded PNG is a
+  // horizontal frame strip that becomes the art verbatim (no composition — the
+  // strip is truth); frame_count falls out of its width and is never typed.
+  // `playing` drives the live preview; painting pins it to frame 0, the frame
+  // every authored mask is registered against.
+  const [fps, setFps] = useState(12)
+  const [playback, setPlayback] = useState('loop')
+  const [playing, setPlaying] = useState(true)
+  const [frame, setFrame] = useState(0)
 
   const cell = effectiveCell(source, tilesetName, manualCell)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -147,6 +157,11 @@ export default function TileMapper() {
         setEdgeCells(o.edge_mask ? edgeSetFromMask(o.edge_mask) : new Set())
         setActive(0)
         setPaintMode('walk')
+        // Animated playback settings (#436) come back with the object; the frame
+        // count doesn't need to — editFlat re-derives it off the stored art.
+        setFps(o.fps ?? 12)
+        setPlayback(o.playback)
+        setPlaying(true)
         setLoadedFg(o.fg_mask ?? null) // restore the foreground mask into the editor
         fgMaskRef.current = null // force a rebuild against the loaded art
         setSel(null) // leave tileset-selection mode; the art/composition drives the preview
@@ -157,7 +172,15 @@ export default function TileMapper() {
           setLayers([new Map()]) // the loaded art replaces any composition in progress
           setEditImg(null)
           const img = new Image()
-          img.onload = () => { setEditImg(img); setStatus(msg) }
+          img.onload = () => {
+            setEditImg(img)
+            // An animated object (#436) reopens in strip mode. Its cell is
+            // whatever makes the stored frame_count fall back out of the art's
+            // width, so the derived count matches what was saved.
+            if (o.frame_count > 1) setManualCell(Math.round(img.naturalWidth / (o.frame_count * o.footprint_w)))
+            setSource((s) => (o.frame_count > 1 ? 'strip' : s === 'strip' ? 'tileset' : s))
+            setStatus(msg)
+          }
           img.onerror = () => setStatus('Could not load the saved image.')
           img.src = o.image
         }
@@ -207,6 +230,12 @@ export default function TileMapper() {
   const collidable = authorsWalkMask(kind, collides)
   const doorCols = Math.max(1, Math.round(fpW))
   const doorRows = Math.max(1, Math.round(fpH))
+
+  // The loaded strip's frame count, derived from its own width (#436) — so the
+  // footprint inputs re-derive it live and a mismatch is caught at import, not
+  // at play. Null outside strip mode; a still object is one frame.
+  const strip = source === 'strip' && editImg ? deriveFrameCount(editImg.naturalWidth, fpW, cell) : null
+  const frameCount = strip?.ok ? strip.frameCount : 1
 
   // The sheet the picked block comes from, and the key its placed cells carry.
   const sheetKey = source === 'tileset' ? tilesetName : UPLOAD_SHEET
@@ -267,12 +296,24 @@ export default function TileMapper() {
     const reader = new FileReader()
     reader.onload = () => {
       const img = new Image()
-      img.onload = () => useSheet(img, UPLOAD_SHEET)
+      img.onload = () => {
+        // A frame strip (#436) is the object's art, kept verbatim — not a sheet
+        // to pick cells off. It lands in the preview the way a reopened object's
+        // stored art does, so every mask/door control downstream just works.
+        if (source !== 'strip') return useSheet(img, UPLOAD_SHEET)
+        setLayers([new Map()])
+        setEditImg(img)
+        setLoadedFg(null)
+        fgMaskRef.current = null
+        setSel(null)
+        setPlaying(true)
+        setStatus(`Loaded strip (${img.naturalWidth}×${img.naturalHeight}). Set the footprint — the frame count follows.`)
+      }
       img.onerror = () => setStatus('Could not read that image.')
       img.src = reader.result as string
     }
     reader.readAsDataURL(file)
-  }, [useSheet])
+  }, [useSheet, source])
 
   // ---- draw the tileset + grid + selection ----------------------------
   // Windowed (#352): the canvas covers the viewport and everything below is
@@ -355,6 +396,17 @@ export default function TileMapper() {
 
   // ---- live preview of the cropped object at map scale --------------
   const previewRef = useRef<HTMLCanvasElement>(null)
+  // An animated object's preview plays its strip at the authored fps (#436) so
+  // the admin can confirm the animation before saving. Painting clears
+  // `playing`, which parks the preview back on frame 0 — masks bind to frame 0.
+  useEffect(() => {
+    if (!playing || frameCount < 2) {
+      setFrame(0)
+      return
+    }
+    const id = setInterval(() => setFrame((f) => (f + 1) % frameCount), 1000 / Math.max(1, fps))
+    return () => clearInterval(id)
+  }, [playing, frameCount, fps])
   useEffect(() => {
     const canvas = previewRef.current
     if (!canvas || (!composed && !editImg)) return
@@ -367,8 +419,12 @@ export default function TileMapper() {
     ctx.clearRect(0, 0, w, h)
     // The composition is the art (#353); editing a saved object draws its
     // stored crop instead. A tileset selection alone previews nothing — it is
-    // just the block waiting to be stamped.
-    ctx.drawImage(composed ?? editImg!, 0, 0, w, h)
+    // just the block waiting to be stamped. A frame strip (#436) draws one
+    // frame of itself: the playing frame, or frame 0 while painting.
+    if (frameCount > 1 && editImg) {
+      const fw = editImg.naturalWidth / frameCount
+      ctx.drawImage(editImg, (frame % frameCount) * fw, 0, fw, editImg.naturalHeight, 0, 0, w, h)
+    } else ctx.drawImage(composed ?? editImg!, 0, 0, w, h)
 
     // For a building (or a collidable prop, #338), overlay the footprint grid,
     // the painted walkable cells (#32), and the picked door cell so the admin
@@ -411,7 +467,7 @@ export default function TileMapper() {
       else { ctx.moveTo(x + cw, y); ctx.lineTo(x + cw, y + ch) }
       ctx.stroke()
     }
-  }, [editImg, composed, fpW, fpH, collidable, doorCols, doorRows, door, walk, overhangCells, ladderCells, edgeCells])
+  }, [editImg, composed, fpW, fpH, collidable, doorCols, doorRows, door, walk, overhangCells, ladderCells, edgeCells, frameCount, frame])
 
   // Click the preview to either mark the entrance (door mode) or toggle a
   // walkable cell (walk mode) — issue #29/#32.
@@ -462,6 +518,14 @@ export default function TileMapper() {
     })
   }
 
+  // Entering a paint mode parks an animated preview on frame 0 (#436): masks,
+  // edges and the door anchor are all authored against frame 0, so that is what
+  // the admin has to be looking at while painting them.
+  function pickPaint(mode: typeof paintMode) {
+    setPaintMode(mode)
+    setPlaying(false)
+  }
+
   // ---- drag-select on the canvas ------------------------------------
   function cellAt(e: React.MouseEvent<HTMLCanvasElement>) {
     const rect = canvasRef.current!.getBoundingClientRect()
@@ -498,6 +562,12 @@ export default function TileMapper() {
     }
     if (!name.trim()) {
       setStatus('Give the object a name.')
+      return
+    }
+    // A strip whose width isn't a whole number of frames is rejected, never
+    // rounded (#436) — a rounded count slices every frame at the wrong offset.
+    if (strip && !strip.ok) {
+      setStatus(strip.message)
       return
     }
     // A building with a door must ship an authored, reachable interior walk mask
@@ -564,6 +634,12 @@ export default function TileMapper() {
         fg_mask: isBuilding && maskHasInk(fgMaskRef.current) ? fgMaskRef.current!.toDataURL('image/png') : undefined,
         // Composition (#355) — the editor-only rebuild note, when reopenable.
         composition,
+        // Animated art (#436, ADR-0019) — the strip saved verbatim above plus
+        // how to play it. A still object writes frame_count 1, exactly what it
+        // has always been, and clears any playback left on a re-saved record.
+        frame_count: frameCount,
+        fps: frameCount > 1 ? fps : null,
+        playback: frameCount > 1 ? playback : 'loop',
       }))
       setStatus(`Saved "${obj.name}" as the active ${obj.kind}. It'll show on the map on reload.`)
       setSavedTick((t) => t + 1)
@@ -594,6 +670,7 @@ export default function TileMapper() {
           <select value={source} onChange={(e) => { setSource(e.target.value as Source); setSel(null) }}>
             <option value="tileset">Tileset</option>
             <option value="upload">Upload PNG</option>
+            <option value="strip">Frame strip</option>
           </select>
         </label>
         {source === 'tileset' ? (
@@ -608,7 +685,7 @@ export default function TileMapper() {
         ) : (
           <>
             <label className="upload">
-              Tileset PNG
+              {source === 'strip' ? 'Frame strip PNG' : 'Tileset PNG'}
               <input type="file" accept="image/png" onChange={onUpload} />
             </label>
             <label>
@@ -717,6 +794,38 @@ export default function TileMapper() {
               Collides — the footprint blocks the avatar; paint Walkable to carve pass-through cells.
             </label>
           )}
+          {source === 'strip' && (
+            // Animation (#436). Frame count is derived from the strip's width
+            // against the footprint above — it's reported, never typed, and it
+            // re-derives as the footprint changes.
+            <>
+              <p className="hint">
+                {!editImg
+                  ? 'Upload a frame strip — one horizontal row of equal frames. It saves verbatim, so it carries no composition.'
+                  : strip?.ok
+                    ? `${strip.frameCount} frames of ${editImg.naturalWidth / strip.frameCount}×${editImg.naturalHeight}px, derived from the strip's ${editImg.naturalWidth}px width.`
+                    : strip?.message}
+              </p>
+              <div className="fp">
+                <label>
+                  FPS
+                  <input type="number" min={1} max={60} value={fps}
+                    onChange={(e) => setFps(Math.max(1, Number(e.target.value) || 1))} style={{ width: 64 }} />
+                </label>
+                <label>
+                  Playback
+                  <select value={playback} onChange={(e) => setPlayback(e.target.value)}>
+                    <option value="loop">loop</option>
+                    <option value="proximity">proximity</option>
+                  </select>
+                </label>
+              </div>
+              <label className="collides-toggle">
+                <input type="checkbox" checked={playing} onChange={(e) => setPlaying(e.target.checked)} />
+                Play the preview — untick (or pick a paint mode) to hold frame 0, the frame masks are painted against.
+              </label>
+            </>
+          )}
 
           <h3>Preview (map scale)</h3>
           <div className="preview-box">
@@ -730,7 +839,7 @@ export default function TileMapper() {
                   <button
                     type="button"
                     className={paintMode === 'walk' ? 'is-on' : ''}
-                    onClick={() => setPaintMode('walk')}
+                    onClick={() => pickPaint('walk')}
                   >
                     Walkable
                   </button>
@@ -739,7 +848,7 @@ export default function TileMapper() {
                   <button
                     type="button"
                     className={paintMode === 'overhang' ? 'is-on' : ''}
-                    onClick={() => setPaintMode('overhang')}
+                    onClick={() => pickPaint('overhang')}
                   >
                     Overhang
                   </button>
@@ -748,7 +857,7 @@ export default function TileMapper() {
                   <button
                     type="button"
                     className={paintMode === 'ladder' ? 'is-on' : ''}
-                    onClick={() => setPaintMode('ladder')}
+                    onClick={() => pickPaint('ladder')}
                   >
                     Ladder
                   </button>
@@ -757,7 +866,7 @@ export default function TileMapper() {
                   <button
                     type="button"
                     className={paintMode === 'edge' ? 'is-on' : ''}
-                    onClick={() => setPaintMode('edge')}
+                    onClick={() => pickPaint('edge')}
                   >
                     Edge
                   </button>
@@ -766,7 +875,7 @@ export default function TileMapper() {
                   <button
                     type="button"
                     className={paintMode === 'door' ? 'is-on' : ''}
-                    onClick={() => setPaintMode('door')}
+                    onClick={() => pickPaint('door')}
                   >
                     Door
                   </button>
@@ -775,7 +884,7 @@ export default function TileMapper() {
                   <button
                     type="button"
                     className={paintMode === 'fg' ? 'is-on' : ''}
-                    onClick={() => setPaintMode('fg')}
+                    onClick={() => pickPaint('fg')}
                   >
                     Foreground
                   </button>
