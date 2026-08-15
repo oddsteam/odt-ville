@@ -100,5 +100,10 @@ export const NewTileObject = Schema.Struct({
   // tiles, so the object can be reopened and remixed. Absent for the upload
   // path and for flat re-saves, which keeps the server's stored value.
   composition: Schema.optional(Composition),
+  // Animated art (#436, ADR-0019) — the frame count the mapper derived from the
+  // strip's own width, and how to play it. A still object sends frame_count 1.
+  frame_count: Schema.optional(Schema.Number),
+  fps: Schema.optional(Schema.NullOr(Schema.Number)),
+  playback: Schema.optional(Schema.String),
 })
 export type NewTileObject = Schema.Schema.Type<typeof NewTileObject>
