@@ -5,7 +5,8 @@
 // `preloadBakedMap` / `renderBakedMap` load and stamp them.
 
 import { TILE } from './constants.ts'
-import { framesForFacing, resolveSheetSrc, characterScale } from './characterManifest.js'
+import { framesForFacing, characterScale } from './characterManifest.js'
+import { queueRigSheet } from './rigSheet.js'
 import type { BakedEntity, BakedGround, BakedMap } from './schema.ts'
 import {
   loadObjectTextures,
@@ -247,8 +248,7 @@ export function preloadBakedMap(scene: Scene) {
   const npcs: Array<{ id: number; manifest: NpcRig | null }> = scene.registry.get('bakedNpcs') || []
   scene._bakedNpcs = npcs
   for (const n of npcs) {
-    const src = n.manifest ? resolveSheetSrc(n.manifest) : ''
-    if (src) scene.load.image(npcSheetKey(n.id), src)
+    if (n.manifest) queueRigSheet(scene, n.manifest, npcSheetKey(n.id))
   }
   // Standees (#369, ADR-0015): runtime-placed cutouts the shell resolves by
   // reference and hands over the registry (`bakedStandees`) — read alongside the
@@ -259,8 +259,7 @@ export function preloadBakedMap(scene: Scene) {
     scene.registry.get('bakedStandees') || []
   scene._bakedStandees = standees
   for (const s of standees) {
-    const src = s.manifest ? resolveSheetSrc(s.manifest) : ''
-    if (src) scene.load.image(standeeSheetKey(s.id), src)
+    if (s.manifest) queueRigSheet(scene, s.manifest, standeeSheetKey(s.id))
   }
 }
 

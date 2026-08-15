@@ -115,13 +115,49 @@ export const save = (
     return yield* decode(path, decodeActive)(raw)
   })
 
+// GET /character_manifests?owner=me -> the caller's own personal Looks (#398),
+// kept out of the shared roster the plain list() returns.
+export const listMine = (): Effect.Effect<
+  readonly ManifestSummary[],
+  HttpError,
+  Http
+> =>
+  Effect.gen(function* () {
+    const http = yield* Http
+    const path = '/character_manifests?owner=me'
+    const raw = yield* http.get(path)
+    return yield* decode(path, decodeSummaryList)(raw)
+  })
+
+// POST /character_manifests/looks -> save a personal Look (#398). `data` is the
+// buildLookData blob (parts + layout). Returns the saved envelope.
+export const saveLook = (
+  data: unknown,
+): Effect.Effect<ActiveManifest, HttpError, Http> =>
+  Effect.gen(function* () {
+    const http = yield* Http
+    const path = '/character_manifests/looks'
+    const raw = yield* http.post(path, { manifest: data })
+    return yield* decode(path, decodeActive)(raw)
+  })
+
+// DELETE /character_manifests/:id -> drop one of the caller's own Looks (#398).
+export const deleteLook = (id: number): Effect.Effect<void, HttpError, Http> =>
+  Effect.gen(function* () {
+    const http = yield* Http
+    yield* http.del(`/character_manifests/${id}`)
+  })
+
 export const CharacterService = {
   getActive,
   getForMe,
   select,
   list,
+  listMine,
   getById,
   save,
+  saveLook,
+  deleteLook,
 } as const
 
 // --- promise-level loaders ---------------------------------------------
