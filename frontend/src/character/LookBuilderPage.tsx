@@ -124,6 +124,22 @@ export default function LookBuilderPage() {
     }
   }, [selection, layout, refresh])
 
+  // Update the worn Look in place (#424) — same id, so the worn pointer and
+  // peers keep pointing at it; no re-select needed.
+  const saveChanges = useCallback(async () => {
+    if (!layout || wornId == null) return
+    setBusy(true)
+    setError('')
+    try {
+      await runEdge(CharacterService.updateLook(wornId, buildLookData(selection, layout)))
+      await refresh()
+    } catch (e) {
+      setError(serverMessage(e, 'Could not save the changes.'))
+    } finally {
+      setBusy(false)
+    }
+  }, [selection, layout, wornId, refresh])
+
   const act = useCallback(
     async (run: Promise<unknown>, fail: string) => {
       setBusy(true)
@@ -201,6 +217,9 @@ export default function LookBuilderPage() {
   }
 
   const canSave = Boolean(selection.body && selection.eyes) && !busy
+  // "Save changes" only applies to a worn Look the caller owns (in `mine`); a
+  // worn premade / house Look can't be updated (it 404s), so create-only.
+  const canSaveChanges = canSave && mine.some((m) => m.id === wornId)
 
   return (
     <Shell>
@@ -211,9 +230,14 @@ export default function LookBuilderPage() {
           <div className="builder-preview">
             <Baked parts={orderedParts(selection)} layout={layout} frames={walk} frameRate={frameRate} scale={4} />
           </div>
-          <button type="button" className="builder-save" onClick={save} disabled={!canSave}>
-            Save &amp; wear
-          </button>
+          <div className="builder-saves">
+            <button type="button" className="builder-save" onClick={saveChanges} disabled={!canSaveChanges}>
+              Save changes
+            </button>
+            <button type="button" className="builder-save" onClick={save} disabled={!canSave}>
+              Save as new
+            </button>
+          </div>
 
           <h3>Your Looks ({mine.length}/3)</h3>
           {!mine.length && <p>No Looks yet.</p>}

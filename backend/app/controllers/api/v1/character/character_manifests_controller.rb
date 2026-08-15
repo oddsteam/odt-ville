@@ -75,6 +75,16 @@ module Api
           render json: ::Character::CharacterManifestSerializer.call(look), status: :created
         end
 
+        # PATCH/PUT /api/v1/character_manifests/:id — update one of the caller's
+        # own Looks in place (#424). Same id, so the worn pointer and peer
+        # references (#397) survive; the model re-runs the slot rules. Other
+        # users' Looks and house-owned rows 404, exactly like DELETE.
+        def update
+          look = ::Character::CharacterManifest.where(owner_id: current_user.id).find(params[:id])
+          look.update!(data: manifest_data.except("name"))
+          render json: ::Character::CharacterManifestSerializer.call(look)
+        end
+
         # DELETE /api/v1/character_manifests/:id — drop one of the caller's own
         # Looks. House-owned rows and other users' Looks 404. Deleting a worn
         # Look nullifies the pick via the users FK, so the render falls back down
