@@ -4,6 +4,7 @@ import { preloadBakedMap, renderBakedMap } from '../kernel/mapRenderer.ts'
 import { TILE } from '../kernel/constants.ts'
 import { tileFromPointer, tileWithinGutter } from './previewPointer.ts'
 import { blockedCells, type Mask } from './maskPaint.ts'
+import { frameArtStyle, type FrameArt } from './frameArt.ts'
 import type { BakedMap } from '../kernel/schema.ts'
 
 // The editor's WYSIWYG bake preview (#107). It renders the *real* baked map
@@ -74,10 +75,11 @@ export default function MapPreview({
   // where each trigger region sits and which one is selected.
   zoneRects?: readonly { x: number; y: number; w: number; h: number; color: string; label: string; selected?: boolean }[]
   // The footprint ghost to preview under the cursor (#144): a tile rect the size
-  // of the acted-on footprint. `image` (place mode) draws the object art semi-
-  // transparent; `refused` tints it red (placement would hang off the edge);
-  // no image (erase mode) draws a highlight box round the prop a click removes.
-  ghost?: { x: number; y: number; w: number; h: number; image?: string; refused?: boolean } | null
+  // of the acted-on footprint. `art` (place mode) draws the object art semi-
+  // transparent — one frame of it when the object is a strip (#437); `refused`
+  // tints it red (placement would hang off the edge); no art (erase mode) draws
+  // a highlight box round the prop a click removes.
+  ghost?: { x: number; y: number; w: number; h: number; art?: FrameArt; refused?: boolean } | null
   // A persistent highlight round the selected placed prop's footprint (#341) —
   // what arrow-key nudging moves. Unlike the hover `ghost` it stays put while
   // the author nudges; a negative-anchor footprint positions off the top/left
@@ -277,16 +279,12 @@ export default function MapPreview({
             opacity: 0.55,
             // Erase highlight (no image) fills white; a refused placement tints
             // red behind the semi-transparent art so it reads as "won't stamp".
-            background: ghost.refused ? '#dd3333' : ghost.image ? undefined : '#ffffff',
+            background: ghost.refused ? '#dd3333' : ghost.art ? undefined : '#ffffff',
             outline: `2px solid ${ghost.refused ? '#dd3333' : '#ffffff'}`,
           }}
         >
-          {ghost.image && (
-            <img
-              src={ghost.image}
-              alt=""
-              style={{ width: '100%', height: '100%', objectFit: 'fill', imageRendering: 'pixelated' }}
-            />
+          {ghost.art && (
+            <div style={{ width: '100%', height: '100%', ...frameArtStyle(ghost.art, 'stretch') }} />
           )}
         </div>
       )}
