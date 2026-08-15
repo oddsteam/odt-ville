@@ -26,6 +26,60 @@ const COLOURS = [
 
 const POSTURE_GATE = 'posture-login'
 
+// Rename in place: the house's name is an input that saves on blur or Enter.
+// Escape or a blank name puts the stored title back — a house with no name
+// can't be found on the map, and the server rejects it anyway.
+function CommunityName({
+  house,
+  onSaved,
+}: {
+  house: Community
+  onSaved?: () => void | Promise<void>
+}) {
+  const [name, setName] = useState(house.title)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function save() {
+    const title = name.trim()
+    if (busy || title === house.title) return
+    if (!title) {
+      setName(house.title)
+      return
+    }
+    setBusy(true)
+    setError(null)
+    try {
+      await runEdge(CommunitiesService.update(house.id, { title }))
+      if (onSaved) await onSaved()
+    } catch (err) {
+      setError((err as Error).message)
+      setName(house.title)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <>
+      <input
+        className="comm-name"
+        aria-label={`Name for ${house.title}`}
+        value={name}
+        maxLength={40}
+        disabled={busy}
+        onChange={(e) => setName(e.target.value)}
+        onBlur={save}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') e.currentTarget.blur()
+          if (e.key === 'Escape') setName(house.title)
+        }}
+      />
+      {error && <span className="comm-gate-err">{error}</span>}
+    </>
+  )
+}
+
 // Per-house door-Portal editor (ADR-0005): the interior Node the door travels
 // to (#113), its gate — "No gate" or "Posture-login + <set>" (#38) — and the
 // plot's mapped building (#292, "None (default)" = active object / bundled
@@ -249,7 +303,7 @@ export default function CommunitiesAdminPanel({
                 <div className="comm-row-main">
                   <span className="comm-swatch" style={{ background: c.color }} />
                   <span className="comm-emoji">{categoryEmoji(c.category_key)}</span>
-                  <span className="comm-name">{c.title}</span>
+                  <CommunityName house={c} onSaved={onChanged} />
                   <button
                     type="button"
                     className="comm-del"

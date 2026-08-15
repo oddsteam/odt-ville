@@ -90,12 +90,29 @@
   flex-shrink: 0;
 }
 
+/* The name is an editable field that reads as plain text until you reach for
+   it — the row stays a list, not a form. */
 .comm-name {
   flex: 1;
+  min-width: 0;
+  font: inherit;
   font-size: 13px;
-  overflow: hidden;
+  color: #e8e8ee;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 3px 6px;
   text-overflow: ellipsis;
-  white-space: nowrap;
+}
+
+.comm-name:hover:not(:disabled) {
+  border-color: #3a3a47;
+}
+
+.comm-name:focus {
+  background: #15151b;
+  border-color: #4a4a5c;
+  outline: none;
 }
 
 .comm-del {

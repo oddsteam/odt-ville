@@ -60,9 +60,11 @@ module Api
           render json: { id: community.id, title: community.title }, status: :created
         end
 
-        # PATCH /api/v1/communities/:id — admin: the door-Portal editor (ADR-0005).
+        # PATCH /api/v1/communities/:id — admin: rename, plus the door-Portal
+        # editor (ADR-0005).
         # Each field acts only when its key is sent, so gate and node saves can't
-        # clobber each other. `entry_gate` (#38): posture-login needs a
+        # clobber each other. `title`: renamed in place, blank is rejected (the
+        # name is how the house is found on the map). `entry_gate` (#38): posture-login needs a
         # posture_set_id, blank clears both columns. `interior_node_slug` (#113):
         # must name an existing map, blank clears (door falls back to the
         # hardcoded InteriorScene). `tile_object_id` (#292): must name a saved
@@ -71,6 +73,12 @@ module Api
         def update
           community = current_user.company.houses.find(params[:id])
           attrs = {}
+
+          if params.key?(:title)
+            title = params[:title].to_s.strip
+            return render json: { error: "Title can't be blank" }, status: :unprocessable_entity if title.blank?
+            attrs[:title] = title
+          end
 
           if params.key?(:interior_node_slug)
             slug = params[:interior_node_slug].presence
