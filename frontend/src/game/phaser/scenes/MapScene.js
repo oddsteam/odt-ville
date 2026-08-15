@@ -20,6 +20,7 @@ import { deltaFor, resolveDirection, stepTile } from '../movement.ts'
 import { applyFrame, pruneOutOfRange } from '../../presence.ts'
 import { applyStandeeFrame } from '../../standees.ts'
 import { loadAvatar } from '../peerAvatar.ts'
+import { updateProximityStamps } from '../../../kernel/entityLoader.ts'
 import { badgeText, cardHref, statusColor } from '../cardBadge.ts'
 import { interactZoneEvents, sightZoneEvents, zoneEvents } from '../../../kernel/zones.ts'
 import downStill from '../../assets/character/rpg-char-01/r0-c0.png'
@@ -326,7 +327,12 @@ export default class MapScene extends Phaser.Scene {
     }
   }
 
-  update() {
+  update(_time, delta) {
+    // Swing every proximity object toward or away from us (#438) — a door opens
+    // as you walk up and closes behind you. Ahead of the input guards, so it
+    // keeps swinging while a panel is open or a warp is fading; it is pure
+    // theatre and never touches walkability.
+    updateProximityStamps(this, this.playerTile, delta)
     // Keep our own nameplate glued to the avatar: the plate is a separate
     // container (the player is a lone tweened sprite), so it tracks position +
     // depth here every frame — ahead of the input guard, which only gates steps.
