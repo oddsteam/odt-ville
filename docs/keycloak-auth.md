@@ -71,3 +71,39 @@ curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3190/api/v1/me  # => 4
 ```
 
 Swap `username=bob` / `username=carol` to authenticate as the other seeded users.
+
+## Admin roles: where they come from (#429–#432)
+
+`current_roles` returns **the token's realm roles UNION the `auth_user_roles`
+rows** for the signed-in user. Two sources, deliberately:
+
+- **Realm role** (`admin` in the token) — the escape hatch. Locally that's
+  alice, seeded by `keycloak/realm-export.json`. It cannot be revoked from
+  `/admin/users`, so you cannot lock yourself out of your own dev stack.
+- **App grant** (an `auth_user_roles` row) — the day-to-day tool. Granted and
+  revoked at `/admin/users`, recorded with `granted_by`. It takes effect on the
+  grantee's **next page load** — no re-login, because it never touches the token.
+
+### Cold start: minting the first admin
+
+Nobody can use `/admin/users` until someone is already an admin. On a fresh
+environment, grant the first one directly:
+
+```sh
+docker compose exec backend ./bin/rails runner \
+  'Auth::UserRole.find_or_create_by!(user: Auth::User.find_by!(email: "you@odds.team"), role: "admin")'
+```
+
+On the homeserver, prefix with the deploy overlay (`-f compose.yaml -f
+compose.prod.yaml`) as `scripts/deploy-homeserver.sh` does. The user must have
+logged in at least once — rows are JIT-provisioned on first login, so there is
+nothing to grant to before that.
+
+**Why this and not `kcadm`:** prod auth is the **org** Keycloak
+(`https://sso.odd.works/realms/odt`, see `compose.prod.yaml`) — we do not
+administer that realm, so realm roles are not ours to assign there. The DB grant
+is the only bootstrap path we own. This is why #433 was closed as obsolete.
+
+> Editing `keycloak/realm-export*.json` does **not** change a running Keycloak —
+> the import only runs when the realm is absent. Locally, recreate the Keycloak
+> volume to re-seed; in prod the realm is not ours to edit at all.
