@@ -9,12 +9,12 @@ import { spawnStandees, sortStandees, standeeAt, placardOf, addStandee, restande
 import {
   CHAR_SHEET_KEY,
   preloadCharacter,
+  queueCharacterSheet,
   buildCharacterRig,
   characterScale,
   peerSheetKey,
   applyFacing,
 } from '../characterRig.js'
-import { resolveSheetSrc } from '../../../kernel/characterManifest.js'
 import bus from '../bus.js'
 import { deltaFor, resolveDirection, stepTile } from '../movement.ts'
 import { applyFrame, pruneOutOfRange } from '../../presence.ts'
@@ -632,22 +632,26 @@ export default class MapScene extends Phaser.Scene {
     }
     Promise.resolve(fetchManifest(manifestId))
       .then((manifest) => {
-        const src = manifest && resolveSheetSrc(manifest)
-        if (!src) return settle(false)
+        if (!manifest) return settle(false)
         const key = peerSheetKey(manifestId)
         // The same rig the local player uses, keyed to this peer's sheet (#267),
-        // so their walk/idle loops play from their own frames.
+        // so their walk/idle loops play from their own frames — and their Look
+        // bakes the same way the player's does (#397).
         const cut = () => {
           const rig = this.textures.exists(key) && buildCharacterRig(this, manifest, key)
           return rig && rig.usingManifest && { charDir: rig.charDir, scale: characterScale(manifest) }
         }
         // Textures outlive the scene (stop/start swaps maps, #249), so a peer
-        // seen on an earlier map is already cut and needs no second load.
+        // seen on an earlier map — or a second peer wearing the very same Look —
+        // is already cut and needs no second load (one texture, shared #397).
         if (this.textures.exists(key)) return settle(cut())
-        this.load.image(key, src)
+        // A sheet is one image; a Look is N Part atlases plus a composite. The
+        // shared queue decides which, keyed to this peer. A manifest that names
+        // neither leaves them on the bundled stills.
+        if (!queueCharacterSheet(this, manifest, key)) return settle(false)
         // The queue-drained event rather than filecomplete-image-<key>: it
-        // fires whether the sheet arrived or 404'd, so a broken sheet settles
-        // to the fallback instead of hiding that peer forever.
+        // fires whether the atlases arrived or 404'd, so a broken sheet/Look
+        // settles to the fallback instead of hiding that peer forever.
         this.load.once(Phaser.Loader.Events.COMPLETE, () => settle(cut()))
         this.load.start()
       })

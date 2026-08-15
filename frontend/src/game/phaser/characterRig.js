@@ -23,13 +23,26 @@ export const CHAR_SHEET_KEY = 'char.sheet'
 export function preloadCharacter(scene) {
   const manifest = scene.registry.get('characterManifest') || null
   if (!manifest || scene.textures.exists(CHAR_SHEET_KEY)) return manifest
+  queueCharacterSheet(scene, manifest, CHAR_SHEET_KEY)
+  return manifest
+}
+
+// Queue whatever this manifest needs under `sheetKey`: a single sheet image, or
+// a Look's Part atlases to composite (ADR-0017). One decision shared by the
+// player (CHAR_SHEET_KEY) and the peer (peer.sheet.<id>) paths, so a Look bakes
+// the same both ways and the two can't drift (#397). Returns false when the
+// manifest carries neither — the caller falls back to the bundled stills.
+export function queueCharacterSheet(scene, manifest, sheetKey) {
   const src = resolveSheetSrc(manifest)
   if (src) {
-    scene.load.image(CHAR_SHEET_KEY, src)
-  } else if (manifest.layout && manifest.parts?.length) {
-    preloadLook(scene, manifest, CHAR_SHEET_KEY)
+    scene.load.image(sheetKey, src)
+    return true
   }
-  return manifest
+  if (manifest?.layout && manifest.parts?.length) {
+    preloadLook(scene, manifest, sheetKey)
+    return true
+  }
+  return false
 }
 
 // Bake a Look (ADR-0017): queue each Part atlas, then on load-complete composite

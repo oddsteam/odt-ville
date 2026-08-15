@@ -8,7 +8,7 @@ vi.mock('../../kernel/composeLook.ts', () => ({
   composeLook: vi.fn((images: any[]) => ({ sentinel: images.length })),
 }))
 
-import { preloadCharacter, CHAR_SHEET_KEY } from './characterRig.js'
+import { preloadCharacter, queueCharacterSheet, peerSheetKey, CHAR_SHEET_KEY } from './characterRig.js'
 import { composeLook } from '../../kernel/composeLook.ts'
 
 function fakeScene(manifest: any, present: string[] = []) {
@@ -89,6 +89,36 @@ describe('preloadCharacter — Look', () => {
     scene.fireComplete()
     expect(scene.added).toEqual([])
     expect(composeLook).not.toHaveBeenCalled()
+  })
+})
+
+// The peer path (#397) resolves each peer's rig under its own peer.sheet.<id>
+// key. It bakes a Look exactly like the player path — same shared decision — so
+// a peer wearing a Look renders their character instead of the bundled stills.
+describe('queueCharacterSheet — peer path bakes a Look under its own key', () => {
+  it('queues the Look Parts under the peer sheet key and composites on load-complete', () => {
+    const scene = fakeScene(null)
+    const key = peerSheetKey(7)
+    expect(queueCharacterSheet(scene, LOOK, key)).toBe(true)
+    expect(scene.loaded).toEqual([
+      { key: `${key}.part.body-01`, url: '/maps/characters/packs/modern-interiors/body-01.png' },
+      { key: `${key}.part.eyes-01`, url: '/maps/characters/packs/modern-interiors/eyes-01.png' },
+    ])
+    scene.fireComplete()
+    expect(scene.added).toEqual([{ key, canvas: { sentinel: 2 } }])
+  })
+
+  it('queues a plain sheet manifest under the peer sheet key', () => {
+    const scene = fakeScene(null)
+    const key = peerSheetKey(3)
+    expect(queueCharacterSheet(scene, { sheet: { path: '/maps/characters/sheets/scout.png' } }, key)).toBe(true)
+    expect(scene.loaded).toEqual([{ key, url: '/maps/characters/sheets/scout.png' }])
+  })
+
+  it('returns false for a manifest with neither a sheet nor Parts, so the peer keeps the stills', () => {
+    const scene = fakeScene(null)
+    expect(queueCharacterSheet(scene, { name: 'bare' }, peerSheetKey(9))).toBe(false)
+    expect(scene.loaded).toEqual([])
   })
 })
 
