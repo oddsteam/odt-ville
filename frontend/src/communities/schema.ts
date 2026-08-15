@@ -96,16 +96,18 @@ export const NewCommunity = Schema.Struct({
 })
 export type NewCommunity = Schema.Schema.Type<typeof NewCommunity>
 
-// Body the admin PATCHes for a community's door Portal (#38 gate, #113 node)
-// and its plot's building (#292). entry_gate null clears the gate;
+// Body the admin PATCHes for a community: its name, its door Portal (#38 gate,
+// #113 node) and its plot's building (#292). Every key is optional and the
+// server acts only on the ones sent, so a rename can't clobber a door and vice
+// versa. title must be non-blank. entry_gate null clears the gate;
 // 'posture-login' requires a posture_set_id. interior_node_slug null falls the
 // door back to the default interior. tile_object_id null clears the building
 // assignment (plot falls back to the active object, then bundled art).
 // Plain type, not a Schema: it's a request body, never decoded from the wire.
-export type CommunityDoor = {
-  readonly entry_gate: string | null
-  readonly posture_set_id: string | null
-  readonly interior_node_slug: string | null
-  // Optional: absent keys leave the server's stored assignment untouched.
+export type CommunityPatch = {
+  readonly title?: string
+  readonly entry_gate?: string | null
+  readonly posture_set_id?: string | null
+  readonly interior_node_slug?: string | null
   readonly tile_object_id?: number | null
 }

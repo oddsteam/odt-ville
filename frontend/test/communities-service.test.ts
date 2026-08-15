@@ -59,6 +59,21 @@ describe('CommunitiesService.open', () => {
   })
 })
 
+describe('CommunitiesService.update', () => {
+  it('sends only the keys given, so a rename leaves the door alone', async () => {
+    const sent: Array<{ path: string; body: unknown }> = []
+    const record = (path: string, body?: unknown) => {
+      sent.push({ path, body })
+      return Effect.succeed(null)
+    }
+    const layer = Layer.succeed(Http, { get: record, post: record, put: record, patch: record, del: record } as never)
+
+    await Effect.runPromise(Effect.provide(CommunitiesService.update(3, { title: 'Finance House' }), layer))
+
+    expect(sent).toEqual([{ path: '/communities/3', body: { title: 'Finance House' } }])
+  })
+})
+
 describe('CommunitiesService.acknowledge', () => {
   it('posts to /content_items/:id/acknowledge and decodes the state shape', async () => {
     const exit = await Effect.runPromiseExit(

@@ -302,6 +302,28 @@ module Api
         assert_nil community.reload.tile_object_id
       end
 
+      test "update renames the community" do
+        community = make_community(company: @company, title: "Old Name")
+
+        patch "/api/v1/communities/#{community.id}",
+              params: { title: "New Name" },
+              as: :json, headers: auth(@user, roles: ["admin"])
+
+        assert_response :success
+        assert_equal "New Name", community.reload.title
+      end
+
+      test "update 422s on a blank title" do
+        community = make_community(company: @company, title: "Old Name")
+
+        patch "/api/v1/communities/#{community.id}",
+              params: { title: "  " },
+              as: :json, headers: auth(@user, roles: ["admin"])
+
+        assert_response :unprocessable_entity
+        assert_equal "Old Name", community.reload.title
+      end
+
       test "update 404s across companies" do
         other_company, _ = setup_company(name: "Other Co")
         foreign = make_community(company: other_company, title: "Theirs")
