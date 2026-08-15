@@ -43,6 +43,11 @@ Rails.application.routes.draw do
       # the header and the multiplayer peers (#323) share one URL shape.
       scope module: :auth do
         get "users/:external_id/avatar", to: "avatars#show"
+        # The admin roster (#430): every login with its role badges, tagged by
+        # source (App grant vs the caller's own Keycloak realm role). The URL
+        # sits under /admin because it is admin-console chrome, not an identity
+        # read; `scope module: :auth` nests the controller, not the path.
+        get "admin/users", to: "users#index"
       end
 
       # The GameSession domain (ADR-0010) — controller under

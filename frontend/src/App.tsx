@@ -11,6 +11,7 @@ import GroundTileMapper from './groundMapper/GroundTileMapper.tsx'
 import MonstersAdminPage from './admin/MonstersAdminPage.tsx'
 import NpcsAdminPage from './admin/NpcsAdminPage.tsx'
 import EmployeesAdminPage from './org/EmployeesAdminPage.tsx'
+import UsersAdminPage from './admin/UsersAdminPage.tsx'
 import PostureCallbackPage from './posture/CallbackPage.tsx'
 import MapPage from './MapPage.tsx'
 import CharacterSelectPage from './character/CharacterSelectPage.tsx'
@@ -64,6 +65,10 @@ export default function App() {
           {/* The org roster (#388, ADR-0016) — read-only; org data is authored
               upstream and this app is only ever a consumer of it. */}
           <Route path="employees" element={<EmployeesAdminPage />} />
+          {/* The user roster (#430): every login with its role badges. The
+              first page of the admin-roles slice — grant/revoke follow (#431,
+              #432). */}
+          <Route path="users" element={<UsersAdminPage />} />
           <Route
             path="maps"
             element={
