@@ -616,7 +616,7 @@ button:disabled {
   overflow: hidden;
   width: min(900px, 92vw);
   height: clamp(440px, 66vh, 640px);
-  background: var(--grass);
+  background: #000000;
   border: 5px solid var(--screen-edge);
   border-radius: 4px 4px 14px 4px;
 }
