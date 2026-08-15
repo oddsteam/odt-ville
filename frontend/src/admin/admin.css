@@ -373,9 +373,22 @@
   outline: 2px solid #2e7dff;
 }
 
-.decorate-thumb img {
+/* The palette thumbnail paints its art as a background (#437) so an animated
+   object shows one frame instead of its whole strip; frameArtStyle supplies the
+   background, this the slot. */
+.decorate-thumb-art {
   width: 32px;
   height: 32px;
-  object-fit: contain;
-  image-rendering: pixelated;
+}
+
+/* Walks a frame strip one frame at a time — the whole strip is `frame_count ×
+   100%` wide, so 0%→100% split into that many jump-none steps lands on each
+   frame exactly once. */
+@keyframes frame-strip {
+  from {
+    background-position-x: 0%;
+  }
+  to {
+    background-position-x: 100%;
+  }
 }

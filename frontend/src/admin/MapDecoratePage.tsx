@@ -10,6 +10,7 @@ import { loadNpcRigs } from '../character/service.ts'
 import type { Npc } from '../catalog/npcs/schema.ts'
 import { makeMask, setMaskCell, resizeMask, isMaskEmpty, type Mask } from './maskPaint.ts'
 import { groupPalette } from './paletteGroups.ts'
+import { frameArtStyle } from './frameArt.ts'
 import { zoneRects as buildZoneRects, ZONE_COLORS } from './zoneRects.ts'
 import { placeProp, erasePropAt, propEntities, propsFromBaked, propGhost, propIndexAt, nudgeProp, newZone, retrigger, triggersFor, zoneIndexAt, eraseZoneAt, replaceZone, placeNpc, eraseNpcAt, npcIndexAt, npcEntities, npcsFromBaked, NPC_FACING_DEFAULT, isDuellist, markDuellist, unmarkDuellist, syncDuellistZones, draftMap, stashDraft, DRAFT_PLAY_PATH, type PlacedProp, type PlacedNpc, type SizeOf, type MaskOf, type DoorOf, type NudgeDir, type ZoneKind } from '../maps/service.ts'
 import type { MapAccessPolicy } from '../kernel/schema.ts'
@@ -311,8 +312,10 @@ export default function MapDecoratePage() {
     if (mode !== 'props' || propTool == null || !hover || !baked) return null
     const g = propGhost(hover, propTool, props, sizeOf, { cols: baked.cols, rows: baked.rows })
     if (!g) return null
-    const image = propTool === 'erase' ? undefined : byId.get(propTool)?.image
-    return { x: g.x, y: g.y, w: g.w, h: g.h, image, refused: !g.valid }
+    // The art rides along whole (#437): an animated object's `image` is a frame
+    // strip the preview must show one frame of, which needs its frame count/fps.
+    const art = propTool === 'erase' ? undefined : byId.get(propTool)
+    return { x: g.x, y: g.y, w: g.w, h: g.h, art, refused: !g.valid }
     // sizeOf is derived from byId; listing byId keeps the footprint lookup fresh.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, propTool, hover, baked, props, byId])
@@ -453,8 +456,12 @@ export default function MapDecoratePage() {
                   {g.objects.map((o) => (
                     <button key={o.id} onClick={() => setPropTool(o.id)}
                       className={`decorate-thumb${propTool === o.id ? ' on' : ''}`}
+                      aria-label={o.name}
                       title={`${o.name} (${o.footprint_w}×${o.footprint_h})`}>
-                      <img src={o.image} alt={o.name} />
+                      {/* Painted as a background, not an <img> (#437): an
+                          animated object's `image` is a frame strip, which an
+                          <img> would smear across the slot. */}
+                      <span className="decorate-thumb-art" style={frameArtStyle(o, 'contain')} />
                     </button>
                   ))}
                 </div>

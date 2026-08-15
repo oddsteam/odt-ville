@@ -36,7 +36,7 @@ export const objectAnimKey = (id: number) => `${objectTextureKey(id)}.loop`
 
 // Frames per second for a strip that authored none — the pack's animated
 // objects are drawn at roughly this rate.
-const DEFAULT_FPS = 12
+export const DEFAULT_FPS = 12
 
 // What the loader needs off a fetched tile object to register + size it. Both
 // producers hand it objects in this shape (a full TileObject satisfies it). The
