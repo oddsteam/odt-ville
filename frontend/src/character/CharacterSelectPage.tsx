@@ -76,7 +76,7 @@ export default function CharacterSelectPage() {
     <div className="char-select">
       <div className="char-select-head">
         <h2>Choose your character</h2>
-        <Link to="/character/looks">Build a Look →</Link>
+        <Link to="/character/looks">Build your own →</Link>
         <Link to="/">← Back to the village</Link>
       </div>
       <p className="char-select-hint">

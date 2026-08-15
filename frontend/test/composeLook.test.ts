@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import sharp from 'sharp'
+import sharp, { type OverlayOptions } from 'sharp'
 import { composeLook } from '../src/kernel/composeLook.ts'
 import layout from '../public/maps/characters/packs/modern-interiors/layout.json'
 
@@ -37,7 +37,7 @@ describe('composeLook', () => {
     const atlas = await sharp({
       create: { width: layout.atlas.width, height: layout.atlas.height, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
     })
-      .composite(canvas.overlays as sharp.OverlayOptions[])
+      .composite(canvas.overlays as OverlayOptions[])
       .png()
       .toBuffer()
     const r = layout.postures.idleDown[0]
