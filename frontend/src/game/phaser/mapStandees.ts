@@ -13,7 +13,7 @@
 import { TILE } from '../constants.js'
 import { standeeSheetKey, MAP_ENTITY_DEPTH } from '../../kernel/mapRenderer.ts'
 import { framesForFacing, characterScale } from '../../kernel/characterManifest.js'
-import { MAP_NPC_FRONT_DEPTH, MAP_NPC_BEHIND_DEPTH } from './mapNpcs.ts'
+import { MAP_PLAYER_DEPTH } from './mapWalk.ts'
 import { peerSheetKey } from './characterRig.js'
 import type { StandeeNote } from '../standees.ts'
 
@@ -299,18 +299,20 @@ function stampStandee(scene: Scene, s: BakedStandee) {
   return cutout(scene, { x: s.x, y: s.y }, figure, s.message)
 }
 
-// A Standee is a character-shaped cutout, so it sorts against the avatar like a
-// placed NPC (#295): one further south covers the avatar, one north draws behind.
-// It differs from an NPC in one case only — you can share its cell, because you
-// deploy a Standee on your own feet (#369) and a Standee never blocks. The strict
-// NPC rule (same row → behind) would then tuck the fresh cutout under your avatar,
-// so you'd never see the note you just left though a peer elsewhere does. So a
-// cutout on the avatar's own row draws in FRONT (`>=`), not behind.
+// A Standee is a character-shaped cutout, so it sorts by the same continuous
+// row-delta a peer avatar uses (`peerDepth`, #403): the whole delta — not a
+// two-way ±1 flag — so a cutout interleaves with peers by row. The old binary
+// depth sorted only against the LOCAL avatar, so a peer south of the cutout but
+// north of me fell below its +1 band and drew behind the cutout it stood in
+// front of. One case still differs from a peer (#369): you deploy a Standee on
+// your own feet and it never blocks, so a cutout on the avatar's own row draws
+// just in FRONT (delta 0 → +0.5) rather than tying and hiding under your avatar.
 export function sortStandees(
   standees: ReadonlyArray<{ tile: { x: number; y: number }; sprite: any }>,
   avatarRow: number,
 ) {
   for (const s of standees) {
-    s.sprite?.setDepth(s.tile.y >= avatarRow ? MAP_NPC_FRONT_DEPTH : MAP_NPC_BEHIND_DEPTH)
+    const delta = s.tile.y - avatarRow
+    s.sprite?.setDepth(MAP_PLAYER_DEPTH + (delta === 0 ? 0.5 : delta))
   }
 }
