@@ -3,10 +3,10 @@ import { packLayout } from '../scripts/trim-pack.mjs'
 import authored from '../public/maps/characters/packs/modern-interiors/authored-layout.json'
 
 describe('packLayout', () => {
-  it('dedups the authored rects into a compact 256×256 atlas', () => {
+  it('dedups the authored rects into a compact 256×384 atlas', () => {
     const { packed, slots } = packLayout(authored)
-    expect(slots).toHaveLength(28) // 4 idles + 4×6 walks, all distinct
-    expect(packed.atlas).toEqual({ width: 256, height: 256 })
+    expect(slots).toHaveLength(48) // 4×6 idles + 4×6 walks, all distinct
+    expect(packed.atlas).toEqual({ width: 256, height: 384 })
   })
 
   it('keeps every posture key and lands every frame inside the atlas', () => {
@@ -14,8 +14,8 @@ describe('packLayout', () => {
     expect(Object.keys(packed.postures)).toEqual(Object.keys(authored.postures))
     for (const frames of Object.values<any>(packed.postures)) {
       for (const r of frames) {
-        expect(r.x + r.w).toBeLessThanOrEqual(256)
-        expect(r.y + r.h).toBeLessThanOrEqual(256)
+        expect(r.x + r.w).toBeLessThanOrEqual(packed.atlas.width)
+        expect(r.y + r.h).toBeLessThanOrEqual(packed.atlas.height)
       }
     }
   })
