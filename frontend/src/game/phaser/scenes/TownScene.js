@@ -16,6 +16,7 @@ import bus from '../bus.js'
 import { resolveDirection, stepTile } from '../movement.ts'
 import { initialPerfStallState, observeFrame } from '../perfStall.ts'
 import { interiorPortal } from '../townInteractions.ts'
+import { updateProximityStamps } from '../../../kernel/entityLoader.ts'
 import { render, setupDevTools, preloadAssets, tilesetColumns } from '../townRenderer.ts'
 import { sightCells, sightZoneEvents, zoneEvents } from '../../../kernel/zones.ts'
 
@@ -337,6 +338,10 @@ export default class TownScene extends Phaser.Scene {
 
   update(_time, delta) {
     this.observePerf(delta)
+    // Swing every proximity object toward or away from us (#438) — the same
+    // catalog art behaves the same way on the generated hometown as it does on
+    // an authored map. Ahead of the guards below: pure theatre, no walkability.
+    updateProximityStamps(this, this.playerTile, delta)
     // Mid-warp (#254): refuse held-key steps while the exit-to-town fade plays,
     // so a banked step doesn't fire the instant the town lands.
     if (isTransitioning()) return

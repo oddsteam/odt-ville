@@ -12,6 +12,7 @@ import {
   objectAnimKey,
   objectTextureKey,
   stampEntity,
+  updateProximityStamps,
   type EntityObject,
 } from './entityLoader.ts'
 
@@ -36,6 +37,18 @@ const SPELL_BOOK: EntityObject = {
 
 const STILL: EntityObject = { id: 3, image: png(32, 32), footprint_w: 1, footprint_h: 1 }
 
+// The swinging door from the same pack (#438): 160×64 = 5 frames of 1×2 tiles,
+// frame 0 shut → frame 4 open, its playhead driven by the avatar's distance.
+const DOOR: EntityObject = {
+  id: 11,
+  image: png(160, 64),
+  footprint_w: 1,
+  footprint_h: 2,
+  frame_count: 5,
+  fps: 10,
+  playback: 'proximity',
+}
+
 // Enough Phaser to record what the loader and the stamp asked for. Loading a
 // texture registers its key, the way the real preload→create handoff does.
 function fakeScene() {
@@ -49,6 +62,7 @@ function fakeScene() {
     o.setDepth = () => o
     o.setDisplaySize = (w: number, h: number) => ((o.size = [w, h]), o)
     o.play = (k: string) => (o.played.push(k), o)
+    o.setFrame = (f: number) => ((o.frame = f), o)
     return o
   }
   return {
@@ -146,5 +160,78 @@ describe('stampEntity', () => {
   it('draws nothing for a never-loaded texture (ADR-0008)', () => {
     const scene = fakeScene()
     expect(stampEntity(scene, draw(7, SPELL_BOOK))).toBeNull()
+  })
+})
+
+describe('proximity playback', () => {
+  // A door stamped at its tile, with the avatar pushed far enough away to
+  // start shut. One tick of `ms` at 10fps moves the playhead ms/100 frames.
+  const stampDoor = () => {
+    const scene = fakeScene()
+    loadObjectTextures(scene, [DOOR])
+    return { scene, sprite: stampEntity(scene, draw(11, DOOR)) }
+  }
+  const near = { x: 2, y: 3 }
+  const far = { x: 40, y: 40 }
+
+  it('stamps a sprite that holds shut instead of playing a loop', () => {
+    const { scene, sprite } = stampDoor()
+
+    expect(sprite.type).toBe('sprite')
+    expect(sprite.played).toEqual([])
+    expect(scene.animsCreated).toEqual([])
+    expect(sprite.frame).toBe(0)
+  })
+
+  it('swings open while the avatar is near and holds at the last frame', () => {
+    const { scene, sprite } = stampDoor()
+
+    updateProximityStamps(scene, near, 100)
+    expect(sprite.frame).toBe(1)
+    updateProximityStamps(scene, near, 5000)
+    expect(sprite.frame).toBe(4)
+  })
+
+  it('reverses from where it got to when the avatar leaves, with no snap', () => {
+    const { scene, sprite } = stampDoor()
+
+    updateProximityStamps(scene, near, 200)
+    expect(sprite.frame).toBe(2)
+    updateProximityStamps(scene, far, 100)
+    expect(sprite.frame).toBe(1)
+    updateProximityStamps(scene, far, 5000)
+    expect(sprite.frame).toBe(0)
+  })
+
+  it('leaves a looping object entirely alone', () => {
+    const scene = fakeScene()
+    loadObjectTextures(scene, [SPELL_BOOK])
+    const sprite = stampEntity(scene, draw(7, SPELL_BOOK))
+    updateProximityStamps(scene, near, 100)
+
+    expect(sprite.played).toEqual([objectAnimKey(7)])
+    expect(sprite.frame).toBeUndefined()
+  })
+
+  it('reads playback off the catalog object, so two placements behave alike', () => {
+    const scene = fakeScene()
+    loadObjectTextures(scene, [DOOR])
+    const a = stampEntity(scene, draw(11, DOOR))
+    const b = stampEntity(scene, { ...draw(11, DOOR), x: 20, y: 3 })
+
+    updateProximityStamps(scene, { x: 20, y: 3 }, 100)
+    expect(a.frame).toBe(0)
+    expect(b.frame).toBe(1)
+  })
+
+  // A scene is reused across `scene.start`, so a door left over from the map we
+  // just walked out of would be driven forever against the new map's avatar.
+  it('forgets the previous map’s doors when a scene restarts its preload', () => {
+    const { scene, sprite } = stampDoor()
+    updateProximityStamps(scene, near, 100)
+    loadObjectTextures(scene, [DOOR])
+    updateProximityStamps(scene, near, 100)
+
+    expect(sprite.frame).toBe(1)
   })
 })

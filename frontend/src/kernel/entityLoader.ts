@@ -12,6 +12,7 @@
 // tests can resolve references without booting Phaser.
 
 import { TILE } from './constants.ts'
+import { advancePlayhead, swingDirection, type Tile } from './proximityPlayback.ts'
 
 // The Phaser scene, structurally — the loader touches only load/textures/add,
 // so the scene stays loose (same convention as town/mapRenderer).
@@ -98,6 +99,11 @@ function pngSize(dataUrl: string): { w: number; h: number } | null {
 // in create() without either producer having to carry animation through its
 // draw list. `frame_count: 1` takes the still path, byte-identical to pre-#435.
 export function loadObjectTextures(scene: Scene, objects: readonly EntityObject[]) {
+  // Proximity stamps are sprite handles, so they can't outlive the map that
+  // drew them. A scene is *reused* across `scene.start` (the constructor runs
+  // once), so clear them here — preload always runs before the create() that
+  // registers new ones, on every producer and every restart.
+  scene._proximityStamps = []
   for (const o of objects) {
     if (!o?.image) continue
     const key = objectTextureKey(o.id)
@@ -116,6 +122,11 @@ export function loadObjectTextures(scene: Scene, objects: readonly EntityObject[
       animKey: objectAnimKey(o.id),
       frames: Array.from({ length: frameCount }, (_, frame) => ({ key, frame })),
       fps: o.fps ?? DEFAULT_FPS,
+      // Playback is a property of the *catalog object* (#438, ADR-0019), never
+      // of a placement — so a door behaves like a door on every map that
+      // places it, the same argument as the walk mask.
+      playback: o.playback ?? 'loop',
+      frameCount,
     })
   }
 }
@@ -147,10 +158,41 @@ export function stampEntity(scene: Scene, d: EntityDraw) {
     .setDepth(d.depth)
     .setDisplaySize((d.w ?? 1) * TILE, (d.h ?? 1) * TILE)
   if (!anim) return stamp
+  // A proximity object (#438) has no Phaser animation at all: its playhead is
+  // driven by the avatar's distance in updateProximityStamps, which is the only
+  // way to hold at either end and reverse mid-swing without a snap. It starts
+  // shut on frame 0 and is remembered with the tile it was stamped on.
+  if (anim.playback === 'proximity') {
+    ;(scene._proximityStamps ??= []).push({
+      sprite: stamp.setFrame(0),
+      tile: { x: d.x, y: d.y },
+      fps: anim.fps,
+      frameCount: anim.frameCount,
+      playhead: 0,
+    })
+    return stamp
+  }
   // One animation per object id, registered on first stamp: two placements of
   // the same object share it.
   if (!scene.anims.exists(anim.animKey)) {
     scene.anims.create({ key: anim.animKey, frames: anim.frames, frameRate: anim.fps, repeat: -1 })
   }
   return stamp.play(anim.animKey)
+}
+
+// Drive every proximity stamp's playhead one frame — forward while the avatar
+// is within range, back once they leave, held at either end (#438). Call from a
+// scene's update() with the avatar's tile; a scene with no such objects does
+// nothing. Purely cosmetic: no walkability, no collision, no server state
+// changes here, and the door's cell stays crossable at every frame.
+export function updateProximityStamps(scene: Scene, avatar: Tile, deltaMs: number) {
+  for (const s of scene._proximityStamps ?? []) {
+    const direction = swingDirection(avatar, s.tile)
+    s.playhead = advancePlayhead(s.playhead, direction, {
+      fps: s.fps,
+      frameCount: s.frameCount,
+      deltaMs,
+    })
+    s.sprite.setFrame(Math.round(s.playhead))
+  }
 }
