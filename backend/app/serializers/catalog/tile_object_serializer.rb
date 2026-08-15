@@ -35,6 +35,13 @@ module Catalog
         # Impassable cell borders (#53): newline-joined hex-digit rows in the
         # column, split back into a row-major array. Nil when none authored.
         edge_mask: obj.edge_mask&.split("\n"),
+        # Animated art (#435, ADR-0019): `image` is a horizontal frame strip
+        # when frame_count > 1 — the frame size is derived from the image, so
+        # nothing else needs serializing. On the summary because the decorate
+        # palette lists summaries and the full object spreads them.
+        frame_count: obj.frame_count,
+        fps: obj.fps,
+        playback: obj.playback,
         active: obj.active,
         updated_at: obj.updated_at
       }

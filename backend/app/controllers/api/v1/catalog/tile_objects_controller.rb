@@ -69,7 +69,13 @@ module Api
             # opaque jsonb document, so permit its nested structure wholesale;
             # absent key keeps the stored composition, so re-saving a flat object
             # (no composition sent) never clobbers one already recorded.
-            composition: params.key?(:composition) ? params.permit(composition: {})[:composition].to_h : obj.composition
+            composition: params.key?(:composition) ? params.permit(composition: {})[:composition].to_h : obj.composition,
+            # Animated art (#435, ADR-0019) — a frame strip in `image` plus how
+            # to play it. Absent keys keep the stored values, so a re-save from
+            # a still-only editor never flattens an animated object.
+            frame_count: params.key?(:frame_count) ? params[:frame_count] : obj.frame_count,
+            fps: params.key?(:fps) ? params[:fps] : obj.fps,
+            playback: params.key?(:playback) ? params[:playback] : obj.playback
           )
           obj.save!
           obj.activate! unless params[:active] == false
