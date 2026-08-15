@@ -215,7 +215,7 @@ button:disabled {
 
 .char-select-head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
 }
@@ -225,9 +225,23 @@ button:disabled {
   margin: 0;
 }
 
+/* Back-link wears the same pixel button chrome as real buttons (#396) so it
+   reads as a way out, not body text. */
 .char-select-head a {
-  color: var(--paper);
-  font-size: 8px;
+  flex-shrink: 0;
+  text-decoration: none;
+  font-family: var(--font-ui);
+  border: 3px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  padding: 7px 12px;
+  font-size: 10px;
+  box-shadow: 3px 3px 0 var(--ink);
+}
+
+.char-select-head a:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--ink);
 }
 
 .char-select-hint {
