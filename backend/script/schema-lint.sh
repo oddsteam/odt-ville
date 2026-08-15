@@ -52,6 +52,7 @@ prefixes=(
 fk_allowlist=(
   "boards|houses"
   "catalog_npcs|character_manifests"
+  "character_manifests|users"
   "content_items|boards"
   "houses|companies"
   "houses|tile_objects"
