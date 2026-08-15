@@ -1,6 +1,11 @@
 import { describe, expect, test } from 'vitest'
 
-import { hasAdmin, rowBadges, sourceLabel } from './roleBadges.ts'
+import { hasAdmin, revokeControl, rowBadges, sourceLabel } from './roleBadges.ts'
+
+const [appBadge, keycloakBadge] = rowBadges([
+  { role: 'admin', source: 'app', granted_by: 'Ivy Issuer', granted_at: '2026-08-15T00:00:00Z' },
+  { role: 'admin', source: 'keycloak' },
+])
 
 describe('sourceLabel', () => {
   // The App/Keycloak distinction is the whole reason the badge carries a
@@ -39,5 +44,29 @@ describe('hasAdmin', () => {
 
   test('is false for a user with no admin badge', () => {
     expect(hasAdmin([])).toBe(false)
+  })
+})
+
+describe('revokeControl', () => {
+  // An App grant on someone else's row is the one revocable case.
+  test('enables revoke for an App grant on another user', () => {
+    expect(revokeControl(appBadge, false)).toEqual({
+      enabled: true,
+      title: 'Revoke this admin grant',
+    })
+  })
+
+  // Self-lockout guard: you cannot revoke your own admin (the server 422s too).
+  test('disables revoke on your own row, pointing at the lockout', () => {
+    const control = revokeControl(appBadge, true)
+    expect(control.enabled).toBe(false)
+    expect(control.title).toMatch(/your own/i)
+  })
+
+  // A Keycloak realm role is not ours to remove — the tooltip names Keycloak.
+  test('disables revoke for a Keycloak badge, pointing at Keycloak', () => {
+    const control = revokeControl(keycloakBadge, false)
+    expect(control.enabled).toBe(false)
+    expect(control.title).toMatch(/Keycloak/i)
   })
 })

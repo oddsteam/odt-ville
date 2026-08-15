@@ -51,6 +51,10 @@ Rails.application.routes.draw do
         # Grant an App role from the console (#431): admin-gated, stamps the
         # acting admin as granted_by. Only `admin` is grantable for now.
         post "admin/users/:id/roles", to: "roles#create"
+        # Revoke an App role (#432): admin-gated. Refuses self-revoke (422) so an
+        # admin can't lock themselves out, and 404s a role the user does not hold
+        # as an App grant — a Keycloak-only admin cannot be silently "revoked".
+        delete "admin/users/:id/roles/:role", to: "roles#destroy"
       end
 
       # The GameSession domain (ADR-0010) — controller under

@@ -1,7 +1,7 @@
-// AdminUsersService.grant — POST /admin/users/:id/roles (#431). Pins the
-// request PATH and body the service builds, and that it decodes the updated
-// roster row the server returns, so the page can flip the badge without a
-// reload.
+// AdminUsersService.grant / revoke — POST and DELETE /admin/users/:id/roles
+// (#431/#432). Pins the request PATH (and body, for grant) the service builds,
+// and that it decodes the updated roster row the server returns, so the page can
+// flip the badge without a reload.
 
 import { describe, expect, it } from 'vitest'
 import * as Effect from 'effect/Effect'
@@ -44,5 +44,28 @@ describe('AdminUsersService.grant', () => {
     if (Exit.isSuccess(exit)) {
       expect(exit.value.roles[0]).toMatchObject({ role: 'admin', source: 'app', granted_by: 'Test Admin' })
     }
+  })
+})
+
+// Fake Http answering a revoke with the demoted row (no roles left), recording
+// each DELETE path.
+function revokingHttp(seen: Array<{ path: string }>) {
+  const del = (path: string): Effect.Effect<unknown, HttpError> => {
+    seen.push({ path })
+    return Effect.succeed({ id: 7, name: 'Tara Target', email: 'tara@example.test', roles: [] })
+  }
+  const client = { get: del, post: del, put: del, patch: del, del }
+  return Layer.succeed(Http, client as never)
+}
+
+describe('AdminUsersService.revoke', () => {
+  it('deletes the role from the user roles collection and decodes the demoted row', async () => {
+    const seen: Array<{ path: string }> = []
+    const exit = await Effect.runPromiseExit(
+      Effect.provide(AdminUsersService.revoke(7, 'admin'), revokingHttp(seen)),
+    )
+    expect(Exit.isSuccess(exit)).toBe(true)
+    expect(seen).toEqual([{ path: '/admin/users/7/roles/admin' }])
+    if (Exit.isSuccess(exit)) expect(exit.value.roles).toEqual([])
   })
 })

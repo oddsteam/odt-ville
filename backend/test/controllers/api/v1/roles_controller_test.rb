@@ -61,6 +61,48 @@ module Api
 
         assert_response :unauthorized
       end
+
+      # DELETE /api/v1/admin/users/:id/roles/:role (#432): revoke an App grant,
+      # with the guardrails that stop it becoming a lockout or a false "revoked".
+      test "revokes an App grant, removes the row, and returns the updated user" do
+        ::Auth::UserRole.create!(user: @target, role: "admin", granted_by: @admin)
+
+        assert_difference -> { ::Auth::UserRole.count }, -1 do
+          delete "/api/v1/admin/users/#{@target.id}/roles/admin", headers: auth(@admin, roles: %w[admin])
+        end
+
+        assert_response :success
+        assert_nil ::Auth::UserRole.find_by(user: @target, role: "admin")
+        assert_empty json[:roles]
+      end
+
+      test "refuses self-revoke with 422 and leaves the grant intact" do
+        ::Auth::UserRole.create!(user: @admin, role: "admin", granted_by: @admin)
+
+        assert_no_difference -> { ::Auth::UserRole.count } do
+          delete "/api/v1/admin/users/#{@admin.id}/roles/admin", headers: auth(@admin, roles: %w[admin])
+        end
+
+        assert_response :unprocessable_entity
+        assert json[:error].present?
+      end
+
+      test "revoking a role the user does not hold as an App grant is a 404, not a silent 200" do
+        delete "/api/v1/admin/users/#{@target.id}/roles/admin", headers: auth(@admin, roles: %w[admin])
+
+        assert_response :not_found
+        assert json[:error].present?
+      end
+
+      test "returns 403 for a signed-in non-admin, and revokes nothing" do
+        ::Auth::UserRole.create!(user: @target, role: "admin", granted_by: @admin)
+
+        assert_no_difference -> { ::Auth::UserRole.count } do
+          delete "/api/v1/admin/users/#{@target.id}/roles/admin", headers: auth(@admin)
+        end
+
+        assert_response :forbidden
+      end
     end
   end
 end

@@ -1,6 +1,6 @@
-// Effect-based admin users service (#430, #431). The read roster plus the grant
-// write; the revoke write arrives in #432. Callers `runEdge(...)` at the React
-// boundary; no React, no DOM. Mirrors the org and viewer service shapes.
+// Effect-based admin users service (#430, #431, #432). The read roster plus the
+// grant and revoke writes. Callers `runEdge(...)` at the React boundary; no
+// React, no DOM. Mirrors the org and viewer service shapes.
 
 import * as Effect from 'effect/Effect'
 import * as Schema from 'effect/Schema'
@@ -39,4 +39,22 @@ export const grant = (
     )
   })
 
-export const AdminUsersService = { list, grant } as const
+// DELETE /admin/users/:id/roles/:role -> revoke an App grant and get the user's
+// updated roster row back, so the page flips the badge in place without a reload
+// (#432). Admin-gated server-side; refuses self-revoke (422) and 404s a role the
+// user does not hold as an App grant.
+export const revoke = (
+  userId: number,
+  role: string,
+): Effect.Effect<AdminUser, HttpError, Http> =>
+  Effect.gen(function* () {
+    const http = yield* Http
+    const path = `/admin/users/${userId}/roles/${role}`
+    const raw = yield* http.del(path)
+    return yield* Effect.mapError(
+      Schema.decodeUnknown(AdminUser)(raw),
+      (e) => new DecodeError({ path, reason: e instanceof Error ? e.message : String(e) }),
+    )
+  })
+
+export const AdminUsersService = { list, grant, revoke } as const

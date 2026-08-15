@@ -38,3 +38,24 @@ export function rowBadges(roles: readonly RoleBadge[]): readonly Badge[] {
 export function hasAdmin(roles: readonly RoleBadge[]): boolean {
   return roles.some((r) => r.role === 'admin')
 }
+
+export interface RevokeControl {
+  readonly enabled: boolean
+  // The tooltip: the reason it is refused when disabled, a plain label otherwise.
+  readonly title: string
+}
+
+// Whether a badge's grant may be revoked in this console, and the tooltip that
+// says why not (#432). An App grant is revocable — except your own, which would
+// lock you out (the server refuses that too, with a 422). A Keycloak realm role
+// is not ours to remove: it lives in the token, not our DB, so the tooltip
+// points at Keycloak, where it must actually be removed.
+export function revokeControl(badge: Badge, isSelf: boolean): RevokeControl {
+  if (badge.source === sourceLabel('keycloak')) {
+    return { enabled: false, title: 'This admin comes from Keycloak — remove it in Keycloak.' }
+  }
+  if (isSelf) {
+    return { enabled: false, title: 'You cannot revoke your own admin role.' }
+  }
+  return { enabled: true, title: 'Revoke this admin grant' }
+}

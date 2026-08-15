@@ -31,6 +31,30 @@ module Api
 
           render json: user_json(user, keycloak: surfaced_keycloak(user))
         end
+
+        # DELETE /api/v1/admin/users/:id/roles/:role (#432): revoke an App grant.
+        # Two guardrails stop this becoming a lockout or a false "revoked":
+        #  - self-revoke is refused (422) so an admin can't remove their own gate;
+        #  - a role the user does not hold as an App grant is a 404, never a silent
+        #    no-op — a Keycloak-sourced admin lives in the token, not our DB, so
+        #    deleting the missing row would read as "revoked" while access remains.
+        def destroy
+          user = ::Auth::User.find(params[:id])
+
+          if current_user && user.id == current_user.id
+            return render json: { error: "You cannot revoke your own admin role." },
+                          status: :unprocessable_entity
+          end
+
+          grant = ::Auth::UserRole.find_by(user: user, role: params[:role].to_s)
+          unless grant
+            return render json: { error: "No App #{params[:role]} grant to revoke." },
+                          status: :not_found
+          end
+
+          grant.destroy!
+          render json: user_json(user, keycloak: surfaced_keycloak(user))
+        end
       end
     end
   end

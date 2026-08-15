@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { AdminUsersService } from '../auth/service.ts'
+import { ViewerService } from '../viewer/service.ts'
 import type { AdminUser } from '../auth/schema.ts'
-import { hasAdmin, rowBadges } from './roleBadges.ts'
+import { hasAdmin, revokeControl, rowBadges } from './roleBadges.ts'
 import { runEdge } from '../lib/runEdge.ts'
 
 // The read-only admin roster (#430): who has logged in, and who is an admin
@@ -24,10 +25,16 @@ export default function UsersAdminPage() {
   // server's updated row, so the badge flips without a reload; on failure the
   // row's true badges stay put and the error appears beside them (#431).
   const [granting, setGranting] = useState<number | null>(null)
+  const [revoking, setRevoking] = useState<number | null>(null)
   const [rowError, setRowError] = useState<{ id: number; message: string } | null>(null)
+  // The caller's own user id, so the revoke control is disabled on their own row
+  // — you cannot revoke your own admin without locking yourself out (#432). The
+  // server refuses it too (422); this just stops the button being offered.
+  const [meId, setMeId] = useState<number | null>(null)
 
   useEffect(() => {
     runEdge(AdminUsersService.list()).then(setUsers, (e: Error) => setError(e.message))
+    runEdge(ViewerService.get()).then((v) => setMeId(v.user.id), () => {})
   }, [])
 
   function makeAdmin(id: number) {
@@ -40,6 +47,23 @@ export default function UsersAdminPage() {
       },
       (e: Error) => {
         setGranting(null)
+        setRowError({ id, message: e.message })
+      },
+    )
+  }
+
+  function revoke(id: number, role: string) {
+    setRevoking(id)
+    setRowError(null)
+    runEdge(AdminUsersService.revoke(id, role)).then(
+      (updated) => {
+        setRevoking(null)
+        setUsers((prev) => prev?.map((u) => (u.id === id ? updated : u)) ?? prev)
+      },
+      (e: Error) => {
+        setRevoking(null)
+        // Leave the row's true badges put; a failed revoke must never leave the
+        // badge showing the wrong state (#432).
         setRowError({ id, message: e.message })
       },
     )
@@ -80,13 +104,24 @@ export default function UsersAdminPage() {
                   <td>
                     {badges.length === 0
                       ? '—'
-                      : badges.map((b) => (
-                          <span key={b.key}>
-                            {b.role} ({b.source})
-                            {b.grantedBy ? ` — granted by ${b.grantedBy}` : ''}
-                            {b.grantedAt ? ` on ${b.grantedAt.slice(0, 10)}` : ''}{' '}
-                          </span>
-                        ))}
+                      : badges.map((b) => {
+                          const revoke_ = revokeControl(b, u.id === meId)
+                          return (
+                            <span key={b.key}>
+                              {b.role} ({b.source})
+                              {b.grantedBy ? ` — granted by ${b.grantedBy}` : ''}
+                              {b.grantedAt ? ` on ${b.grantedAt.slice(0, 10)}` : ''}{' '}
+                              <button
+                                type="button"
+                                disabled={!revoke_.enabled || revoking === u.id}
+                                title={revoke_.title}
+                                onClick={() => revoke(u.id, b.role)}
+                              >
+                                {revoking === u.id ? 'Revoking…' : 'Revoke'}
+                              </button>{' '}
+                            </span>
+                          )
+                        })}
                   </td>
                   <td>
                     {hasAdmin(u.roles) ? null : (
