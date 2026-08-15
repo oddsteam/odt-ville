@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { AdminUsersService } from '../auth/service.ts'
 import type { AdminUser } from '../auth/schema.ts'
-import { rowBadges } from './roleBadges.ts'
+import { hasAdmin, rowBadges } from './roleBadges.ts'
 import { runEdge } from '../lib/runEdge.ts'
 
 // The read-only admin roster (#430): who has logged in, and who is an admin
@@ -19,10 +19,31 @@ import { runEdge } from '../lib/runEdge.ts'
 export default function UsersAdminPage() {
   const [users, setUsers] = useState<readonly AdminUser[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Per-row grant state, keyed by user id: the id currently being granted, and
+  // the last grant error to render inline on its row. On success we swap in the
+  // server's updated row, so the badge flips without a reload; on failure the
+  // row's true badges stay put and the error appears beside them (#431).
+  const [granting, setGranting] = useState<number | null>(null)
+  const [rowError, setRowError] = useState<{ id: number; message: string } | null>(null)
 
   useEffect(() => {
     runEdge(AdminUsersService.list()).then(setUsers, (e: Error) => setError(e.message))
   }, [])
+
+  function makeAdmin(id: number) {
+    setGranting(id)
+    setRowError(null)
+    runEdge(AdminUsersService.grant(id, 'admin')).then(
+      (updated) => {
+        setGranting(null)
+        setUsers((prev) => prev?.map((u) => (u.id === id ? updated : u)) ?? prev)
+      },
+      (e: Error) => {
+        setGranting(null)
+        setRowError({ id, message: e.message })
+      },
+    )
+  }
 
   if (error) return <p className="admin-msg admin-msg-error">{error}</p>
   if (!users) return <p className="admin-msg">Loading users…</p>
@@ -46,6 +67,7 @@ export default function UsersAdminPage() {
               <th>Name</th>
               <th>Email</th>
               <th>Roles</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -60,9 +82,25 @@ export default function UsersAdminPage() {
                       ? '—'
                       : badges.map((b) => (
                           <span key={b.key}>
-                            {b.role} ({b.source}){' '}
+                            {b.role} ({b.source})
+                            {b.grantedBy ? ` — granted by ${b.grantedBy}` : ''}
+                            {b.grantedAt ? ` on ${b.grantedAt.slice(0, 10)}` : ''}{' '}
                           </span>
                         ))}
+                  </td>
+                  <td>
+                    {hasAdmin(u.roles) ? null : (
+                      <button
+                        type="button"
+                        disabled={granting === u.id}
+                        onClick={() => makeAdmin(u.id)}
+                      >
+                        {granting === u.id ? 'Granting…' : 'Make admin'}
+                      </button>
+                    )}
+                    {rowError?.id === u.id ? (
+                      <span className="admin-msg-error"> {rowError.message}</span>
+                    ) : null}
                   </td>
                 </tr>
               )

@@ -13,30 +13,13 @@ module Api
       # own row also carries their Keycloak roles. That asymmetry is a hard
       # limit, not an oversight: there is no way to read another user's JWT.
       class UsersController < BaseController
+        include RosterSerialization
+
         before_action -> { require_role!("admin") }
 
-        # The one authorization role this console surfaces. `admin` is the only
-        # role the gate checks (#94) and the only one app grants allow (#431),
-        # so a Keycloak role outside it is realm plumbing (offline_access,
-        # default-roles-…) and not a badge worth showing.
-        SURFACED_ROLES = %w[admin].freeze
-
         def index
-          my_keycloak = (token_claims&.roles || []) & SURFACED_ROLES
-          render json: ::Auth::User.includes(:user_roles).order(:name).map { |user|
-            user_json(user, keycloak: user.id == current_user.id ? my_keycloak : [])
-          }
-        end
-
-        private
-
-        def user_json(user, keycloak:)
-          {
-            id: user.id,
-            name: user.name,
-            email: user.email,
-            roles: user.user_roles.map { |r| { role: r.role, source: "app" } } +
-                   keycloak.map { |r| { role: r, source: "keycloak" } }
+          render json: ::Auth::User.includes(user_roles: :granted_by).order(:name).map { |user|
+            user_json(user, keycloak: surfaced_keycloak(user))
           }
         end
       end

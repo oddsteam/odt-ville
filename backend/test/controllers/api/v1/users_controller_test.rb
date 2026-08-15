@@ -53,7 +53,29 @@ module Api
         get "/api/v1/admin/users", headers: auth(@admin, roles: %w[admin])
 
         gil = json.find { _1[:name] == "Gil Granted" }
-        assert_equal [{ role: "admin", source: "app" }], gil[:roles]
+        assert_equal 1, gil[:roles].size
+        badge = gil[:roles].first
+        assert_equal "admin", badge[:role]
+        assert_equal "app", badge[:source]
+        # A bootstrap/console grant has no actor; the audit key is still present.
+        assert_nil badge[:granted_by]
+        assert badge.key?(:granted_at)
+      end
+
+      # The audit line the roster shows for an App grant (#431): who issued it
+      # and when. Keycloak badges carry neither — they are not our grant.
+      test "an app grant carries its granter and grant date for the audit line" do
+        granter = @company.users.create!(name: "Ivy Issuer", role: "branch_employee",
+                                         external_id: SecureRandom.uuid, email: "ivy@example.test")
+        target = @company.users.create!(name: "Gil Granted", role: "branch_employee",
+                                        external_id: SecureRandom.uuid, email: "gil@example.test")
+        Auth::UserRole.create!(user: target, role: "admin", granted_by: granter)
+
+        get "/api/v1/admin/users", headers: auth(@admin, roles: %w[admin])
+
+        badge = json.find { _1[:name] == "Gil Granted" }[:roles].first
+        assert_equal "Ivy Issuer", badge[:granted_by]
+        assert badge[:granted_at].present?
       end
 
       test "the requesting user's own Keycloak role is tagged source keycloak" do
