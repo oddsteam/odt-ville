@@ -141,6 +141,19 @@ export const saveLook = (
     return yield* decode(path, decodeActive)(raw)
   })
 
+// PATCH /character_manifests/:id -> update one of the caller's own Looks in
+// place (#424). Same id, so the worn pointer and peer refs (#397) survive.
+export const updateLook = (
+  id: number,
+  data: unknown,
+): Effect.Effect<ActiveManifest, HttpError, Http> =>
+  Effect.gen(function* () {
+    const http = yield* Http
+    const path = `/character_manifests/${id}`
+    const raw = yield* http.patch(path, { manifest: data })
+    return yield* decode(path, decodeActive)(raw)
+  })
+
 // DELETE /character_manifests/:id -> drop one of the caller's own Looks (#398).
 export const deleteLook = (id: number): Effect.Effect<void, HttpError, Http> =>
   Effect.gen(function* () {
@@ -157,6 +170,7 @@ export const CharacterService = {
   getById,
   save,
   saveLook,
+  updateLook,
   deleteLook,
 } as const
 

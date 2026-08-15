@@ -323,7 +323,13 @@ button:disabled {
   border-radius: 6px;
 }
 
+.builder-saves {
+  display: flex;
+  gap: 6px;
+}
+
 .builder-save {
+  flex: 1;
   font-size: 10px;
 }
 

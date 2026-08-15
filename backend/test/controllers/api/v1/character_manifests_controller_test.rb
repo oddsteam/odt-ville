@@ -267,6 +267,55 @@ module Api
         assert_equal active.id, json[:id]
       end
 
+      # Slice 6 — update a worn Look in place (#424): same id, so the worn
+      # pointer and peer references (#397) survive; slot rules re-run; only the
+      # owner's own Looks are reachable.
+
+      test "updating a Look replaces its data in place and keeps the id" do
+        look = ::Character::CharacterManifest.create!(name: "Mine", owner: @user, data: { "parts" => valid_parts })
+        new_parts = valid_parts(accessories: 2)
+        assert_no_difference "::Character::CharacterManifest.count" do
+          patch "/api/v1/character_manifests/#{look.id}", params: look_params(parts: new_parts),
+                as: :json, headers: auth(@user)
+        end
+        assert_response :success
+        assert_equal look.id, json[:id]
+        assert_equal new_parts, look.reload.data["parts"]
+      end
+
+      test "updating a worn Look survives the worn pointer" do
+        worn = ::Character::CharacterManifest.create!(name: "Worn", owner: @user, data: { "parts" => valid_parts })
+        @user.update!(character_manifest: worn)
+        patch "/api/v1/character_manifests/#{worn.id}", params: look_params(parts: valid_parts(accessories: 2)),
+              as: :json, headers: auth(@user)
+        assert_response :success
+        assert_equal worn.id, @user.reload.character_manifest_id
+      end
+
+      test "updating a Look re-runs the slot rules" do
+        look = ::Character::CharacterManifest.create!(name: "Mine", owner: @user, data: { "parts" => valid_parts })
+        patch "/api/v1/character_manifests/#{look.id}", params: look_params(parts: %w[eyes-01]),
+              as: :json, headers: auth(@user)
+        assert_response :unprocessable_entity
+        assert_equal valid_parts, look.reload.data["parts"]
+      end
+
+      test "a user cannot update another user's Look" do
+        _, other = setup_company(name: "Other")
+        theirs = ::Character::CharacterManifest.create!(name: "Theirs", owner: other, data: { "parts" => valid_parts })
+        patch "/api/v1/character_manifests/#{theirs.id}", params: look_params(parts: valid_parts(accessories: 2)),
+              as: :json, headers: auth(@user)
+        assert_response :not_found
+        assert_equal valid_parts, theirs.reload.data["parts"]
+      end
+
+      test "a user cannot update a house-owned manifest" do
+        house = ::Character::CharacterManifest.create!(name: "House", data: { "parts" => valid_parts })
+        patch "/api/v1/character_manifests/#{house.id}", params: look_params(parts: valid_parts(accessories: 2)),
+              as: :json, headers: auth(@user)
+        assert_response :not_found
+      end
+
       # Slice 5 — a user cannot wear another user's personal Look
 
       test "a user cannot select another user's personal Look" do
