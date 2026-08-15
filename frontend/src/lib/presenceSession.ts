@@ -9,20 +9,25 @@
 import type { PresenceHandle } from './presenceClient.ts'
 
 export interface PresenceSessionDeps {
-  viewerId: () => Promise<string | null>
+  // The local viewer: the id presence filters its own echoed frames by, plus
+  // the display name MapScene labels the local avatar with (their own
+  // nameplate). Null when the viewer is unknown — presence stays off.
+  viewer: () => Promise<{ id: string; name: string } | null>
   connect: (slug: string) => PresenceHandle | null
   // Fetch a peer's character by the manifest id their frames carry (#266).
   loadManifest: (id: number) => Promise<unknown>
 }
 
 // The registry bundle MapScene reads: the handle, the id it filters its own
-// echoed frames by, and the peer-character lookup it renders them with.
+// echoed frames by, the local name it labels the own avatar with, and the
+// peer-character lookup it renders peers with.
 export type OpenPresence = PresenceHandle & {
   ownId: string
+  ownName: string
   loadManifest: (id: number) => Promise<unknown>
 }
 
-export function presenceSession({ viewerId, connect, loadManifest }: PresenceSessionDeps) {
+export function presenceSession({ viewer, connect, loadManifest }: PresenceSessionDeps) {
   let current: PresenceHandle | null = null
 
   const close = () => {
@@ -36,10 +41,10 @@ export function presenceSession({ viewerId, connect, loadManifest }: PresenceSes
   const open = async (map: { slug: string; multiplayer?: boolean }): Promise<OpenPresence | null> => {
     close()
     if (!map.multiplayer) return null
-    const ownId = await viewerId()
-    if (!ownId) return null
+    const me = await viewer()
+    if (!me) return null
     current = connect(map.slug)
-    return current && { ownId, loadManifest, ...current }
+    return current && { ownId: me.id, ownName: me.name, loadManifest, ...current }
   }
 
   return { open, close }
