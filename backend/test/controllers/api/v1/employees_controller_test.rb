@@ -19,7 +19,7 @@ module Api
       # #429: a DB-granted admin (a user_roles row) passes the gate with no
       # Keycloak realm role on the token — the whole point of the union.
       test "a DB admin grant passes the gate without the realm role" do
-        Auth::UserRole.create!(user: @user, role: "admin")
+        ::Auth::UserRole.create!(user: @user, role: "admin")
 
         get "/api/v1/org/employees", headers: auth(@user)
 

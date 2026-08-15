@@ -61,7 +61,7 @@ module Api
       # the union of the token's realm roles and the caller's user_roles grants,
       # so a DB grant reaches /me (and the gate) with no re-login.
       test "the response merges DB-granted roles with the token's realm roles" do
-        Auth::UserRole.create!(user: @user, role: "curator")
+        ::Auth::UserRole.create!(user: @user, role: "curator")
 
         get "/api/v1/me", headers: auth(@user, roles: ["admin"])
 
@@ -71,7 +71,7 @@ module Api
 
       # A grant the token already carries must not double up in the merged list.
       test "a DB grant that duplicates a realm role is de-duplicated" do
-        Auth::UserRole.create!(user: @user, role: "admin")
+        ::Auth::UserRole.create!(user: @user, role: "admin")
 
         get "/api/v1/me", headers: auth(@user, roles: ["admin"])
 

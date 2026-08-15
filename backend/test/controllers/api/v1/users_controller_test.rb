@@ -23,7 +23,7 @@ module Api
       end
 
       test "a DB admin grant passes the gate without the realm role" do
-        Auth::UserRole.create!(user: @admin, role: "admin")
+        ::Auth::UserRole.create!(user: @admin, role: "admin")
 
         get "/api/v1/admin/users", headers: auth(@admin)
 
@@ -48,7 +48,7 @@ module Api
       test "an app-granted admin badge is tagged source app for any user" do
         target = @company.users.create!(name: "Gil Granted", role: "branch_employee",
                                         external_id: SecureRandom.uuid, email: "gil@example.test")
-        Auth::UserRole.create!(user: target, role: "admin")
+        ::Auth::UserRole.create!(user: target, role: "admin")
 
         get "/api/v1/admin/users", headers: auth(@admin, roles: %w[admin])
 
@@ -69,7 +69,7 @@ module Api
                                          external_id: SecureRandom.uuid, email: "ivy@example.test")
         target = @company.users.create!(name: "Gil Granted", role: "branch_employee",
                                         external_id: SecureRandom.uuid, email: "gil@example.test")
-        Auth::UserRole.create!(user: target, role: "admin", granted_by: granter)
+        ::Auth::UserRole.create!(user: target, role: "admin", granted_by: granter)
 
         get "/api/v1/admin/users", headers: auth(@admin, roles: %w[admin])
 
