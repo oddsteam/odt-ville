@@ -20,7 +20,7 @@ import { peerSheetKey } from './characterRig.js'
 import { TILE } from '../constants.js'
 import * as mapStandees from './mapStandees.ts'
 import { npcBlockedFor } from './mapNpcs.ts'
-import { mapWalkable, MAP_PLAYER_DEPTH } from './mapWalk.ts'
+import { mapWalkable, MAP_PLAYER_DEPTH, peerDepth } from './mapWalk.ts'
 import { standeeSheetKey } from '../../kernel/mapRenderer.ts'
 import { normalizeManifest } from '../../kernel/characterManifest.js'
 
@@ -421,5 +421,31 @@ describe('sortStandees', () => {
     sortStandees([onMe], 3)
 
     expect(onMe.sprite.depth).toBeGreaterThan(MAP_PLAYER_DEPTH)
+  })
+
+  it('lets a peer standing south of a Standee cover it, matching how peers sort (#403)', () => {
+    // The binary ±1 depth sorted a cutout only against the LOCAL avatar's row, so
+    // it never interleaved with a peer's continuous row-delta depth: a peer south
+    // of the Standee but north of me landed *below* the Standee's +1 band and drew
+    // behind the cutout it stood in front of. A cutout must share the peer scale.
+    const avatarRow = 5
+    const standee: LiveStandee = {
+      id: 4,
+      message: 'note',
+      tile: { x: 0, y: 2 },
+      sprite: fakeSprite(),
+      detail: null,
+      ownerName: null,
+      ownerAvatarUrl: null,
+      replyLink: null,
+      mine: false,
+      expiresAt: '2026-08-09T08:00:00.000Z',
+    }
+
+    sortStandees([standee], avatarRow)
+
+    // A peer one row south of the Standee (row 3) — still north of me (row 5).
+    const peer = peerDepth(3, avatarRow, false, false)
+    expect(peer).toBeGreaterThan(standee.sprite.depth)
   })
 })
