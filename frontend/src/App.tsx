@@ -14,6 +14,7 @@ import EmployeesAdminPage from './org/EmployeesAdminPage.tsx'
 import PostureCallbackPage from './posture/CallbackPage.tsx'
 import MapPage from './MapPage.tsx'
 import CharacterSelectPage from './character/CharacterSelectPage.tsx'
+import LookBuilderPage from './character/LookBuilderPage.tsx'
 import VoiceMeters from './voice/VoiceMeters.tsx'
 import MicIndicator from './voice/MicIndicator.tsx'
 
@@ -45,6 +46,8 @@ export default function App() {
         <Route index element={<VillagePage />} />
         {/* Pick which saved character *you* play as (#155, ADR-0009). */}
         <Route path="character" element={<CharacterSelectPage />} />
+        {/* Build & wear a personal Look — the ugly plumbing UI (#398, ADR-0017). */}
+        <Route path="character/looks" element={<LookBuilderPage />} />
       </Route>
       {/* The admin console is its own standalone shell (mapper-styled, dark) and
           is reachable by URL only — no link from the game UI. RequireAdmin gates

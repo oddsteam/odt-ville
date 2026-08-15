@@ -19,12 +19,13 @@ module Api
         end
 
         # GET /api/v1/character_manifests/:id — full manifest (incl. data blob),
-        # used by the roster to animate each saved character. House-owned rows
-        # are readable by anyone; a personal row only by its owner (#394) — a
-        # stranger's row 404s like it doesn't exist.
+        # readable by id by any authenticated user. A peer must fetch a Look's
+        # recipe to bake and render the wearer in the shared village (#398, #397),
+        # and presence already broadcasts the manifest id to everyone on the map.
+        # Privacy lives elsewhere: index stays house-owned so a Look is unlisted,
+        # and save/select stay owner-scoped so no one wears another's Look (#394).
         def show
-          manifest = ::Character::CharacterManifest
-            .where(owner_id: [nil, current_user.id]).find(params[:id])
+          manifest = ::Character::CharacterManifest.find(params[:id])
           render json: ::Character::CharacterManifestSerializer.call(manifest)
         end
 
@@ -50,11 +51,38 @@ module Api
 
         # POST /api/v1/character_manifests/:id/select — make this manifest the
         # current user's character. Writes only the caller's row; other users
-        # and the global active are untouched.
+        # and the global active are untouched. A house-owned manifest or the
+        # caller's own Look is wearable; a stranger's personal Look 404s (#398).
         def select
-          manifest = ::Character::CharacterManifest.find(params[:id])
+          manifest = ::Character::CharacterManifest
+            .where(owner_id: [nil, current_user.id]).find(params[:id])
           current_user.update!(character_manifest: manifest)
           render json: ::Character::CharacterManifestSerializer.summary(manifest)
+        end
+
+        # POST /api/v1/character_manifests/looks — save a personal Look (#398,
+        # ADR-0017): owner = caller, never globally active, capped at three and
+        # slot-validated in the model. Auto-names when the ugly form sends none.
+        def looks
+          data = manifest_data
+          look = ::Character::CharacterManifest.new(
+            owner: current_user,
+            name: data["name"].presence || default_look_name,
+            active: false,
+            data: data.except("name")
+          )
+          look.save!
+          render json: ::Character::CharacterManifestSerializer.call(look), status: :created
+        end
+
+        # DELETE /api/v1/character_manifests/:id — drop one of the caller's own
+        # Looks. House-owned rows and other users' Looks 404. Deleting a worn
+        # Look nullifies the pick via the users FK, so the render falls back down
+        # the ADR-0009 chain (global active → committed default).
+        def destroy
+          look = ::Character::CharacterManifest.where(owner_id: current_user.id).find(params[:id])
+          look.destroy!
+          head :no_content
         end
 
         # POST /api/v1/character_manifests — save from the sprite-mapper. Upserts
@@ -81,6 +109,16 @@ module Api
         # than enumerating every posture/grid key.
         def manifest_data
           params.require(:manifest).permit!.to_h
+        end
+
+        # First free "Look <owner>-<n>" for the caller — owner id embedded so the
+        # name is globally unique (dodging the unique-name index) without a
+        # per-owner name field the ugly form doesn't collect (#399 owns naming).
+        def default_look_name
+          taken = ::Character::CharacterManifest.where(owner: current_user).pluck(:name)
+          n = 1
+          n += 1 while taken.include?("Look #{current_user.id}-#{n}")
+          "Look #{current_user.id}-#{n}"
         end
       end
     end

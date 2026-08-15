@@ -70,12 +70,14 @@ Rails.application.routes.draw do
       scope module: :character do
         # Character sprite manifests — saved by the sprite-mapper tool, read by
         # the game/preview. `active` is the single live character.
-        resources :character_manifests, only: [:index, :create, :show] do
+        resources :character_manifests, only: [:index, :create, :show, :destroy] do
           get :active, on: :collection
           # Per-user selection (#155, ADR-0009): for_me resolves the caller's
           # pick -> global active; select persists the caller's pick.
           get :for_me, on: :collection
           post :select, on: :member
+          # Personal Looks (#398, ADR-0017): any authenticated user saves one.
+          post :looks, on: :collection
         end
       end
 

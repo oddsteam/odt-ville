@@ -1,10 +1,15 @@
-import { POSTURE_KEYS, resolveSheetSrc, framesForFacing } from '../../kernel/characterManifest.js'
-import { composeLook } from '../../kernel/composeLook.ts'
+import { POSTURE_KEYS, framesForFacing } from '../../kernel/characterManifest.js'
+// Queuing a sheet-or-Look under a key is one kernel decision (ADR-0017), shared
+// with the placed NPCs + Standees so a Look bakes the same everywhere. Imported
+// (not just re-exported) so preloadCharacter can call it, and re-exported under
+// this name so the scenes and peer path import it from the rig unchanged.
+import { queueRigSheet as queueCharacterSheet } from '../../kernel/rigSheet.js'
 
 // The manifest sprite's on-screen scale lives in the kernel beside the tile
 // basis it uses (#295), shared with the map renderer's placed NPCs. Re-exported
 // so the scenes keep reaching it through the rig they already import.
 export { characterScale } from '../../kernel/characterManifest.js'
+export { queueCharacterSheet }
 
 // Shared "character rig" for the manifest-driven player (sprite-mapper). Both
 // TownScene and InteriorScene render the active character from the same sheet,
@@ -25,47 +30,6 @@ export function preloadCharacter(scene) {
   if (!manifest || scene.textures.exists(CHAR_SHEET_KEY)) return manifest
   queueCharacterSheet(scene, manifest, CHAR_SHEET_KEY)
   return manifest
-}
-
-// Queue whatever this manifest needs under `sheetKey`: a single sheet image, or
-// a Look's Part atlases to composite (ADR-0017). One decision shared by the
-// player (CHAR_SHEET_KEY) and the peer (peer.sheet.<id>) paths, so a Look bakes
-// the same both ways and the two can't drift (#397). Returns false when the
-// manifest carries neither — the caller falls back to the bundled stills.
-export function queueCharacterSheet(scene, manifest, sheetKey) {
-  const src = resolveSheetSrc(manifest)
-  if (src) {
-    scene.load.image(sheetKey, src)
-    return true
-  }
-  if (manifest?.layout && manifest.parts?.length) {
-    preloadLook(scene, manifest, sheetKey)
-    return true
-  }
-  return false
-}
-
-// Bake a Look (ADR-0017): queue each Part atlas, then on load-complete composite
-// the ones that arrived into a canvas under `sheetKey`, which buildCharacterRig
-// slices exactly like a sheet. A Part that 404s (renamed / dropped from the pack)
-// leaves no texture — we warn and skip its slot rather than draw a broken
-// character; if none arrive we register nothing, so the rig falls back to the
-// bundled stills (usingManifest: false).
-function preloadLook(scene, manifest, sheetKey) {
-  const packDir = `/maps/characters/packs/${manifest.layout.name}/`
-  const parts = manifest.parts.map((name) => ({ name, key: `${sheetKey}.part.${name}`, url: `${packDir}${name}.png` }))
-  for (const p of parts) {
-    if (!scene.textures.exists(p.key)) scene.load.image(p.key, p.url)
-  }
-  scene.load.once('complete', () => {
-    if (scene.textures.exists(sheetKey)) return
-    const images = []
-    for (const p of parts) {
-      if (scene.textures.exists(p.key)) images.push(scene.textures.get(p.key).getSourceImage())
-      else console.warn(`Look: Part "${p.name}" not in pack "${manifest.layout.name}" — slot skipped`)
-    }
-    if (images.length) scene.textures.addCanvas(sheetKey, composeLook(images, manifest.layout))
-  })
 }
 
 // Slice the manifest sheet into named frames, build a looping walk anim per
