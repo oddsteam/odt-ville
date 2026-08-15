@@ -4,6 +4,7 @@ import { Link, Outlet } from 'react-router-dom'
 import { runEdge } from './lib/runEdge.ts'
 import { subscribeAuthToken } from './lib/authToken.ts'
 import UserSwitcher from './auth/UserSwitcher.tsx'
+import { adminGate } from './auth/adminGate.ts'
 import LogoutButton from './auth/LogoutButton.tsx'
 import ArchScoreBar from './dev/ArchScoreBar.tsx'
 import Avatar from './viewer/Avatar.tsx'
@@ -54,7 +55,7 @@ export default function RootLayout() {
           <Link className="app-character-link" to="/character">
             👤 CHARACTER
           </Link>
-          {import.meta.env.DEV && (
+          {adminGate(me) === 'allow' && (
             <Link className="app-dev-admin" to="/admin">
               ⚙ ADMIN
             </Link>
