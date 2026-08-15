@@ -24,6 +24,13 @@ export const TileObjectSummary = Schema.Struct({
   // grid the size of the footprint, one hex digit per cell whose bits mark
   // blocked sides (N=1 E=2 S=4 W=8). Null otherwise.
   edge_mask: Schema.NullOr(Schema.Array(Schema.String)),
+  // Animated art (#435, ADR-0019): `image` is a horizontal frame strip when
+  // frame_count > 1 (1 = today's still object). Frame size is derived from the
+  // image — imageWidth / frame_count × imageHeight — never authored. `fps` null
+  // lets the runtime pick; `playback` is 'loop' or 'proximity'.
+  frame_count: Schema.Number,
+  fps: Schema.NullOr(Schema.Number),
+  playback: Schema.String,
   active: Schema.Boolean,
   updated_at: Schema.String,
 })

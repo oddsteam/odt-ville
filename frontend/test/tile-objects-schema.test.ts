@@ -15,6 +15,9 @@ describe('TileObject schema', () => {
     door_dy: null,
     walk_mask: null,
     edge_mask: null,
+    frame_count: 1,
+    fps: null,
+    playback: 'loop',
     active: true,
     updated_at: '2026-06-22T00:00:00.000Z',
     image: 'data:image/png;base64,xxx',
@@ -41,6 +44,16 @@ describe('TileObject schema', () => {
     const fg = 'data:image/png;base64,maskblob'
     const decoded = Schema.decodeUnknownSync(TileObject)({ ...valid, fg_mask: fg })
     expect(decoded.fg_mask).toBe(fg)
+  })
+
+  it('decodes an animated object — a frame strip and how to play it (#435)', () => {
+    const decoded = Schema.decodeUnknownSync(TileObject)({
+      ...valid,
+      frame_count: 72,
+      fps: 12,
+      playback: 'proximity',
+    })
+    expect([decoded.frame_count, decoded.fps, decoded.playback]).toEqual([72, 12, 'proximity'])
   })
 
   it('rejects a missing image (the blob the game draws)', () => {

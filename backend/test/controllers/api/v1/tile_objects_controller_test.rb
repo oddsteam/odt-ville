@@ -110,6 +110,37 @@ module Api
         assert_equal fg, json[:fg_mask]
       end
 
+      # Animated catalog art (ADR-0019, #435): a strip object is a tile object
+      # carrying frame_count > 1. The three fields ride the *summary*, so the
+      # decorate palette and the game's batched read both get them.
+      test "create persists the animation fields and the roster carries them" do
+        post "/api/v1/tile_objects",
+             params: { name: "Spell Book", kind: "prop", image: "data:strip", footprint_w: 1, footprint_h: 2,
+                       frame_count: 72, fps: 12, playback: "proximity" },
+             headers: auth(@user, roles: ["admin"])
+
+        assert_response :success
+        assert_equal [72, 12, "proximity"], json.values_at(:frame_count, :fps, :playback)
+
+        get "/api/v1/tile_objects", headers: auth(@user)
+        assert_response :success
+        assert_equal [72, 12, "proximity"], json.first.values_at(:frame_count, :fps, :playback)
+      end
+
+      test "an absent animation key keeps the stored strip, and a still object defaults to one looping frame" do
+        obj = ::Catalog::TileObject.create!(name: "Spell Book", kind: "prop", image: "data:strip", frame_count: 72, fps: 12)
+
+        post "/api/v1/tile_objects",
+             params: { name: "Spell Book", kind: "prop", image: "data:strip2" },
+             headers: auth(@user, roles: ["admin"])
+
+        assert_response :success
+        assert_equal [72, 12], [obj.reload.frame_count, obj.fps], "absent keys preserve the stored strip"
+
+        still = ::Catalog::TileObject.create!(name: "Oak", kind: "tree", image: "i")
+        assert_equal [1, nil, "loop"], [still.frame_count, still.fps, still.playback]
+      end
+
       test "create persists the composition and show returns it, for remixing" do
         comp = {
           "v" => 1, "cell" => 32, "cols" => 2, "rows" => 1,
