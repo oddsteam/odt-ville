@@ -400,4 +400,26 @@ describe('sortStandees', () => {
     expect(north.sprite.depth).toBeLessThan(MAP_PLAYER_DEPTH)
     expect(south.sprite.depth).toBeGreaterThan(MAP_PLAYER_DEPTH)
   })
+
+  it('draws a Standee on the avatar’s own cell in front, so the deployer sees the one they just placed', () => {
+    // You deploy a Standee on your own feet (#369): the strict placed-NPC rule
+    // (same row → behind) would tuck the fresh cutout under your avatar and you'd
+    // never see it, though a peer standing elsewhere does. Same row → front.
+    const onMe: LiveStandee = {
+      id: 3,
+      message: 'mine',
+      tile: { x: 0, y: 3 },
+      sprite: fakeSprite(),
+      detail: null,
+      ownerName: null,
+      ownerAvatarUrl: null,
+      replyLink: null,
+      mine: true,
+      expiresAt: '2026-08-09T08:00:00.000Z',
+    }
+
+    sortStandees([onMe], 3)
+
+    expect(onMe.sprite.depth).toBeGreaterThan(MAP_PLAYER_DEPTH)
+  })
 })
