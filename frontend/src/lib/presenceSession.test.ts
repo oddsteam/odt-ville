@@ -15,7 +15,7 @@ const handle = (log: unknown[], slug: string) => ({
 const loadManifest = async (id: number) => ({ id })
 
 const deps = (log: unknown[], ownId: string | null = 'kc-1') => ({
-  viewerId: async () => ownId,
+  viewer: async () => (ownId ? { id: ownId, name: 'Ada Lovelace' } : null),
   connect: (slug: string) => {
     log.push(['connect', slug])
     return handle(log, slug)
@@ -29,6 +29,9 @@ describe('presenceSession', () => {
     const open = await presenceSession(deps(log)).open({ slug: 'compliance-hq', multiplayer: true })
     expect(log).toEqual([['connect', 'compliance-hq']])
     expect(open?.ownId).toBe('kc-1')
+    // The viewer's own name rides the same bundle so MapScene can label the
+    // local avatar (their own nameplate), not just the peers'.
+    expect(open?.ownName).toBe('Ada Lovelace')
     // The peer-character lookup rides the same bundle (#266) — MapScene reads
     // it off the registry rather than importing a data service (ADR-0004).
     expect(open?.loadManifest).toBe(loadManifest)

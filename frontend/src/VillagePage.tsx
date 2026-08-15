@@ -188,9 +188,9 @@ export default function VillagePage() {
   // — the door path never routes, so nothing else would ever close the last.
   const presenceRef = useRef(
     presenceSession({
-      viewerId: () =>
+      viewer: () =>
         runEdge(ViewerService.get())
-          .then((v) => v.user.external_id)
+          .then((v) => ({ id: v.user.external_id, name: v.user.name }))
           .catch(() => null),
       connect: connectPresence,
       loadManifest: loadManifestById,

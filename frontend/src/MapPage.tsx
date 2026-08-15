@@ -74,6 +74,9 @@ export default function MapPage({ draft = false }: { draft?: boolean }) {
   // The viewer's stable Keycloak id (#88) — presence filters its own echoed
   // frames by it. Only fetched for multiplayer maps; null keeps presence off.
   const ownIdRef = useRef<string | null>(null)
+  // The viewer's display name — MapScene labels the local avatar with it (their
+  // own nameplate), the same bundle that carries ownId. Null keeps it off.
+  const ownNameRef = useRef<string | null>(null)
 
   useEffect(() => {
     if (!slug && !draft) return
@@ -98,6 +101,7 @@ export default function MapPage({ draft = false }: { draft?: boolean }) {
         const viewer = m.multiplayer ? await runEdge(ViewerService.get()).catch(() => null) : null
         if (!active) return
         ownIdRef.current = viewer?.user.external_id ?? null
+        ownNameRef.current = viewer?.user.name ?? null
         manifestRef.current = manifest
         objectsRef.current = objects
         npcsRef.current = npcs
@@ -194,7 +198,7 @@ export default function MapPage({ draft = false }: { draft?: boolean }) {
       bakedStandees: standeesRef.current,
       entrySpawnId: entrySpawnIdRef.current,
       presence: presence
-        ? { ownId: ownIdRef.current, loadManifest: loadManifestById, ...presence }
+        ? { ownId: ownIdRef.current, ownName: ownNameRef.current, loadManifest: loadManifestById, ...presence }
         : null,
       voice,
     })

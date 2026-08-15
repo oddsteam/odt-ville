@@ -259,6 +259,10 @@ export default class MapScene extends Phaser.Scene {
     this.presence = this.registry.get('presence') || null
     this.remoteRoster = new Map()
     this.remoteSprites = new Map()
+    // Our own nameplate container (below) — cleared here because the instance
+    // survives stop/start (#249); a hop to a solo map builds none, so a stale
+    // reference would point update() at a destroyed object.
+    this.selfPlate = null
     // Peer characters by manifest id (#266): a present key means "already
     // asked", the value is the built stills or null while the fetch/sheet load
     // is in flight (and after a failure — that peer stays on the fallback).
@@ -280,6 +284,7 @@ export default class MapScene extends Phaser.Scene {
       // Announce our spawn; peers echo their own positions back (stateless
       // roster sync — see presence.ts).
       this.sendPosition()
+      this.spawnSelfPlate()
     }
     if (this.voice) {
       this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.voice.stop())
@@ -297,7 +302,37 @@ export default class MapScene extends Phaser.Scene {
     }
   }
 
+  // Our own nameplate + face, mirroring a peer's (#323) but for the local
+  // avatar — the one character the peer path deliberately skips. A container of
+  // [label, face] we reposition onto the player each frame in update(), because
+  // `this.player` is a lone tweened sprite (camera-followed, anim-played), not a
+  // container we can safely reparent. Multiplayer maps only — presence carries
+  // the name + the id the face is fetched by, exactly as for peers.
+  spawnSelfPlate() {
+    const name = this.presence?.ownName || ''
+    const children = []
+    if (name) {
+      children.push(
+        this.add
+          .text(0, NAMEPLATE_Y, name, { fontSize: '12px', color: '#ffffff', backgroundColor: '#000000aa' })
+          .setOrigin(0.5, 0),
+      )
+    }
+    this.selfPlate = this.add.container(this.player.x, this.player.y, children).setDepth(this.player.depth)
+    if (this.presence?.ownId) {
+      loadAvatar(this, this.presence.ownId, this.avatarsAsked, (key) => {
+        this.selfPlate?.add(this.add.image(0, NAMEPLATE_Y, key).setOrigin(0.5, 1).setDisplaySize(AVATAR_PX, AVATAR_PX))
+      })
+    }
+  }
+
   update() {
+    // Keep our own nameplate glued to the avatar: the plate is a separate
+    // container (the player is a lone tweened sprite), so it tracks position +
+    // depth here every frame — ahead of the input guard, which only gates steps.
+    if (this.selfPlate && this.player) {
+      this.selfPlate.setPosition(this.player.x, this.player.y).setDepth(this.player.depth)
+    }
     // A Standee retires itself when its moment passes (#374) — off the clock
     // this loop already runs on, so there is no sweeper job and no server tick.
     // Ahead of the input guards below: a cutout dying while you stand reading
