@@ -95,6 +95,22 @@ async function listParts(sourceDir) {
   return parts.sort((a, b) => a.name.localeCompare(b.name))
 }
 
+// The 20 premade characters (#396): finished, hand-picked characters at the same
+// 1792×1312 geometry, already composed. Trimmed against the same layout, each
+// becomes a single sheet-atlas — no recipe to reverse-engineer (ADR-0017).
+const PREMADE_DIR = '0_Premade_Characters/32x32'
+const PREMADE_RE = /^Premade_Character_32x32_(\d+)\.png$/i
+
+async function listPremades(sourceDir) {
+  const abs = path.join(sourceDir, PREMADE_DIR)
+  const premades = []
+  for (const file of (await readdir(abs)).sort()) {
+    const m = PREMADE_RE.exec(file)
+    if (m) premades.push({ name: `premade-${m[1]}`, file: path.join(abs, file) })
+  }
+  return premades
+}
+
 // Crop a source sheet down to the atlas. compressionLevel is fixed so a second
 // run over unchanged inputs produces byte-identical PNGs (idempotency).
 async function trim(file, slots, atlas) {
@@ -122,7 +138,7 @@ async function main() {
   const authored = JSON.parse(await readFile(path.join(packDir, 'authored-layout.json'), 'utf8'))
   const { packed, slots } = packLayout(authored)
 
-  const parts = await listParts(sourceDir)
+  const parts = [...(await listParts(sourceDir)), ...(await listPremades(sourceDir))]
   for (const p of parts) {
     await writeFile(path.join(packDir, `${p.name}.png`), await trim(p.file, slots, packed.atlas))
   }

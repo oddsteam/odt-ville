@@ -516,6 +516,23 @@ ActiveRecord::Base.transaction do
   })
   look.activate!
 
+  # The 20 premade characters (#396): house-owned sheet-manifests, not Looks —
+  # each is a finished character trimmed to one packed atlas (premade-NN.png),
+  # so `data.sheet.path` + the shared packed layout is the whole recipe (ADR-0017
+  # rejects reverse-engineering their Parts). Seeds the /character gallery on day
+  # one. Idempotent by name; house-owned (owner nil) so they join the roster;
+  # never activated, so look-tracer stays the global default.
+  (1..20).each do |n|
+    slug = format("premade-%02d", n)
+    manifest = ::Character::CharacterManifest.find_or_initialize_by(name: slug)
+    manifest.update!(owner: nil, data: {
+      "version" => 1,
+      "name" => slug,
+      "sheet" => { "path" => "/maps/characters/packs/modern-interiors/#{slug}.png", "width" => 256, "height" => 256 },
+      "layout" => look_layout,
+    })
+  end
+
   # No NPC seed (#260). The old "THE BOSS" row inlined a frontend PNG through a
   # path the backend container cannot see (it mounts only ./backend), so the
   # guard fired silently and the Docker stack never got one — a seed that seeded
