@@ -57,6 +57,28 @@ module Api
         assert_equal [], json[:roles]
       end
 
+      # #429: the app becomes a source of authorization roles. The gate reads
+      # the union of the token's realm roles and the caller's user_roles grants,
+      # so a DB grant reaches /me (and the gate) with no re-login.
+      test "the response merges DB-granted roles with the token's realm roles" do
+        Auth::UserRole.create!(user: @user, role: "curator")
+
+        get "/api/v1/me", headers: auth(@user, roles: ["admin"])
+
+        assert_response :success
+        assert_equal %w[admin curator], json[:roles].sort
+      end
+
+      # A grant the token already carries must not double up in the merged list.
+      test "a DB grant that duplicates a realm role is de-duplicated" do
+        Auth::UserRole.create!(user: @user, role: "admin")
+
+        get "/api/v1/me", headers: auth(@user, roles: ["admin"])
+
+        assert_response :success
+        assert_equal ["admin"], json[:roles]
+      end
+
       test "a request with no bearer token is rejected with 401" do
         get "/api/v1/me"
 

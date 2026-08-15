@@ -50,6 +50,7 @@ prefixes=(
 # Today's nine foreign keys, as "from_table|to_table". Adding a legitimate FK
 # means adding its pair here in the same PR — a deliberate act, not a default.
 fk_allowlist=(
+  "auth_user_roles|users"
   "boards|houses"
   "catalog_npcs|character_manifests"
   "character_manifests|users"

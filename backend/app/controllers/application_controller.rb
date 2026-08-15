@@ -64,9 +64,15 @@ class ApplicationController < ActionController::API
     user
   end
 
-  # Realm + client roles / groups stamped into the token (#94).
+  # The roles that gate this request: the realm/client roles Keycloak stamped
+  # into the token (#94) UNION the app-granted roles in user_roles (#429),
+  # de-duplicated. The union lets an admin be minted in-app (a user_roles row)
+  # without a Keycloak change, while the realm role stays the bootstrap
+  # super-admin. Never raises when there is no signed-in user.
   def current_roles
-    token_claims&.roles || []
+    jwt = token_claims&.roles || []
+    db = current_user ? current_user.user_roles.pluck(:role) : []
+    (jwt + db).uniq
   end
 
   def current_groups

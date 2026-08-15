@@ -9,6 +9,9 @@ module Auth
     # The person this login belongs to (#390, ADR-0016). Optional forever: a
     # User with no Employee is not on the roster, which is normal, not an error.
     belongs_to :employee, class_name: "Org::Employee", optional: true
+    # App-granted authorization roles (#429). The admin gate reads the union of
+    # these and the token's realm roles, so a grant lands with no re-login.
+    has_many :user_roles, class_name: "Auth::UserRole", dependent: :destroy
     has_many :user_content_states, class_name: "Viewer::UserContentState", dependent: :destroy
     has_one :user_location_state, class_name: "GameSession::UserLocationState", dependent: :destroy
 

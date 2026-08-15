@@ -10,9 +10,19 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_15_000001) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_15_000002) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
+
+  create_table "auth_user_roles", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.bigint "granted_by_id"
+    t.string "role", null: false
+    t.bigint "user_id", null: false
+    t.index ["granted_by_id"], name: "index_auth_user_roles_on_granted_by_id"
+    t.index ["user_id", "role"], name: "index_auth_user_roles_on_user_id_and_role", unique: true
+    t.index ["user_id"], name: "index_auth_user_roles_on_user_id"
+  end
 
   create_table "boards", force: :cascade do |t|
     t.string "board_type", null: false
@@ -253,6 +263,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_15_000001) do
     t.index ["external_id"], name: "index_users_on_external_id", unique: true
   end
 
+  add_foreign_key "auth_user_roles", "users"
+  add_foreign_key "auth_user_roles", "users", column: "granted_by_id"
   add_foreign_key "boards", "houses"
   add_foreign_key "catalog_npcs", "character_manifests", on_delete: :nullify
   add_foreign_key "character_manifests", "users", column: "owner_id", on_delete: :nullify
