@@ -164,7 +164,7 @@ export default function MapPage({ draft = false }: { draft?: boolean }) {
       parent: hostRef.current,
       width: map.cols * 48,
       height: map.rows * 48,
-      backgroundColor: '#5fc24a',
+      backgroundColor: '#000000',
       pixelArt: true,
       antialias: false,
       scale: { mode: Phaser.Scale.RESIZE, autoCenter: Phaser.Scale.CENTER_BOTH },

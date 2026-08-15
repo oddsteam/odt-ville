@@ -265,7 +265,7 @@ export default function PhaserGame({
       parent: hostRef.current,
       width: DESIGN_WIDTH,
       height: DESIGN_HEIGHT,
-      backgroundColor: '#5fc24a',
+      backgroundColor: '#000000',
       pixelArt: true,
       antialias: false,
       scale: {
