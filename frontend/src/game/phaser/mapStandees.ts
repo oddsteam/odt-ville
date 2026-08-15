@@ -13,7 +13,7 @@
 import { TILE } from '../constants.js'
 import { standeeSheetKey, MAP_ENTITY_DEPTH } from '../../kernel/mapRenderer.ts'
 import { framesForFacing, characterScale } from '../../kernel/characterManifest.js'
-import { npcDepth } from './mapNpcs.ts'
+import { MAP_NPC_FRONT_DEPTH, MAP_NPC_BEHIND_DEPTH } from './mapNpcs.ts'
 import { peerSheetKey } from './characterRig.js'
 import type { StandeeNote } from '../standees.ts'
 
@@ -299,12 +299,18 @@ function stampStandee(scene: Scene, s: BakedStandee) {
   return cutout(scene, { x: s.x, y: s.y }, figure, s.message)
 }
 
-// A Standee is a character-shaped cutout, so it sorts against the avatar exactly
-// as a placed NPC does (#295): one standing further south covers the avatar, one
-// level or north draws behind. Reuses `npcDepth` — "the existing NPC depth rule".
+// A Standee is a character-shaped cutout, so it sorts against the avatar like a
+// placed NPC (#295): one further south covers the avatar, one north draws behind.
+// It differs from an NPC in one case only — you can share its cell, because you
+// deploy a Standee on your own feet (#369) and a Standee never blocks. The strict
+// NPC rule (same row → behind) would then tuck the fresh cutout under your avatar,
+// so you'd never see the note you just left though a peer elsewhere does. So a
+// cutout on the avatar's own row draws in FRONT (`>=`), not behind.
 export function sortStandees(
   standees: ReadonlyArray<{ tile: { x: number; y: number }; sprite: any }>,
   avatarRow: number,
 ) {
-  for (const s of standees) s.sprite?.setDepth(npcDepth(s.tile.y, avatarRow))
+  for (const s of standees) {
+    s.sprite?.setDepth(s.tile.y >= avatarRow ? MAP_NPC_FRONT_DEPTH : MAP_NPC_BEHIND_DEPTH)
+  }
 }
