@@ -34,12 +34,17 @@ import type { Npc } from './catalog/npcs/schema.ts'
 export default function MapPage({ draft = false }: { draft?: boolean }) {
   const { slug } = useParams<{ slug: string }>()
   const navigate = useNavigate()
-  // A portal arrival names its entry spawn via route state (#84); direct
-  // navigation carries none and the scene falls back to the grid centre. A ref
-  // (like the manifest/objects below) so the boot effect keys on the loaded map
-  // alone — route state flips before the target map arrives.
+  // A portal arrival names its entry spawn via route state (#84), and carries
+  // the slug it came from so an unnamed portal can land on the door back rather
+  // than the target's centre. Direct navigation carries neither and the scene
+  // falls back to the grid centre. Refs (like the manifest/objects below) so the
+  // boot effect keys on the loaded map alone — route state flips before the
+  // target map arrives.
   const entrySpawnIdRef = useRef<string | undefined>(undefined)
-  entrySpawnIdRef.current = (useLocation().state as { entrySpawnId?: string } | null)?.entrySpawnId
+  const fromSlugRef = useRef<string | undefined>(undefined)
+  const routeState = useLocation().state as { entrySpawnId?: string; fromSlug?: string } | null
+  entrySpawnIdRef.current = routeState?.entrySpawnId
+  fromSlugRef.current = routeState?.fromSlug
   const hostRef = useRef<HTMLDivElement>(null)
   const [map, setMap] = useState<BakedMap | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -197,6 +202,7 @@ export default function MapPage({ draft = false }: { draft?: boolean }) {
       bakedNpcs: npcRigsRef.current,
       bakedStandees: standeesRef.current,
       entrySpawnId: entrySpawnIdRef.current,
+      fromSlug: fromSlugRef.current,
       presence: presence
         ? { ownId: ownIdRef.current, ownName: ownNameRef.current, loadManifest: loadManifestById, ...presence }
         : null,
@@ -219,8 +225,12 @@ export default function MapPage({ draft = false }: { draft?: boolean }) {
         case 'portal':
           void travel(p, {
             load: (s) => runEdge(MapsService.get(s)),
+            // `map.slug` is the map being left — the target reads it back as
+            // `fromSlug` to place the avatar on the door it arrived by. Read off
+            // the loaded map, not the route param, so it can never be a hop
+            // ahead of what is actually on screen.
             go: (s, spawn) =>
-              void warp(() => navigate(`/maps/${s}`, { state: { entrySpawnId: spawn } })),
+              void warp(() => navigate(`/maps/${s}`, { state: { entrySpawnId: spawn, fromSlug: map.slug } })),
             refuse: setZoneNotice,
           })
           return

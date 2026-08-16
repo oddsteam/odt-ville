@@ -15,6 +15,11 @@ export type MapTarget = {
   // bakedNpcs, so it rides the same single chokepoint and both entry paths get it.
   bakedStandees: unknown
   entrySpawnId: string | undefined
+  // Where this hop came from, so an unnamed portal can land the avatar on the
+  // door back rather than the target's centre (spawnTile's reciprocal-door
+  // default). The town is `'town'` — a reserved node, never a Map row. Undefined
+  // on direct navigation to /maps/:slug, which arrives from nowhere.
+  fromSlug: string | undefined
   // The presence/voice handles for a multiplayer target, or null for a solo
   // one. Set every hop so a solo target clears the previous map's room/mesh.
   presence: unknown
@@ -30,6 +35,7 @@ export function applyMapTarget(
   registry.set('bakedNpcs', target.bakedNpcs)
   registry.set('bakedStandees', target.bakedStandees)
   registry.set('entrySpawnId', target.entrySpawnId)
+  registry.set('fromSlug', target.fromSlug)
   registry.set('presence', target.presence)
   registry.set('voice', target.voice)
 }

@@ -404,6 +404,17 @@ describe('entityDoorCells', () => {
 // direct navigation to a spawn-less map still works.
 describe('spawnTile', () => {
   const map = { cols: 8, rows: 6, spawns: [{ id: 'from-atrium', x: 1, y: 4 }] }
+  // A map with a door back to `atrium`, plus a second portal elsewhere so the
+  // reciprocal lookup has to match on targetNode rather than "the only portal".
+  const doored = {
+    cols: 8,
+    rows: 6,
+    zones: [
+      { x: 7, y: 2, payload: { kind: 'portal', targetNode: 'plaza' } },
+      { x: 2, y: 5, payload: { kind: 'portal', targetNode: 'atrium' } },
+      { x: 0, y: 0, payload: { kind: 'link', url: 'https://example.test' } },
+    ],
+  }
 
   it('resolves a named entry spawn', () => {
     expect(spawnTile(map, 'from-atrium')).toEqual({ x: 1, y: 4 })
@@ -412,5 +423,36 @@ describe('spawnTile', () => {
   it('falls back to the grid centre for an unknown or absent spawn id', () => {
     expect(spawnTile(map, 'nope')).toEqual({ x: 4, y: 3 })
     expect(spawnTile({ cols: 8, rows: 6 })).toEqual({ x: 4, y: 3 })
+  })
+
+  it('lands on the door back to where you came from when no spawn is named', () => {
+    expect(spawnTile(doored, undefined, 'atrium')).toEqual({ x: 2, y: 5 })
+    expect(spawnTile(doored, undefined, 'plaza')).toEqual({ x: 7, y: 2 })
+  })
+
+  it('prefers a named spawn over the door you came through', () => {
+    const both = { ...doored, spawns: [{ id: 'balcony', x: 6, y: 1 }] }
+    expect(spawnTile(both, 'balcony', 'atrium')).toEqual({ x: 6, y: 1 })
+  })
+
+  it('falls through a dangling spawn id to the door rather than the centre', () => {
+    expect(spawnTile(doored, 'typo', 'atrium')).toEqual({ x: 2, y: 5 })
+  })
+
+  it('takes the first authored portal when several lead back to the source', () => {
+    const twice = {
+      cols: 8,
+      rows: 6,
+      zones: [
+        { x: 3, y: 3, payload: { kind: 'portal', targetNode: 'atrium' } },
+        { x: 5, y: 1, payload: { kind: 'portal', targetNode: 'atrium' } },
+      ],
+    }
+    expect(spawnTile(twice, undefined, 'atrium')).toEqual({ x: 3, y: 3 })
+  })
+
+  it('falls back to the centre when nothing leads back to the source', () => {
+    expect(spawnTile(doored, undefined, 'nowhere')).toEqual({ x: 4, y: 3 })
+    expect(spawnTile(map, undefined, 'atrium')).toEqual({ x: 4, y: 3 })
   })
 })
