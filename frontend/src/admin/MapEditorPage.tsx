@@ -39,6 +39,10 @@ const swatch = (t: string | null) => (t ? TERRAIN_COLOR[t] ?? '#cccccc' : 'trans
 
 const clampDim = (n: number) => Math.max(1, Math.min(Number.isFinite(n) ? n : 1, 40))
 
+// Built by scripts/build-map-starter-kit.mjs into public/, so it is served by
+// the same origin as the app in both dev and the prod build.
+const STARTER_KIT_URL = '/maps/map-starter-kit.zip'
+
 export default function MapEditorPage() {
   const [slug, setSlug] = useState('')
   const [title, setTitle] = useState('')
@@ -235,6 +239,16 @@ export default function MapEditorPage() {
           and switches the map to the `tiled` producer, locking the paint tools below.
           Clearing it returns to painting. */}
       <div className="admin-field-inline">
+        {/* The starter kit is the only supported way in for someone without repo
+            access: a generated starter.tmj with every server tileset already
+            embedded under the exact names the importer resolves, zipped with the
+            PNGs (Tiled needs them on disk to draw). Regenerate with
+            `pnpm map:starter` whenever public/maps/tilesets/ changes. The plain
+            navigation downloads rather than navigates because the asset is served
+            as application/zip. */}
+        <button onClick={() => { window.location.href = STARTER_KIT_URL }}>
+          Download Tiled starter kit
+        </button>
         <label className="admin-field">
           Import Tiled JSON
           {/* .tmj is Tiled's own JSON map extension (same content as .json). */}
@@ -248,6 +262,14 @@ export default function MapEditorPage() {
           </span>
         )}
       </div>
+      {!imported && (
+        <p className="admin-hint">
+          No Tiled setup yet? Download the starter kit, open <code>starter.tmj</code> in{' '}
+          <a href="https://www.mapeditor.org/" target="_blank" rel="noreferrer">Tiled</a>, paint,
+          save as <code>.tmj</code>, and import it here. Every tileset the server can draw is
+          already embedded — the importer rejects maps that reference anything else.
+        </p>
+      )}
 
       {!imported && !catalog && <p className="admin-hint">Loading terrain catalog…</p>}
       {!imported && catalog && palette.length === 0 && (
