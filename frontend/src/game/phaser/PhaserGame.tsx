@@ -305,9 +305,13 @@ export default function PhaserGame({
     // Node (#249). A failed / forbidden load returns false and starts nothing —
     // the avatar stays where it is and the shell's banner is the notice (#84).
     // Stopping both scenes covers either origin; stopping an idle one is a no-op.
+    // `fromSlug` is where this hop starts: the town for a door (#111), or the
+    // Node you are standing on for an onward hop (#249). The target lands the
+    // avatar on its door back to it when the portal names no entry spawn.
     const enterPortal = async (
       portal: { kind: 'portal'; targetNode: string; entrySpawnId?: string },
       communityId: number | null,
+      fromSlug: string | undefined,
     ) => {
       const loaded = await portalRef.current?.({ communityId, portal })
       if (!loaded) return false
@@ -321,6 +325,7 @@ export default function PhaserGame({
         bakedNpcs: loaded.bakedNpcs ?? [],
         bakedStandees: loaded.bakedStandees ?? [],
         entrySpawnId: portal.entrySpawnId,
+        fromSlug,
         presence: loaded.presence ?? null,
         voice: loaded.voice ?? null,
       })
@@ -395,7 +400,11 @@ export default function PhaserGame({
           })
         },
         travel: (portal) => {
-          void enterPortal(portal, (game.registry.get('portalCommunityId') as number | undefined) ?? null)
+          // An onward hop (#249) leaves the Node currently rendered, so its slug
+          // is the source — read off the registry, the same document MapScene is
+          // drawing, so it can never name a map we already left.
+          const here = (game.registry.get('bakedMap') as { slug?: string } | null)?.slug
+          void enterPortal(portal, (game.registry.get('portalCommunityId') as number | undefined) ?? null, here)
         },
         openLink: (url) => window.open(url, '_blank', 'noopener'),
         startDuel,
@@ -424,7 +433,9 @@ export default function PhaserGame({
       communityId: number
       portal: { kind: 'portal'; targetNode: string; entrySpawnId?: string }
     }) => {
-      const granted = await enterPortal(payload.portal, payload.communityId)
+      // A door is entered from the town (#111) — the reserved node, never a Map
+      // row, so an interior wanting a doorstep spawn authors a portal to 'town'.
+      const granted = await enterPortal(payload.portal, payload.communityId, 'town')
       if (granted) enterCommunityRef.current?.(payload.communityId)
       else bus.emit('portalResolved', { granted: false })
     }

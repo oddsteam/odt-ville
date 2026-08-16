@@ -258,16 +258,41 @@ export function entityDoorCells(
   return (x, y) => doors.has(`${x},${y}`)
 }
 
-// Where the player appears on an authored map. A portal names the target's
-// entry spawn (#84) — resolved from the map's authored `spawns`; an unknown or
-// absent id falls back to the grid centre (flooring keeps it on-grid for even
-// sizes: 8×6 → (4,3)) so direct navigation to a spawn-less map still works.
+// Where the player appears on an authored map — best available of three, in
+// order:
+//
+//   1. the named entry spawn a portal asked for (#84), from `spawns`;
+//   2. the door you came through — this map's portal back to `fromSlug`;
+//   3. the grid centre (flooring keeps it on-grid for even sizes: 8×6 → (4,3)).
+//
+// (2) is the reciprocal-door default: walking out of an interior should put you
+// back on the doorstep you entered by, which is what every authored door pair
+// means, and it needs no authoring at all. Before it existed a portal with no
+// `entrySpawnId` dumped you at the centre of the map you returned to — the
+// library→downtown bug. A dangling id falls through to (2) rather than straight
+// to (3): the doorstep is still the better answer than the middle of the map.
+//
+// Ambiguity is resolved by document order: if this map has several portals back
+// to `fromSlug`, the first authored one wins. Deterministic, and there is no
+// better signal — the arriving map is never told *which* portal was used, only
+// where it came from.
+//
+// Landing on the portal's own tile does not bounce you back: zone events are
+// edge-triggered on a step (kernel/zones.ts), and a spawn is not a step.
 export function spawnTile(
-  map: GridSize & { spawns?: ReadonlyArray<{ id: string; x: number; y: number }> },
+  map: GridSize & {
+    spawns?: ReadonlyArray<{ id: string; x: number; y: number }>
+    zones?: ReadonlyArray<{ x: number; y: number; payload?: { kind: string; targetNode?: string } }>
+  },
   spawnId?: string,
+  fromSlug?: string,
 ): Tile {
   const spawn = spawnId ? map.spawns?.find((s) => s.id === spawnId) : undefined
   if (spawn) return { x: spawn.x, y: spawn.y }
+  const door = fromSlug
+    ? map.zones?.find((z) => z.payload?.kind === 'portal' && z.payload.targetNode === fromSlug)
+    : undefined
+  if (door) return { x: door.x, y: door.y }
   return { x: Math.floor(map.cols / 2), y: Math.floor(map.rows / 2) }
 }
 

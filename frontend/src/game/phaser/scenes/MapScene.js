@@ -89,9 +89,10 @@ export default class MapScene extends Phaser.Scene {
     this.usingManifest = rig.usingManifest
     this.charDir = rig.charDir
 
-    // Arriving through a portal names the entry spawn (#84); the registry key
-    // is unset on direct navigation and spawnTile falls back to the centre.
-    this.playerTile = spawnTile(map, this.registry.get('entrySpawnId'))
+    // Arriving through a portal names the entry spawn (#84); unnamed, we land
+    // on this map's door back to where the hop came from. Both registry keys are
+    // unset on direct navigation and spawnTile falls back to the centre.
+    this.playerTile = spawnTile(map, this.registry.get('entrySpawnId'), this.registry.get('fromSlug'))
     // A placed building's door cell (#29, #212) is its walkable entrance: it
     // overrides the entity's own walk-mask so a solid footprint is still
     // enterable, mirroring town.ts's always-walkable door. Legacy/door-less maps
