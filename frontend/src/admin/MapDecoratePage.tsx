@@ -594,10 +594,35 @@ export default function MapDecoratePage() {
                         {portalTargets.map((s) => <option key={s} value={s}>{s}</option>)}
                       </select>
                     </label>
+                    {/* Entry spawn (#84) names a spawn point on the *target*
+                        map — and nothing in this editor can place one, so as a
+                        free-text box this only ever produced ids that missed.
+                        A miss was silent: the arrival fell back to the target's
+                        centre, which is how the library→downtown centre-spawn
+                        shipped (#453). Disabled rather than deleted, because
+                        hand-baked ids (seeds, the API) are real and an author
+                        editing this zone must still see and be able to drop one.
+                        Unset is now the good default, not a fallback: #453 lands
+                        arrivals on the target's door back to this map. */}
                     <label>Entry spawn{' '}
-                      <input type="text" placeholder="(map centre)" value={p.entrySpawnId ?? ''}
-                        onChange={(e) => editZone({ ...zone, payload: { ...p, entrySpawnId: opt(e.target.value) } })} />
+                      <input type="text" disabled placeholder="(the door back to this map)"
+                        value={p.entrySpawnId ?? ''} />
                     </label>
+                    {p.entrySpawnId ? (
+                      <p className="admin-hint">
+                        Hand-baked spawn — not editable here. Clearing it lands arrivals on
+                        this map&rsquo;s door instead.{' '}
+                        <button type="button"
+                          onClick={() => editZone({ ...zone, payload: { ...p, entrySpawnId: undefined } })}>
+                          Clear
+                        </button>
+                      </p>
+                    ) : (
+                      <p className="admin-hint">
+                        Arrivals land on {p.targetNode || 'the target'}&rsquo;s door back to this map,
+                        or its centre if it has none.
+                      </p>
+                    )}
                   </>
                 )}
                 {p.kind === 'trainer' && (
