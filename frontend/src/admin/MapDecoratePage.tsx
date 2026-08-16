@@ -12,7 +12,7 @@ import { makeMask, setMaskCell, resizeMask, isMaskEmpty, type Mask } from './mas
 import { groupPalette } from './paletteGroups.ts'
 import { frameArtStyle } from './frameArt.ts'
 import { zoneRects as buildZoneRects, ZONE_COLORS } from './zoneRects.ts'
-import { placeProp, erasePropAt, propEntities, propsFromBaked, propGhost, propIndexAt, nudgeProp, newZone, retrigger, triggersFor, zoneIndexAt, eraseZoneAt, replaceZone, placeNpc, eraseNpcAt, npcIndexAt, npcEntities, npcsFromBaked, NPC_FACING_DEFAULT, isDuellist, markDuellist, unmarkDuellist, syncDuellistZones, draftMap, stashDraft, DRAFT_PLAY_PATH, type PlacedProp, type PlacedNpc, type SizeOf, type MaskOf, type DoorOf, type NudgeDir, type ZoneKind } from '../maps/service.ts'
+import { placeProp, erasePropAt, propEntities, propsFromBaked, propGhost, propIndexAt, nudgeProp, newZone, retrigger, triggersFor, zoneIndexAt, eraseZoneAt, replaceZone, placeNpc, eraseNpcAt, npcIndexAt, npcEntities, npcsFromBaked, NPC_FACING_DEFAULT, isDuellist, markDuellist, unmarkDuellist, syncDuellistZones, type PlacedProp, type PlacedNpc, type SizeOf, type MaskOf, type DoorOf, type NudgeDir, type ZoneKind } from '../maps/service.ts'
 import type { MapAccessPolicy } from '../kernel/schema.ts'
 import MapPreview from './MapPreview.tsx'
 import { runEdge } from '../lib/runEdge.ts'
@@ -392,14 +392,12 @@ export default function MapDecoratePage() {
     }
   }
 
-  // Preview in game (#91): stash the current draft — unsaved edits included —
-  // as the runtime document and open the real play shell on the draft route.
-  // A handoff via the contract (ADR-0004): this page never imports the runtime.
+  // Preview in game (#91): open the real play shell on the map's own route, so
+  // the preview is the same URL the published map serves. Saved decorations
+  // only — the draft route never survived the hop to a fresh tab.
   const previewInGame = () => {
     if (!baked) return
-    const entities = [...otherEntities, ...propEntities(props, maskOf, edgeMaskOf, doorOf)]
-    stashDraft(draftMap(baked, entities, isMaskEmpty(collision) ? null : collision, zones, multiplayer))
-    window.open(DRAFT_PLAY_PATH, '_blank', 'noopener')
+    window.open(`/maps/${slug}`, '_blank', 'noopener')
   }
 
   if (error && !baked) return <p className="admin-msg admin-msg-error">{error}</p>
