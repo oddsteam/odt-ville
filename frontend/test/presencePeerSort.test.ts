@@ -34,6 +34,7 @@ function fakeScene(playerRow: number, overhang: string[] = []) {
     peerChars: new Map(),
     remoteRoster: new Map(),
     remoteSprites: new Map(),
+    remotePlates: new Map(),
     cardBadges: new Map(),
     avatarsAsked: new Set(),
     playerTile: { x: 0, y: playerRow },

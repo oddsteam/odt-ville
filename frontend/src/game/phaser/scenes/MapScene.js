@@ -261,6 +261,13 @@ export default class MapScene extends Phaser.Scene {
     this.presence = this.registry.get('presence') || null
     this.remoteRoster = new Map()
     this.remoteSprites = new Map()
+    // A peer's nameplate (label + face chip + card badge) lives in its own
+    // container, not the body one (#483): a Phaser container forces one depth on
+    // every child, and the body drops to the walk-under / masked band on a masked
+    // tile (peerDepth), so a plate riding it sinks under prop art — the peer half
+    // of #482. The plate holds MAP_NAMEPLATE_DEPTH and tracks the body's position
+    // every frame in update(), keyed by the same userId as remoteSprites.
+    this.remotePlates = new Map()
     // Our own nameplate container (below) — cleared here because the instance
     // survives stop/start (#249); a hop to a solo map builds none, so a stale
     // reference would point update() at a destroyed object.
@@ -346,6 +353,14 @@ export default class MapScene extends Phaser.Scene {
     // `this.player.depth` onto it.
     if (this.selfPlate && this.player) {
       this.selfPlate.setPosition(this.player.x, this.player.y)
+    }
+    // Glue each peer's nameplate to its body the same way (#483): the plate is a
+    // separate container held at MAP_NAMEPLATE_DEPTH, so it tracks the tweened
+    // body's position here every frame — no lag or drift while the peer walks —
+    // while the body keeps its own dynamic walk-under / row-sort depth.
+    for (const [userId, plate] of this.remotePlates) {
+      const body = this.remoteSprites.get(userId)
+      if (body) plate.setPosition(body.x, body.y)
     }
     // A Standee retires itself when its moment passes (#374) — off the clock
     // this loop already runs on, so there is no sweeper job and no server tick.
@@ -458,8 +473,12 @@ export default class MapScene extends Phaser.Scene {
   dropPeer(userId) {
     this.remoteSprites.get(userId)?.destroy()
     this.remoteSprites.delete(userId)
-    // Destroyed with the container above; drop the handle so a rejoin builds
-    // a fresh badge instead of trying to destroy a dead one.
+    // The plate is a sibling container, not a child of the body, so it needs its
+    // own destroy (#483) — otherwise a leaver's label/face/badge lingers.
+    this.remotePlates.get(userId)?.destroy()
+    this.remotePlates.delete(userId)
+    // Destroyed with the plate container above; drop the handle so a rejoin
+    // builds a fresh badge instead of trying to destroy a dead one.
     this.cardBadges.delete(userId)
   }
 
@@ -469,10 +488,10 @@ export default class MapScene extends Phaser.Scene {
   setPeerCard(userId, card) {
     this.cardBadges.get(userId)?.destroy()
     this.cardBadges.delete(userId)
-    const remote = this.remoteSprites.get(userId)
+    const plate = this.remotePlates.get(userId)
     // No card is the resting state, not an error — most people never link a
     // Jira token to Eira at all.
-    if (!remote || !card) return
+    if (!plate || !card) return
 
     const badge = this.add
       .text(0, CARD_Y, badgeText(card), {
@@ -487,7 +506,7 @@ export default class MapScene extends Phaser.Scene {
       badge.setInteractive({ useHandCursor: true })
       badge.on('pointerdown', () => window.open(href, '_blank', 'noopener'))
     }
-    remote.add(badge)
+    plate.add(badge)
     this.cardBadges.set(userId, badge)
   }
 
@@ -559,12 +578,11 @@ export default class MapScene extends Phaser.Scene {
     this.loadPeerCharacter(state.manifestId)
     const feet = this.peerFeet(state)
     if (action === 'spawn') {
-      // A sprite, not an image: peers play their own walk loop (#267).
+      // A sprite, not an image: peers play their own walk loop (#267). The body
+      // container holds the sprite alone — the plate (label + chip + badge) is a
+      // sibling (#483), so applyPeerLook still reads the body's list[0].
       const img = this.add.sprite(0, 0, `player.${state.facing}.0`).setOrigin(0.5, 1)
-      const label = this.add
-        .text(0, NAMEPLATE_Y, state.name, { fontSize: '12px', color: '#ffffff', backgroundColor: '#000000aa' })
-        .setOrigin(0.5, 0)
-      const remote = this.add.container(feet.x, feet.y, [img, label])
+      const remote = this.add.container(feet.x, feet.y, [img])
       // A peer sorts against the local avatar's row like a placed NPC (#403):
       // south covers, north draws behind — and an overhang / foreground cell
       // still wins where it applies (#402: behind an object's art on an overhang
@@ -573,18 +591,26 @@ export default class MapScene extends Phaser.Scene {
         peerDepth(state.y, this.playerTile.y, this.isOverhang(state.x, state.y), this.isForeground(state.x, state.y)),
       )
       this.remoteSprites.set(frame.userId, remote)
+      // The nameplate rides its own container at MAP_NAMEPLATE_DEPTH (#483), so
+      // it never sinks under prop art when the body drops onto a masked tile. It
+      // tracks the body's position every frame in update().
+      const label = this.add
+        .text(0, NAMEPLATE_Y, state.name, { fontSize: '12px', color: '#ffffff', backgroundColor: '#000000aa' })
+        .setOrigin(0.5, 0)
+      const plate = this.add.container(feet.x, feet.y, [label]).setDepth(MAP_NAMEPLATE_DEPTH)
+      this.remotePlates.set(frame.userId, plate)
       this.applyPeerLook(remote, state)
       // The spawn frame carries their card, so someone who picked one up while
       // out of range walks back in already wearing the badge.
       this.setPeerCard(frame.userId, state.card)
-      // Their face on the nameplate (#323) once it lands — a child of the
+      // Their face on the nameplate (#323) once it lands — a child of the plate
       // container, so leaving destroys it with the rest of them. A peer who left
-      // (or walked out of range) mid-fetch is no longer the container we hold.
+      // (or walked out of range) mid-fetch is no longer the plate we hold.
       loadAvatar(this, frame.userId, this.avatarsAsked, (key) => {
-        if (this.remoteSprites.get(frame.userId) !== remote) return
+        if (this.remotePlates.get(frame.userId) !== plate) return
         // A square chip standing on the nameplate line, whatever the source
         // image's aspect (Basecamp serves squares, the proxy re-serves them).
-        remote.add(this.add.image(0, NAMEPLATE_Y, key).setOrigin(0.5, 1).setDisplaySize(AVATAR_PX, AVATAR_PX))
+        plate.add(this.add.image(0, NAMEPLATE_Y, key).setOrigin(0.5, 1).setDisplaySize(AVATAR_PX, AVATAR_PX))
       })
       return
     }

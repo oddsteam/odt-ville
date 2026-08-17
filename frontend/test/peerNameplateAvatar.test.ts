@@ -45,6 +45,7 @@ function fakeScene() {
     peerChars: new Map(),
     remoteRoster: new Map(),
     remoteSprites: new Map(),
+    remotePlates: new Map(),
     avatarsAsked: new Set(),
     cardBadges: new Map(),
     // A plain map: peers depth-sort against nothing here — faces are the subject.
@@ -125,8 +126,9 @@ const move = {
   manifestId: null,
 }
 
-// The sprite and the name label; a face is the third thing on the nameplate.
-const NAMEPLATE = 2
+// The name label starts the plate; a face is the second thing on it (#483: the
+// plate is its own container now, not the body one — the sprite lives apart).
+const PLATE = 1
 
 describe('peer nameplate avatar', () => {
   it('hangs the face on the nameplate once it lands', () => {
@@ -134,8 +136,8 @@ describe('peer nameplate avatar', () => {
     scene.presenceFrame(move)
     scene.settle('peer.avatar.peer')
 
-    const list = scene.remoteSprites.get('peer').list
-    expect(list).toHaveLength(NAMEPLATE + 1)
+    const list = scene.remotePlates.get('peer').list
+    expect(list).toHaveLength(PLATE + 1)
     expect(list.at(-1).key).toBe('peer.avatar.peer.round')
   })
 
@@ -144,16 +146,16 @@ describe('peer nameplate avatar', () => {
     scene.presenceFrame(move)
     scene.settle()
 
-    expect(scene.remoteSprites.get('peer').list).toHaveLength(NAMEPLATE)
+    expect(scene.remotePlates.get('peer').list).toHaveLength(PLATE)
   })
 
   it('hangs nothing on a peer who left while their face was in flight', () => {
     const scene = fakeScene()
     scene.presenceFrame(move)
-    const left = scene.remoteSprites.get('peer')
+    const left = scene.remotePlates.get('peer')
     scene.dropPeer('peer')
     scene.settle('peer.avatar.peer')
 
-    expect(left.list).toHaveLength(NAMEPLATE)
+    expect(left.list).toHaveLength(PLATE)
   })
 })
