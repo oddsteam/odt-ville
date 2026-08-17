@@ -16,7 +16,7 @@ vi.mock('phaser', () => ({
 }))
 
 const { default: MapScene } = await import('../src/game/phaser/scenes/MapScene.js')
-const { MAP_PLAYER_DEPTH, MAP_PLAYER_OVERHANG_DEPTH, MAP_PLAYER_FOREGROUND_DEPTH } = await import(
+const { MAP_PLAYER_DEPTH, MAP_PLAYER_OVERHANG_DEPTH, MAP_PLAYER_FOREGROUND_DEPTH, MAP_NAMEPLATE_DEPTH } = await import(
   '../src/game/phaser/mapWalk.ts'
 )
 
@@ -37,6 +37,7 @@ function fakeScene(overhang: string[] = [], fg: string[] = []) {
     peerChars: new Map(),
     remoteRoster: new Map(),
     remoteSprites: new Map(),
+    remotePlates: new Map(),
     cardBadges: new Map(),
     avatarsAsked: new Set(),
     // The local avatar shares the peers' rows here (row 4), so peer-vs-local row
@@ -97,6 +98,7 @@ const move = (x: number, y: number) => ({
 })
 
 const depthOf = (scene: any) => scene.remoteSprites.get('peer').depth
+const plateDepthOf = (scene: any) => scene.remotePlates.get('peer').depth
 
 describe('a peer spawning', () => {
   it('sits in the flat player band on a plain cell — a legacy map is unchanged', () => {
@@ -157,5 +159,35 @@ describe('a peer moving', () => {
     expect(depthOf(scene)).toBe(MAP_PLAYER_DEPTH)
     scene.tween.onComplete()
     expect(depthOf(scene)).toBe(MAP_PLAYER_DEPTH)
+  })
+})
+
+describe('a peer nameplate (#483)', () => {
+  it('holds the fixed nameplate depth while the body drops onto an overhang cell', () => {
+    const scene = fakeScene(['3,4'])
+    scene.presenceFrame(move(3, 4))
+
+    // The body sinks below the prop band (walk-under), but the plate sits in its
+    // own container above every prop band, so it is never swallowed by the art.
+    expect(depthOf(scene)).toBe(MAP_PLAYER_OVERHANG_DEPTH)
+    expect(plateDepthOf(scene)).toBe(MAP_NAMEPLATE_DEPTH)
+  })
+
+  it('keeps the nameplate depth on a foreground cell too', () => {
+    const scene = fakeScene([], ['3,4'])
+    scene.presenceFrame(move(3, 4))
+
+    expect(depthOf(scene)).toBe(MAP_PLAYER_FOREGROUND_DEPTH)
+    expect(plateDepthOf(scene)).toBe(MAP_NAMEPLATE_DEPTH)
+  })
+
+  it('holds the nameplate depth across a walking step, whatever the body does', () => {
+    const scene = fakeScene(['3,4'])
+    scene.presenceFrame(move(3, 3)) // spawn on a plain cell
+    scene.presenceFrame(move(3, 4)) // step onto the overhang cell
+
+    expect(plateDepthOf(scene)).toBe(MAP_NAMEPLATE_DEPTH)
+    scene.tween.onComplete()
+    expect(plateDepthOf(scene)).toBe(MAP_NAMEPLATE_DEPTH)
   })
 })

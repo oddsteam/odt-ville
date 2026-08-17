@@ -144,6 +144,16 @@ export function mapPlayerDepth(isOverhang: boolean, isForeground = false): numbe
   return MAP_PLAYER_DEPTH
 }
 
+// The nameplate band (#482). A name label + face chip + card badge is UI about a
+// person, not scenery, so it must never be occluded by prop art. It gets its own
+// fixed depth *above* MAP_PLAYER_DEPTH rather than borrowing the avatar's, which
+// is dynamic per step (mapPlayerDepth): an overhang cell drops the avatar to
+// MAP_PLAYER_OVERHANG_DEPTH (below the whole prop band) and a foreground cell to
+// MAP_PLAYER_FOREGROUND_DEPTH, so a plate riding that depth sinks under any art it
+// overlaps on a masked tile. Walk-under of the body itself is unchanged — only
+// the plate stops following the avatar down.
+export const MAP_NAMEPLATE_DEPTH = MAP_PLAYER_DEPTH + 1
+
 // The depth to hold for a whole tile-step (#210, #294). Mid-slide the avatar
 // overlaps both cells, so it stays under the entity band while EITHER end of the
 // step is an overhang cell: taking the destination's depth alone pops the avatar
