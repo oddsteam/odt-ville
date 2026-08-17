@@ -22,6 +22,7 @@ import {
   MAP_PLAYER_DEPTH,
   MAP_PLAYER_OVERHANG_DEPTH,
   MAP_PLAYER_FOREGROUND_DEPTH,
+  MAP_NAMEPLATE_DEPTH,
 } from './mapWalk.ts'
 import { MAP_ENTITY_DEPTH, MAP_ENTITY_FG_DEPTH } from '../../kernel/mapRenderer.ts'
 import type { BakedEntity } from '../../kernel/schema.ts'
@@ -321,6 +322,20 @@ describe('mapPlayerDepth', () => {
     // Fully-behind (overhang) beats partly-behind (foreground): the object's
     // whole art overhangs the avatar, not just its masked canopy.
     expect(mapPlayerDepth(true, true)).toBe(MAP_PLAYER_OVERHANG_DEPTH)
+  })
+})
+
+describe('MAP_NAMEPLATE_DEPTH', () => {
+  it('sits above every prop band and both dropped avatar bands (#482)', () => {
+    // A nameplate is UI about a person, not scenery — it must never be occluded
+    // by prop art whatever cell the avatar stands on.
+    expect(MAP_NAMEPLATE_DEPTH).toBeGreaterThan(MAP_ENTITY_DEPTH)
+    expect(MAP_NAMEPLATE_DEPTH).toBeGreaterThan(MAP_ENTITY_FG_DEPTH)
+    // Above the avatar's default band and both dropped (walk-under / masked) bands,
+    // so the plate does not follow the avatar down onto a masked tile.
+    expect(MAP_NAMEPLATE_DEPTH).toBeGreaterThan(MAP_PLAYER_DEPTH)
+    expect(MAP_NAMEPLATE_DEPTH).toBeGreaterThan(MAP_PLAYER_OVERHANG_DEPTH)
+    expect(MAP_NAMEPLATE_DEPTH).toBeGreaterThan(MAP_PLAYER_FOREGROUND_DEPTH)
   })
 })
 

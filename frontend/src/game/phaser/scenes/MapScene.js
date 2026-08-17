@@ -3,7 +3,7 @@ import { preloadBakedMap, renderBakedMap } from '../../../kernel/mapRenderer.ts'
 import { MOVE_MS, TILE } from '../../constants.js'
 import { cameraBounds } from '../canvasLayout.ts'
 import { isTransitioning } from '../../transition.ts'
-import { spawnTile, mapWalkable, entityBlockedFor, entityEdgeBlockedFor, entityDoorCells, entityLadderFor, entityOverhangFor, entityForegroundFor, mapPlayerDepth, slidePlayerDepth, peerDepth, peerSlideDepth, feetWorldXY } from '../mapWalk.ts'
+import { spawnTile, mapWalkable, entityBlockedFor, entityEdgeBlockedFor, entityDoorCells, entityLadderFor, entityOverhangFor, entityForegroundFor, mapPlayerDepth, slidePlayerDepth, peerDepth, peerSlideDepth, feetWorldXY, MAP_NAMEPLATE_DEPTH } from '../mapWalk.ts'
 import { spawnNpcs, npcBlockedFor, sortNpcs } from '../mapNpcs.ts'
 import { spawnStandees, sortStandees, standeeAt, placardOf, addStandee, restandeeRigs, expiredStandees, cutout } from '../mapStandees.ts'
 import {
@@ -320,7 +320,11 @@ export default class MapScene extends Phaser.Scene {
           .setOrigin(0.5, 0),
       )
     }
-    this.selfPlate = this.add.container(this.player.x, this.player.y, children).setDepth(this.player.depth)
+    // The plate holds its own nameplate depth (#482) rather than the avatar's,
+    // which drops onto masked tiles (walk-under / foreground) and would sink the
+    // plate under prop art. It tracks the avatar's *position* every frame, not
+    // its depth.
+    this.selfPlate = this.add.container(this.player.x, this.player.y, children).setDepth(MAP_NAMEPLATE_DEPTH)
     if (this.presence?.ownId) {
       loadAvatar(this, this.presence.ownId, this.avatarsAsked, (key) => {
         this.selfPlate?.add(this.add.image(0, NAMEPLATE_Y, key).setOrigin(0.5, 1).setDisplaySize(AVATAR_PX, AVATAR_PX))
@@ -335,10 +339,13 @@ export default class MapScene extends Phaser.Scene {
     // theatre and never touches walkability.
     updateProximityStamps(this, this.playerTile, delta)
     // Keep our own nameplate glued to the avatar: the plate is a separate
-    // container (the player is a lone tweened sprite), so it tracks position +
-    // depth here every frame — ahead of the input guard, which only gates steps.
+    // container (the player is a lone tweened sprite), so it tracks position here
+    // every frame — ahead of the input guard, which only gates steps. Its depth
+    // is fixed at MAP_NAMEPLATE_DEPTH (#482): a nameplate is UI about a person and
+    // must not follow the avatar down onto a masked tile, so we no longer copy
+    // `this.player.depth` onto it.
     if (this.selfPlate && this.player) {
-      this.selfPlate.setPosition(this.player.x, this.player.y).setDepth(this.player.depth)
+      this.selfPlate.setPosition(this.player.x, this.player.y)
     }
     // A Standee retires itself when its moment passes (#374) — off the clock
     // this loop already runs on, so there is no sweeper job and no server tick.
