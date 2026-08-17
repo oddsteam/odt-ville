@@ -7,7 +7,7 @@
 import { TILE } from './constants.ts'
 import { framesForFacing, characterScale } from './characterManifest.js'
 import { queueRigSheet } from './rigSheet.js'
-import type { BakedEntity, BakedGround, BakedMap } from './schema.ts'
+import type { BakedEntity, BakedGround, BakedMap, Zone } from './schema.ts'
 import {
   loadObjectTextures,
   loadObjectForegroundTextures,
@@ -76,6 +76,34 @@ export const MAP_ENTITY_DEPTH = 1
 // overlay once south of the footprint. This is the map path's flat-depth
 // counterpart to town's buildingOverlayDepth ((row+h)*10 + 2) south band.
 export const MAP_ENTITY_FG_DEPTH = MAP_ENTITY_DEPTH + 1
+
+// The blinking-zone marker's depth: above every ground stack, below the entity
+// band, so a prop standing on the zone covers the glow instead of being lit by
+// it. Nothing is drawn *inside* the zone rect either (see blinkRects) — the
+// pulse is a ring hugging the outside of the border, so authored art on the
+// zone's own tiles is never tinted.
+export const BLINK_DEPTH = MAP_ENTITY_DEPTH - 0.5
+
+// The ring's colour — amber, the decorate editor's `link` tint (ZONE_COLORS),
+// so what an author paints and what a player sees agree.
+const BLINK_COLOR = 0xf59e0b
+
+// The pulse: one full fade out-and-back per this many ms.
+const BLINK_MS = 700
+
+// The world-px rect of every zone the author ticked "blinking" (link zones
+// only, the one kind that carries the flag). Pure, so the geometry is checked
+// without Phaser; the stroking and the tween live in renderZoneBlink.
+export function blinkRects(zones?: readonly Zone[]) {
+  return (zones ?? [])
+    .filter((z) => z.payload.kind === 'link' && z.payload.blink)
+    .map((z) => ({
+      x: z.x * TILE,
+      y: z.y * TILE,
+      w: (z.w ?? 1) * TILE,
+      h: (z.h ?? 1) * TILE,
+    }))
+}
 
 // What the draw list needs off a fetched object — structural, so the pure
 // part is testable without full TileObjects. `fg_mask` (a PNG data URL, #36)
@@ -300,11 +328,37 @@ export function renderBakedMap(scene: Scene) {
     if (d.fgMaskKey) stampForeground(scene, d)
   }
 
+  renderZoneBlink(scene, map.zones)
+
   // Size the world to the authored grid so the camera can frame it.
   const worldW = map.cols * TILE
   const worldH = map.rows * TILE
   scene.cameras?.main?.setBounds(0, 0, worldW, worldH)
   scene.cameras?.main?.centerOn(worldW / 2, worldH / 2)
+}
+
+// Ring every blinking zone with a pulsing glow: three strokes stepping outward
+// from the border, each fainter than the last, all in one Graphics so a single
+// alpha tween pulses the lot. The strokes sit wholly outside the zone rect
+// (each band is centred half its width beyond the border), which is what keeps
+// the glow off the object art standing on the zone — the flag is a hint that
+// something is pressable here, not a highlight of what.
+function renderZoneBlink(scene: Scene, zones?: readonly Zone[]) {
+  const rects = blinkRects(zones)
+  if (!rects.length) return
+  const g = scene.add.graphics().setDepth(BLINK_DEPTH)
+  for (const [i, alpha] of [0.9, 0.5, 0.25].entries()) {
+    g.lineStyle(2, BLINK_COLOR, alpha)
+    const pad = i * 2 + 1
+    for (const r of rects) g.strokeRect(r.x - pad, r.y - pad, r.w + pad * 2, r.h + pad * 2)
+  }
+  scene.tweens.add({
+    targets: g,
+    alpha: { from: 1, to: 0.15 },
+    duration: BLINK_MS,
+    yoyo: true,
+    repeat: -1,
+  })
 }
 
 // A stamped NPC and the entity it draws (#295), left on the scene for the

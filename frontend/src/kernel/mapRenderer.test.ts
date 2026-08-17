@@ -7,6 +7,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   bakedDraws,
+  blinkRects,
+  BLINK_DEPTH,
   MAP_ENTITY_DEPTH,
   MAP_ENTITY_FG_DEPTH,
   objectTextureKey,
@@ -14,6 +16,7 @@ import {
 } from './mapRenderer.ts'
 import { objectForegroundKey } from './entityLoader.ts'
 import type { BakedMap } from './schema.ts'
+import { TILE } from './constants.ts'
 
 // A minimal 2×2 baked map with a single tile and the given entities.
 const mapWith = (entities: BakedMap['entities']): BakedMap => ({
@@ -68,5 +71,42 @@ describe('bakedDraws fg overlay', () => {
     const entity = draws.find((d) => d.key === 'bake.t')
     expect(entity).toBeDefined()
     expect(entity?.fgMaskKey).toBeUndefined()
+  })
+})
+
+// The blinking zone marker: only a zone the author ticked "blinking" on gets a
+// ring, in world px, and the ring band sits wholly *outside* the zone's own
+// rect so the object art it hides under is never tinted.
+describe('blinkRects', () => {
+  const link = (blink?: boolean, w?: number, h?: number) => ({
+    trigger: 'interact' as const,
+    x: 2,
+    y: 3,
+    w,
+    h,
+    payload: { kind: 'link' as const, url: 'https://odds.team', blink },
+  })
+
+  it('rings only the zones flagged blinking', () => {
+    expect(blinkRects([link(false), link(undefined), link(true)])).toEqual([
+      { x: 2 * TILE, y: 3 * TILE, w: TILE, h: TILE },
+    ])
+  })
+
+  it('spans the zone rect for a multi-tile zone', () => {
+    expect(blinkRects([link(true, 3, 2)])[0]).toEqual({
+      x: 2 * TILE,
+      y: 3 * TILE,
+      w: 3 * TILE,
+      h: 2 * TILE,
+    })
+  })
+
+  it('draws under the object art', () => {
+    expect(BLINK_DEPTH).toBeLessThan(MAP_ENTITY_DEPTH)
+  })
+
+  it('has nothing to draw on a map with no zones', () => {
+    expect(blinkRects(undefined)).toEqual([])
   })
 })

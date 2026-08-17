@@ -123,6 +123,10 @@ export const ZonePayload = Schema.Union(
     kind: Schema.Literal('link'),
     url: Schema.String,
     label: Schema.optional(Schema.String),
+    // Ticked in the decorate editor: the runtime rings the zone with a pulsing
+    // glow so a player can tell there is something to press here. Presentation
+    // only — it changes nothing about how or when the zone fires.
+    blink: Schema.optional(Schema.Boolean),
   }),
   // The trainer duel (#259, ADR-0008): the payload holds only the *mechanic* —
   // which NPC challenges you, by catalog-row id (like a Prop's `object_id`). Who

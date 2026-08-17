@@ -661,6 +661,14 @@ export default function MapDecoratePage() {
                       <input type="text" value={p.label ?? ''}
                         onChange={(e) => editZone({ ...zone, payload: { ...p, label: opt(e.target.value) } })} />
                     </label>
+                    {/* Presentation only: the runtime rings the zone with a
+                        pulsing glow just outside its border, under the object
+                        art, so a player can see there is something to press. */}
+                    <label className="admin-field-inline">
+                      <input type="checkbox" checked={!!p.blink}
+                        onChange={(e) => editZone({ ...zone, payload: { ...p, blink: e.target.checked || undefined } })} />
+                      Blinking — glow the zone&rsquo;s border in game
+                    </label>
                   </>
                 )}
               </div>
