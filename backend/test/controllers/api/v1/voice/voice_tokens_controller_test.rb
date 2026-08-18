@@ -46,8 +46,8 @@ module Api
 
         # A meeting room (#486): the roomId must name a meeting zone authored on a
         # map the caller can reach, so the browser can't mint a token for any room.
-        def map_with_meeting(slug: "hq", room_id: "standup", access_policy: nil)
-          Maps::Map.create!(
+        def map_with_meeting(slug: "hq", room_id: "standup", access_policy: { "kind" => "public" })
+          ::Maps::Map.create!(
             slug: slug, title: slug.titleize, cols: 8, rows: 6,
             access_policy: access_policy,
             baked: { "zones" => [
