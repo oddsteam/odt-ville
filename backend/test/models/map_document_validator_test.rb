@@ -106,6 +106,23 @@ class MapDocumentValidatorTest < ActiveSupport::TestCase
     })
   end
 
+  # A meeting room (#485) names only its room. A blank roomId can't be joined —
+  # the resolver (#486) keys the LiveKit room off it — so it is refused at save.
+  test "a meeting zone with a blank roomId is rejected with a reason" do
+    error = assert_raises(ActiveRecord::RecordInvalid) do
+      make_map(baked: { "zones" => [
+        { "trigger" => "on_enter", "x" => 4, "y" => 5, "payload" => { "kind" => "meeting", "roomId" => "  " } }
+      ] })
+    end
+    assert_match(/meeting zone at \(4, 5\) has a blank roomId/, error.message)
+  end
+
+  test "a meeting zone with a roomId is accepted" do
+    assert make_map(baked: { "zones" => [
+      { "trigger" => "on_enter", "x" => 4, "y" => 5, "payload" => { "kind" => "meeting", "roomId" => "room-1a2b" } }
+    ] })
+  end
+
   # A 1×1 house whose door is its own footprint cell at (0,0) — the walk-mask
   # solid, the door the carved entry (mirrors MapScene's door override).
   def house_with_door

@@ -48,6 +48,11 @@ export function villageZone({
       case 'encounter':
         startEncounter(p.pool)
         return
+      case 'meeting':
+        // Authored round-trip only in this slice (#485). A meeting room is a
+        // *position* you stand in, not a fired event — voice membership resolves
+        // off the avatar's tile in #486, not through this on_enter channel.
+        return
       // The switch claims to be exhaustive over ZonePayload; this makes the
       // compiler hold it to that. Without it #87 added `encounter` to MapPage
       // alone and this dispatch went on silently ignoring it — the same map

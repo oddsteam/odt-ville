@@ -14,7 +14,21 @@ module Maps
         unknown_terrain_reasons(source["terrain"]) +
         portal_reasons(map, baked["zones"] || []) +
         sight_reasons(baked["zones"] || []) +
+        meeting_reasons(baked["zones"] || []) +
         unreachable_door_reasons(map, baked)
+    end
+
+    # A meeting zone (#485) names only its room. `roomId` keys the LiveKit room
+    # the resolver joins (#486), so a blank one can never be joined — refuse it
+    # at the boundary, the way a facing-less sight cone is refused above.
+    def meeting_reasons(zones)
+      zones.filter_map do |zone|
+        payload = zone["payload"] || {}
+        next unless payload["kind"] == "meeting"
+        next if payload["roomId"].to_s.strip.present?
+
+        "meeting zone at (#{zone['x']}, #{zone['y']}) has a blank roomId"
+      end
     end
 
     FACINGS = %w[up down left right].freeze
