@@ -18,6 +18,7 @@ import { getAuthToken } from '../lib/authToken.ts'
 import { micState } from './micState.ts'
 import { podFor } from './service.ts'
 import { resolveRoom, type MeetingRect } from './room.ts'
+import { meetingState, type CameraStatus, type SelfView } from './meetingState.ts'
 import { DWELL_MS, LEAVE_RADIUS, PREJOIN_RADIUS } from './schema.ts'
 import type { MicStatus, VoicePosition } from './schema.ts'
 import type { VoiceMesh } from './mesh.ts'
@@ -30,11 +31,20 @@ export function voiceSfuEnabled(env: { VITE_VOICE_SFU?: string }): boolean {
 
 // Just enough of livekit-client's Room to test the join/mute/stop wiring against
 // a fake — the adapter below hands the real Room in.
+// A camera publication carries the local video track (LocalVideoTrack) — enough
+// of livekit's LocalTrackPublication to attach the self-view.
+interface CameraPublicationLike {
+  videoTrack?: SelfView
+}
+
 export interface RoomLike {
   on(event: string, cb: (...args: unknown[]) => void): unknown
   connect(url: string, token: string): Promise<void>
   disconnect(): Promise<void> | void
-  localParticipant: { setMicrophoneEnabled(enabled: boolean): Promise<unknown> }
+  localParticipant: {
+    setMicrophoneEnabled(enabled: boolean): Promise<unknown>
+    setCameraEnabled(enabled: boolean): Promise<CameraPublicationLike | undefined>
+  }
 }
 
 interface RemoteTrackLike {
@@ -58,6 +68,16 @@ export interface LivekitDeps {
   attach: (track: RemoteTrackLike) => void
   detach: (track: RemoteTrackLike) => void
   onStatus?: (s: MicStatus) => void
+  // Meeting-room membership for the HUD (#487): true when we hold a meeting room,
+  // false when we leave it. Drives whether the meeting overlay is shown.
+  onMeeting?: (inMeeting: boolean) => void
+  // The camera's real state as a toggle resolves (#487): 'denied' is a clean off
+  // state (same shape as a declined mic), not an error.
+  onCamera?: (s: CameraStatus) => void
+  // Attach/detach the local camera track to the self-view tile (DOM lives in the
+  // adapter, so the core stays testable in node — mirrors attach/detach above).
+  attachSelfView?: (track: SelfView | undefined) => void
+  detachSelfView?: () => void
   // The measured room-join latency, emitted on each connect (#310 spike output).
   onJoinLatency?: (ms: number) => void
   // Overridable for tests; defaults to the tuned constants / wall clock.
@@ -82,6 +102,11 @@ export function createLivekitVoice(deps: LivekitDeps): VoiceMesh {
   let joining = false // a connect() is in flight — don't start a second
   let muted = false
   let denied = false // the browser declined the mic — voice cleanly off
+  // Meeting HUD state (#487). Camera membership is a click, never a default: it
+  // publishes only inside a meeting room and stops the device on the way out.
+  let inMeeting = false
+  let cameraOn = false
+  let cameraDenied = false
   let leaveTimer: ReturnType<typeof setTimeout> | null = null
   // The last position/roster, so a dwell timer firing later re-resolves against
   // where we actually are now, not where we were when it was armed.
@@ -90,6 +115,32 @@ export function createLivekitVoice(deps: LivekitDeps): VoiceMesh {
 
   const report = () =>
     deps.onStatus?.({ live: connected && !muted && !denied, muted, denied })
+
+  // A meeting room is one whose key we minted as `meeting-<roomId>` (#486).
+  const isMeetingRoom = (r: string | null) => r !== null && r.startsWith('meeting-')
+
+  // Fire onMeeting only on the edge: we hold a meeting room, or we don't.
+  const reportMeeting = () => {
+    const next = connected && isMeetingRoom(currentRoom)
+    if (next !== inMeeting) {
+      inMeeting = next
+      deps.onMeeting?.(next)
+    }
+  }
+
+  const reportCamera = () =>
+    deps.onCamera?.(cameraDenied ? 'denied' : cameraOn ? 'on' : 'off')
+
+  // Stop the camera device and drop the self-view — used both by the off toggle
+  // and by leaving the room, so the light goes out either way (#487).
+  function stopCamera() {
+    if (!cameraOn && !cameraDenied) return
+    cameraOn = false
+    cameraDenied = false
+    void room.localParticipant.setCameraEnabled(false).catch(() => {})
+    deps.detachSelfView?.()
+    reportCamera()
+  }
 
   room.on(TRACK_SUBSCRIBED, (track) => {
     const t = track as RemoteTrackLike
@@ -113,6 +164,7 @@ export function createLivekitVoice(deps: LivekitDeps): VoiceMesh {
       connected = true
       deps.onJoinLatency?.(now() - t0) // measured lead time (#310)
       report()
+      reportMeeting() // opens the HUD the moment we hold a meeting room (#487)
       try {
         await room.localParticipant.setMicrophoneEnabled(!muted)
       } catch {
@@ -133,9 +185,11 @@ export function createLivekitVoice(deps: LivekitDeps): VoiceMesh {
 
   function disconnect() {
     if (!connected) return
+    stopCamera() // leaving a room stops the camera device, even if the tab stays open (#487)
     connected = false
     void room.disconnect()
     report()
+    reportMeeting() // tears the HUD down when the meeting room is left (#487)
   }
 
   // Move to `target` (a room key, or null = disconnected). Leaves the current
@@ -200,6 +254,27 @@ export function createLivekitVoice(deps: LivekitDeps): VoiceMesh {
       if (connected) void room.localParticipant.setMicrophoneEnabled(!muted).catch(() => {})
       report()
     },
+    // Publish/unpublish the camera (#487). Only meaningful inside a meeting room;
+    // a declined permission lands in a clean off state (denied), never an error.
+    async setCamera(on) {
+      if (!connected || !isMeetingRoom(currentRoom)) return
+      if (!on) {
+        stopCamera()
+        return
+      }
+      try {
+        const pub = await room.localParticipant.setCameraEnabled(true)
+        cameraOn = true
+        cameraDenied = false
+        deps.attachSelfView?.(pub?.videoTrack)
+        reportCamera()
+      } catch {
+        cameraOn = false
+        cameraDenied = true
+        deps.detachSelfView?.()
+        reportCamera()
+      }
+    },
     stop() {
       cancelLeave()
       disconnect()
@@ -257,6 +332,15 @@ export function connectLivekitRoom(
     },
     detach: (track) => (track as RemoteTrack).detach().forEach((el) => el.remove()),
     onStatus: (s) => micState.status(s),
+    // Meeting HUD (#487): entering a meeting room opens the overlay and binds the
+    // camera toggle to this mesh; leaving tears it down (the camera is already
+    // stopped by the core). The camera state itself flows back through onCamera /
+    // attachSelfView so the store never guesses what the device actually did.
+    onMeeting: (inMeeting) =>
+      inMeeting ? meetingState.enter((on) => mesh.setCamera?.(on)) : meetingState.leave(),
+    onCamera: (s) => meetingState.cameraStatus(s),
+    attachSelfView: (track) => meetingState.setSelfView(track ?? null),
+    detachSelfView: () => meetingState.setSelfView(null),
     // Spike output (#310): log the real join latency so PREJOIN_RADIUS can be
     // re-derived from measurement rather than the current estimate.
     onJoinLatency: (ms) => console.info(`[voice] livekit join latency ${Math.round(ms)}ms`),

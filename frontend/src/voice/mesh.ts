@@ -32,6 +32,9 @@ export interface VoiceDeps {
 export interface VoiceMesh {
   update(own: VoicePosition, roster: Map<string, VoicePosition>): void
   setMute(muted: boolean): void
+  // Publish/unpublish the local camera in a meeting room (#487). Only the LiveKit
+  // room path implements it — the peer mesh has no meeting rooms, so it is optional.
+  setCamera?(on: boolean): void
   stop(): void
 }
 

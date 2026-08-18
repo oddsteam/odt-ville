@@ -18,6 +18,7 @@ import CharacterSelectPage from './character/CharacterSelectPage.tsx'
 import LookBuilderPage from './character/LookBuilderPage.tsx'
 import VoiceMeters from './voice/VoiceMeters.tsx'
 import MicIndicator from './voice/MicIndicator.tsx'
+import MeetingHud from './voice/MeetingHud.tsx'
 
 // Test-env voice meter (#287): opt-in via ?voicemeter, so it rides any route
 // (door path at "/" or /maps/:slug) and works on the prod homeserver build.
@@ -41,6 +42,10 @@ export default function App() {
     {/* Mic consent + mute affordance (#282): self-hides unless a voice mesh is
         live, so it rides every route without knowing which map you are on. */}
     <MicIndicator />
+    {/* Meeting overlay (#487): mic + camera controls and your own self-view,
+        shown only while you stand in a meeting room (#486). Self-hides like the
+        mic indicator, so it rides every route without knowing the map. */}
+    <MeetingHud />
     {showVoiceMeters && <VoiceMeters />}
     <Routes>
       <Route element={<RootLayout />}>

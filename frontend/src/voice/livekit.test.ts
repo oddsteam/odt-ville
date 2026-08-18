@@ -7,19 +7,31 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createLivekitVoice, voiceSfuEnabled, type RoomLike } from './livekit.ts'
 import type { MeetingRect } from './room.ts'
 import { DWELL_MS, LEAVE_RADIUS, PREJOIN_RADIUS, type MicStatus, type VoicePosition } from './schema.ts'
+import type { CameraStatus } from './meetingState.ts'
 
 class FakeTrack {
   constructor(public kind = 'audio') {}
+  // A video track doubles as a self-view SelfView (attach/detach) in #487 tests.
+  attach() {}
+  detach() {}
 }
 
 class FakeRoom implements RoomLike {
   handlers = new Map<string, (...a: unknown[]) => void>()
   connected = false
   micEnabled: boolean | null = null
+  cameraEnabled: boolean | null = null
+  cameraDenied = false // set by a test to simulate a declined camera permission
+  videoTrack = new FakeTrack('video')
   disconnected = false
   localParticipant = {
     setMicrophoneEnabled: async (enabled: boolean) => {
       this.micEnabled = enabled
+    },
+    setCameraEnabled: async (enabled: boolean) => {
+      if (enabled && this.cameraDenied) throw new Error('NotAllowedError')
+      this.cameraEnabled = enabled
+      return enabled ? { videoTrack: this.videoTrack } : undefined
     },
   }
   on(event: string, cb: (...a: unknown[]) => void) {
@@ -48,6 +60,10 @@ function harness(meetingRects: MeetingRect[] = []) {
   const statuses: MicStatus[] = []
   const latencies: number[] = []
   const tokensFor: string[] = [] // the room keys getToken was asked for, in order
+  const meetings: boolean[] = [] // onMeeting edges: in a meeting room or not
+  const cameras: CameraStatus[] = [] // onCamera reports
+  const selfViews: unknown[] = [] // attachSelfView payloads
+  let selfViewOn = false // detachSelfView flips this back off
   const mesh = createLivekitVoice({
     room,
     url: 'wss://example.livekit.cloud',
@@ -61,8 +77,29 @@ function harness(meetingRects: MeetingRect[] = []) {
     detach: (t) => detached.push(t as FakeTrack),
     onStatus: (s) => statuses.push(s),
     onJoinLatency: (ms) => latencies.push(ms),
+    onMeeting: (inMeeting) => meetings.push(inMeeting),
+    onCamera: (s) => cameras.push(s),
+    attachSelfView: (t) => {
+      selfViews.push(t)
+      selfViewOn = true
+    },
+    detachSelfView: () => {
+      selfViewOn = false
+    },
   })
-  return { room, mesh, attached, detached, statuses, latencies, tokensFor }
+  return {
+    room,
+    mesh,
+    attached,
+    detached,
+    statuses,
+    latencies,
+    tokensFor,
+    meetings,
+    cameras,
+    selfViews,
+    selfViewShown: () => selfViewOn,
+  }
 }
 
 const at = (x: number): VoicePosition => ({ x, y: 0 })
@@ -303,5 +340,118 @@ describe('meeting rooms (#486)', () => {
       await flush()
       expect(h.tokensFor).toEqual(['meeting-standup', 'map-town']) // meeting → proximity
     })
+  })
+})
+
+describe('meeting HUD signals (#487)', () => {
+  const RECTS: MeetingRect[] = [{ x: 5, y: 5, w: 3, h: 3, roomId: 'standup' }]
+  const inside = { x: 6, y: 6 }
+  const outside = { x: 0, y: 0 }
+
+  it('signals in-meeting on entry and out again once the dwell leaves', async () => {
+    vi.useFakeTimers()
+    try {
+      const h = harness(RECTS)
+      h.mesh.update(inside, new Map())
+      await flush()
+      expect(h.meetings).toEqual([true]) // HUD shows
+
+      h.mesh.update(outside, new Map()) // walk out
+      await flush()
+      expect(h.meetings).toEqual([true]) // still connected through the dwell
+      vi.advanceTimersByTime(DWELL_MS)
+      await flush()
+      expect(h.meetings).toEqual([true, false]) // HUD tears down
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not signal in-meeting for the proximity room', async () => {
+    const h = harness(RECTS)
+    h.mesh.update(outside, roster(1)) // outside, a peer near → proximity join
+    await flush()
+    expect(h.meetings).toEqual([])
+  })
+
+  it('camera is off on entry — nothing is published without a toggle', async () => {
+    const h = harness(RECTS)
+    h.mesh.update(inside, new Map())
+    await flush()
+    expect(h.room.cameraEnabled).toBe(null) // never enabled
+    expect(h.selfViewShown()).toBe(false)
+  })
+
+  it('toggling the camera on publishes and renders a self-view; off stops it', async () => {
+    const h = harness(RECTS)
+    h.mesh.update(inside, new Map())
+    await flush()
+
+    h.mesh.setCamera!(true)
+    await flush()
+    expect(h.room.cameraEnabled).toBe(true)
+    expect(h.selfViews).toEqual([h.room.videoTrack])
+    expect(h.selfViewShown()).toBe(true)
+    expect(h.cameras.at(-1)).toBe('on')
+
+    h.mesh.setCamera!(false)
+    await flush()
+    expect(h.room.cameraEnabled).toBe(false) // the device light goes out
+    expect(h.selfViewShown()).toBe(false)
+    expect(h.cameras.at(-1)).toBe('off')
+  })
+
+  it('a denied camera is a clean off state, not an error', async () => {
+    const h = harness(RECTS)
+    h.room.cameraDenied = true
+    h.mesh.update(inside, new Map())
+    await flush()
+
+    h.mesh.setCamera!(true)
+    await flush()
+    expect(h.cameras.at(-1)).toBe('denied')
+    expect(h.selfViewShown()).toBe(false)
+  })
+
+  it('walking out stops the camera track even with the tab still open', async () => {
+    vi.useFakeTimers()
+    try {
+      const h = harness(RECTS)
+      h.mesh.update(inside, new Map())
+      await flush()
+      h.mesh.setCamera!(true)
+      await flush()
+      expect(h.room.cameraEnabled).toBe(true)
+
+      h.mesh.update(outside, new Map()) // walk out
+      vi.advanceTimersByTime(DWELL_MS)
+      await flush()
+      expect(h.room.cameraEnabled).toBe(false) // stopped on leave, not just on tab close
+      expect(h.selfViewShown()).toBe(false)
+      expect(h.cameras.at(-1)).toBe('off')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('stop() stops the camera and signals out of the meeting', async () => {
+    const h = harness(RECTS)
+    h.mesh.update(inside, new Map())
+    await flush()
+    h.mesh.setCamera!(true)
+    await flush()
+
+    h.mesh.stop()
+    expect(h.room.cameraEnabled).toBe(false)
+    expect(h.meetings.at(-1)).toBe(false)
+  })
+
+  it('ignores a camera toggle when not in a meeting room', async () => {
+    const h = harness(RECTS)
+    h.mesh.update(outside, roster(1)) // proximity room, no meeting
+    await flush()
+    h.mesh.setCamera!(true)
+    await flush()
+    expect(h.room.cameraEnabled).toBe(null)
   })
 })
