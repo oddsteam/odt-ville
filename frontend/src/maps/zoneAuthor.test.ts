@@ -5,7 +5,9 @@
 
 import { describe, expect, it } from 'vitest'
 import { newZone, retrigger, triggersFor, zoneIndexAt, eraseZoneAt, replaceZone } from './zoneAuthor.ts'
-import type { Zone } from '../kernel/schema.ts'
+import type { Zone, ZonePayload } from '../kernel/schema.ts'
+
+type MeetingPayload = Extract<ZonePayload, { kind: 'meeting' }>
 
 describe('retrigger (the inspector’s trigger switch, #86)', () => {
   const portal: Zone = { trigger: 'on_enter', x: 1, y: 1, payload: { kind: 'portal', targetNode: 'town' } }
@@ -81,6 +83,23 @@ describe('newZone', () => {
       payload: { kind: 'link', url: '' },
     })
   })
+
+  it('seeds a meeting as an on_enter room with a generated roomId that saves cleanly (#485)', () => {
+    const zone = newZone('meeting', 8, 9)
+    expect(zone).toMatchObject({ trigger: 'on_enter', x: 8, y: 9 })
+    const payload = zone.payload as MeetingPayload
+    expect(payload.kind).toBe('meeting')
+    // Non-blank so the zone saves from the first click (the validator rejects a
+    // blank roomId), and no label until the author types one.
+    expect(payload.roomId).toMatch(/\S/)
+    expect(payload.label).toBeUndefined()
+  })
+
+  it('gives each placed meeting room its own roomId, so moving one never strands the other (#485)', () => {
+    const a = newZone('meeting', 0, 0).payload as MeetingPayload
+    const b = newZone('meeting', 1, 1).payload as MeetingPayload
+    expect(a.roomId).not.toEqual(b.roomId)
+  })
 })
 
 describe('zoneIndexAt', () => {
@@ -131,6 +150,13 @@ describe('triggersFor', () => {
   // fires (#87).
   it('offers only on_enter for an encounter payload', () => {
     expect(triggersFor('encounter')).toEqual(['on_enter'])
+  })
+
+  // You are in a meeting room when you stand inside its rect (#486) — there is
+  // no press-to-meet and no meet-across-a-cone, so on_enter is the only trigger
+  // that can ever fire it (#485).
+  it('offers only on_enter for a meeting payload', () => {
+    expect(triggersFor('meeting')).toEqual(['on_enter'])
   })
 
   it('leaves the other kinds free to pick any trigger', () => {

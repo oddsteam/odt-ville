@@ -12,7 +12,9 @@ export type ZoneKind = ZonePayload['kind']
 
 // Placement never seeds an aiming zone — a cone needs a direction the click
 // can't know, so an author picks `on_sight` from the inspector (retrigger).
-const seeds: Record<ZoneKind, { trigger: 'on_enter' | 'interact'; payload: ZonePayload }> = {
+// `meeting` is seeded in newZone rather than here: its roomId is a *generated*
+// slug (unique per placement), which a static literal can't be.
+const seeds: Record<Exclude<ZoneKind, 'meeting'>, { trigger: 'on_enter' | 'interact'; payload: ZonePayload }> = {
   portal: { trigger: 'on_enter', payload: { kind: 'portal', targetNode: 'town' } },
   link: { trigger: 'interact', payload: { kind: 'link', url: '' } },
   // A trainer is conceptually an aiming zone, but placement can't seed a cone
@@ -28,6 +30,13 @@ const seeds: Record<ZoneKind, { trigger: 'on_enter' | 'interact'; payload: ZoneP
 }
 
 export function newZone(kind: ZoneKind, x: number, y: number): Zone {
+  // A meeting room's roomId is author-assigned (#485), seeded with a generated
+  // slug so the zone saves without further editing (the validator rejects a
+  // blank one) and two rooms on a map never collide. Generated, not derived
+  // from (x,y), so moving the rect doesn't strand people in a different room.
+  if (kind === 'meeting') {
+    return { trigger: 'on_enter', x, y, payload: { kind: 'meeting', roomId: `room-${crypto.randomUUID().slice(0, 8)}` } }
+  }
   return { ...seeds[kind], x, y }
 }
 
@@ -39,8 +48,11 @@ const ALL_TRIGGERS: readonly ZoneTrigger[] = ['on_enter', 'interact', 'on_sight'
 // so offering the other two would author a zone that can never fire (#87).
 // Every other kind stays open: a portal or link reads fine stepped or pressed,
 // and a trainer aims.
+// A meeting room joins the same way: you are in it when you stand inside its
+// rect (#486), so on_enter is the only trigger that can fire it — press-to-meet
+// and meet-across-a-cone are meaningless (#485), exactly like an encounter.
 export function triggersFor(kind: ZoneKind): readonly ZoneTrigger[] {
-  return kind === 'encounter' ? ['on_enter'] : ALL_TRIGGERS
+  return kind === 'encounter' || kind === 'meeting' ? ['on_enter'] : ALL_TRIGGERS
 }
 
 // Switch a zone's trigger, keeping the shape legal (#86). The schema union

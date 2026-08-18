@@ -651,6 +651,22 @@ export default function MapDecoratePage() {
                       onChange={(e) => editZone({ ...zone, payload: { ...p, pool: e.target.value } })} />
                   </label>
                 )}
+                {p.kind === 'meeting' && (
+                  <>
+                    {/* The room this rect drops you into (#485): standing inside
+                        it joins that room's call (#486). Author-assigned, seeded
+                        with a slug on placement so moving the rect never strands
+                        people in a different room. */}
+                    <label>Room{' '}
+                      <input type="text" placeholder="room-id" value={p.roomId}
+                        onChange={(e) => editZone({ ...zone, payload: { ...p, roomId: e.target.value } })} />
+                    </label>
+                    <label>Label{' '}
+                      <input type="text" value={p.label ?? ''}
+                        onChange={(e) => editZone({ ...zone, payload: { ...p, label: opt(e.target.value) } })} />
+                    </label>
+                  </>
+                )}
                 {p.kind === 'link' && (
                   <>
                     <label>URL{' '}

@@ -153,6 +153,17 @@ export const ZonePayload = Schema.Union(
     kind: Schema.Literal('encounter'),
     pool: Schema.String,
   }),
+  // A meeting room (#485, #486): standing inside the rect drops you into that
+  // room's call with everyone else standing in it, at full volume. The payload
+  // names only the room — `roomId` is author-assigned (a generated slug on
+  // placement, edited from there), not derived from (x,y), so moving the rect
+  // never silently strands people in a different room. Placing one mints no
+  // LiveKit room and no backend row; the voice behaviour lands in #486.
+  Schema.Struct({
+    kind: Schema.Literal('meeting'),
+    roomId: Schema.String,
+    label: Schema.optional(Schema.String),
+  }),
 )
 export type ZonePayload = Schema.Schema.Type<typeof ZonePayload>
 

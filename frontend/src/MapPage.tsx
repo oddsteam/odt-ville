@@ -267,6 +267,10 @@ export default function MapPage({ draft = false }: { draft?: boolean }) {
             .catch(() => {})
           return
         }
+        case 'meeting':
+          // Authored round-trip only in this slice (#485): a meeting room is a
+          // position you stand in, joined by tile in #486, not a fired event.
+          return
         // Mirrors villageZone's guard: the two shells dispatch the same
         // ZonePayload contract, so a new kind must fail the build in both
         // rather than land in one and go quiet in the other (#87 did exactly
