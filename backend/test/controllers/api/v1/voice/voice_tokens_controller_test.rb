@@ -43,6 +43,54 @@ module Api
 
           assert_response :unauthorized
         end
+
+        # A meeting room (#486): the roomId must name a meeting zone authored on a
+        # map the caller can reach, so the browser can't mint a token for any room.
+        def map_with_meeting(slug: "hq", room_id: "standup", access_policy: nil)
+          Maps::Map.create!(
+            slug: slug, title: slug.titleize, cols: 8, rows: 6,
+            access_policy: access_policy,
+            baked: { "zones" => [
+              { "trigger" => "on_enter", "x" => 5, "y" => 5, "w" => 3, "h" => 3,
+                "payload" => { "kind" => "meeting", "roomId" => room_id } }
+            ] }
+          )
+        end
+
+        test "mints a token scoped to a meeting room authored on a reachable map" do
+          map_with_meeting(slug: "hq", room_id: "standup")
+
+          get "/api/v1/voice/token", params: { map: "hq", meeting: "standup" }, headers: auth(@user)
+
+          assert_response :success
+          assert_equal "meeting-standup", json[:room]
+          c = claims(json[:token])
+          assert_equal "meeting-standup", c["video"]["room"]
+          assert_equal true, c["video"]["roomJoin"]
+        end
+
+        test "rejects a meeting roomId that no zone on the map authors" do
+          map_with_meeting(slug: "hq", room_id: "standup")
+
+          get "/api/v1/voice/token", params: { map: "hq", meeting: "ghost" }, headers: auth(@user)
+
+          assert_response :forbidden
+        end
+
+        test "rejects a meeting room on a map the caller cannot reach" do
+          map_with_meeting(slug: "hq", room_id: "standup",
+                           access_policy: { "kind" => "claim", "role" => "insider" })
+
+          get "/api/v1/voice/token", params: { map: "hq", meeting: "standup" }, headers: auth(@user)
+
+          assert_response :forbidden
+        end
+
+        test "a meeting request for an unknown map is 404" do
+          get "/api/v1/voice/token", params: { map: "nowhere", meeting: "standup" }, headers: auth(@user)
+
+          assert_response :not_found
+        end
       end
     end
   end

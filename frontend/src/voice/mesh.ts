@@ -13,6 +13,7 @@ import { connectLivekitRoom, voiceSfuEnabled } from './livekit.ts'
 import { connectSignalling } from './write.ts'
 import { iceConfig } from './iceConfig.ts'
 import { micState } from './micState.ts'
+import type { MeetingRect } from './room.ts'
 import type { MicStatus, SignalMessage, VoicePosition } from './schema.ts'
 import type { SignallingHandle } from './write.ts'
 
@@ -162,12 +163,18 @@ export function createVoiceMesh(deps: VoiceDeps): VoiceMesh {
 // this and injects it into MapScene via the registry — the same path presence
 // takes, so the game never imports voice (see game-runtime-never-imports-voice).
 // Null when there is no auth token (connectSignalling gates on it).
-export function connectVoice(slug: string, ownId: string): VoiceMesh | null {
+export function connectVoice(
+  slug: string,
+  ownId: string,
+  meetingRects: readonly MeetingRect[] = [],
+): VoiceMesh | null {
   // ADR-0011: behind VITE_VOICE_SFU, audio rides a LiveKit SFU instead of the
   // mesh (the mesh can't traverse residential NAT, #290). Off => the mesh path
-  // below is byte-for-byte unchanged; this slice deletes nothing.
+  // below is byte-for-byte unchanged; this slice deletes nothing. Meeting rooms
+  // (#486) need the SFU — a >6-way call can't run on the peer mesh, which is why
+  // POD_CAP exists (ADR-0011) — so the mesh path ignores the rects.
   if (voiceSfuEnabled(import.meta.env as { VITE_VOICE_SFU?: string }))
-    return connectLivekitRoom(slug, ownId)
+    return connectLivekitRoom(slug, ownId, meetingRects)
 
   const signalling = connectSignalling(slug)
   if (!signalling) return null

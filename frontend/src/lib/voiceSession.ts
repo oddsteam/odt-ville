@@ -11,10 +11,12 @@
 // is voice off, not an error.
 
 import type { VoiceMesh } from '../voice/mesh.ts'
+import { meetingRectsOf, type MeetingRect } from '../voice/service.ts'
+import type { Zone } from '../kernel/schema.ts'
 
 export interface VoiceSessionDeps {
   viewerId: () => Promise<string | null>
-  connect: (slug: string, ownId: string) => VoiceMesh | null
+  connect: (slug: string, ownId: string, meetingRects: readonly MeetingRect[]) => VoiceMesh | null
 }
 
 export function voiceSession({ viewerId, connect }: VoiceSessionDeps) {
@@ -27,12 +29,16 @@ export function voiceSession({ viewerId, connect }: VoiceSessionDeps) {
 
   // Open the mesh for `map`, tearing down whatever was open first — an onward
   // hop to a solo map therefore leaves no mesh (no leaked peers or mic) behind.
-  const open = async (map: { slug: string; multiplayer?: boolean }): Promise<VoiceMesh | null> => {
+  const open = async (map: {
+    slug: string
+    multiplayer?: boolean
+    zones?: readonly Zone[]
+  }): Promise<VoiceMesh | null> => {
     close()
     if (!map.multiplayer) return null
     const ownId = await viewerId()
     if (!ownId) return null
-    current = connect(map.slug, ownId)
+    current = connect(map.slug, ownId, meetingRectsOf(map.zones))
     return current
   }
 

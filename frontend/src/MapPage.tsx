@@ -19,6 +19,7 @@ import { runEdge } from './lib/runEdge.ts'
 import { subscribeAuthToken } from './lib/authToken.ts'
 import { connectPresence } from './lib/presenceClient.ts'
 import { connectVoice } from './voice/mesh.ts'
+import { meetingRectsOf } from './voice/service.ts'
 import { ViewerService } from './viewer/service.ts'
 import { loadManifestById, loadMyManifest } from './character/service.ts'
 import type { BakedMap, Zone } from './kernel/schema.ts'
@@ -192,7 +193,9 @@ export default function MapPage({ draft = false }: { draft?: boolean }) {
     // is P2P and never touches the app server. Injected via the registry like
     // presence, so the game imports no voice code (ADR-0004, arch rule #278).
     const voice =
-      map.multiplayer && ownIdRef.current ? connectVoice(map.slug, ownIdRef.current) : null
+      map.multiplayer && ownIdRef.current
+        ? connectVoice(map.slug, ownIdRef.current, meetingRectsOf(map.zones))
+        : null
     // The per-target keys in one place (#303), shared with the portal path.
     // `loadManifest` rides the presence bundle (#266): frames name their
     // sender's character and the scene asks for it through here.

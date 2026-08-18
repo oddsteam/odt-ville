@@ -5,6 +5,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createLivekitVoice, voiceSfuEnabled, type RoomLike } from './livekit.ts'
+import type { MeetingRect } from './room.ts'
 import { DWELL_MS, LEAVE_RADIUS, PREJOIN_RADIUS, type MicStatus, type VoicePosition } from './schema.ts'
 
 class FakeTrack {
@@ -40,22 +41,28 @@ const flush = async () => {
   for (let i = 0; i < 8; i++) await Promise.resolve()
 }
 
-function harness() {
+function harness(meetingRects: MeetingRect[] = []) {
   const room = new FakeRoom()
   const attached: FakeTrack[] = []
   const detached: FakeTrack[] = []
   const statuses: MicStatus[] = []
   const latencies: number[] = []
+  const tokensFor: string[] = [] // the room keys getToken was asked for, in order
   const mesh = createLivekitVoice({
     room,
     url: 'wss://example.livekit.cloud',
-    token: 'jwt',
+    proximityRoom: 'map-town',
+    meetingRects,
+    getToken: async (roomKey) => {
+      tokensFor.push(roomKey)
+      return 'jwt'
+    },
     attach: (t) => attached.push(t as FakeTrack),
     detach: (t) => detached.push(t as FakeTrack),
     onStatus: (s) => statuses.push(s),
     onJoinLatency: (ms) => latencies.push(ms),
   })
-  return { room, mesh, attached, detached, statuses, latencies }
+  return { room, mesh, attached, detached, statuses, latencies, tokensFor }
 }
 
 const at = (x: number): VoicePosition => ({ x, y: 0 })
@@ -206,5 +213,95 @@ describe('leave dwell timer (#310)', () => {
     vi.advanceTimersByTime(DWELL_MS)
     await flush()
     expect(h.room.disconnected).toBe(false) // never left, so no reconnect / no fresh minute
+  })
+})
+
+describe('meeting rooms (#486)', () => {
+  // A 3×3 room anchored at (5,5); (6,6) is inside, (0,0) is outside.
+  const RECTS: MeetingRect[] = [{ x: 5, y: 5, w: 3, h: 3, roomId: 'standup' }]
+
+  it('joins the meeting room on entry, alone, regardless of proximity', async () => {
+    const h = harness(RECTS)
+    h.mesh.update({ x: 6, y: 6 }, new Map()) // inside the rect, nobody near
+    await flush()
+    expect(h.room.connected).toBe(true)
+    expect(h.tokensFor).toEqual(['meeting-standup']) // not the proximity room
+  })
+
+  it('drops the proximity room when walking into a meeting room', async () => {
+    const h = harness(RECTS)
+    h.mesh.update({ x: 0, y: 0 }, roster(1)) // outside, a peer near → proximity join
+    await flush()
+    expect(h.tokensFor).toEqual(['map-town'])
+
+    h.mesh.update({ x: 6, y: 6 }, roster(1)) // step into the rect
+    await flush()
+    expect(h.room.disconnected).toBe(true) // left the proximity room...
+    expect(h.tokensFor).toEqual(['map-town', 'meeting-standup']) // ...for the meeting room
+  })
+
+  it('stays connected while standing still inside the room (joins once)', async () => {
+    const h = harness(RECTS)
+    let connects = 0
+    const realConnect = h.room.connect.bind(h.room)
+    h.room.connect = async (...a: unknown[]) => {
+      connects++
+      return realConnect(...(a as []))
+    }
+    h.mesh.update({ x: 6, y: 6 }, new Map())
+    await flush()
+    h.mesh.update({ x: 6, y: 6 }, new Map()) // still inside — must not re-join
+    await flush()
+    expect(connects).toBe(1)
+  })
+
+  describe('with fake timers', () => {
+    beforeEach(() => vi.useFakeTimers())
+    afterEach(() => vi.useRealTimers())
+
+    const entered = async (h: ReturnType<typeof harness>) => {
+      h.mesh.update({ x: 6, y: 6 }, new Map())
+      await flush()
+      expect(h.room.connected).toBe(true)
+    }
+
+    it('leaves the meeting room only after the dwell once you walk out', async () => {
+      const h = harness(RECTS)
+      await entered(h)
+      h.mesh.update({ x: 0, y: 0 }, new Map()) // walked out, nobody near
+
+      vi.advanceTimersByTime(DWELL_MS - 1)
+      await flush()
+      expect(h.room.disconnected).toBe(false) // still connected through the dwell
+
+      vi.advanceTimersByTime(1)
+      await flush()
+      expect(h.room.disconnected).toBe(true)
+    })
+
+    it('re-entering within the dwell cancels the leave, with no reconnect', async () => {
+      const h = harness(RECTS)
+      await entered(h)
+      h.mesh.update({ x: 0, y: 0 }, new Map()) // walked out, dwell starts
+      await flush()
+      vi.advanceTimersByTime(DWELL_MS - 1)
+
+      h.mesh.update({ x: 6, y: 6 }, new Map()) // back inside before the dwell fires
+      await flush()
+      vi.advanceTimersByTime(DWELL_MS)
+      await flush()
+      expect(h.room.disconnected).toBe(false) // never left → no fresh billed minute
+      expect(h.tokensFor).toEqual(['meeting-standup']) // one join only
+    })
+
+    it('falls back to the proximity room after the dwell when a peer is near', async () => {
+      const h = harness(RECTS)
+      await entered(h)
+      h.mesh.update({ x: 0, y: 0 }, roster(1)) // walked out; a peer is in earshot
+      await flush()
+      vi.advanceTimersByTime(DWELL_MS)
+      await flush()
+      expect(h.tokensFor).toEqual(['meeting-standup', 'map-town']) // meeting → proximity
+    })
   })
 })

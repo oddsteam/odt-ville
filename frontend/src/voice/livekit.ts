@@ -4,13 +4,20 @@
 // this file adds; it deletes nothing. mesh.ts / iceConfig.ts stay untouched.
 //
 // FLAT audio on purpose: everyone in the room at constant volume. Distance-
-// scaled gain, proximity-gated membership and hysteresis are later slices — the
-// only question here is whether two peers connect and hear each other.
+// scaled gain is a later slice — inside a room, everyone hears everyone at gain
+// 1.0, which is exactly what a meeting room wants (#486).
+//
+// Which room you are in is a function of *position* (#486): outside every
+// authored meeting rect you are proximity-gated into `map-<slug>`; inside one
+// you drop that room and join `meeting-<roomId>` with everyone else standing
+// there, no proximity cap. The resolver (room.ts) is handed plain rects — the
+// game runtime is never imported (voice-depends-only-on-shared-infrastructure).
 
 import { Room, type RemoteTrack } from 'livekit-client'
 import { getAuthToken } from '../lib/authToken.ts'
 import { micState } from './micState.ts'
 import { podFor } from './service.ts'
+import { resolveRoom, type MeetingRect } from './room.ts'
 import { DWELL_MS, LEAVE_RADIUS, PREJOIN_RADIUS } from './schema.ts'
 import type { MicStatus, VoicePosition } from './schema.ts'
 import type { VoiceMesh } from './mesh.ts'
@@ -37,9 +44,15 @@ interface RemoteTrackLike {
 export interface LivekitDeps {
   room: RoomLike
   url: string
-  // The room token (#308) is minted server-side, so it arrives async — the
-  // adapter passes the in-flight fetch straight in.
-  token: string | Promise<string>
+  // Mint (server-side, #308) the token for a room key — `map-<slug>` for the
+  // proximity room, `meeting-<roomId>` for a meeting room. Called once per join,
+  // so a room switch fetches the token scoped to the room it is joining.
+  getToken: (roomKey: string) => string | Promise<string>
+  // This map's proximity room key (`map-<slug>`), joined when outside every rect.
+  proximityRoom: string
+  // This map's authored meeting rects (#486); empty when it authors none. Plain
+  // data — voice never imports the map or the scene to get them.
+  meetingRects?: readonly MeetingRect[]
   // Attach/detach a subscribed remote track's media element (DOM lives in the
   // adapter, so the core stays testable in node).
   attach: (track: RemoteTrackLike) => void
@@ -57,14 +70,23 @@ const TRACK_SUBSCRIBED = 'trackSubscribed'
 const TRACK_UNSUBSCRIBED = 'trackUnsubscribed'
 
 export function createLivekitVoice(deps: LivekitDeps): VoiceMesh {
-  const { room, url, token, attach, detach } = deps
+  const { room, url, getToken, proximityRoom, attach, detach } = deps
+  const meetingRects = deps.meetingRects ?? []
   const dwellMs = deps.dwellMs ?? DWELL_MS
   const now = deps.now ?? (() => Date.now())
+  // The room we hold or are joining (null = disconnected). The proximity room
+  // and a meeting room are never held at once (#486) — a switch leaves one
+  // before joining the other.
+  let currentRoom: string | null = null
   let connected = false
   let joining = false // a connect() is in flight — don't start a second
   let muted = false
   let denied = false // the browser declined the mic — voice cleanly off
   let leaveTimer: ReturnType<typeof setTimeout> | null = null
+  // The last position/roster, so a dwell timer firing later re-resolves against
+  // where we actually are now, not where we were when it was armed.
+  let lastOwn: VoicePosition = { x: 0, y: 0 }
+  let lastRoster: Map<string, VoicePosition> = new Map()
 
   const report = () =>
     deps.onStatus?.({ live: connected && !muted && !denied, muted, denied })
@@ -78,17 +100,16 @@ export function createLivekitVoice(deps: LivekitDeps): VoiceMesh {
   })
   room.on(TRACK_UNSUBSCRIBED, (track) => detach(track as RemoteTrackLike))
 
-  // Fetch the token, connect, then publish the mic. A token/connect failure just
-  // leaves voice off; only a declined mic reports `denied` (it lights the
-  // mic-blocked indicator), so the two aren't conflated. Idempotent — a second
-  // caller while connected/connecting is a no-op, so a peer lingering in range
-  // never re-joins (and never re-pays LiveKit's 1-minute floor, #298).
-  async function join() {
-    if (connected || joining) return
+  // Fetch the room's token, connect, then publish the mic. A token/connect
+  // failure just leaves voice off; only a declined mic reports `denied` (it
+  // lights the mic-blocked indicator), so the two aren't conflated.
+  async function connectTo(roomKey: string) {
+    if (joining) return
     joining = true
+    currentRoom = roomKey
     const t0 = now()
     try {
-      await room.connect(url, await token)
+      await room.connect(url, await getToken(roomKey))
       connected = true
       deps.onJoinLatency?.(now() - t0) // measured lead time (#310)
       report()
@@ -110,29 +131,66 @@ export function createLivekitVoice(deps: LivekitDeps): VoiceMesh {
     }
   }
 
-  function leave() {
+  function disconnect() {
     if (!connected) return
     connected = false
     void room.disconnect()
     report()
   }
 
-  // Proximity-gated membership with three-radius hysteresis (ADR-0011, #310):
-  // join once a peer enters the (wide) pre-join band; stay connected through the
-  // dead-band out to LEAVE_RADIUS; disconnect only after the pod clears that band
-  // for DWELL_MS. Map entry never joins — this reconciler is what does.
-  function update(own: VoicePosition, roster: Map<string, VoicePosition>) {
-    const nearby = podFor(own, roster, PREJOIN_RADIUS).length > 0
+  // Move to `target` (a room key, or null = disconnected). Leaves the current
+  // room first, so the two are never held at once. A no-op when already there.
+  function switchTo(target: string | null) {
+    if (target === currentRoom && (connected || joining)) return
+    disconnect()
+    if (target === null) {
+      currentRoom = null
+      return
+    }
+    void connectTo(target).catch(report)
+  }
+
+  // Which room do we *want* to be in right now? Inside a meeting rect → that
+  // room, unconditionally (you are in the call the moment you step in, alone or
+  // not, no POD_CAP). Outside → the proximity room, but only when a peer is in
+  // earshot, with the three-radius hysteresis (#310): join on the pre-join band,
+  // hold through the dead-band out to LEAVE_RADIUS, want-out beyond it.
+  function desiredRoom(own: VoicePosition, roster: Map<string, VoicePosition>): string | null {
+    const room = resolveRoom(own, meetingRects, proximityRoom)
+    if (room !== proximityRoom) return room
+    if (podFor(own, roster, PREJOIN_RADIUS).length > 0) return proximityRoom
     const holding = podFor(own, roster, LEAVE_RADIUS).length > 0
-    if (nearby) {
+    return holding && currentRoom === proximityRoom ? proximityRoom : null
+  }
+
+  // Reconcile the connection with where we want to be. Entering a meeting room,
+  // and any join from nothing, are immediate. Leaving a room — a meeting on the
+  // way out, or the proximity room once the pod empties — waits DWELL_MS, so a
+  // doorway boundary never thrashes a billed LiveKit minute (#298).
+  function reconcile(own: VoicePosition, roster: Map<string, VoicePosition>) {
+    const desired = desiredRoom(own, roster)
+    if (desired === currentRoom) {
       cancelLeave()
-      void join().catch(report)
-    } else if (!holding && connected && leaveTimer === null) {
+      return
+    }
+    const enteringMeeting = desired !== null && desired !== proximityRoom
+    if (enteringMeeting || currentRoom === null) {
+      cancelLeave()
+      switchTo(desired)
+      return
+    }
+    if (leaveTimer === null) {
       leaveTimer = setTimeout(() => {
         leaveTimer = null
-        leave()
+        switchTo(desiredRoom(lastOwn, lastRoster))
       }, dwellMs)
     }
+  }
+
+  function update(own: VoicePosition, roster: Map<string, VoicePosition>) {
+    lastOwn = own
+    lastRoster = roster
+    reconcile(own, roster)
   }
 
   return {
@@ -144,15 +202,24 @@ export function createLivekitVoice(deps: LivekitDeps): VoiceMesh {
     },
     stop() {
       cancelLeave()
-      leave()
+      disconnect()
+      currentRoom = null
     },
   }
 }
 
 // Server-minted room token (#308): the secret never touches the browser. Lib-only
-// I/O keeps voice inside its arch boundary (getAuthToken lives in src/lib).
-async function fetchRoomToken(slug: string, authToken: string): Promise<string> {
-  const res = await fetch(`/api/v1/voice/token?map=${encodeURIComponent(slug)}`, {
+// I/O keeps voice inside its arch boundary (getAuthToken lives in src/lib). The
+// room key names which token to mint: `meeting-<roomId>` asks Rails to authorize
+// a meeting zone on this map (#486); anything else is the proximity room. Rails
+// verifies the meeting is authored on a map the caller can reach — the browser
+// never gets to name an arbitrary room.
+async function fetchRoomToken(slug: string, authToken: string, roomKey: string): Promise<string> {
+  const meetingId = roomKey.startsWith('meeting-') ? roomKey.slice('meeting-'.length) : null
+  const q = meetingId
+    ? `map=${encodeURIComponent(slug)}&meeting=${encodeURIComponent(meetingId)}`
+    : `map=${encodeURIComponent(slug)}`
+  const res = await fetch(`/api/v1/voice/token?${q}`, {
     headers: { Authorization: `Bearer ${authToken}` },
   })
   if (!res.ok) throw new Error(`voice token request failed: ${res.status}`)
@@ -163,8 +230,13 @@ async function fetchRoomToken(slug: string, authToken: string): Promise<string> 
 // Browser adapter: the real livekit-client Room wired from env + the #308 token.
 // Same shape as mesh.ts's connectVoice — returns null (voice cleanly off) when
 // there is no LiveKit URL or no auth token. `ownId` is unused: LiveKit takes the
-// participant identity from the server-minted token, not the client.
-export function connectLivekitRoom(slug: string, _ownId: string): VoiceMesh | null {
+// participant identity from the server-minted token, not the client. `meetingRects`
+// are this map's authored meeting zones (#486), passed as plain data.
+export function connectLivekitRoom(
+  slug: string,
+  _ownId: string,
+  meetingRects: readonly MeetingRect[] = [],
+): VoiceMesh | null {
   const url = import.meta.env.VITE_LIVEKIT_URL as string | undefined
   const authToken = getAuthToken()
   if (!url || !authToken) return null
@@ -173,7 +245,9 @@ export function connectLivekitRoom(slug: string, _ownId: string): VoiceMesh | nu
   const mesh = createLivekitVoice({
     room,
     url,
-    token: fetchRoomToken(slug, authToken),
+    proximityRoom: `map-${slug}`,
+    meetingRects,
+    getToken: (roomKey) => fetchRoomToken(slug, authToken, roomKey),
     // Flat MVP: attach every remote audio track at its default volume and let it
     // autoplay. Distance-scaled gain is a later slice (ADR-0011).
     attach: (track) => {
