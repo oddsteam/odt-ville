@@ -471,7 +471,13 @@ export default class MapScene extends Phaser.Scene {
   }
 
   dropPeer(userId) {
-    this.remoteSprites.get(userId)?.destroy()
+    // Kill the step tween before the body goes. A peer who leaves — or walks out
+    // of presence range — mid-step would otherwise fire onComplete on a
+    // destroyed container, and that throw takes the whole game loop with it:
+    // Phaser never schedules the next frame, so the local avatar freezes.
+    const remote = this.remoteSprites.get(userId)
+    if (remote) this.tweens.killTweensOf(remote)
+    remote?.destroy()
     this.remoteSprites.delete(userId)
     // The plate is a sibling container, not a child of the body, so it needs its
     // own destroy (#483) — otherwise a leaver's label/face/badge lingers.
@@ -704,10 +710,13 @@ export default class MapScene extends Phaser.Scene {
   // first sighting used to flash the generic sprite for a frame before snapping
   // to the real one.
   applyPeerLook(remote, state, walking = false) {
+    // A destroyed body holds no children: bail rather than throw, since a stale
+    // callback can still land here after the peer went.
+    const img = remote.list?.[0]
+    if (!img) return
     const rig = this.peerChars.get(state.manifestId)
     remote.setVisible(rig !== null)
     remote.peerWalking = walking
-    const img = remote.list[0]
     if (!rig) {
       img.setTexture(`player.${state.facing}.0`).setFlipX(false).setDisplaySize(96, 96)
       return
