@@ -4,8 +4,8 @@
 // lookup/erase hit any cell of a zone's w×h rect, topmost (last placed) first.
 
 import { describe, expect, it } from 'vitest'
-import { newZone, retrigger, triggersFor, zoneIndexAt, eraseZoneAt, replaceZone } from './zoneAuthor.ts'
-import type { Zone, ZonePayload } from '../kernel/schema.ts'
+import { newZone, retrigger, triggersFor, zoneIndexAt, eraseZoneAt, replaceZone, previewMapOf } from './zoneAuthor.ts'
+import type { BakedMap, Zone, ZonePayload } from '../kernel/schema.ts'
 
 type MeetingPayload = Extract<ZonePayload, { kind: 'meeting' }>
 
@@ -163,5 +163,33 @@ describe('triggersFor', () => {
     for (const kind of ['portal', 'link', 'trainer'] as const) {
       expect(triggersFor(kind)).toEqual(['on_enter', 'interact', 'on_sight'])
     }
+  })
+})
+
+describe('previewMapOf (the live decorate preview, #493)', () => {
+  const stale: Zone = { trigger: 'interact', x: 0, y: 0, payload: { kind: 'link', url: 'old' } }
+  const baked: BakedMap = {
+    slug: 'm',
+    title: 'M',
+    cols: 4,
+    rows: 4,
+    tilesets: [{ name: 'grass', cell: 16 }],
+    tiles: [[{ tileset: 'grass', frame: 0 }]],
+    zones: [stale],
+    entities: [],
+  }
+
+  it('reflects the live zones, not the ones baked at load — a deleted zone is gone', () => {
+    const kept: Zone = { trigger: 'interact', x: 2, y: 2, payload: { kind: 'link', url: 'kept' } }
+    expect(previewMapOf(baked, [kept], []).zones).toEqual([kept])
+    expect(previewMapOf(baked, [], []).zones).toEqual([]) // not baked.zones
+  })
+
+  it('carries the passed entities and keeps the rest of the baked map', () => {
+    const entities: BakedMap['entities'] = [{ kind: 'prop', object_id: 1, x: 1, y: 1 }]
+    const out = previewMapOf(baked, [], entities)
+    expect(out.entities).toEqual(entities)
+    expect(out.slug).toBe('m')
+    expect(out.cols).toBe(4)
   })
 })

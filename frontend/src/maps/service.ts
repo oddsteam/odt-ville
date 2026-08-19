@@ -172,7 +172,7 @@ export {
 export type { PlacedProp, SizeOf, MaskOf, DoorOf, NudgeDir } from './props.ts'
 export { placeNpc, eraseNpcAt, npcIndexAt, npcEntities, npcsFromBaked, NPC_FACING_DEFAULT } from './npcs.ts'
 export type { PlacedNpc } from './npcs.ts'
-export { newZone, retrigger, triggersFor, zoneIndexAt, eraseZoneAt, replaceZone } from './zoneAuthor.ts'
+export { newZone, retrigger, triggersFor, zoneIndexAt, eraseZoneAt, replaceZone, previewMapOf } from './zoneAuthor.ts'
 export type { ZoneKind } from './zoneAuthor.ts'
 export { isDuellist, markDuellist, unmarkDuellist, syncDuellistZones } from './duellist.ts'
 export { importTiledMap, TiledImportError } from './tiledImport.ts'

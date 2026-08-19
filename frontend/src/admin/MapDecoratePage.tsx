@@ -12,7 +12,7 @@ import { makeMask, setMaskCell, resizeMask, isMaskEmpty, type Mask } from './mas
 import { groupPalette } from './paletteGroups.ts'
 import { frameArtStyle } from './frameArt.ts'
 import { zoneRects as buildZoneRects, ZONE_COLORS } from './zoneRects.ts'
-import { placeProp, erasePropAt, propEntities, propsFromBaked, propGhost, propIndexAt, nudgeProp, newZone, retrigger, triggersFor, zoneIndexAt, eraseZoneAt, replaceZone, placeNpc, eraseNpcAt, npcIndexAt, npcEntities, npcsFromBaked, NPC_FACING_DEFAULT, isDuellist, markDuellist, unmarkDuellist, syncDuellistZones, type PlacedProp, type PlacedNpc, type SizeOf, type MaskOf, type DoorOf, type NudgeDir, type ZoneKind } from '../maps/service.ts'
+import { placeProp, erasePropAt, propEntities, propsFromBaked, propGhost, propIndexAt, nudgeProp, newZone, retrigger, triggersFor, zoneIndexAt, eraseZoneAt, replaceZone, previewMapOf, placeNpc, eraseNpcAt, npcIndexAt, npcEntities, npcsFromBaked, NPC_FACING_DEFAULT, isDuellist, markDuellist, unmarkDuellist, syncDuellistZones, type PlacedProp, type PlacedNpc, type SizeOf, type MaskOf, type DoorOf, type NudgeDir, type ZoneKind } from '../maps/service.ts'
 import type { MapAccessPolicy } from '../kernel/schema.ts'
 import MapPreview from './MapPreview.tsx'
 import { runEdge } from '../lib/runEdge.ts'
@@ -126,9 +126,11 @@ export default function MapDecoratePage() {
   // The WYSIWYG preview: the loaded map with the current edits applied — the
   // unmanaged entities plus the placed props, rendered through the shared
   // loader with the palette objects' images. Null until the map loads.
+  // Fold the *live* zones in too (#493): the Phaser preview's blink glow reads
+  // map.zones, so without this a deleted link zone keeps pulsing until reload.
   const previewMap = useMemo<BakedMap | null>(
-    () => (baked ? { ...baked, entities: [...otherEntities, ...propEntities(props)] } : null),
-    [baked, otherEntities, props],
+    () => (baked ? previewMapOf(baked, zones, [...otherEntities, ...propEntities(props)]) : null),
+    [baked, zones, otherEntities, props],
   )
 
   // The palette, filtered by the search box and grouped under `kind` headers
