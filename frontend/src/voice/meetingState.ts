@@ -19,13 +19,25 @@ export interface SelfView {
   detach(): unknown
 }
 
+// One remote face in the meeting filmstrip (#488): a live video track when their
+// camera is on, null for a name/initial placeholder when it's off. `speaking`
+// drives the active-speaker ring. Video reuses SelfView (attach/detach) so the
+// store still never imports the livekit client.
+export interface RemoteTile {
+  id: string // participant identity — the stable React key
+  name: string // display name, or the identity when there is none
+  video: SelfView | null
+  speaking: boolean
+}
+
 export interface MeetingSnapshot {
   inRoom: boolean // standing in a meeting room — the HUD shows, else it hides
   camera: CameraStatus
   selfView: SelfView | null // the local camera track to render while on
+  participants: RemoteTile[] // everyone else in the room (#488)
 }
 
-let snapshot: MeetingSnapshot = { inRoom: false, camera: 'off', selfView: null }
+let snapshot: MeetingSnapshot = { inRoom: false, camera: 'off', selfView: null, participants: [] }
 let apply: (on: boolean) => void = () => {}
 const listeners = new Set<() => void>()
 
@@ -47,7 +59,7 @@ export const meetingState = {
   // the camera never does.
   enter(setCamera: (on: boolean) => void): void {
     apply = setCamera
-    emit({ inRoom: true, camera: 'off', selfView: null })
+    emit({ inRoom: true, camera: 'off', selfView: null, participants: [] })
   },
 
   // The one camera control the HUD drives: off→on publishes, on→off stops the
@@ -67,10 +79,15 @@ export const meetingState = {
     emit({ ...snapshot, selfView: track })
   },
 
+  // The mesh reports the room's remote roster (#488): the tiles the HUD renders.
+  setParticipants(participants: RemoteTile[]): void {
+    emit({ ...snapshot, participants })
+  },
+
   // Walked out: tear the HUD down. The mesh has already stopped the camera device
   // (the light goes out); the store just forgets everything and defaults back off.
   leave(): void {
     apply = () => {}
-    emit({ inRoom: false, camera: 'off', selfView: null })
+    emit({ inRoom: false, camera: 'off', selfView: null, participants: [] })
   },
 }

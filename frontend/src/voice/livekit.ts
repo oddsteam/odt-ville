@@ -18,7 +18,7 @@ import { getAuthToken } from '../lib/authToken.ts'
 import { micState } from './micState.ts'
 import { podFor } from './service.ts'
 import { resolveRoom, type MeetingRect } from './room.ts'
-import { meetingState, type CameraStatus, type SelfView } from './meetingState.ts'
+import { meetingState, type CameraStatus, type RemoteTile, type SelfView } from './meetingState.ts'
 import { DWELL_MS, LEAVE_RADIUS, PREJOIN_RADIUS } from './schema.ts'
 import type { MicStatus, VoicePosition } from './schema.ts'
 import type { VoiceMesh } from './mesh.ts'
@@ -45,10 +45,19 @@ export interface RoomLike {
     setMicrophoneEnabled(enabled: boolean): Promise<unknown>
     setCameraEnabled(enabled: boolean): Promise<CameraPublicationLike | undefined>
   }
+  // Participants already in the room at connect time (#488) — livekit populates
+  // this before we get any participantConnected event. Absent in the mesh tests.
+  remoteParticipants?: Map<string, RemoteParticipantLike>
 }
 
 interface RemoteTrackLike {
   kind: string
+}
+
+// The bit of a livekit RemoteParticipant the meeting tiles need (#488).
+interface RemoteParticipantLike {
+  identity: string
+  name?: string
 }
 
 export interface LivekitDeps {
@@ -78,6 +87,9 @@ export interface LivekitDeps {
   // adapter, so the core stays testable in node — mirrors attach/detach above).
   attachSelfView?: (track: SelfView | undefined) => void
   detachSelfView?: () => void
+  // The room's remote roster for the meeting filmstrip (#488), re-emitted whenever
+  // a participant joins/leaves, publishes/stops video, or starts/stops speaking.
+  onParticipants?: (tiles: RemoteTile[]) => void
   // The measured room-join latency, emitted on each connect (#310 spike output).
   onJoinLatency?: (ms: number) => void
   // Overridable for tests; defaults to the tuned constants / wall clock.
@@ -88,6 +100,9 @@ export interface LivekitDeps {
 // LiveKit RoomEvent string values (livekit-client uses these literals).
 const TRACK_SUBSCRIBED = 'trackSubscribed'
 const TRACK_UNSUBSCRIBED = 'trackUnsubscribed'
+const PARTICIPANT_CONNECTED = 'participantConnected'
+const PARTICIPANT_DISCONNECTED = 'participantDisconnected'
+const ACTIVE_SPEAKERS_CHANGED = 'activeSpeakersChanged'
 
 export function createLivekitVoice(deps: LivekitDeps): VoiceMesh {
   const { room, url, getToken, proximityRoom, attach, detach } = deps
@@ -108,6 +123,9 @@ export function createLivekitVoice(deps: LivekitDeps): VoiceMesh {
   let cameraOn = false
   let cameraDenied = false
   let leaveTimer: ReturnType<typeof setTimeout> | null = null
+  // The remote meeting roster (#488), keyed by identity: one tile per participant,
+  // holding their video track (null = camera off → placeholder) and speaking flag.
+  const tiles = new Map<string, { name: string; video: SelfView | null; speaking: boolean }>()
   // The last position/roster, so a dwell timer firing later re-resolves against
   // where we actually are now, not where we were when it was armed.
   let lastOwn: VoicePosition = { x: 0, y: 0 }
@@ -131,6 +149,23 @@ export function createLivekitVoice(deps: LivekitDeps): VoiceMesh {
   const reportCamera = () =>
     deps.onCamera?.(cameraDenied ? 'denied' : cameraOn ? 'on' : 'off')
 
+  // Meeting filmstrip roster (#488). Tiles are only tracked inside a meeting room;
+  // the proximity room is audio-only and hidden, so it never grows tiles.
+  const syncTiles = () =>
+    deps.onParticipants?.(
+      [...tiles].map(([id, t]) => ({ id, name: t.name, video: t.video, speaking: t.speaking })),
+    )
+  const tileFor = (p: RemoteParticipantLike) => {
+    let tile = tiles.get(p.identity)
+    if (!tile) tiles.set(p.identity, (tile = { name: p.name || p.identity, video: null, speaking: false }))
+    return tile
+  }
+  const clearTiles = () => {
+    if (tiles.size === 0) return
+    tiles.clear()
+    syncTiles()
+  }
+
   // Stop the camera device and drop the self-view — used both by the off toggle
   // and by leaving the room, so the light goes out either way (#487).
   function stopCamera() {
@@ -142,14 +177,43 @@ export function createLivekitVoice(deps: LivekitDeps): VoiceMesh {
     reportCamera()
   }
 
-  room.on(TRACK_SUBSCRIBED, (track) => {
+  room.on(TRACK_SUBSCRIBED, (track, _pub, participant) => {
     const t = track as RemoteTrackLike
     if (t.kind === 'audio') {
       attach(t)
       report()
+      return
+    }
+    if (t.kind === 'video' && participant && isMeetingRoom(currentRoom)) {
+      tileFor(participant as RemoteParticipantLike).video = t as unknown as SelfView
+      syncTiles()
     }
   })
-  room.on(TRACK_UNSUBSCRIBED, (track) => detach(track as RemoteTrackLike))
+  room.on(TRACK_UNSUBSCRIBED, (track, _pub, participant) => {
+    const t = track as RemoteTrackLike
+    detach(t)
+    if (t.kind === 'video' && participant) {
+      const tile = tiles.get((participant as RemoteParticipantLike).identity)
+      if (tile) {
+        tile.video = null // camera off → placeholder, but keep the tile
+        syncTiles()
+      }
+    }
+  })
+  room.on(PARTICIPANT_CONNECTED, (participant) => {
+    if (!isMeetingRoom(currentRoom)) return
+    tileFor(participant as RemoteParticipantLike)
+    syncTiles()
+  })
+  room.on(PARTICIPANT_DISCONNECTED, (participant) => {
+    if (tiles.delete((participant as RemoteParticipantLike).identity)) syncTiles()
+  })
+  room.on(ACTIVE_SPEAKERS_CHANGED, (speakers) => {
+    if (!isMeetingRoom(currentRoom)) return
+    const talking = new Set((speakers as RemoteParticipantLike[]).map((s) => s.identity))
+    for (const [id, tile] of tiles) tile.speaking = talking.has(id)
+    syncTiles()
+  })
 
   // Fetch the room's token, connect, then publish the mic. A token/connect
   // failure just leaves voice off; only a declined mic reports `denied` (it
@@ -165,6 +229,10 @@ export function createLivekitVoice(deps: LivekitDeps): VoiceMesh {
       deps.onJoinLatency?.(now() - t0) // measured lead time (#310)
       report()
       reportMeeting() // opens the HUD the moment we hold a meeting room (#487)
+      if (isMeetingRoom(currentRoom) && room.remoteParticipants) {
+        for (const p of room.remoteParticipants.values()) tileFor(p) // seed who's already here (#488)
+        syncTiles()
+      }
       try {
         await room.localParticipant.setMicrophoneEnabled(!muted)
       } catch {
@@ -186,6 +254,7 @@ export function createLivekitVoice(deps: LivekitDeps): VoiceMesh {
   function disconnect() {
     if (!connected) return
     stopCamera() // leaving a room stops the camera device, even if the tab stays open (#487)
+    clearTiles() // and forgets everyone else's tiles (#488)
     connected = false
     void room.disconnect()
     report()
@@ -341,6 +410,8 @@ export function connectLivekitRoom(
     onCamera: (s) => meetingState.cameraStatus(s),
     attachSelfView: (track) => meetingState.setSelfView(track ?? null),
     detachSelfView: () => meetingState.setSelfView(null),
+    // Remote faces in the meeting filmstrip (#488).
+    onParticipants: (tiles) => meetingState.setParticipants(tiles),
     // Spike output (#310): log the real join latency so PREJOIN_RADIUS can be
     // re-derived from measurement rather than the current estimate.
     onJoinLatency: (ms) => console.info(`[voice] livekit join latency ${Math.round(ms)}ms`),

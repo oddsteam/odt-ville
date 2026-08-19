@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createLivekitVoice, voiceSfuEnabled, type RoomLike } from './livekit.ts'
 import type { MeetingRect } from './room.ts'
 import { DWELL_MS, LEAVE_RADIUS, PREJOIN_RADIUS, type MicStatus, type VoicePosition } from './schema.ts'
-import type { CameraStatus } from './meetingState.ts'
+import type { CameraStatus, RemoteTile } from './meetingState.ts'
 
 class FakeTrack {
   constructor(public kind = 'audio') {}
@@ -63,6 +63,7 @@ function harness(meetingRects: MeetingRect[] = []) {
   const meetings: boolean[] = [] // onMeeting edges: in a meeting room or not
   const cameras: CameraStatus[] = [] // onCamera reports
   const selfViews: unknown[] = [] // attachSelfView payloads
+  const rosters: RemoteTile[][] = [] // onParticipants emissions, in order
   let selfViewOn = false // detachSelfView flips this back off
   const mesh = createLivekitVoice({
     room,
@@ -86,6 +87,7 @@ function harness(meetingRects: MeetingRect[] = []) {
     detachSelfView: () => {
       selfViewOn = false
     },
+    onParticipants: (list) => rosters.push(list),
   })
   return {
     room,
@@ -98,6 +100,8 @@ function harness(meetingRects: MeetingRect[] = []) {
     meetings,
     cameras,
     selfViews,
+    rosters,
+    tiles: () => rosters.at(-1) ?? [],
     selfViewShown: () => selfViewOn,
   }
 }
@@ -453,5 +457,88 @@ describe('meeting HUD signals (#487)', () => {
     h.mesh.setCamera!(true)
     await flush()
     expect(h.room.cameraEnabled).toBe(null)
+  })
+})
+
+describe('remote meeting tiles (#488)', () => {
+  const RECTS: MeetingRect[] = [{ x: 5, y: 5, w: 3, h: 3, roomId: 'standup' }]
+  const inside = { x: 6, y: 6 }
+  const outside = { x: 0, y: 0 }
+  const peer = (identity: string, name?: string) => ({ identity, name })
+
+  const enter = async (rects = RECTS) => {
+    const h = harness(rects)
+    h.mesh.update(inside, new Map())
+    await flush()
+    return h
+  }
+
+  it('adds a video tile when a remote camera track subscribes', async () => {
+    const h = await enter()
+    const video = new FakeTrack('video')
+    h.room.emit('trackSubscribed', video, {}, peer('alice', 'Alice'))
+    expect(h.tiles()).toEqual([{ id: 'alice', name: 'Alice', video, speaking: false }])
+  })
+
+  it('drops a tile to a placeholder when the camera track unsubscribes, keeping the tile', async () => {
+    const h = await enter()
+    const video = new FakeTrack('video')
+    h.room.emit('trackSubscribed', video, {}, peer('alice', 'Alice'))
+    h.room.emit('trackUnsubscribed', video, {}, peer('alice', 'Alice'))
+    expect(h.tiles()).toEqual([{ id: 'alice', name: 'Alice', video: null, speaking: false }])
+  })
+
+  it('shows a placeholder tile for a camera-off participant who just connected', async () => {
+    const h = await enter()
+    h.room.emit('participantConnected', peer('bob', 'Bob'))
+    expect(h.tiles()).toEqual([{ id: 'bob', name: 'Bob', video: null, speaking: false }])
+  })
+
+  it('removes the tile when the participant leaves', async () => {
+    const h = await enter()
+    h.room.emit('participantConnected', peer('bob', 'Bob'))
+    h.room.emit('participantDisconnected', peer('bob', 'Bob'))
+    expect(h.tiles()).toEqual([])
+  })
+
+  it('marks the active speaker on their tile', async () => {
+    const h = await enter()
+    h.room.emit('participantConnected', peer('alice', 'Alice'))
+    h.room.emit('participantConnected', peer('bob', 'Bob'))
+    h.room.emit('activeSpeakersChanged', [peer('bob')])
+    expect(h.tiles().find((t) => t.id === 'bob')?.speaking).toBe(true)
+    expect(h.tiles().find((t) => t.id === 'alice')?.speaking).toBe(false)
+  })
+
+  it('names the tile by identity when the participant has no display name', async () => {
+    const h = await enter()
+    h.room.emit('participantConnected', peer('u-42'))
+    expect(h.tiles()).toEqual([{ id: 'u-42', name: 'u-42', video: null, speaking: false }])
+  })
+
+  it('clears the tiles when leaving the meeting room', async () => {
+    vi.useFakeTimers()
+    try {
+      const h = harness(RECTS)
+      h.mesh.update(inside, new Map())
+      await flush()
+      h.room.emit('participantConnected', peer('alice', 'Alice'))
+      expect(h.tiles()).toHaveLength(1)
+
+      h.mesh.update(outside, new Map())
+      vi.advanceTimersByTime(DWELL_MS)
+      await flush()
+      expect(h.tiles()).toEqual([])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not surface tiles for the proximity room', async () => {
+    const h = harness(RECTS)
+    h.mesh.update(outside, roster(1)) // proximity join, not a meeting
+    await flush()
+    h.room.emit('participantConnected', peer('alice', 'Alice'))
+    expect(h.rosters).toEqual([])
   })
 })
