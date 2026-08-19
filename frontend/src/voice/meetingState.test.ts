@@ -5,7 +5,7 @@
 // without a deliberate click, even after turning it on in the last room).
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { meetingState, type SelfView } from './meetingState.ts'
+import { meetingState, type RemoteTile, type SelfView } from './meetingState.ts'
 
 // Module singleton — reset between cases so order doesn't leak state.
 afterEach(() => meetingState.leave())
@@ -57,6 +57,15 @@ describe('meetingState', () => {
     expect(meetingState.get().selfView).toBe(track)
     meetingState.leave()
     expect(meetingState.get().selfView).toBe(null)
+  })
+
+  it('holds the remote roster while in the room and clears it on leave (#488)', () => {
+    const roster: RemoteTile[] = [{ id: 'alice', name: 'Alice', video: null, speaking: true }]
+    meetingState.enter(() => {})
+    meetingState.setParticipants(roster)
+    expect(meetingState.get().participants).toEqual(roster)
+    meetingState.leave()
+    expect(meetingState.get().participants).toEqual([])
   })
 
   it('notifies subscribers on change and stops after unsubscribe', () => {

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useSyncExternalStore } from 'react'
-import { meetingState, type CameraStatus } from './meetingState.ts'
+import { meetingState, type CameraStatus, type RemoteTile } from './meetingState.ts'
 import { micState } from './micState.ts'
 import { micView } from './MicIndicator.tsx'
 
@@ -31,6 +31,22 @@ export function cameraView(camera: CameraStatus): CameraView {
     }
   if (camera === 'on') return { icon: '📹', label: 'Camera on', tone: 'on', clickable: true }
   return { icon: '📷', label: 'Camera off', tone: 'off', clickable: true }
+}
+
+// A remote tile's display (#488): live video, or a name-initial placeholder when
+// their camera is off, plus the active-speaker ring. Pure so it's the one bit worth
+// a test; the JSX around it is trivial (cf. cameraView).
+export interface TileView {
+  showVideo: boolean
+  initial: string
+  ring: boolean
+}
+export function tileView(tile: RemoteTile): TileView {
+  return {
+    showVideo: tile.video !== null,
+    initial: (tile.name.trim()[0] ?? '?').toUpperCase(),
+    ring: tile.speaking,
+  }
 }
 
 const TONE_BG: Record<CameraTone, string> = {
@@ -117,6 +133,66 @@ function SelfView() {
   )
 }
 
+// One remote face. A live <video> when their camera is on (attached like the
+// self-view), a name-initial placeholder when off; a green ring marks the active
+// speaker. Fixed size — the strip scrolls rather than shrinking the tiles (#488).
+function RemoteFace({ tile }: { tile: RemoteTile }) {
+  const ref = useRef<HTMLVideoElement>(null)
+  const v = tileView(tile)
+  useEffect(() => {
+    const el = ref.current
+    const track = tile.video
+    if (!el || !track) return
+    track.attach(el)
+    return () => void track.detach()
+  }, [tile.video])
+
+  return (
+    <div
+      title={tile.name}
+      style={{
+        position: 'relative',
+        flex: '0 0 auto',
+        width: 112,
+        height: 63,
+        borderRadius: 6,
+        overflow: 'hidden',
+        background: '#111',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        outline: v.ring ? '3px solid #4ade80' : 'none',
+        outlineOffset: -3,
+      }}
+    >
+      {v.showVideo ? (
+        <video
+          ref={ref}
+          autoPlay
+          playsInline
+          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+        />
+      ) : (
+        <span style={{ color: '#ccc', font: '600 22px/1 system-ui, sans-serif' }}>{v.initial}</span>
+      )}
+    </div>
+  )
+}
+
+// The remote filmstrip: a fixed-height row that scrolls horizontally once the
+// tiles overflow its cap width, so the footprint never grows (#488).
+function RemoteTiles() {
+  const s = useSyncExternalStore(meetingState.subscribe, meetingState.get, meetingState.get)
+  if (s.participants.length === 0) return null
+  return (
+    <div style={{ display: 'flex', gap: 6, maxWidth: 560, overflowX: 'auto', padding: 1 }}>
+      {s.participants.map((t) => (
+        <RemoteFace key={t.id} tile={t} />
+      ))}
+    </div>
+  )
+}
+
 export default function MeetingHud() {
   const meeting = useSyncExternalStore(meetingState.subscribe, meetingState.get, meetingState.get)
   const mic = useSyncExternalStore(micState.subscribe, micState.get, micState.get)
@@ -142,7 +218,10 @@ export default function MeetingHud() {
         boxShadow: '0 2px 10px rgba(0,0,0,0.4)',
       }}
     >
-      <SelfView />
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center', maxWidth: '90vw' }}>
+        <SelfView />
+        <RemoteTiles />
+      </div>
       <div style={{ display: 'flex', gap: 8 }}>
         <ControlButton
           icon={m.icon}
