@@ -6,9 +6,18 @@
 // Lookup and erase hit any cell of a zone's w×h rect, topmost (last placed)
 // winning where rects overlap.
 
-import type { Zone, ZonePayload, ZoneTrigger } from '../kernel/schema.ts'
+import type { BakedMap, Zone, ZonePayload, ZoneTrigger } from '../kernel/schema.ts'
 
 export type ZoneKind = ZonePayload['kind']
+
+// The map handed to the WYSIWYG decorate preview (#493). It must carry the *live*
+// authored zones and entities, not the ones baked at load — the Phaser preview's
+// blink glow (renderZoneBlink) reads map.zones, so a deleted link zone keeps
+// pulsing until this reflects the edit. Pure merge; the page memoises it over the
+// edit state so the preview rebuilds whenever a zone changes.
+export function previewMapOf(baked: BakedMap, zones: readonly Zone[], entities: BakedMap['entities']): BakedMap {
+  return { ...baked, zones: [...zones], entities }
+}
 
 // Placement never seeds an aiming zone — a cone needs a direction the click
 // can't know, so an author picks `on_sight` from the inspector (retrigger).
