@@ -5,8 +5,8 @@
 // mirroring the mic-blocked state's shape.
 
 import { describe, expect, it } from 'vitest'
-import { cameraView, tileView } from './MeetingHud.tsx'
-import type { RemoteTile } from './meetingState.ts'
+import { cameraView, shareView, tileView } from './MeetingHud.tsx'
+import type { RemoteTile, ShareTile } from './meetingState.ts'
 
 describe('cameraView', () => {
   it('shows an off state you can turn on', () => {
@@ -55,5 +55,20 @@ describe('tileView (#488)', () => {
 
   it('uses a fallback glyph when the name is blank', () => {
     expect(tileView(tile({ name: '   ' })).initial).toBe('?')
+  })
+})
+
+describe('shareView (#489)', () => {
+  const tile: ShareTile = { id: 'alice', name: 'Alice', video: {} as ShareTile['video'] }
+
+  it('offers to share while nobody is, and to stop while I am', () => {
+    expect(shareView({ focused: null, mine: false }).label).toBe('Share screen')
+    expect(shareView({ focused: { ...tile, id: 'me' }, mine: true }).label).toBe('Stop sharing')
+  })
+
+  it('captions the focused surface by its sharer', () => {
+    expect(shareView({ focused: tile, mine: false }).caption).toBe("Alice's screen")
+    expect(shareView({ focused: { ...tile, id: 'me' }, mine: true }).caption).toBe('Your screen')
+    expect(shareView({ focused: null, mine: false }).caption).toBe(null)
   })
 })

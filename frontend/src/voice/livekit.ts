@@ -18,7 +18,13 @@ import { getAuthToken } from '../lib/authToken.ts'
 import { micState } from './micState.ts'
 import { podFor } from './service.ts'
 import { resolveRoom, type MeetingRect } from './room.ts'
-import { meetingState, type CameraStatus, type RemoteTile, type SelfView } from './meetingState.ts'
+import {
+  meetingState,
+  type CameraStatus,
+  type RemoteTile,
+  type ScreenShare,
+  type SelfView,
+} from './meetingState.ts'
 import { DWELL_MS, LEAVE_RADIUS, PREJOIN_RADIUS } from './schema.ts'
 import type { MicStatus, VoicePosition } from './schema.ts'
 import type { VoiceMesh } from './mesh.ts'
@@ -44,6 +50,7 @@ export interface RoomLike {
   localParticipant: {
     setMicrophoneEnabled(enabled: boolean): Promise<unknown>
     setCameraEnabled(enabled: boolean): Promise<CameraPublicationLike | undefined>
+    setScreenShareEnabled(enabled: boolean): Promise<CameraPublicationLike | undefined>
   }
   // Participants already in the room at connect time (#488) — livekit populates
   // this before we get any participantConnected event. Absent in the mesh tests.
@@ -52,6 +59,7 @@ export interface RoomLike {
 
 interface RemoteTrackLike {
   kind: string
+  source?: string // livekit Track.Source: 'camera' | 'screen_share' | ... (#489)
 }
 
 // The bit of a livekit RemoteParticipant the meeting tiles need (#488).
@@ -90,6 +98,8 @@ export interface LivekitDeps {
   // The room's remote roster for the meeting filmstrip (#488), re-emitted whenever
   // a participant joins/leaves, publishes/stops video, or starts/stops speaking.
   onParticipants?: (tiles: RemoteTile[]) => void
+  // The focused screen share (#489), re-emitted whenever a share starts or stops.
+  onScreenShare?: (s: ScreenShare) => void
   // The measured room-join latency, emitted on each connect (#310 spike output).
   onJoinLatency?: (ms: number) => void
   // Overridable for tests; defaults to the tuned constants / wall clock.
@@ -103,6 +113,9 @@ const TRACK_UNSUBSCRIBED = 'trackUnsubscribed'
 const PARTICIPANT_CONNECTED = 'participantConnected'
 const PARTICIPANT_DISCONNECTED = 'participantDisconnected'
 const ACTIVE_SPEAKERS_CHANGED = 'activeSpeakersChanged'
+const LOCAL_TRACK_UNPUBLISHED = 'localTrackUnpublished'
+// Our own share sits in `shares` under this key, so "newest wins" covers it too.
+const ME = 'me'
 
 export function createLivekitVoice(deps: LivekitDeps): VoiceMesh {
   const { room, url, getToken, proximityRoom, attach, detach } = deps
@@ -126,6 +139,10 @@ export function createLivekitVoice(deps: LivekitDeps): VoiceMesh {
   // The remote meeting roster (#488), keyed by identity: one tile per participant,
   // holding their video track (null = camera off → placeholder) and speaking flag.
   const tiles = new Map<string, { name: string; video: SelfView | null; speaking: boolean }>()
+  // Live screen shares (#489), keyed by identity, in start order: the newest is
+  // the focused surface, so two concurrent shares never fight — the later one wins
+  // and the earlier one comes back when it stops.
+  const shares = new Map<string, { name: string; video: SelfView }>()
   // The last position/roster, so a dwell timer firing later re-resolves against
   // where we actually are now, not where we were when it was armed.
   let lastOwn: VoicePosition = { x: 0, y: 0 }
@@ -165,6 +182,25 @@ export function createLivekitVoice(deps: LivekitDeps): VoiceMesh {
     tiles.clear()
     syncTiles()
   }
+  const syncShare = () => {
+    const last = [...shares].at(-1)
+    deps.onScreenShare?.({
+      focused: last ? { id: last[0], ...last[1] } : null,
+      mine: shares.has(ME),
+    })
+  }
+  const dropShare = (id: string) => {
+    if (shares.delete(id)) syncShare()
+  }
+  const isScreen = (t: RemoteTrackLike) => t.kind === 'video' && t.source === 'screen_share'
+
+  // Stop publishing our screen — the in-app button, the browser's own "Stop
+  // sharing" control, and walking out of the room all land here (#489).
+  function stopShare() {
+    if (!shares.has(ME)) return
+    void room.localParticipant.setScreenShareEnabled(false).catch(() => {})
+    dropShare(ME)
+  }
 
   // Stop the camera device and drop the self-view — used both by the off toggle
   // and by leaving the room, so the light goes out either way (#487).
@@ -184,14 +220,25 @@ export function createLivekitVoice(deps: LivekitDeps): VoiceMesh {
       report()
       return
     }
-    if (t.kind === 'video' && participant && isMeetingRoom(currentRoom)) {
-      tileFor(participant as RemoteParticipantLike).video = t as unknown as SelfView
+    if (t.kind !== 'video' || !participant || !isMeetingRoom(currentRoom)) return
+    const p = participant as RemoteParticipantLike
+    if (isScreen(t)) {
+      tileFor(p) // a sharer still gets a face tile (placeholder when camera off)
+      shares.set(p.identity, { name: p.name || p.identity, video: t as unknown as SelfView })
       syncTiles()
+      syncShare()
+      return
     }
+    tileFor(p).video = t as unknown as SelfView
+    syncTiles()
   })
   room.on(TRACK_UNSUBSCRIBED, (track, _pub, participant) => {
     const t = track as RemoteTrackLike
     detach(t)
+    if (isScreen(t) && participant) {
+      dropShare((participant as RemoteParticipantLike).identity)
+      return
+    }
     if (t.kind === 'video' && participant) {
       const tile = tiles.get((participant as RemoteParticipantLike).identity)
       if (tile) {
@@ -206,7 +253,12 @@ export function createLivekitVoice(deps: LivekitDeps): VoiceMesh {
     syncTiles()
   })
   room.on(PARTICIPANT_DISCONNECTED, (participant) => {
-    if (tiles.delete((participant as RemoteParticipantLike).identity)) syncTiles()
+    const id = (participant as RemoteParticipantLike).identity
+    if (tiles.delete(id)) syncTiles()
+    dropShare(id)
+  })
+  room.on(LOCAL_TRACK_UNPUBLISHED, (pub) => {
+    if ((pub as RemoteTrackLike).source === 'screen_share') stopShare()
   })
   room.on(ACTIVE_SPEAKERS_CHANGED, (speakers) => {
     if (!isMeetingRoom(currentRoom)) return
@@ -254,7 +306,12 @@ export function createLivekitVoice(deps: LivekitDeps): VoiceMesh {
   function disconnect() {
     if (!connected) return
     stopCamera() // leaving a room stops the camera device, even if the tab stays open (#487)
+    stopShare() // and the screen share (#489)
     clearTiles() // and forgets everyone else's tiles (#488)
+    if (shares.size) {
+      shares.clear() // and any share we were watching (#489)
+      syncShare()
+    }
     connected = false
     void room.disconnect()
     report()
@@ -344,6 +401,23 @@ export function createLivekitVoice(deps: LivekitDeps): VoiceMesh {
         reportCamera()
       }
     },
+    // Share/stop sharing the screen (#489). A dismissed picker rejects — that is
+    // simply "not sharing", no denied state: the user can always try again.
+    async setScreenShare(on) {
+      if (!connected || !isMeetingRoom(currentRoom)) return
+      if (!on) {
+        stopShare()
+        return
+      }
+      try {
+        const pub = await room.localParticipant.setScreenShareEnabled(true)
+        if (!pub?.videoTrack) return
+        shares.set(ME, { name: 'You', video: pub.videoTrack })
+        syncShare()
+      } catch {
+        /* picker dismissed or blocked — stay off */
+      }
+    },
     stop() {
       cancelLeave()
       disconnect()
@@ -406,12 +480,19 @@ export function connectLivekitRoom(
     // stopped by the core). The camera state itself flows back through onCamera /
     // attachSelfView so the store never guesses what the device actually did.
     onMeeting: (inMeeting) =>
-      inMeeting ? meetingState.enter((on) => mesh.setCamera?.(on)) : meetingState.leave(),
+      inMeeting
+        ? meetingState.enter(
+            (on) => mesh.setCamera?.(on),
+            (on) => void mesh.setScreenShare?.(on),
+          )
+        : meetingState.leave(),
     onCamera: (s) => meetingState.cameraStatus(s),
     attachSelfView: (track) => meetingState.setSelfView(track ?? null),
     detachSelfView: () => meetingState.setSelfView(null),
     // Remote faces in the meeting filmstrip (#488).
     onParticipants: (tiles) => meetingState.setParticipants(tiles),
+    // The focused screen share (#489).
+    onScreenShare: (s) => meetingState.setScreenShare(s),
     // Spike output (#310): log the real join latency so PREJOIN_RADIUS can be
     // re-derived from measurement rather than the current estimate.
     onJoinLatency: (ms) => console.info(`[voice] livekit join latency ${Math.round(ms)}ms`),

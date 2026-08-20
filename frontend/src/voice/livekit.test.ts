@@ -7,10 +7,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createLivekitVoice, voiceSfuEnabled, type RoomLike } from './livekit.ts'
 import type { MeetingRect } from './room.ts'
 import { DWELL_MS, LEAVE_RADIUS, PREJOIN_RADIUS, type MicStatus, type VoicePosition } from './schema.ts'
-import type { CameraStatus, RemoteTile } from './meetingState.ts'
+import type { CameraStatus, RemoteTile, ScreenShare } from './meetingState.ts'
 
 class FakeTrack {
-  constructor(public kind = 'audio') {}
+  constructor(
+    public kind = 'audio',
+    public source = kind === 'video' ? 'camera' : 'microphone',
+  ) {}
   // A video track doubles as a self-view SelfView (attach/detach) in #487 tests.
   attach() {}
   detach() {}
@@ -23,6 +26,9 @@ class FakeRoom implements RoomLike {
   cameraEnabled: boolean | null = null
   cameraDenied = false // set by a test to simulate a declined camera permission
   videoTrack = new FakeTrack('video')
+  screenEnabled: boolean | null = null
+  screenDenied = false // the user dismissed the browser's picker
+  screenTrack = new FakeTrack('video', 'screen_share')
   disconnected = false
   localParticipant = {
     setMicrophoneEnabled: async (enabled: boolean) => {
@@ -32,6 +38,11 @@ class FakeRoom implements RoomLike {
       if (enabled && this.cameraDenied) throw new Error('NotAllowedError')
       this.cameraEnabled = enabled
       return enabled ? { videoTrack: this.videoTrack } : undefined
+    },
+    setScreenShareEnabled: async (enabled: boolean) => {
+      if (enabled && this.screenDenied) throw new Error('NotAllowedError')
+      this.screenEnabled = enabled
+      return enabled ? { videoTrack: this.screenTrack } : undefined
     },
   }
   on(event: string, cb: (...a: unknown[]) => void) {
@@ -64,6 +75,7 @@ function harness(meetingRects: MeetingRect[] = []) {
   const cameras: CameraStatus[] = [] // onCamera reports
   const selfViews: unknown[] = [] // attachSelfView payloads
   const rosters: RemoteTile[][] = [] // onParticipants emissions, in order
+  const shares: ScreenShare[] = [] // onScreenShare emissions, in order (#489)
   let selfViewOn = false // detachSelfView flips this back off
   const mesh = createLivekitVoice({
     room,
@@ -88,6 +100,7 @@ function harness(meetingRects: MeetingRect[] = []) {
       selfViewOn = false
     },
     onParticipants: (list) => rosters.push(list),
+    onScreenShare: (s) => shares.push(s),
   })
   return {
     room,
@@ -102,6 +115,7 @@ function harness(meetingRects: MeetingRect[] = []) {
     selfViews,
     rosters,
     tiles: () => rosters.at(-1) ?? [],
+    share: () => shares.at(-1) ?? { focused: null, mine: false },
     selfViewShown: () => selfViewOn,
   }
 }
@@ -540,5 +554,101 @@ describe('remote meeting tiles (#488)', () => {
     await flush()
     h.room.emit('participantConnected', peer('alice', 'Alice'))
     expect(h.rosters).toEqual([])
+  })
+})
+
+describe('screen share (#489)', () => {
+  const RECTS: MeetingRect[] = [{ x: 5, y: 5, w: 3, h: 3, roomId: 'standup' }]
+  const inside = { x: 6, y: 6 }
+  const peer = (identity: string, name?: string) => ({ identity, name })
+  const screen = () => new FakeTrack('video', 'screen_share')
+
+  const enter = async () => {
+    const h = harness(RECTS)
+    h.mesh.update(inside, new Map())
+    await flush()
+    return h
+  }
+
+  it('focuses a remote screen track instead of making it a camera tile', async () => {
+    const h = await enter()
+    const track = screen()
+    h.room.emit('trackSubscribed', track, {}, peer('alice', 'Alice'))
+    expect(h.share()).toEqual({ focused: { id: 'alice', name: 'Alice', video: track }, mine: false })
+    expect(h.tiles()).toEqual([{ id: 'alice', name: 'Alice', video: null, speaking: false }])
+  })
+
+  it('clears the focus when the share track unsubscribes', async () => {
+    const h = await enter()
+    const track = screen()
+    h.room.emit('trackSubscribed', track, {}, peer('alice', 'Alice'))
+    h.room.emit('trackUnsubscribed', track, {}, peer('alice', 'Alice'))
+    expect(h.share().focused).toBe(null)
+  })
+
+  it('focuses the newest of two concurrent shares, falling back when it stops', async () => {
+    const h = await enter()
+    const a = screen()
+    const b = screen()
+    h.room.emit('trackSubscribed', a, {}, peer('alice', 'Alice'))
+    h.room.emit('trackSubscribed', b, {}, peer('bob', 'Bob'))
+    expect(h.share().focused?.id).toBe('bob')
+    h.room.emit('trackUnsubscribed', b, {}, peer('bob', 'Bob'))
+    expect(h.share().focused?.id).toBe('alice')
+  })
+
+  it('drops the focus when the sharer leaves, and when we leave the room', async () => {
+    const h = await enter()
+    h.room.emit('trackSubscribed', screen(), {}, peer('alice', 'Alice'))
+    h.room.emit('participantDisconnected', peer('alice', 'Alice'))
+    expect(h.share().focused).toBe(null)
+    h.room.emit('trackSubscribed', screen(), {}, peer('bob', 'Bob'))
+    h.mesh.stop()
+    expect(h.share().focused).toBe(null)
+  })
+
+  it('publishes my screen on start and focuses it as mine', async () => {
+    const h = await enter()
+    await h.mesh.setScreenShare?.(true)
+    expect(h.room.screenEnabled).toBe(true)
+    expect(h.share()).toEqual({ focused: { id: 'me', name: 'You', video: h.room.screenTrack }, mine: true })
+  })
+
+  it('stops the publish and returns to the grid on stop', async () => {
+    const h = await enter()
+    await h.mesh.setScreenShare?.(true)
+    await h.mesh.setScreenShare?.(false)
+    expect(h.room.screenEnabled).toBe(false)
+    expect(h.share()).toEqual({ focused: null, mine: false })
+  })
+
+  it("stays off when the browser's picker is dismissed", async () => {
+    const h = await enter()
+    h.room.screenDenied = true
+    await h.mesh.setScreenShare?.(true)
+    expect(h.share()).toEqual({ focused: null, mine: false })
+  })
+
+  it("handles the browser's own Stop sharing control (local track unpublished)", async () => {
+    const h = await enter()
+    await h.mesh.setScreenShare?.(true)
+    h.room.emit('localTrackUnpublished', { source: 'screen_share' })
+    expect(h.share()).toEqual({ focused: null, mine: false })
+  })
+
+  it('a remote share started after mine takes the focus, but I am still sharing', async () => {
+    const h = await enter()
+    await h.mesh.setScreenShare?.(true)
+    h.room.emit('trackSubscribed', screen(), {}, peer('alice', 'Alice'))
+    expect(h.share().focused?.id).toBe('alice')
+    expect(h.share().mine).toBe(true)
+  })
+
+  it('stops my share when I walk out of the meeting room', async () => {
+    const h = await enter()
+    await h.mesh.setScreenShare?.(true)
+    h.mesh.stop()
+    expect(h.room.screenEnabled).toBe(false)
+    expect(h.share()).toEqual({ focused: null, mine: false })
   })
 })

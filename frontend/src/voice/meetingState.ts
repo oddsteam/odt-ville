@@ -30,15 +30,32 @@ export interface RemoteTile {
   speaking: boolean
 }
 
+// A screen share (#489): whose it is and the track to render as the focused
+// surface. `mine` is the local share, so the HUD can show the Stop control.
+export interface ShareTile {
+  id: string
+  name: string
+  video: SelfView
+}
+export interface ScreenShare {
+  focused: ShareTile | null // the surface the HUD shows; null = plain tile grid
+  mine: boolean // we are sharing (focused or not)
+}
+
 export interface MeetingSnapshot {
   inRoom: boolean // standing in a meeting room — the HUD shows, else it hides
   camera: CameraStatus
   selfView: SelfView | null // the local camera track to render while on
   participants: RemoteTile[] // everyone else in the room (#488)
+  share: ScreenShare // the focused screen share, if any (#489)
 }
 
-let snapshot: MeetingSnapshot = { inRoom: false, camera: 'off', selfView: null, participants: [] }
+const NO_SHARE: ScreenShare = { focused: null, mine: false }
+const EMPTY: MeetingSnapshot = { inRoom: false, camera: 'off', selfView: null, participants: [], share: NO_SHARE }
+
+let snapshot = EMPTY
 let apply: (on: boolean) => void = () => {}
+let applyShare: (on: boolean) => void = () => {}
 const listeners = new Set<() => void>()
 
 const emit = (next: MeetingSnapshot) => {
@@ -57,9 +74,10 @@ export const meetingState = {
   // Walked into a meeting room: show the HUD and bind the camera control. The
   // camera starts OFF every time — the standing mute choice survives (micState),
   // the camera never does.
-  enter(setCamera: (on: boolean) => void): void {
+  enter(setCamera: (on: boolean) => void, setShare: (on: boolean) => void = () => {}): void {
     apply = setCamera
-    emit({ inRoom: true, camera: 'off', selfView: null, participants: [] })
+    applyShare = setShare
+    emit({ ...EMPTY, inRoom: true })
   },
 
   // The one camera control the HUD drives: off→on publishes, on→off stops the
@@ -84,10 +102,20 @@ export const meetingState = {
     emit({ ...snapshot, participants })
   },
 
+  // Share / stop sharing the screen (#489); the mesh reports back via setScreenShare().
+  toggleShare(): void {
+    applyShare(!snapshot.share.mine)
+  },
+
+  setScreenShare(share: ScreenShare): void {
+    emit({ ...snapshot, share })
+  },
+
   // Walked out: tear the HUD down. The mesh has already stopped the camera device
   // (the light goes out); the store just forgets everything and defaults back off.
   leave(): void {
     apply = () => {}
-    emit({ inRoom: false, camera: 'off', selfView: null, participants: [] })
+    applyShare = () => {}
+    emit(EMPTY)
   },
 }
