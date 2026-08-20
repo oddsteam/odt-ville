@@ -1,12 +1,12 @@
-import { useEffect, useRef, useSyncExternalStore } from 'react'
-import { meetingState, type CameraStatus, type RemoteTile } from './meetingState.ts'
+import { useEffect, useRef, useSyncExternalStore, type RefObject } from 'react'
+import { meetingState, type CameraStatus, type RemoteTile, type ScreenShare, type SelfView as Track } from './meetingState.ts'
 import { micState } from './micState.ts'
 import { micView } from './MicIndicator.tsx'
 
 // The meeting overlay (#487). While you stand in a meeting room (#486) this is
 // your mic + camera controls and your own self-view; walking out tears it down.
 // It reads the two singleton stores (meetingState / micState) and renders only
-// your own tile — remote faces are a later slice. The camera is off on entry,
+// your own tile, the remote filmstrip (#488) and the focused screen share (#489). The camera is off on entry,
 // every time: publishing video is a deliberate click, never a default.
 
 export type CameraTone = 'on' | 'off' | 'denied'
@@ -47,6 +47,47 @@ export function tileView(tile: RemoteTile): TileView {
     initial: (tile.name.trim()[0] ?? '?').toUpperCase(),
     ring: tile.speaking,
   }
+}
+
+// The screen-share control + surface caption (#489). The button reads by whether
+// *I* am sharing (someone else's share doesn't stop me starting mine — newest
+// wins, see livekit.ts); the caption names whose screen is focused.
+export interface ShareView {
+  label: string
+  caption: string | null
+}
+export function shareView(share: ScreenShare): ShareView {
+  return {
+    label: share.mine ? 'Stop sharing' : 'Share screen',
+    caption: !share.focused ? null : share.focused.id === 'me' ? 'Your screen' : `${share.focused.name}'s screen`,
+  }
+}
+
+// Attach a track to a <video> for as long as it lives — the self-view, the
+// remote faces and the share surface all do exactly this.
+function useAttach(ref: RefObject<HTMLVideoElement | null>, track: Track | null) {
+  useEffect(() => {
+    const el = ref.current
+    if (!el || !track) return
+    track.attach(el)
+    return () => void track.detach()
+  }, [ref, track])
+}
+
+// The focused share surface (#489): the sharer's screen, large, above the strip.
+// `contain`, not `cover` — a screen must stay legible edge to edge.
+function ShareSurface({ share }: { share: ScreenShare }) {
+  const ref = useRef<HTMLVideoElement>(null)
+  useAttach(ref, share.focused?.video ?? null)
+  if (!share.focused) return null
+  return (
+    <div style={{ position: 'relative', width: 'min(960px, 90vw)', aspectRatio: '16 / 9', background: '#000', borderRadius: 8, overflow: 'hidden' }}>
+      <video ref={ref} autoPlay playsInline style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+      <span style={{ position: 'absolute', left: 8, bottom: 8, color: '#fff', background: 'rgba(0,0,0,0.6)', borderRadius: 4, padding: '2px 6px', font: '600 12px/1 system-ui, sans-serif' }}>
+        {shareView(share).caption}
+      </span>
+    </div>
+  )
 }
 
 const TONE_BG: Record<CameraTone, string> = {
@@ -96,13 +137,7 @@ function ControlButton(props: {
 function SelfView() {
   const s = useSyncExternalStore(meetingState.subscribe, meetingState.get, meetingState.get)
   const ref = useRef<HTMLVideoElement>(null)
-  useEffect(() => {
-    const el = ref.current
-    const track = s.selfView
-    if (!el || !track) return
-    track.attach(el)
-    return () => void track.detach()
-  }, [s.selfView])
+  useAttach(ref, s.selfView)
 
   return (
     <div
@@ -139,13 +174,7 @@ function SelfView() {
 function RemoteFace({ tile }: { tile: RemoteTile }) {
   const ref = useRef<HTMLVideoElement>(null)
   const v = tileView(tile)
-  useEffect(() => {
-    const el = ref.current
-    const track = tile.video
-    if (!el || !track) return
-    track.attach(el)
-    return () => void track.detach()
-  }, [tile.video])
+  useAttach(ref, tile.video)
 
   return (
     <div
@@ -200,6 +229,7 @@ export default function MeetingHud() {
 
   const cam = cameraView(meeting.camera)
   const m = micView(mic)
+  const sh = shareView(meeting.share)
   return (
     <div
       style={{
@@ -218,6 +248,7 @@ export default function MeetingHud() {
         boxShadow: '0 2px 10px rgba(0,0,0,0.4)',
       }}
     >
+      <ShareSurface share={meeting.share} />
       <div style={{ display: 'flex', gap: 6, alignItems: 'center', maxWidth: '90vw' }}>
         <SelfView />
         <RemoteTiles />
@@ -240,6 +271,15 @@ export default function MeetingHud() {
           pressed={meeting.camera === 'on'}
           title={cam.hint ?? (meeting.camera === 'on' ? 'Click to turn the camera off' : 'Click to turn the camera on')}
           onClick={meetingState.toggleCamera}
+        />
+        <ControlButton
+          icon="🖥️"
+          label={sh.label}
+          bg={meeting.share.mine ? '#2d7d46' : '#555'}
+          clickable
+          pressed={meeting.share.mine}
+          title={meeting.share.mine ? 'Click to stop sharing your screen' : 'Click to share a screen or window'}
+          onClick={meetingState.toggleShare}
         />
       </div>
     </div>

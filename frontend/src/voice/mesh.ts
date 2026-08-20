@@ -35,6 +35,8 @@ export interface VoiceMesh {
   // Publish/unpublish the local camera in a meeting room (#487). Only the LiveKit
   // room path implements it — the peer mesh has no meeting rooms, so it is optional.
   setCamera?(on: boolean): void
+  // Share/stop sharing the screen in a meeting room (#489). LiveKit-only, like setCamera.
+  setScreenShare?(on: boolean): Promise<void>
   stop(): void
 }
 

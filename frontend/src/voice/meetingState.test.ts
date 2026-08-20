@@ -5,7 +5,7 @@
 // without a deliberate click, even after turning it on in the last room).
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { meetingState, type RemoteTile, type SelfView } from './meetingState.ts'
+import { meetingState, type RemoteTile, type ScreenShare, type SelfView } from './meetingState.ts'
 
 // Module singleton — reset between cases so order doesn't leak state.
 afterEach(() => meetingState.leave())
@@ -66,6 +66,19 @@ describe('meetingState', () => {
     expect(meetingState.get().participants).toEqual(roster)
     meetingState.leave()
     expect(meetingState.get().participants).toEqual([])
+  })
+
+  it('toggles the bound share control by whether I am sharing, and resets on leave (#489)', () => {
+    const calls: boolean[] = []
+    meetingState.enter(() => {}, (on) => calls.push(on))
+    const share: ScreenShare = { focused: { id: 'me', name: 'You', video: {} as SelfView }, mine: true }
+    meetingState.toggleShare()
+    meetingState.setScreenShare(share)
+    expect(meetingState.get().share).toEqual(share)
+    meetingState.toggleShare()
+    expect(calls).toEqual([true, false])
+    meetingState.leave()
+    expect(meetingState.get().share).toEqual({ focused: null, mine: false })
   })
 
   it('notifies subscribers on change and stops after unsubscribe', () => {
