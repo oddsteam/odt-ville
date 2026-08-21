@@ -326,7 +326,7 @@ module Api
       test "a Tiled-imported map records producer 'tiled' and round-trips it" do
         # The editor stores the terrain producer inside baked (ADR-0007) so the
         # play endpoint and editor both know the terrain came from Tiled.
-        tiled = create_params(slug: "downtown", title: "Downtown").merge(
+        tiled = create_params(slug: "sampletown", title: "Sampletown").merge(
           source: { "type" => "map", "tilesets" => [] },
           baked: {
             "producer" => "tiled",
@@ -340,7 +340,7 @@ module Api
         post "/api/v1/maps", params: tiled, headers: auth(@user, roles: ["admin"]), as: :json
         assert_response :created
 
-        get "/api/v1/maps/downtown", headers: auth(@user)
+        get "/api/v1/maps/sampletown", headers: auth(@user)
         assert_equal "tiled", json[:producer]
       end
 

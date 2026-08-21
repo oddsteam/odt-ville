@@ -426,12 +426,12 @@ Site is held **FK-less by name** (the soft-seam rule), not as a hard FK into
 _Avoid_: an "everyone" / untagged-global scope — it would leak company content
 to Clients.
 
-**Downtown** *(two meanings — flagged ambiguity)*:
-Here, **downtown = the Scope** covering the many ODDS-wide community buildings on
-a staff member's hometown. Distinct from **`downtown.json`**, an authored
-travel-map reached by a portal and gated by its own `Maps::AccessPolicy`. The
-two are unrelated; this feature touches only the Scope. _Resolve before build_:
-if the authored map is meant to *be* this downtown, rename one.
+**Downtown** *(resolved — 2026-08-21, #502)*:
+**Downtown = the Scope** — the one word, unqualified, always means the
+`NULL`-scoped set of ODDS-wide community buildings on a staff member's hometown.
+The former `downtown.json` authored-map sample (a Tiled export used only to test
+the importer, never a seeded map) was renamed to **`sampletown`** to clear the
+collision. See [ADR-0021](docs/adr/0021-downtown-means-the-scope.md).
 
 ### Character looks (resolving — 2026-08-14)
 
