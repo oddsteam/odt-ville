@@ -49,6 +49,16 @@ module Auth
       domain.present? && company.company_domains.exists?(domain: domain)
     end
 
+    # The sites whose buildings this user's hometown resolves to (#499): the
+    # roster placements on their linked Employee, unioned with an app-assigned
+    # `client_site`. The union is why `client_site` can stand alone — an
+    # external Client with no roster Employee still resolves to their site.
+    # `client_site` lives here, not on Employee, because the roster sync
+    # replaces `Employee.sites` wholesale and would wipe it (ADR-0020).
+    def effective_site_names
+      (employee&.sites&.map(&:name) || []) | Array(client_site.presence)
+    end
+
     # The character this user renders (#155, ADR-0009): their pick, else the
     # global active. One resolution shared by the for_me read and the presence
     # frames peers render each other from (#266).

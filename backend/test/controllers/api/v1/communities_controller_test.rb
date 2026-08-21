@@ -450,6 +450,37 @@ module Api
         assert_empty json[:communities], "an unplaced external client sees nothing at this stage"
       end
 
+      # --- Client site membership on the User (#499) ---------------------------
+
+      test "an external client with only a client_site sees that site and no downtown" do
+        make_community(company: @company, title: "Downtown") # site: nil
+        make_community(company: @company, title: "KTB Hub").update!(site: "KTB")
+        make_community(company: @company, title: "TISCO Hub").update!(site: "TISCO")
+        @user.update!(external: true, client_site: "KTB")
+
+        get "/api/v1/communities", headers: auth(@user)
+
+        assert_response :success
+        titles = json[:communities].map { _1[:title] }
+        assert_equal %w[KTB\ Hub], titles,
+                     "a client with client_site=KTB and no Employee sees only KTB, no downtown"
+      end
+
+      test "effective sites union roster placements with client_site" do
+        make_community(company: @company, title: "Downtown") # site: nil
+        make_community(company: @company, title: "KTB Hub").update!(site: "KTB")
+        make_community(company: @company, title: "TISCO Hub").update!(site: "TISCO")
+        place_user_at(@user, "TISCO")
+        @user.update!(client_site: "KTB") # staff (external nil), so downtown folds in too
+
+        get "/api/v1/communities", headers: auth(@user)
+
+        assert_response :success
+        titles = json[:communities].map { _1[:title] }
+        assert_equal %w[Downtown KTB\ Hub TISCO\ Hub], titles.sort,
+                     "the read unions the Employee's TISCO placement with the client_site KTB"
+      end
+
       test "admin scope=all read is unfiltered by site" do
         make_community(company: @company, title: "Downtown") # site: nil
         make_community(company: @company, title: "KTB Hub").update!(site: "KTB")
