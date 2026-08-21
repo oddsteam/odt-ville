@@ -49,6 +49,7 @@ module Api
             color: attrs[:color].presence || "#888888",
             logo_url: attrs[:logo_url].to_s,
             category_key: attrs[:category_key].presence || "community",
+            site: attrs[:site].presence,
             position_order: (company.houses.maximum(:position_order) || 0) + 1,
             active: true
           )
@@ -112,6 +113,15 @@ module Api
             end
           end
 
+          # Site scope (#503): blank clears back to downtown (`nil`); a present
+          # name must be a known Site — FK-less by name (soft-seam), so this is a
+          # name check, not an association. Only the hometown read consults it.
+          if params.key?(:site)
+            site = params[:site].presence
+            return render json: { error: "Unknown site: #{site}" }, status: :unprocessable_entity if site && !::Org::Site.exists?(name: site)
+            attrs[:site] = site
+          end
+
           community.update!(attrs) if attrs.any?
           head :no_content
         end
@@ -127,7 +137,7 @@ module Api
         private
 
         def community_params
-          params.permit(:title, :color, :logo_url, :category_key)
+          params.permit(:title, :color, :logo_url, :category_key, :site)
         end
       end
     end

@@ -217,6 +217,54 @@ module Api
         assert_nil community.reload.interior_node_slug
       end
 
+      test "update scopes a community to a known site" do
+        ::Org::Site.create!(name: "KTB", kind: "client")
+        community = make_community(company: @company, title: "Compliance")
+
+        patch "/api/v1/communities/#{community.id}",
+              params: { site: "KTB" },
+              as: :json, headers: auth(@user, roles: ["admin"])
+
+        assert_response :success
+        assert_equal "KTB", community.reload.site
+      end
+
+      test "update 422s on an unknown site, leaving the scope unchanged" do
+        community = make_community(company: @company, title: "Compliance")
+
+        patch "/api/v1/communities/#{community.id}",
+              params: { site: "NOPE" },
+              as: :json, headers: auth(@user, roles: ["admin"])
+
+        assert_response :unprocessable_entity
+        assert_nil community.reload.site
+      end
+
+      test "update with a blank site clears the scope back to downtown" do
+        community = make_community(company: @company, title: "Compliance")
+        community.update!(site: "KTB")
+
+        patch "/api/v1/communities/#{community.id}",
+              params: { site: "" },
+              as: :json, headers: auth(@user, roles: ["admin"])
+
+        assert_response :success
+        assert_nil community.reload.site
+      end
+
+      test "the admin list exposes each community's site scope" do
+        ::Org::Site.create!(name: "KTB", kind: "client")
+        make_community(company: @company, title: "Scoped").update!(site: "KTB")
+        make_community(company: @company, title: "Downtown")
+
+        get "/api/v1/communities?scope=all", headers: auth(@user, roles: ["admin"])
+
+        assert_response :success
+        by_title = JSON.parse(response.body, symbolize_names: true)[:communities].index_by { _1[:title] }
+        assert_equal "KTB", by_title["Scoped"][:site]
+        assert_nil by_title["Downtown"][:site]
+      end
+
       test "update with a blank interior node slug clears it" do
         community = make_community(company: @company, title: "Housed")
         community.update!(interior_node_slug: "compliance-hq")
