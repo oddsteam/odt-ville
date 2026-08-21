@@ -430,10 +430,17 @@ ActiveRecord::Base.transaction do
   Communities::Board.delete_all
   Communities::House.delete_all
   Auth::User.delete_all
+  Org::CompanyDomain.delete_all
   Org::Company.delete_all
   Maps::Map.delete_all
 
   company = Org::Company.create!(name: "ODT")
+
+  # The ODDS staff email domains (#498): a login whose email domain is one of
+  # these is Staff (`external = false`); every other domain is a Client
+  # (`external = true`, fail-closed). Data, not a constant — the same table is
+  # the future domain->tenant router.
+  %w[odds.team odt.co.th].each { |d| company.company_domains.create!(domain: d) }
 
   # Seeded users mirror the Keycloak realm (keycloak/realm-export.json): their
   # external_id pins to the realm's seeded subject UUIDs so a verified token for

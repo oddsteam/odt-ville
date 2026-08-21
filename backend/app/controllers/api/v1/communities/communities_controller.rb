@@ -13,12 +13,15 @@ module Api
 
         # GET /api/v1/communities
         # The default is the per-user hometown read, scoped server-side to the
-        # caller's effective sites plus downtown (#497). `?scope=all` is the
-        # admin CRUD list, which stays unfiltered — only the hometown read is
-        # scoped.
+        # caller's effective sites (#497), plus downtown for Staff — an external
+        # Client is gated from the downtown (`site: nil`) buildings (#498).
+        # `?scope=all` is the admin CRUD list, which stays unfiltered — only the
+        # hometown read is scoped.
         def index
           communities = current_user.company.houses.active.ordered
-          communities = communities.for_sites(effective_site_names) unless params[:scope] == "all"
+          unless params[:scope] == "all"
+            communities = communities.for_sites(effective_site_names, downtown: !current_user.external)
+          end
           communities = communities.includes(boards: { content_items: :user_content_states }).to_a
           render json: ::Communities::CommunitiesSerializer.call(
             communities: communities, user: current_user, now: Time.current

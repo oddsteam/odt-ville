@@ -34,16 +34,25 @@ class ApplicationController < ActionController::API
     sub = claims&.subject
     return nil if sub.blank?
 
-    user = Auth::User.find_by(external_id: sub)
-    return user if user
+    user = Auth::User.find_by(external_id: sub) || provision_by_email(claims, sub)
+    return nil unless user
 
+    # Classify Staff/Client once, fail-closed (#498). A returning staff login
+    # backfills `external` on their next visit; a new login sets it at provision.
+    # No-op once set, so an admin flip is preserved.
+    user.classify_external! if user.external.nil?
+    user
+  end
+
+  def provision_by_email(claims, sub)
     # First login: provision (or re-link) by email so a later IdP swap — which
     # changes `sub` — reuses the same user instead of duplicating (#97).
     # ponytail: find_or_initialize races under concurrent first-logins; the
     # unique email index makes the loser raise rather than double-create.
-    # No domain gate — the org Keycloak is the access-control boundary now (#97),
-    # so any token it issues with an email provisions a user. Email is required
-    # (we key on it); a token without one can't be provisioned.
+    # No domain gate on access — the org Keycloak is the access-control boundary
+    # now (#97), so any token it issues with an email provisions a user; the
+    # domain only classifies Staff vs Client (#498). Email is required (we key on
+    # it); a token without one can't be provisioned.
     email = claims.email.to_s.downcase
     return nil if email.blank?
 

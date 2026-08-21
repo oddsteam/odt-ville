@@ -410,6 +410,46 @@ module Api
         assert_equal %w[Downtown], titles, "an unplaced user sees only downtown (nil) communities"
       end
 
+      # --- External Client downtown gate (#498) --------------------------------
+
+      test "an external client is gated from downtown, seeing only their site" do
+        make_community(company: @company, title: "Downtown") # site: nil
+        make_community(company: @company, title: "KTB Hub").update!(site: "KTB")
+        place_user_at(@user, "KTB")
+        @user.update!(external: true)
+
+        get "/api/v1/communities", headers: auth(@user)
+
+        assert_response :success
+        titles = json[:communities].map { _1[:title] }
+        assert_equal %w[KTB\ Hub], titles, "downtown (nil) is withheld from an external client"
+      end
+
+      test "a staff member embedded at a site sees the site and downtown" do
+        make_community(company: @company, title: "Downtown") # site: nil
+        make_community(company: @company, title: "KTB Hub").update!(site: "KTB")
+        place_user_at(@user, "KTB")
+        @user.update!(external: false)
+
+        get "/api/v1/communities", headers: auth(@user)
+
+        assert_response :success
+        titles = json[:communities].map { _1[:title] }
+        assert_equal %w[Downtown KTB\ Hub], titles.sort,
+                     "staff embedded at KTB see KTB and downtown"
+      end
+
+      test "an external client with no placement sees no downtown buildings" do
+        make_community(company: @company, title: "Downtown") # site: nil
+        make_community(company: @company, title: "KTB Hub").update!(site: "KTB")
+        @user.update!(external: true)
+
+        get "/api/v1/communities", headers: auth(@user)
+
+        assert_response :success
+        assert_empty json[:communities], "an unplaced external client sees nothing at this stage"
+      end
+
       test "admin scope=all read is unfiltered by site" do
         make_community(company: @company, title: "Downtown") # site: nil
         make_community(company: @company, title: "KTB Hub").update!(site: "KTB")

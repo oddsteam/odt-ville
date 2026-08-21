@@ -31,6 +31,24 @@ module Auth
       ::Org::Employee.find_by(email: email.downcase)&.tap { update!(employee: _1) }
     end
 
+    # Classify this login as Staff or Client (#498), fail-closed: `external` is
+    # true unless the email's domain is one the company positively owns. Called
+    # only when `external` is nil (never classified), so a first login sets it
+    # and a later admin flip is preserved. A blank email can't be classified —
+    # the only such rows are pre-provisioning seed users — so it stays nil
+    # (treated as Staff) rather than being forced Client.
+    def classify_external!
+      return if email.blank?
+
+      update!(external: !staff_email_domain?)
+    end
+
+    # True when the login email's domain is one this user's Company owns (#498).
+    def staff_email_domain?
+      domain = email.to_s.split("@").last&.downcase
+      domain.present? && company.company_domains.exists?(domain: domain)
+    end
+
     # The character this user renders (#155, ADR-0009): their pick, else the
     # global active. One resolution shared by the for_me read and the presence
     # frames peers render each other from (#266).

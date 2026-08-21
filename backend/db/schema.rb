@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_21_000001) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_21_000003) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -148,6 +148,15 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_21_000001) do
     t.index ["name"], name: "index_monsters_on_name", unique: true
   end
 
+  create_table "org_company_domains", force: :cascade do |t|
+    t.bigint "company_id", null: false
+    t.datetime "created_at", null: false
+    t.string "domain", null: false
+    t.datetime "updated_at", null: false
+    t.index ["company_id"], name: "index_org_company_domains_on_company_id"
+    t.index ["domain"], name: "index_org_company_domains_on_domain", unique: true
+  end
+
   create_table "org_employee_sites", id: false, force: :cascade do |t|
     t.bigint "employee_id", null: false
     t.bigint "site_id", null: false
@@ -256,6 +265,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_21_000001) do
     t.datetime "created_at", null: false
     t.string "email"
     t.bigint "employee_id"
+    t.boolean "external"
     t.string "external_id"
     t.string "name", null: false
     t.string "role", default: "employee", null: false

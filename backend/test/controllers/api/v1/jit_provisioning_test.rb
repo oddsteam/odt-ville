@@ -60,6 +60,50 @@ module Api
         assert_nil ::Auth::User.find_by(external_id: "kc-sub-5").employee_id
       end
 
+      # --- Staff / Client classification (#498) --------------------------------
+
+      test "a staff-domain login is provisioned as not external" do
+        @company.company_domains.create!(domain: "odds.team")
+
+        get "/api/v1/me", headers: auth_email("kc-sub-staff", "ada@ODDS.team")
+
+        assert_response :success
+        assert_equal false, ::Auth::User.find_by(external_id: "kc-sub-staff").external
+      end
+
+      test "an unknown-domain login is provisioned external, fail-closed" do
+        @company.company_domains.create!(domain: "odds.team")
+
+        get "/api/v1/me", headers: auth_email("kc-sub-client", "guest@acme.example")
+
+        assert_response :success
+        assert_equal true, ::Auth::User.find_by(external_id: "kc-sub-client").external
+      end
+
+      test "existing staff resolve to not external on next login" do
+        @company.company_domains.create!(domain: "odds.team")
+        staff = @company.users.create!(name: "Carol", role: "branch_manager",
+          external_id: "kc-sub-return", email: "carol@odds.team", external: nil)
+
+        get "/api/v1/me", headers: auth_email("kc-sub-return", "carol@odds.team")
+
+        assert_response :success
+        assert_equal false, staff.reload.external
+      end
+
+      test "a set external flag is preserved on next login (admin-flippable)" do
+        @company.company_domains.create!(domain: "odds.team")
+        # An admin marked this staff-domain user external; the login must not
+        # re-classify and undo the flip.
+        flipped = @company.users.create!(name: "Dana", role: "branch_employee",
+          external_id: "kc-sub-flip", email: "dana@odds.team", external: true)
+
+        get "/api/v1/me", headers: auth_email("kc-sub-flip", "dana@odds.team")
+
+        assert_response :success
+        assert_equal true, flipped.reload.external
+      end
+
       test "a returning user re-links by email when their subject changes" do
         existing = @company.users.create!(name: "Carol", role: "branch_manager",
           external_id: "old-sub", email: "carol@odds.team")
