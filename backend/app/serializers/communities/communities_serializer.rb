@@ -31,6 +31,9 @@ module Communities
         # The assigned mapped building for this house's hometown plot (#292);
         # null falls back to the active 'building' object, then bundled art.
         tile_object_id: community.tile_object_id,
+        # Site scope (#497/#503): a Site name shows the building only to users
+        # placed there; null = downtown (all Staff). FK-less, by name.
+        site: community.site,
         badges: {
           unread: all_items.count { |ci| state_of(ci, user) == "unread" },
           urgent: urgent_signage_count(effective_by_board, user),

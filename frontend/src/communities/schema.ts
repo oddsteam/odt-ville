@@ -41,6 +41,9 @@ export const Community = Schema.Struct({
   // falls back to the active 'building' object, then bundled art. Optional so
   // older payloads decode.
   tile_object_id: Schema.optional(Schema.NullOr(Schema.Number)),
+  // Site scope (#497/#503): the Site name this building is scoped to, or null
+  // for downtown (all Staff). Optional so older payloads decode.
+  site: Schema.optional(Schema.NullOr(Schema.String)),
   badges: Badges,
   boards: Schema.Array(BoardSummary),
 })
@@ -110,4 +113,7 @@ export type CommunityPatch = {
   readonly posture_set_id?: string | null
   readonly interior_node_slug?: string | null
   readonly tile_object_id?: number | null
+  // Site scope (#503): a Site name scopes the building to users placed there;
+  // null clears it back to downtown (all Staff).
+  readonly site?: string | null
 }

@@ -55,4 +55,19 @@ export const linkBasecampPerson = (
     )
   })
 
-export const EmployeesService = { list, searchBasecampPeople, linkBasecampPerson } as const
+// GET /org/sites -> the Site names, ordered, for admin pickers (#503). A bare
+// name list: the community scope is FK-less by name (soft-seam), so a name is
+// all a picker needs. Admin-gated server-side.
+export const listSites = (): Effect.Effect<readonly string[], HttpError, Http> =>
+  Effect.gen(function* () {
+    const http = yield* Http
+    const path = '/org/sites'
+    const raw = yield* http.get(path)
+    const payload = yield* Effect.mapError(
+      Schema.decodeUnknown(Schema.Struct({ sites: Schema.Array(Schema.String) }))(raw),
+      (e) => new DecodeError({ path, reason: e instanceof Error ? e.message : String(e) }),
+    )
+    return payload.sites
+  })
+
+export const EmployeesService = { list, searchBasecampPeople, linkBasecampPerson, listSites } as const

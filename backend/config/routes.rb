@@ -159,6 +159,9 @@ Rails.application.routes.draw do
         # link email can't. Scoped to that column in the controller, admin-gated.
         patch "org/employees/:id", to: "employees#update"
         get "org/basecamp_people", to: "basecamp_people#index"
+        # Site names for admin pickers (#503) — read-only, the community scope
+        # is FK-less by name so a bare name list is all a picker needs.
+        get "org/sites", to: "sites#index"
       end
 
       # The Maps domain (ADR-0010) — controllers under Api::V1::Maps::, URLs

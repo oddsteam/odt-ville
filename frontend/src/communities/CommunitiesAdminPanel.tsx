@@ -7,6 +7,7 @@ import type { PostureSet } from '../posture/schema.ts'
 import { MapsService, type MapSummary } from '../maps/service.ts'
 import { TileObjectsService } from '../catalog/tileObjects/service.ts'
 import type { TileObjectSummary } from '../catalog/tileObjects/schema.ts'
+import { EmployeesService } from '../org/service.ts'
 import { runEdge } from '../lib/runEdge.ts'
 import '../lib/mapperChrome.css'
 import './admin.css'
@@ -91,12 +92,14 @@ function HouseDoor({
   sets,
   nodes,
   buildings,
+  sites,
   onSaved,
 }: {
   house: Community
   sets: readonly PostureSet[]
   nodes: readonly MapSummary[]
   buildings: readonly TileObjectSummary[]
+  sites: readonly string[]
   onSaved?: () => void | Promise<void>
 }) {
   const [gate, setGate] = useState(house.entry_gate === POSTURE_GATE ? POSTURE_GATE : '')
@@ -107,6 +110,9 @@ function HouseDoor({
   const [buildingId, setBuildingId] = useState(
     house.tile_object_id != null ? String(house.tile_object_id) : '',
   )
+  // The building's Site scope (#503); '' = downtown (all Staff), a name scopes
+  // it to users placed at that Site.
+  const [site, setSite] = useState(house.site ?? '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -125,6 +131,7 @@ function HouseDoor({
           posture_set_id: gate === POSTURE_GATE ? setId : null,
           interior_node_slug: nodeSlug || null,
           tile_object_id: buildingId ? Number(buildingId) : null,
+          site: site || null,
         }),
       )
       if (onSaved) await onSaved()
@@ -161,6 +168,20 @@ function HouseDoor({
         {buildings.map((b) => (
           <option key={b.id} value={b.id}>
             {b.name} ({b.footprint_w}×{b.footprint_h})
+          </option>
+        ))}
+      </select>
+
+      <select
+        aria-label={`Site scope for ${house.title}`}
+        value={site}
+        onChange={(e) => setSite(e.target.value)}
+        disabled={busy}
+      >
+        <option value="">Downtown (all staff)</option>
+        {sites.map((s) => (
+          <option key={s} value={s}>
+            {s}
           </option>
         ))}
       </select>
@@ -218,6 +239,7 @@ export default function CommunitiesAdminPanel({
   const [sets, setSets] = useState<readonly PostureSet[]>([])
   const [nodes, setNodes] = useState<readonly MapSummary[]>([])
   const [buildings, setBuildings] = useState<readonly TileObjectSummary[]>([])
+  const [sites, setSites] = useState<readonly string[]>([])
 
   // The posture-set catalog for the gate picker. Empty if posture-login is
   // unreachable — the picker just shows no sets and a gate can't be saved.
@@ -241,6 +263,14 @@ export default function CommunitiesAdminPanel({
     runEdge(TileObjectsService.list('building'))
       .then(setBuildings)
       .catch(() => setBuildings([]))
+  }, [])
+
+  // The Site names for the scope picker (#503). Empty on error — the picker
+  // then offers only "Downtown (all staff)".
+  useEffect(() => {
+    runEdge(EmployeesService.listSites())
+      .then(setSites)
+      .catch(() => setSites([]))
   }, [])
 
   const used = communities.length
@@ -314,7 +344,7 @@ export default function CommunitiesAdminPanel({
                     ×
                   </button>
                 </div>
-                <HouseDoor house={c} sets={sets} nodes={nodes} buildings={buildings} onSaved={onChanged} />
+                <HouseDoor house={c} sets={sets} nodes={nodes} buildings={buildings} sites={sites} onSaved={onChanged} />
               </li>
             ))}
             {used === 0 && <li className="hint">No communities yet.</li>}
