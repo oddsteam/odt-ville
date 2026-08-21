@@ -30,14 +30,15 @@ module ApiTestHelpers
 
   # Build a community with the standard three boards. Pass `with_welcome: true`
   # to drop a single Must Know content item on it.
-  def make_community(company:, title: "Community", category: "community", with_welcome: false)
+  def make_community(company:, title: "Community", category: "community", with_welcome: false, site: nil)
     community = company.houses.create!(
       title: title,
       color: "#888888",
       logo_url: "",
       category_key: category,
       position_order: (company.houses.maximum(:position_order) || 0) + 1,
-      active: true
+      active: true,
+      site: site
     )
     BOARD_TYPES.each { |bt| community.boards.create!(board_type: bt) }
     if with_welcome

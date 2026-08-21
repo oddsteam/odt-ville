@@ -115,6 +115,9 @@ module Api
       # Pre-provision (#500): create a Client login by email before their first
       # sign-in. external_id stays nil until they log in and are matched by email.
       test "an admin pre-provisions a client by email with external and client_site" do
+        # The client_site guarantee (#501) needs a building at the site.
+        make_community(company: @company, title: "KTB HQ", site: "KTB")
+
         assert_difference -> { ::Auth::User.count }, 1 do
           post "/api/v1/admin/users",
                params: { email: "New.Client@client.test", external: true, client_site: "KTB" },
@@ -158,6 +161,8 @@ module Api
 
       # Edit an existing user (#500): flip external and assign a client_site.
       test "an admin sets external and client_site on an existing user" do
+        # The client_site guarantee (#501) needs a building at the site.
+        make_community(company: @company, title: "KTB HQ", site: "KTB")
         target = @company.users.create!(name: "Ed Existing", role: "branch_employee",
                                         external_id: SecureRandom.uuid, email: "ed@example.test")
 
@@ -185,6 +190,43 @@ module Api
         assert_nil target.reload.client_site
         # external untouched — the console can send one field at a time.
         assert_equal true, target.external
+      end
+
+      # The client-site building guarantee (#501): a Client resolves their
+      # hometown to that site's buildings, so assigning a site with no active
+      # community would drop them into an empty town. Block the assignment.
+      test "pre-provision rejects a client_site with no buildings, creating nothing" do
+        assert_no_difference -> { ::Auth::User.count } do
+          post "/api/v1/admin/users",
+               params: { email: "ghost@client.test", external: true, client_site: "Nowhere" },
+               headers: auth(@admin, roles: %w[admin])
+        end
+
+        assert_response :unprocessable_entity
+        assert json[:error].present?
+      end
+
+      test "update rejects a client_site with no buildings, leaving it unset" do
+        target = @company.users.create!(name: "No Site", role: "branch_employee",
+                                        external_id: SecureRandom.uuid, email: "nosite@client.test")
+
+        patch "/api/v1/admin/users/#{target.id}",
+              params: { client_site: "Nowhere" }, headers: auth(@admin, roles: %w[admin])
+
+        assert_response :unprocessable_entity
+        assert_nil target.reload.client_site
+      end
+
+      # An inactive community at the site doesn't count — the hometown read is
+      # scoped to *active* houses, so the town would still be empty.
+      test "an inactive-only site is still treated as having no buildings" do
+        make_community(company: @company, title: "Retired", site: "KTB").update!(active: false)
+
+        post "/api/v1/admin/users",
+             params: { email: "x@client.test", external: true, client_site: "KTB" },
+             headers: auth(@admin, roles: %w[admin])
+
+        assert_response :unprocessable_entity
       end
 
       test "create and update are admin-gated" do

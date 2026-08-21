@@ -53,6 +53,14 @@ export const assignedBuildingIds = (
   ...new Set(communities.flatMap((c) => (c.tile_object_id != null ? [c.tile_object_id] : []))),
 ]
 
+// The empty-town backstop (#501, CONTEXT.md "Hometown"): a user resolves their
+// hometown to their effective sites' buildings (#497), so a never-placed user —
+// or an external Client on a site with no communities — comes back with an empty
+// list. Communities ARE the town's buildings, so an empty list means there is no
+// town to generate; the shell shows a plain "not placed yet" line instead of the
+// degenerate one-plot ghost town buildTown would floor to (Math.max(count, 1)).
+export const isUnplaced = (communities: readonly unknown[]): boolean => communities.length === 0
+
 export const townErrorMessage = (e: unknown): string => {
   if (e instanceof RequestError) {
     if (e.status === 401 || e.status === 403) return "YOU DON'T HAVE ACCESS TO ENTER THE VILLAGE"

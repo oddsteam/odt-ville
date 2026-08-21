@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { assignedBuildingIds, townErrorMessage } from './townLoader.ts'
+import { assignedBuildingIds, isUnplaced, townErrorMessage } from './townLoader.ts'
 import { NetworkError, RequestError } from './lib/http.ts'
 
 const request = (status: number) => new RequestError({ path: '/x', status, body: '' })
@@ -18,6 +18,19 @@ describe('assignedBuildingIds', () => {
         { tile_object_id: 3 },
       ]),
     ).toEqual([7, 3])
+  })
+})
+
+// The empty-town backstop (#501): communities ARE the town's buildings, so an
+// empty resolved list means the user hasn't been placed — the shell shows a
+// "not placed yet" line instead of a degenerate one-plot ghost town.
+describe('isUnplaced', () => {
+  it('is true when the resolved building list is empty (no ghost town)', () => {
+    expect(isUnplaced([])).toBe(true)
+  })
+
+  it('is false as soon as there is at least one community', () => {
+    expect(isUnplaced([{ id: 1 }])).toBe(false)
   })
 })
 

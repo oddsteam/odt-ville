@@ -513,7 +513,8 @@ button:disabled {
 /* ---- Loading / error -------------------------------------- */
 
 .loading-card,
-.error-card {
+.error-card,
+.not-placed-card {
   background: var(--paper);
   border: 4px solid var(--ink);
   box-shadow: 6px 6px 0 var(--ink);
@@ -528,6 +529,17 @@ button:disabled {
   margin-top: 0;
   color: var(--red);
   font-size: 12px;
+}
+
+/* The empty-town backstop (#501): a normal "not placed yet" state, not an
+   error — inherit the card box but keep the heading ink, not red. */
+.not-placed-card h2 {
+  margin-top: 0;
+  font-size: 12px;
+}
+
+.not-placed-card .daily-brief-btn {
+  margin-top: 16px;
 }
 
 .error-detail {

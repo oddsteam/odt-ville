@@ -40,12 +40,17 @@ module Api
             return render json: { error: "A user with #{email} already exists." },
                           status: :unprocessable_entity
           end
+          company = current_user.company
+          site = params[:client_site].presence
+          if (msg = empty_site_error(company, site))
+            return render json: { error: msg }, status: :unprocessable_entity
+          end
 
-          user = current_user.company.users.create!(
+          user = company.users.create!(
             email: email,
             name: email.split("@").first,
             external: boolean_param(:external),
-            client_site: params[:client_site].presence
+            client_site: site
           )
           render json: user_json(user, keycloak: []), status: :created
         end
@@ -57,13 +62,31 @@ module Api
         def update
           user = ::Auth::User.find(params[:id])
           user.external = boolean_param(:external) if params.key?(:external)
-          user.client_site = params[:client_site].presence if params.key?(:client_site)
+          if params.key?(:client_site)
+            site = params[:client_site].presence
+            if (msg = empty_site_error(user.company, site))
+              return render json: { error: msg }, status: :unprocessable_entity
+            end
+            user.client_site = site
+          end
           user.save!
 
           render json: user_json(user, keycloak: surfaced_keycloak(user))
         end
 
         private
+
+        # Guard the client-site assignment (#501): a Client resolves their
+        # hometown to that site's active buildings (#497), so assigning a site
+        # with no active community would drop them into an empty town. Blank
+        # clears the field and skips the check. Nil (no building) → an error
+        # string the caller renders as a 422; a live site → nil (proceed).
+        def empty_site_error(company, site)
+          return nil if site.blank?
+          return nil if company.houses.active.exists?(site: site)
+
+          "Site #{site.inspect} has no buildings yet — add a community there before assigning a client."
+        end
 
         def boolean_param(key)
           ActiveModel::Type::Boolean.new.cast(params[key])

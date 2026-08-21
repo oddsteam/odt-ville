@@ -7,7 +7,7 @@ import { startPosture, confirmPosture } from './posture/client.ts'
 import { runPostureGate } from './posture/runGate.ts'
 import { openGatePopup, awaitGateResult } from './posture/popup.ts'
 import { CALLBACK_PATH } from './posture/callback.ts'
-import { loadTown as loadTownData, townErrorMessage } from './townLoader.ts'
+import { loadTown as loadTownData, townErrorMessage, isUnplaced } from './townLoader.ts'
 import { MapsService } from './maps/service.ts'
 import { StandeesWrite } from './standees/write.ts'
 import { StandeesService } from './standees/service.ts'
@@ -389,6 +389,22 @@ export default function VillagePage() {
   }
 
   if (!communities || !session) return null
+
+  // Empty-town backstop (#501): a user whose effective sites resolve to no
+  // buildings — never placed, or an external Client on a site with no
+  // communities — would otherwise boot a degenerate one-plot ghost town
+  // (buildTown floors plotCount at 1). Short-circuit before the game loads and
+  // show a plain "not placed yet" line. The Daily Brief stays reachable, so
+  // content access never depends on having a town.
+  if (isUnplaced(communities)) {
+    return (
+      <div className="not-placed-card">
+        <h2>You haven't been placed on the map yet.</h2>
+        <p>Once you're assigned to a site with a community, your hometown appears here.</p>
+        <DailyBriefShortcut items={feed} onClose={handleDailyBriefClose} />
+      </div>
+    )
+  }
 
   // A plain display payload for the deploy affordance (#371): the count out, the
   // cap, whether a deploy is allowed, and the located refusal — the pure budget
