@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { importTiledGround, importTiledMap } from './tiledImport.ts'
-import downtown from '../../public/maps/downtown.json'
+import sampletown from '../../public/maps/sampletown.json'
 
 // Minimal well-formed Tiled map: two embedded tilesets (so gid→frame crosses a
 // firstgid offset) and two tile layers over a 2×1 grid, plus an object layer the
@@ -74,9 +74,9 @@ describe('importTiledGround', () => {
     expect(() => importTiledGround(m)).toThrow(/margin|spacing/i)
   })
 
-  // The committed downtown export is the real thing #130 must import (AC 1).
-  it('imports the committed downtown map export', () => {
-    const g = importTiledGround(downtown as never)
+  // The committed sampletown export is the real thing #130 must import (AC 1).
+  it('imports the committed sampletown map export', () => {
+    const g = importTiledGround(sampletown as never)
 
     expect([g.cols, g.rows]).toEqual([30, 20])
     expect(g.tilesets.every((t) => t.cell === 32)).toBe(true)

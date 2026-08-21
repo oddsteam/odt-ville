@@ -64,9 +64,9 @@ because such a scope would leak company content to Clients.
 
 ## Consequences
 
-- `downtown` is now an overloaded word: the **Scope** here vs the authored
-  `downtown.json` travel-map gated by its own `Maps::AccessPolicy`. They are
-  unrelated; if the authored map is meant to *be* this downtown, one must be
-  renamed before build.
+- `downtown` was briefly an overloaded word: the **Scope** here vs an authored
+  `downtown.json` travel-map sample. Resolved in [ADR-0021](0021-downtown-means-the-scope.md):
+  they are deliberately separate, and the sample was renamed to `sampletown` so
+  `downtown` unambiguously means the Scope.
 - The hometown gains its first per-user input on the server side. The generated
   producer stays identity-blind — the filter runs before the list reaches it.

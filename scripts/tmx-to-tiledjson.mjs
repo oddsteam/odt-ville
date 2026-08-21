@@ -3,7 +3,7 @@
 //
 // Why this exists: Phaser's tilemap loader reads Tiled *JSON*, not .tmx XML,
 // and it cannot render Tiled's "oblique" orientation. The source map
-// (tipco/downtown.tmx) is an oblique grid whose tile data is a plain
+// (tipco/sampletown.tmx) is an oblique grid whose tile data is a plain
 // row-major grid, so we re-emit it as "orthogonal" (top-down) — the only
 // thing that changes is the projection used to *display* the same grid.
 //

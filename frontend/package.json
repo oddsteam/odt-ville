@@ -14,7 +14,7 @@
     "graph:folders": "depcruise src --config .dependency-cruiser.cjs --include-only \"^src/\" --output-type ddot --output-to codebase-map.folders.dot",
     "build": "vite build",
     "preview": "vite preview",
-    "map:build": "node ../scripts/tmx-to-tiledjson.mjs public/maps/downtown.tmx public/maps/downtown.json",
+    "map:build": "node ../scripts/tmx-to-tiledjson.mjs public/maps/sampletown.tmx public/maps/sampletown.json",
     "map:starter": "node ../scripts/build-map-starter-kit.mjs",
     "building:prep": "node scripts/prep-building.mjs",
     "map:palette": "node scripts/curate-palette.mjs"
