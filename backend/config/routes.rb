@@ -48,6 +48,11 @@ Rails.application.routes.draw do
         # sits under /admin because it is admin-console chrome, not an identity
         # read; `scope module: :auth` nests the controller, not the path.
         get "admin/users", to: "users#index"
+        # Client onboarding (#500): pre-provision a user by email, and edit
+        # `external` / `client_site` on an existing one. Admin-gated; reuses the
+        # users console, no separate /admin/clients route.
+        post "admin/users", to: "users#create"
+        patch "admin/users/:id", to: "users#update"
         # Grant an App role from the console (#431): admin-gated, stamps the
         # acting admin as granted_by. Only `admin` is grantable for now.
         post "admin/users/:id/roles", to: "roles#create"

@@ -57,4 +57,37 @@ export const revoke = (
     )
   })
 
-export const AdminUsersService = { list, grant, revoke } as const
+// POST /admin/users -> pre-provision a Client by email (#500), before their
+// first login and Keycloak account. Returns the created roster row. Admin-gated
+// server-side; a blank or duplicate email is a 422.
+export const create = (
+  input: { email: string; external?: boolean; client_site?: string | null },
+): Effect.Effect<AdminUser, HttpError, Http> =>
+  Effect.gen(function* () {
+    const http = yield* Http
+    const path = '/admin/users'
+    const raw = yield* http.post(path, input)
+    return yield* Effect.mapError(
+      Schema.decodeUnknown(AdminUser)(raw),
+      (e) => new DecodeError({ path, reason: e instanceof Error ? e.message : String(e) }),
+    )
+  })
+
+// PATCH /admin/users/:id -> set `external` and/or `client_site` on an existing
+// user (#500), one field at a time. A blank client_site clears it. Returns the
+// updated roster row so the page reflects it without a reload.
+export const update = (
+  userId: number,
+  patch: { external?: boolean; client_site?: string | null },
+): Effect.Effect<AdminUser, HttpError, Http> =>
+  Effect.gen(function* () {
+    const http = yield* Http
+    const path = `/admin/users/${userId}`
+    const raw = yield* http.patch(path, patch)
+    return yield* Effect.mapError(
+      Schema.decodeUnknown(AdminUser)(raw),
+      (e) => new DecodeError({ path, reason: e instanceof Error ? e.message : String(e) }),
+    )
+  })
+
+export const AdminUsersService = { list, grant, revoke, create, update } as const

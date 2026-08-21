@@ -3,6 +3,7 @@ import { AdminUsersService } from '../auth/service.ts'
 import { ViewerService } from '../viewer/service.ts'
 import type { AdminUser } from '../auth/schema.ts'
 import { hasAdmin, revokeControl, rowBadges } from './roleBadges.ts'
+import { createPayload } from './clientOnboarding.ts'
 import { runEdge } from '../lib/runEdge.ts'
 
 // The read-only admin roster (#430): who has logged in, and who is an admin
@@ -31,6 +32,18 @@ export default function UsersAdminPage() {
   // — you cannot revoke your own admin without locking yourself out (#432). The
   // server refuses it too (422); this just stops the button being offered.
   const [meId, setMeId] = useState<number | null>(null)
+  // The pre-provision form (#500): create a Client login by email before their
+  // first sign-in. `external` defaults on — pre-provisioning is the Client flow;
+  // a staff member provisions themselves at first login.
+  const [newEmail, setNewEmail] = useState('')
+  const [newExternal, setNewExternal] = useState(true)
+  const [newSite, setNewSite] = useState('')
+  const [creating, setCreating] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
+  // Per-row edit state: the id currently saving, and a client_site draft keyed
+  // by user id so each row's text input edits independently before its Save.
+  const [savingId, setSavingId] = useState<number | null>(null)
+  const [siteDrafts, setSiteDrafts] = useState<Record<number, string>>({})
 
   useEffect(() => {
     runEdge(AdminUsersService.list()).then(setUsers, (e: Error) => setError(e.message))
@@ -47,6 +60,50 @@ export default function UsersAdminPage() {
       },
       (e: Error) => {
         setGranting(null)
+        setRowError({ id, message: e.message })
+      },
+    )
+  }
+
+  // Pre-provision a Client by email (#500). The server returns the created row;
+  // splice it in name-ordered so the table matches the roster's ordering.
+  function preProvision() {
+    const payload = createPayload({ email: newEmail, external: newExternal, clientSite: newSite })
+    if (!payload.email) {
+      setCreateError('Enter an email to pre-provision.')
+      return
+    }
+    setCreating(true)
+    setCreateError(null)
+    runEdge(AdminUsersService.create(payload)).then(
+      (created) => {
+        setCreating(false)
+        setUsers((prev) =>
+          [...(prev ?? []), created].sort((a, b) => a.name.localeCompare(b.name)),
+        )
+        setNewEmail('')
+        setNewSite('')
+        setNewExternal(true)
+      },
+      (e: Error) => {
+        setCreating(false)
+        setCreateError(e.message)
+      },
+    )
+  }
+
+  // Set external and/or client_site on an existing user (#500). Swaps in the
+  // server's updated row so the console reflects it without a reload.
+  function saveEdit(id: number, patch: { external?: boolean; client_site?: string | null }) {
+    setSavingId(id)
+    setRowError(null)
+    runEdge(AdminUsersService.update(id, patch)).then(
+      (updated) => {
+        setSavingId(null)
+        setUsers((prev) => prev?.map((u) => (u.id === id ? updated : u)) ?? prev)
+      },
+      (e: Error) => {
+        setSavingId(null)
         setRowError({ id, message: e.message })
       },
     )
@@ -82,6 +139,42 @@ export default function UsersAdminPage() {
         cannot read another user's token.
       </p>
 
+      {/* Pre-provision a Client by email (#500): create the login before their
+          first sign-in and Keycloak account. On first login they are matched by
+          email and land in their site's town — no downtown, no empty state. */}
+      <form
+        className="admin-form"
+        onSubmit={(e) => {
+          e.preventDefault()
+          preProvision()
+        }}
+      >
+        <input
+          type="email"
+          placeholder="client@company.example"
+          value={newEmail}
+          onChange={(e) => setNewEmail(e.target.value)}
+        />
+        <input
+          type="text"
+          placeholder="Client site (e.g. KTB)"
+          value={newSite}
+          onChange={(e) => setNewSite(e.target.value)}
+        />
+        <label>
+          <input
+            type="checkbox"
+            checked={newExternal}
+            onChange={(e) => setNewExternal(e.target.checked)}
+          />{' '}
+          External (Client)
+        </label>
+        <button type="submit" disabled={creating}>
+          {creating ? 'Adding…' : 'Pre-provision'}
+        </button>
+        {createError ? <span className="admin-msg-error"> {createError}</span> : null}
+      </form>
+
       {users.length === 0 ? (
         <p className="admin-msg">No one has logged in yet.</p>
       ) : (
@@ -90,6 +183,8 @@ export default function UsersAdminPage() {
             <tr>
               <th>Name</th>
               <th>Email</th>
+              <th>Client</th>
+              <th>Client site</th>
               <th>Roles</th>
               <th></th>
             </tr>
@@ -101,6 +196,35 @@ export default function UsersAdminPage() {
                 <tr key={u.id}>
                   <td>{u.name}</td>
                   <td>{u.email ?? '—'}</td>
+                  <td>
+                    <label title="External Client (no downtown) vs Staff">
+                      <input
+                        type="checkbox"
+                        checked={u.external === true}
+                        disabled={savingId === u.id}
+                        onChange={(e) => saveEdit(u.id, { external: e.target.checked })}
+                      />
+                    </label>
+                  </td>
+                  <td>
+                    <input
+                      type="text"
+                      placeholder="—"
+                      value={siteDrafts[u.id] ?? u.client_site ?? ''}
+                      onChange={(e) =>
+                        setSiteDrafts((d) => ({ ...d, [u.id]: e.target.value }))
+                      }
+                    />{' '}
+                    <button
+                      type="button"
+                      disabled={savingId === u.id}
+                      onClick={() =>
+                        saveEdit(u.id, { client_site: siteDrafts[u.id] ?? u.client_site ?? '' })
+                      }
+                    >
+                      {savingId === u.id ? 'Saving…' : 'Save'}
+                    </button>
+                  </td>
                   <td>
                     {badges.length === 0
                       ? '—'

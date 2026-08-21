@@ -90,6 +90,27 @@ module Api
 
         assert_response :unauthorized
       end
+
+      # Client onboarding (#500): a Client pre-provisioned by email (external_id
+      # nil, external true, client_site set) is matched on their first login by
+      # email — the sub is stamped, and the app-assigned external/client_site
+      # survive (classify_external! is a no-op once external is set, ADR-0020).
+      test "a pre-provisioned client is matched by email on first login" do
+        client = @company.users.create!(name: "cleo", role: "branch_employee",
+                                        email: "cleo@client.test", external: true,
+                                        client_site: "KTB")
+        assert_nil client.external_id
+
+        # Token is "<sub>|<roles>|<email>": a brand-new sub carrying the email.
+        get "/api/v1/me", headers: { "Authorization" => "Bearer new-sub||cleo@client.test" }
+
+        assert_response :success
+        assert_equal client.id, json[:user][:id]
+        client.reload
+        assert_equal "new-sub", client.external_id
+        assert_equal true, client.external
+        assert_equal "KTB", client.client_site
+      end
     end
   end
 end

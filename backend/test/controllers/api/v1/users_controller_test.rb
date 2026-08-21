@@ -96,6 +96,114 @@ module Api
         ken = json.find { _1[:name] == "Ken Keycloak" }
         assert_equal [], ken[:roles]
       end
+
+      # A roster row carries the two fields the client-onboarding console edits
+      # (#500): `external` (Staff vs Client, nullable when never classified) and
+      # the app-assigned `client_site`.
+      test "a row carries external and client_site" do
+        @company.users.create!(name: "Cleo Client", role: "branch_employee",
+                               external_id: SecureRandom.uuid, email: "cleo@client.test",
+                               external: true, client_site: "KTB")
+
+        get "/api/v1/admin/users", headers: auth(@admin, roles: %w[admin])
+
+        cleo = json.find { _1[:name] == "Cleo Client" }
+        assert_equal true, cleo[:external]
+        assert_equal "KTB", cleo[:client_site]
+      end
+
+      # Pre-provision (#500): create a Client login by email before their first
+      # sign-in. external_id stays nil until they log in and are matched by email.
+      test "an admin pre-provisions a client by email with external and client_site" do
+        assert_difference -> { ::Auth::User.count }, 1 do
+          post "/api/v1/admin/users",
+               params: { email: "New.Client@client.test", external: true, client_site: "KTB" },
+               headers: auth(@admin, roles: %w[admin])
+        end
+
+        assert_response :created
+        user = ::Auth::User.find_by(email: "new.client@client.test")
+        assert_not_nil user
+        assert_nil user.external_id
+        assert_equal true, user.external
+        assert_equal "KTB", user.client_site
+        # Name defaults to the email prefix, as first-login provisioning does.
+        assert_equal "New.Client", user.name
+        assert_equal @company.id, user.company_id
+        assert_equal "KTB", json[:client_site]
+      end
+
+      test "pre-provision rejects a blank email as a 422, creating nothing" do
+        assert_no_difference -> { ::Auth::User.count } do
+          post "/api/v1/admin/users", params: { email: "  " },
+               headers: auth(@admin, roles: %w[admin])
+        end
+
+        assert_response :unprocessable_entity
+        assert json[:error].present?
+      end
+
+      test "pre-provision rejects a duplicate email as a 422, creating nothing" do
+        @company.users.create!(name: "Dup", role: "branch_employee",
+                               external_id: SecureRandom.uuid, email: "dup@client.test")
+
+        assert_no_difference -> { ::Auth::User.count } do
+          post "/api/v1/admin/users", params: { email: "Dup@client.test" },
+               headers: auth(@admin, roles: %w[admin])
+        end
+
+        assert_response :unprocessable_entity
+        assert json[:error].present?
+      end
+
+      # Edit an existing user (#500): flip external and assign a client_site.
+      test "an admin sets external and client_site on an existing user" do
+        target = @company.users.create!(name: "Ed Existing", role: "branch_employee",
+                                        external_id: SecureRandom.uuid, email: "ed@example.test")
+
+        patch "/api/v1/admin/users/#{target.id}",
+              params: { external: true, client_site: "KTB" },
+              headers: auth(@admin, roles: %w[admin])
+
+        assert_response :success
+        target.reload
+        assert_equal true, target.external
+        assert_equal "KTB", target.client_site
+        assert_equal "KTB", json[:client_site]
+      end
+
+      # A blank client_site clears the assignment (presence → nil).
+      test "an admin clears client_site with a blank value" do
+        target = @company.users.create!(name: "Cl Ear", role: "branch_employee",
+                                        external_id: SecureRandom.uuid, email: "clear@example.test",
+                                        external: true, client_site: "KTB")
+
+        patch "/api/v1/admin/users/#{target.id}",
+              params: { client_site: "" }, headers: auth(@admin, roles: %w[admin])
+
+        assert_response :success
+        assert_nil target.reload.client_site
+        # external untouched — the console can send one field at a time.
+        assert_equal true, target.external
+      end
+
+      test "create and update are admin-gated" do
+        post "/api/v1/admin/users", params: { email: "x@client.test" }, headers: auth(@admin)
+        assert_response :forbidden
+
+        target = @company.users.create!(name: "T", role: "branch_employee",
+                                        external_id: SecureRandom.uuid, email: "t@example.test")
+        patch "/api/v1/admin/users/#{target.id}", params: { external: true }, headers: auth(@admin)
+        assert_response :forbidden
+      end
+
+      test "create and update reject an anonymous request" do
+        post "/api/v1/admin/users", params: { email: "x@client.test" }
+        assert_response :unauthorized
+
+        patch "/api/v1/admin/users/1", params: { external: true }
+        assert_response :unauthorized
+      end
     end
   end
 end

@@ -20,6 +20,12 @@ module Api
             id: user.id,
             name: user.name,
             email: user.email,
+            # Client onboarding (#500): the two fields the console edits. `external`
+            # is nullable — nil means "never classified" (a pre-provisioned seed or
+            # a login before its first classify_external!); `client_site` is the
+            # app-assigned hometown site, by name (#499).
+            external: user.external,
+            client_site: user.client_site,
             roles: user.user_roles.map { |r|
               { role: r.role, source: "app",
                 granted_by: r.granted_by&.name, granted_at: r.created_at.iso8601 }

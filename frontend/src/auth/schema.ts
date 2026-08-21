@@ -22,10 +22,17 @@ export type RoleBadge = Schema.Schema.Type<typeof RoleBadge>
 
 // One login on the roster, from GET /admin/users. `email` is nullable — a
 // local-only user can exist without one.
+//
+// `external` (#498) and `client_site` (#499) are the two fields the client-
+// onboarding console edits (#500). `external` is nullable — null means a login
+// never classified Staff vs Client yet. `client_site` is the app-assigned
+// hometown site, by name, or null when unassigned.
 export const AdminUser = Schema.Struct({
   id: Schema.Number,
   name: Schema.String,
   email: Schema.NullOr(Schema.String),
+  external: Schema.NullOr(Schema.Boolean),
+  client_site: Schema.NullOr(Schema.String),
   roles: Schema.Array(RoleBadge),
 })
 export type AdminUser = Schema.Schema.Type<typeof AdminUser>
