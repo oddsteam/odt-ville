@@ -130,8 +130,9 @@ module Api
         assert_nil user.external_id
         assert_equal true, user.external
         assert_equal "KTB", user.client_site
-        # Name defaults to the email prefix, as first-login provisioning does.
-        assert_equal "New.Client", user.name
+        # Name defaults to the email prefix, as first-login provisioning does —
+        # which downcases the email first, so the derived name is downcased too.
+        assert_equal "new.client", user.name
         assert_equal @company.id, user.company_id
         assert_equal "KTB", json[:client_site]
       end

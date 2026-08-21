@@ -379,6 +379,60 @@ queue, not yet built. Nothing keys on the current source's ids — email and sit
 _Avoid_: "import" for the ongoing flow (it names the temporary scaffolding, not
 the concept).
 
+### Site-scoped hometown (resolving — 2026-08-20)
+
+The hometown stops being one shared building set and renders **per user** from
+who they are: an ODDS employee sees the buildings for the client Sites they are
+placed at **plus downtown**; an external client sees **only** their one Site's
+buildings. Access is a **whitelist** — there is no "visible to everyone" scope.
+
+**Staff / Client**:
+The two populations a login resolves to. **Staff** = a person whose login email
+domain matches one of their **Company**'s registered staff domains → they are
+ODDS employees and see downtown. **Client** = anyone whose domain matches none →
+an external person who came to play, walled off from downtown. Classification is
+**fail-closed**: staff status must be positively proven at login; unproven means
+Client. Stored explicitly as `external` on `Auth::User`, set at provisioning and
+admin-flippable — so the downtown gate never waits on a Site being assigned.
+_Avoid_: deriving Client-ness from "has no Employee" (a new hire has none) or
+from "has a Site assigned" (arrives later, leaving a leak window).
+
+**Company domain**:
+A verified email domain a **Company** owns, held as **data** (an
+`org_company_domains` row, unique on `domain`), never a hardcoded constant —
+because multi-org is on the roadmap and the same table becomes the future
+domain→tenant router. The staff signal is domain membership, so one table
+classifies every employee with no per-user Keycloak change.
+
+**Effective sites**:
+The Set of Sites whose buildings a user sees: a staff member's
+`employee.sites` (sync-owned, ADR-0016) **union** a client's admin-assigned
+`client_site`. Client site membership lives on **`Auth::User`, not Employee** —
+the roster sync replaces `Employee.sites` wholesale and would wipe it, and an
+external client is not on the roster at all. This is *not* ADR-0016's rejected
+"app authors org data": the sync has no record of a client to overwrite. A
+Client is **pre-provisioned by email** (Auth::User with `external` + `client_site`)
+before their first login and before their Keycloak account — so they land
+straight in their Site's town and never see the fail-closed empty state. Every
+Client Site is guaranteed ≥1 building, so the only empty town is the
+never-invited backstop, which the shell shows as a plain "not placed yet" line.
+
+**Scope** *(of a community)*:
+A `Communities::House`'s visibility tag: either a **Site** (`site:KTB`) or
+**downtown**. `site:X` shows only to users whose Effective sites include X;
+`downtown` shows only to Staff (never Clients). A cross-module reference to a
+Site is held **FK-less by name** (the soft-seam rule), not as a hard FK into
+`org_sites`. Today's company-wide communities all become downtown-scoped.
+_Avoid_: an "everyone" / untagged-global scope — it would leak company content
+to Clients.
+
+**Downtown** *(two meanings — flagged ambiguity)*:
+Here, **downtown = the Scope** covering the many ODDS-wide community buildings on
+a staff member's hometown. Distinct from **`downtown.json`**, an authored
+travel-map reached by a portal and gated by its own `Maps::AccessPolicy`. The
+two are unrelated; this feature touches only the Scope. _Resolve before build_:
+if the authored map is meant to *be* this downtown, rename one.
+
 ### Character looks (resolving — 2026-08-14)
 
 A user builds their own avatar by mixing part sheets from an asset pack, instead
