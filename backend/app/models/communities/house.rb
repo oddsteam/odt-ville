@@ -15,6 +15,11 @@ module Communities
 
     scope :active, -> { where(active: true) }
     scope :ordered, -> { order(:position_order, :id) }
+    # The hometown read is scoped to the caller's effective sites plus downtown
+    # (#497): a `site: nil` community is downtown-scoped and shows to everyone at
+    # this stage; a `site: "KTB"` community shows only to a user placed at KTB.
+    # FK-less, keyed by site *name* per the soft-seam rule.
+    scope :for_sites, ->(names) { where(site: [nil, *names]) }
 
     private
 

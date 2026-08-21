@@ -14,7 +14,8 @@ export default function CommunitiesAdminPage() {
   const load = useCallback(async () => {
     try {
       setError(null)
-      setCommunities(await runEdge(CommunitiesService.list()))
+      // Admin CRUD is unfiltered — only the hometown read is site-scoped (#497).
+      setCommunities(await runEdge(CommunitiesService.list({ all: true })))
     } catch (e) {
       setError((e as Error).message)
     }

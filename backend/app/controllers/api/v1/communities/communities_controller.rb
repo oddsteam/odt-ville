@@ -12,10 +12,14 @@ module Api
         BOARD_TYPES = %w[must_know should_know nice_to_know].freeze
 
         # GET /api/v1/communities
+        # The default is the per-user hometown read, scoped server-side to the
+        # caller's effective sites plus downtown (#497). `?scope=all` is the
+        # admin CRUD list, which stays unfiltered — only the hometown read is
+        # scoped.
         def index
           communities = current_user.company.houses.active.ordered
-                                    .includes(boards: { content_items: :user_content_states })
-                                    .to_a
+          communities = communities.for_sites(effective_site_names) unless params[:scope] == "all"
+          communities = communities.includes(boards: { content_items: :user_content_states }).to_a
           render json: ::Communities::CommunitiesSerializer.call(
             communities: communities, user: current_user, now: Time.current
           )
@@ -118,6 +122,14 @@ module Api
         end
 
         private
+
+        # The caller's effective sites for the scoped hometown read (#497):
+        # the roster placements on their linked Employee, by site *name*. A user
+        # with no linked Employee has none, so they see only downtown (nil).
+        # The union with client_site (external Clients) arrives in #499.
+        def effective_site_names
+          current_user.employee&.sites&.map(&:name) || []
+        end
 
         def community_params
           params.permit(:title, :color, :logo_url, :category_key)

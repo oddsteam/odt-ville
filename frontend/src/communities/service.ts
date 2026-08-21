@@ -39,11 +39,16 @@ function decode<A>(
     )
 }
 
-// GET /communities -> Community[]
-export const list = (): Effect.Effect<readonly Community[], HttpError, Http> =>
+// GET /communities -> Community[]. The default is the per-user hometown read,
+// which the server scopes to the caller's effective sites (#497). The admin
+// CRUD console passes `all` to read every community unfiltered.
+export const list = (opts?: {
+  all?: boolean
+}): Effect.Effect<readonly Community[], HttpError, Http> =>
   Effect.gen(function* () {
     const http = yield* Http
-    const raw = yield* http.get('/communities')
+    const path = opts?.all ? '/communities?scope=all' : '/communities'
+    const raw = yield* http.get(path)
     const payload = yield* decode('/communities', decodeCommunities)(raw)
     return payload.communities
   })

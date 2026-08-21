@@ -359,6 +359,69 @@ module Api
         assert_response :not_found
         assert ::Communities::House.exists?(foreign.id)
       end
+
+      # --- Site-scoped hometown read (#497) ------------------------------------
+
+      # Place a user at the named sites by linking a roster Employee (the same
+      # seam the hometown read filters on).
+      def place_user_at(user, *site_names)
+        employee = ::Org::Employee.create!(
+          company: user.company, name: user.name, email: "#{SecureRandom.hex(4)}@example.test"
+        )
+        site_names.each do |n|
+          employee.sites << ::Org::Site.find_or_create_by!(name: n) { _1.kind = "client" }
+        end
+        user.update!(employee: employee)
+      end
+
+      test "hometown read shows a site-tagged community only to a user placed there" do
+        make_community(company: @company, title: "Downtown") # site: nil
+        make_community(company: @company, title: "KTB Hub").update!(site: "KTB")
+        place_user_at(@user, "KTB")
+
+        get "/api/v1/communities", headers: auth(@user)
+
+        assert_response :success
+        titles = json[:communities].map { _1[:title] }
+        assert_equal %w[Downtown KTB\ Hub], titles.sort,
+                     "a user placed at KTB sees downtown and the KTB community"
+      end
+
+      test "hometown read hides a site-tagged community from a user not placed there" do
+        make_community(company: @company, title: "Downtown") # site: nil
+        make_community(company: @company, title: "KTB Hub").update!(site: "KTB")
+        place_user_at(@user, "TISCO")
+
+        get "/api/v1/communities", headers: auth(@user)
+
+        assert_response :success
+        titles = json[:communities].map { _1[:title] }
+        assert_equal %w[Downtown], titles, "KTB is hidden from a user placed only at TISCO"
+      end
+
+      test "hometown read shows only downtown to a user with no roster placement" do
+        make_community(company: @company, title: "Downtown") # site: nil
+        make_community(company: @company, title: "KTB Hub").update!(site: "KTB")
+
+        get "/api/v1/communities", headers: auth(@user)
+
+        assert_response :success
+        titles = json[:communities].map { _1[:title] }
+        assert_equal %w[Downtown], titles, "an unplaced user sees only downtown (nil) communities"
+      end
+
+      test "admin scope=all read is unfiltered by site" do
+        make_community(company: @company, title: "Downtown") # site: nil
+        make_community(company: @company, title: "KTB Hub").update!(site: "KTB")
+        place_user_at(@user, "TISCO")
+
+        get "/api/v1/communities", params: { scope: "all" }, headers: auth(@user, roles: ["admin"])
+
+        assert_response :success
+        titles = json[:communities].map { _1[:title] }
+        assert_equal %w[Downtown KTB\ Hub], titles.sort,
+                     "the admin CRUD list shows every community regardless of the caller's sites"
+      end
     end
   end
 end
