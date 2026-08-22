@@ -6,6 +6,7 @@
 // Lookup and erase hit any cell of a zone's w×h rect, topmost (last placed)
 // winning where rects overlap.
 
+import { inZone } from '../kernel/zones.ts'
 import type { BakedMap, Zone, ZonePayload, ZoneTrigger } from '../kernel/schema.ts'
 
 export type ZoneKind = ZonePayload['kind']
@@ -77,14 +78,11 @@ export function retrigger(zone: Zone, trigger: ZoneTrigger): Zone {
   return { trigger, x, y, w, h, payload }
 }
 
-// Point-in-rect over the zone's w×h footprint (absent w/h mean one tile) —
-// the same rule the runtime detector applies (kernel/zones.ts inZone).
-const covers = (z: Zone, x: number, y: number) =>
-  x >= z.x && x < z.x + (z.w ?? 1) && y >= z.y && y < z.y + (z.h ?? 1)
-
-// The zone a click at (x,y) selects: the topmost (last placed), or -1.
+// The zone a click at (x,y) selects: the topmost (last placed), or -1. Hit-test
+// is the kernel's `inZone` — the same w×h footprint rule the runtime detector
+// fires on (#524).
 export function zoneIndexAt(zones: readonly Zone[], x: number, y: number): number {
-  return zones.findLastIndex((z) => covers(z, x, y))
+  return zones.findLastIndex((z) => inZone(z, x, y))
 }
 
 // Remove the topmost zone covering the cell; off every zone it's a no-op

@@ -5,8 +5,19 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createLivekitVoice, type RoomLike } from './livekit.ts'
-import type { MeetingRect } from './room.ts'
+import type { Zone } from '../kernel/schema.ts'
 import { DWELL_MS, LEAVE_RADIUS, PREJOIN_RADIUS, type MicStatus, type VoicePosition } from './schema.ts'
+
+// A meeting zone anchored at (x,y) over a w×h footprint — the resolver reads
+// these off the map's authored zones (#486).
+const meetingZone = (x: number, y: number, roomId: string, w?: number, h?: number): Zone => ({
+  trigger: 'on_enter',
+  x,
+  y,
+  w,
+  h,
+  payload: { kind: 'meeting', roomId },
+})
 import type { CameraStatus, RemoteTile, ScreenShare } from './meetingState.ts'
 
 class FakeTrack {
@@ -64,7 +75,7 @@ const flush = async () => {
   for (let i = 0; i < 8; i++) await Promise.resolve()
 }
 
-function harness(meetingRects: MeetingRect[] = []) {
+function harness(zones: Zone[] = []) {
   const room = new FakeRoom()
   const attached: FakeTrack[] = []
   const detached: FakeTrack[] = []
@@ -81,7 +92,7 @@ function harness(meetingRects: MeetingRect[] = []) {
     room,
     url: 'wss://example.livekit.cloud',
     proximityRoom: 'map-town',
-    meetingRects,
+    zones,
     getToken: async (roomKey) => {
       tokensFor.push(roomKey)
       return 'jwt'
@@ -263,7 +274,7 @@ describe('leave dwell timer (#310)', () => {
 
 describe('meeting rooms (#486)', () => {
   // A 3×3 room anchored at (5,5); (6,6) is inside, (0,0) is outside.
-  const RECTS: MeetingRect[] = [{ x: 5, y: 5, w: 3, h: 3, roomId: 'standup' }]
+  const RECTS: Zone[] = [meetingZone(5, 5, 'standup', 3, 3)]
 
   it('joins the meeting room on entry, alone, regardless of proximity', async () => {
     const h = harness(RECTS)
@@ -352,7 +363,7 @@ describe('meeting rooms (#486)', () => {
 })
 
 describe('meeting HUD signals (#487)', () => {
-  const RECTS: MeetingRect[] = [{ x: 5, y: 5, w: 3, h: 3, roomId: 'standup' }]
+  const RECTS: Zone[] = [meetingZone(5, 5, 'standup', 3, 3)]
   const inside = { x: 6, y: 6 }
   const outside = { x: 0, y: 0 }
 
@@ -465,7 +476,7 @@ describe('meeting HUD signals (#487)', () => {
 })
 
 describe('remote meeting tiles (#488)', () => {
-  const RECTS: MeetingRect[] = [{ x: 5, y: 5, w: 3, h: 3, roomId: 'standup' }]
+  const RECTS: Zone[] = [meetingZone(5, 5, 'standup', 3, 3)]
   const inside = { x: 6, y: 6 }
   const outside = { x: 0, y: 0 }
   const peer = (identity: string, name?: string) => ({ identity, name })
@@ -548,7 +559,7 @@ describe('remote meeting tiles (#488)', () => {
 })
 
 describe('screen share (#489)', () => {
-  const RECTS: MeetingRect[] = [{ x: 5, y: 5, w: 3, h: 3, roomId: 'standup' }]
+  const RECTS: Zone[] = [meetingZone(5, 5, 'standup', 3, 3)]
   const inside = { x: 6, y: 6 }
   const peer = (identity: string, name?: string) => ({ identity, name })
   const screen = () => new FakeTrack('video', 'screen_share')

@@ -7,92 +7,73 @@
 // 1.0, which is exactly what a meeting room wants (#486).
 //
 // Which room you are in is a function of *position* (#486): outside every
-// authored meeting rect you are proximity-gated into the map's own room; inside
+// authored meeting zone you are proximity-gated into the map's own room; inside
 // one you drop that room and join the meeting room with everyone else standing
 // there, no proximity cap. Room keys come from schema.ts's roomKey (#518). The
-// resolver (room.ts) is handed plain rects — the game runtime is never imported
-// (voice-depends-only-on-shared-infrastructure).
+// resolver (room.ts) is handed the map's authored zones — the game runtime is
+// never imported (voice-depends-only-on-shared-infrastructure).
+//
+// This file is connection + hysteresis only (#524): the meeting call — camera,
+// screen share, the remote filmstrip — lives in meeting.ts, which we hand the
+// room's local publisher and forward the room events to.
 
 import { Room, type RemoteTrack } from 'livekit-client'
 import { getAuthToken } from '../lib/authToken.ts'
 import { micState } from './micState.ts'
 import { podFor } from './service.ts'
-import { resolveRoom, type MeetingRect } from './room.ts'
+import { resolveRoom } from './room.ts'
 import {
-  meetingState,
-  type CameraStatus,
-  type RemoteTile,
-  type ScreenShare,
-  type SelfView,
-} from './meetingState.ts'
+  createMeeting,
+  type MeetingDeps,
+  type PublicationLike,
+  type RemoteParticipantLike,
+  type RemoteTrackLike,
+} from './meeting.ts'
+import { meetingState } from './meetingState.ts'
 import { DWELL_MS, LEAVE_RADIUS, PREJOIN_RADIUS, parseRoomKey, roomKey } from './schema.ts'
 import type { MicStatus, VoiceHandle, VoicePosition } from './schema.ts'
+import type { Zone } from '../kernel/schema.ts'
 
 // Just enough of livekit-client's Room to test the join/mute/stop wiring against
 // a fake — the adapter below hands the real Room in.
-// A camera publication carries the local video track (LocalVideoTrack) — enough
-// of livekit's LocalTrackPublication to attach the self-view.
-interface CameraPublicationLike {
-  videoTrack?: SelfView
-}
-
 export interface RoomLike {
   on(event: string, cb: (...args: unknown[]) => void): unknown
   connect(url: string, token: string): Promise<void>
   disconnect(): Promise<void> | void
   localParticipant: {
     setMicrophoneEnabled(enabled: boolean): Promise<unknown>
-    setCameraEnabled(enabled: boolean): Promise<CameraPublicationLike | undefined>
-    setScreenShareEnabled(enabled: boolean): Promise<CameraPublicationLike | undefined>
+    setCameraEnabled(enabled: boolean): Promise<PublicationLike | undefined>
+    setScreenShareEnabled(enabled: boolean): Promise<PublicationLike | undefined>
   }
   // Participants already in the room at connect time (#488) — livekit populates
   // this before we get any participantConnected event. Absent in the mesh tests.
   remoteParticipants?: Map<string, RemoteParticipantLike>
 }
 
-interface RemoteTrackLike {
-  kind: string
-  source?: string // livekit Track.Source: 'camera' | 'screen_share' | ... (#489)
-}
-
-// The bit of a livekit RemoteParticipant the meeting tiles need (#488).
-interface RemoteParticipantLike {
-  identity: string
-  name?: string
-}
-
-export interface LivekitDeps {
+// The meeting HUD callbacks (onCamera/attachSelfView/detachSelfView/
+// onParticipants/onScreenShare) are the meeting module's — declared once on
+// MeetingDeps and passed straight through, so the two never drift.
+export interface LivekitDeps
+  extends Pick<MeetingDeps, 'onCamera' | 'attachSelfView' | 'detachSelfView' | 'onParticipants' | 'onScreenShare'> {
   room: RoomLike
   url: string
   // Mint (server-side, #308) the token for a room key (schema.ts roomKey, #518) —
   // the map's own room, or a meeting room. Called once per join, so a room switch
   // fetches the token scoped to the room it is joining.
   getToken: (key: string) => string | Promise<string>
-  // This map's proximity room key, joined when outside every rect.
+  // This map's proximity room key, joined when outside every meeting zone.
   proximityRoom: string
-  // This map's authored meeting rects (#486); empty when it authors none. Plain
-  // data — voice never imports the map or the scene to get them.
-  meetingRects?: readonly MeetingRect[]
-  // Attach/detach a subscribed remote track's media element (DOM lives in the
-  // adapter, so the core stays testable in node).
+  // This map's authored zones (#486); the resolver reads the meeting ones off
+  // them. Plain data — voice never imports the map or the scene to get them.
+  zones?: readonly Zone[]
+  // Attach/detach a subscribed remote audio track's media element (DOM lives in
+  // the adapter, so the core stays testable in node).
   attach: (track: RemoteTrackLike) => void
   detach: (track: RemoteTrackLike) => void
   onStatus?: (s: MicStatus) => void
   // Meeting-room membership for the HUD (#487): true when we hold a meeting room,
   // false when we leave it. Drives whether the meeting overlay is shown.
   onMeeting?: (inMeeting: boolean) => void
-  // The camera's real state as a toggle resolves (#487): 'denied' is a clean off
-  // state (same shape as a declined mic), not an error.
-  onCamera?: (s: CameraStatus) => void
-  // Attach/detach the local camera track to the self-view tile (DOM lives in the
-  // adapter, so the core stays testable in node — mirrors attach/detach above).
-  attachSelfView?: (track: SelfView | undefined) => void
-  detachSelfView?: () => void
-  // The room's remote roster for the meeting filmstrip (#488), re-emitted whenever
-  // a participant joins/leaves, publishes/stops video, or starts/stops speaking.
-  onParticipants?: (tiles: RemoteTile[]) => void
-  // The focused screen share (#489), re-emitted whenever a share starts or stops.
-  onScreenShare?: (s: ScreenShare) => void
   // The measured room-join latency, emitted on each connect (#310 spike output).
   onJoinLatency?: (ms: number) => void
   // Overridable for tests; defaults to the tuned constants / wall clock.
@@ -107,12 +88,10 @@ const PARTICIPANT_CONNECTED = 'participantConnected'
 const PARTICIPANT_DISCONNECTED = 'participantDisconnected'
 const ACTIVE_SPEAKERS_CHANGED = 'activeSpeakersChanged'
 const LOCAL_TRACK_UNPUBLISHED = 'localTrackUnpublished'
-// Our own share sits in `shares` under this key, so "newest wins" covers it too.
-const ME = 'me'
 
 export function createLivekitVoice(deps: LivekitDeps): VoiceHandle {
   const { room, url, getToken, proximityRoom, attach, detach } = deps
-  const meetingRects = deps.meetingRects ?? []
+  const zones = deps.zones ?? []
   const dwellMs = deps.dwellMs ?? DWELL_MS
   const now = deps.now ?? (() => Date.now())
   // The room we hold or are joining (null = disconnected). The proximity room
@@ -123,23 +102,24 @@ export function createLivekitVoice(deps: LivekitDeps): VoiceHandle {
   let joining = false // a connect() is in flight — don't start a second
   let muted = false
   let denied = false // the browser declined the mic — voice cleanly off
-  // Meeting HUD state (#487). Camera membership is a click, never a default: it
-  // publishes only inside a meeting room and stops the device on the way out.
-  let inMeeting = false
-  let cameraOn = false
-  let cameraDenied = false
+  let inMeeting = false // last-reported onMeeting edge
   let leaveTimer: ReturnType<typeof setTimeout> | null = null
-  // The remote meeting roster (#488), keyed by identity: one tile per participant,
-  // holding their video track (null = camera off → placeholder) and speaking flag.
-  const tiles = new Map<string, { name: string; video: SelfView | null; speaking: boolean }>()
-  // Live screen shares (#489), keyed by identity, in start order: the newest is
-  // the focused surface, so two concurrent shares never fight — the later one wins
-  // and the earlier one comes back when it stops.
-  const shares = new Map<string, { name: string; video: SelfView }>()
   // The last position/roster, so a dwell timer firing later re-resolves against
   // where we actually are now, not where we were when it was armed.
   let lastOwn: VoicePosition = { x: 0, y: 0 }
   let lastRoster: Map<string, VoicePosition> = new Map()
+
+  // The meeting call (#487/#488/#489) — camera, share, and the remote filmstrip.
+  // It reports out through the same deps callbacks; livekit forwards it the room
+  // events and drives it in and out as membership changes.
+  const meeting = createMeeting({
+    local: room.localParticipant,
+    onCamera: deps.onCamera,
+    attachSelfView: deps.attachSelfView,
+    detachSelfView: deps.detachSelfView,
+    onParticipants: deps.onParticipants,
+    onScreenShare: deps.onScreenShare,
+  })
 
   const report = () =>
     deps.onStatus?.({ live: connected && !muted && !denied, muted, denied })
@@ -157,56 +137,6 @@ export function createLivekitVoice(deps: LivekitDeps): VoiceHandle {
     }
   }
 
-  const reportCamera = () =>
-    deps.onCamera?.(cameraDenied ? 'denied' : cameraOn ? 'on' : 'off')
-
-  // Meeting filmstrip roster (#488). Tiles are only tracked inside a meeting room;
-  // the proximity room is audio-only and hidden, so it never grows tiles.
-  const syncTiles = () =>
-    deps.onParticipants?.(
-      [...tiles].map(([id, t]) => ({ id, name: t.name, video: t.video, speaking: t.speaking })),
-    )
-  const tileFor = (p: RemoteParticipantLike) => {
-    let tile = tiles.get(p.identity)
-    if (!tile) tiles.set(p.identity, (tile = { name: p.name || p.identity, video: null, speaking: false }))
-    return tile
-  }
-  const clearTiles = () => {
-    if (tiles.size === 0) return
-    tiles.clear()
-    syncTiles()
-  }
-  const syncShare = () => {
-    const last = [...shares].at(-1)
-    deps.onScreenShare?.({
-      focused: last ? { id: last[0], ...last[1] } : null,
-      mine: shares.has(ME),
-    })
-  }
-  const dropShare = (id: string) => {
-    if (shares.delete(id)) syncShare()
-  }
-  const isScreen = (t: RemoteTrackLike) => t.kind === 'video' && t.source === 'screen_share'
-
-  // Stop publishing our screen — the in-app button, the browser's own "Stop
-  // sharing" control, and walking out of the room all land here (#489).
-  function stopShare() {
-    if (!shares.has(ME)) return
-    void room.localParticipant.setScreenShareEnabled(false).catch(() => {})
-    dropShare(ME)
-  }
-
-  // Stop the camera device and drop the self-view — used both by the off toggle
-  // and by leaving the room, so the light goes out either way (#487).
-  function stopCamera() {
-    if (!cameraOn && !cameraDenied) return
-    cameraOn = false
-    cameraDenied = false
-    void room.localParticipant.setCameraEnabled(false).catch(() => {})
-    deps.detachSelfView?.()
-    reportCamera()
-  }
-
   room.on(TRACK_SUBSCRIBED, (track, _pub, participant) => {
     const t = track as RemoteTrackLike
     if (t.kind === 'audio') {
@@ -214,70 +144,40 @@ export function createLivekitVoice(deps: LivekitDeps): VoiceHandle {
       report()
       return
     }
-    if (t.kind !== 'video' || !participant || !isMeetingRoom(currentRoom)) return
-    const p = participant as RemoteParticipantLike
-    if (isScreen(t)) {
-      tileFor(p) // a sharer still gets a face tile (placeholder when camera off)
-      shares.set(p.identity, { name: p.name || p.identity, video: t as unknown as SelfView })
-      syncTiles()
-      syncShare()
-      return
-    }
-    tileFor(p).video = t as unknown as SelfView
-    syncTiles()
+    if (isMeetingRoom(currentRoom)) meeting.trackSubscribed(t, participant as RemoteParticipantLike | undefined)
   })
   room.on(TRACK_UNSUBSCRIBED, (track, _pub, participant) => {
     const t = track as RemoteTrackLike
     detach(t)
-    if (isScreen(t) && participant) {
-      dropShare((participant as RemoteParticipantLike).identity)
-      return
-    }
-    if (t.kind === 'video' && participant) {
-      const tile = tiles.get((participant as RemoteParticipantLike).identity)
-      if (tile) {
-        tile.video = null // camera off → placeholder, but keep the tile
-        syncTiles()
-      }
-    }
+    meeting.trackUnsubscribed(t, participant as RemoteParticipantLike | undefined)
   })
   room.on(PARTICIPANT_CONNECTED, (participant) => {
-    if (!isMeetingRoom(currentRoom)) return
-    tileFor(participant as RemoteParticipantLike)
-    syncTiles()
+    if (isMeetingRoom(currentRoom)) meeting.participantConnected(participant as RemoteParticipantLike)
   })
   room.on(PARTICIPANT_DISCONNECTED, (participant) => {
-    const id = (participant as RemoteParticipantLike).identity
-    if (tiles.delete(id)) syncTiles()
-    dropShare(id)
+    meeting.participantDisconnected(participant as RemoteParticipantLike)
   })
-  room.on(LOCAL_TRACK_UNPUBLISHED, (pub) => {
-    if ((pub as RemoteTrackLike).source === 'screen_share') stopShare()
-  })
+  room.on(LOCAL_TRACK_UNPUBLISHED, (pub) => meeting.localTrackUnpublished(pub as RemoteTrackLike))
   room.on(ACTIVE_SPEAKERS_CHANGED, (speakers) => {
-    if (!isMeetingRoom(currentRoom)) return
-    const talking = new Set((speakers as RemoteParticipantLike[]).map((s) => s.identity))
-    for (const [id, tile] of tiles) tile.speaking = talking.has(id)
-    syncTiles()
+    if (isMeetingRoom(currentRoom)) meeting.activeSpeakers(speakers as RemoteParticipantLike[])
   })
 
   // Fetch the room's token, connect, then publish the mic. A token/connect
   // failure just leaves voice off; only a declined mic reports `denied` (it
   // lights the mic-blocked indicator), so the two aren't conflated.
-  async function connectTo(roomKey: string) {
+  async function connectTo(target: string) {
     if (joining) return
     joining = true
-    currentRoom = roomKey
+    currentRoom = target
     const t0 = now()
     try {
-      await room.connect(url, await getToken(roomKey))
+      await room.connect(url, await getToken(target))
       connected = true
       deps.onJoinLatency?.(now() - t0) // measured lead time (#310)
       report()
       reportMeeting() // opens the HUD the moment we hold a meeting room (#487)
       if (isMeetingRoom(currentRoom) && room.remoteParticipants) {
-        for (const p of room.remoteParticipants.values()) tileFor(p) // seed who's already here (#488)
-        syncTiles()
+        meeting.seed(room.remoteParticipants.values()) // seed who's already here (#488)
       }
       try {
         await room.localParticipant.setMicrophoneEnabled(!muted)
@@ -299,13 +199,7 @@ export function createLivekitVoice(deps: LivekitDeps): VoiceHandle {
 
   function disconnect() {
     if (!connected) return
-    stopCamera() // leaving a room stops the camera device, even if the tab stays open (#487)
-    stopShare() // and the screen share (#489)
-    clearTiles() // and forgets everyone else's tiles (#488)
-    if (shares.size) {
-      shares.clear() // and any share we were watching (#489)
-      syncShare()
-    }
+    meeting.reset() // stops the camera + share and forgets the tiles (#487/#488/#489)
     connected = false
     void room.disconnect()
     report()
@@ -324,13 +218,13 @@ export function createLivekitVoice(deps: LivekitDeps): VoiceHandle {
     void connectTo(target).catch(report)
   }
 
-  // Which room do we *want* to be in right now? Inside a meeting rect → that
+  // Which room do we *want* to be in right now? Inside a meeting zone → that
   // room, unconditionally (you are in the call the moment you step in, alone or
   // not, no POD_CAP). Outside → the proximity room, but only when a peer is in
   // earshot, with the three-radius hysteresis (#310): join on the pre-join band,
   // hold through the dead-band out to LEAVE_RADIUS, want-out beyond it.
   function desiredRoom(own: VoicePosition, roster: Map<string, VoicePosition>): string | null {
-    const room = resolveRoom(own, meetingRects, proximityRoom)
+    const room = resolveRoom(own, zones, proximityRoom)
     if (room !== proximityRoom) return room
     if (podFor(own, roster, PREJOIN_RADIUS).length > 0) return proximityRoom
     const holding = podFor(own, roster, LEAVE_RADIUS).length > 0
@@ -375,42 +269,16 @@ export function createLivekitVoice(deps: LivekitDeps): VoiceHandle {
       report()
     },
     // Publish/unpublish the camera (#487). Only meaningful inside a meeting room;
-    // a declined permission lands in a clean off state (denied), never an error.
+    // the meeting module lands a declined permission in a clean off state.
     async setCamera(on) {
       if (!connected || !isMeetingRoom(currentRoom)) return
-      if (!on) {
-        stopCamera()
-        return
-      }
-      try {
-        const pub = await room.localParticipant.setCameraEnabled(true)
-        cameraOn = true
-        cameraDenied = false
-        deps.attachSelfView?.(pub?.videoTrack)
-        reportCamera()
-      } catch {
-        cameraOn = false
-        cameraDenied = true
-        deps.detachSelfView?.()
-        reportCamera()
-      }
+      await meeting.setCamera(on)
     },
-    // Share/stop sharing the screen (#489). A dismissed picker rejects — that is
-    // simply "not sharing", no denied state: the user can always try again.
+    // Share/stop sharing the screen (#489). Only meaningful inside a meeting room;
+    // a dismissed picker is simply "not sharing", handled in the meeting module.
     async setScreenShare(on) {
       if (!connected || !isMeetingRoom(currentRoom)) return
-      if (!on) {
-        stopShare()
-        return
-      }
-      try {
-        const pub = await room.localParticipant.setScreenShareEnabled(true)
-        if (!pub?.videoTrack) return
-        shares.set(ME, { name: 'You', video: pub.videoTrack })
-        syncShare()
-      } catch {
-        /* picker dismissed or blocked — stay off */
-      }
+      await meeting.setScreenShare(on)
     },
     stop() {
       cancelLeave()
@@ -441,14 +309,15 @@ async function fetchRoomToken(slug: string, authToken: string, key: string): Pro
 }
 
 // Browser adapter: the real livekit-client Room wired from env + the #308 token.
-// Same shape as mesh.ts's connectVoice — returns null (voice cleanly off) when
-// there is no LiveKit URL or no auth token. `ownId` is unused: LiveKit takes the
-// participant identity from the server-minted token, not the client. `meetingRects`
-// are this map's authored meeting zones (#486), passed as plain data.
+// Returns null (voice cleanly off) when there is no LiveKit URL or no auth token.
+// `ownId` is unused: LiveKit takes the participant identity from the server-minted
+// token, not the client. `zones` are this map's authored zones (#486), passed as
+// plain data. This is the ONLY place the meetingState singleton is bound (#524):
+// the core reports through callbacks so it never writes the store itself.
 export function connectLivekitRoom(
   slug: string,
   _ownId: string,
-  meetingRects: readonly MeetingRect[] = [],
+  zones: readonly Zone[] = [],
 ): VoiceHandle | null {
   const url = import.meta.env.VITE_LIVEKIT_URL as string | undefined
   const authToken = getAuthToken()
@@ -459,8 +328,8 @@ export function connectLivekitRoom(
     room,
     url,
     proximityRoom: roomKey({ kind: 'map', slug }),
-    meetingRects,
-    getToken: (roomKey) => fetchRoomToken(slug, authToken, roomKey),
+    zones,
+    getToken: (key) => fetchRoomToken(slug, authToken, key),
     // Flat MVP: attach every remote audio track at its default volume and let it
     // autoplay. Distance-scaled gain is a later slice (ADR-0011).
     attach: (track) => {

@@ -8,18 +8,19 @@
 // lives in schema.ts; this file is its sole producer.
 
 import { connectLivekitRoom } from './livekit.ts'
-import type { MeetingRect } from './room.ts'
 import type { VoiceHandle } from './schema.ts'
+import type { Zone } from '../kernel/schema.ts'
 
 // Browser adapter: connectVoice always returns the LiveKit handle (#517). Null
-// (voice cleanly off) when there is no LiveKit URL or auth token. `meetingRects`
-// are this map's authored meeting zones (#486), honoured with no env flag.
+// (voice cleanly off) when there is no LiveKit URL or auth token. `zones` are the
+// map's authored zones (#486); the meeting resolver reads the meeting ones off
+// them, honoured with no env flag.
 export function connectVoice(
   slug: string,
   ownId: string,
-  meetingRects: readonly MeetingRect[] = [],
+  zones: readonly Zone[] = [],
 ): VoiceHandle | null {
-  return connectLivekitRoom(slug, ownId, meetingRects)
+  return connectLivekitRoom(slug, ownId, zones)
 }
 
 // dev/e2e seam only; noop where there is no window (unit env). The voice meter

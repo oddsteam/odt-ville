@@ -11,12 +11,11 @@
 // is voice off, not an error.
 
 import type { VoiceHandle } from '../voice/schema.ts'
-import { meetingRectsOf, type MeetingRect } from '../voice/service.ts'
 import type { Zone } from '../kernel/schema.ts'
 
 export interface VoiceSessionDeps {
   viewerId: () => Promise<string | null>
-  connect: (slug: string, ownId: string, meetingRects: readonly MeetingRect[]) => VoiceHandle | null
+  connect: (slug: string, ownId: string, zones: readonly Zone[]) => VoiceHandle | null
 }
 
 export function voiceSession({ viewerId, connect }: VoiceSessionDeps) {
@@ -38,7 +37,7 @@ export function voiceSession({ viewerId, connect }: VoiceSessionDeps) {
     if (!map.multiplayer) return null
     const ownId = await viewerId()
     if (!ownId) return null
-    current = connect(map.slug, ownId, meetingRectsOf(map.zones))
+    current = connect(map.slug, ownId, map.zones ?? [])
     return current
   }
 
