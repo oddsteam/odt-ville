@@ -5,7 +5,7 @@ import { cameraBounds } from '../canvasLayout.ts'
 import { isTransitioning } from '../../transition.ts'
 import { spawnTile, mapWalkable, entityBlockedFor, entityEdgeBlockedFor, entityDoorCells, entityLadderFor, entityOverhangFor, entityForegroundFor, mapPlayerDepth, slidePlayerDepth, peerDepth, peerSlideDepth, feetWorldXY, MAP_NAMEPLATE_DEPTH } from '../mapWalk.ts'
 import { spawnNpcs, npcBlockedFor, sortNpcs } from '../mapNpcs.ts'
-import { spawnStandees, sortStandees, standeeAt, placardOf, addStandee, restandeeRigs, expiredStandees, cutout } from '../mapStandees.ts'
+import { preloadStandees, spawnStandees, sortStandees, standeeAt, placardOf, addStandee, restandeeRigs, expiredStandees, cutout } from '../mapStandees.ts'
 import {
   CHAR_SHEET_KEY,
   preloadCharacter,
@@ -65,6 +65,7 @@ export default class MapScene extends Phaser.Scene {
 
   preload() {
     preloadBakedMap(this)
+    preloadStandees(this)
     this._charManifest = preloadCharacter(this)
     for (const [dir, url] of Object.entries(STILL_URLS)) {
       this.load.image(`player.${dir}.0`, url)

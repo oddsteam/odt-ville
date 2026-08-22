@@ -11,7 +11,8 @@
 // sheet that never loaded) falls back to the bundled still rather than crashing.
 
 import { TILE } from '../constants.js'
-import { standeeSheetKey, MAP_ENTITY_DEPTH } from '../../kernel/mapRenderer.ts'
+import { MAP_ENTITY_DEPTH } from '../../kernel/mapRenderer.ts'
+import { queueRigSheet } from '../../kernel/rigSheet.js'
 import { framesForFacing, characterScale } from '../../kernel/characterManifest.js'
 import { MAP_PLAYER_DEPTH } from './mapWalk.ts'
 import { peerSheetKey } from './characterRig.js'
@@ -74,7 +75,7 @@ export interface Placard {
 // What the shell places over the registry: the cell, the Placard (short line +
 // detail body + owner attribution), and the owner's rig resolved by reference
 // (null when the owner has no manifest).
-type BakedStandee = {
+export type BakedStandee = {
   id: number
   x: number
   y: number
@@ -120,6 +121,22 @@ const BUBBLE_INK = '#1c1c24'
 // 60: both float over a head, so both must not blanket the avatars either side.
 // The full line is in the Placard a press-A opens.
 const BUBBLE_MAX = 24
+
+// Texture key for a Standee's rig sheet, alongside `npc.<id>` for placed NPCs.
+export const standeeSheetKey = (standeeId: number) => `standee.${standeeId}`
+
+// Read the shell's placed Standees off the registry and queue each owner's rig
+// sheet. Called from MapScene.preload beside the NPC rig preload — here, not in
+// the kernel, because the kernel does not know Standees exist (#521, ADR-0015).
+// A Standee whose owner has no rig loads nothing; `spawnStandees` stands the
+// bundled fallback for it rather than crashing.
+export function preloadStandees(scene: Scene) {
+  const standees: BakedStandee[] = scene.registry.get('bakedStandees') || []
+  scene._bakedStandees = standees
+  for (const s of standees) {
+    if (s.manifest) queueRigSheet(scene, s.manifest, standeeSheetKey(s.id))
+  }
+}
 
 // Bring the shell's placed Standees to life: one cutout each, bottom-centre in
 // its cell. Note what is absent — no walk_mask, no blocked cell, no live

@@ -9,15 +9,16 @@ import { applyMapTarget } from './mapTarget.ts'
 describe('applyMapTarget', () => {
   it('sets exactly the per-target registry keys, nothing else', () => {
     const calls: Record<string, unknown> = {}
+    const S = [{ id: 1, x: 0, y: 0, message: 'hi', manifest: null }]
     applyMapTarget(
       { set: (k, v) => (calls[k] = v) },
-      { map: 'M', objects: 'O', bakedNpcs: 'N', bakedStandees: 'S', entrySpawnId: 's', fromSlug: 'F', presence: 'P', voice: 'V' },
+      { map: 'M', objects: 'O', bakedNpcs: 'N', bakedStandees: S, entrySpawnId: 's', fromSlug: 'F', presence: 'P', voice: 'V' },
     )
     expect(calls).toEqual({
       bakedMap: 'M',
       bakedObjects: 'O',
       bakedNpcs: 'N',
-      bakedStandees: 'S',
+      bakedStandees: S,
       entrySpawnId: 's',
       fromSlug: 'F',
       presence: 'P',

@@ -13,6 +13,8 @@ import {
   addStandee,
   restandeeRigs,
   expiredStandees,
+  preloadStandees,
+  standeeSheetKey,
   type LiveStandee,
 } from './mapStandees.ts'
 import { applyStandeeFrame, type StandeeNote } from '../standees.ts'
@@ -21,7 +23,6 @@ import { TILE } from '../constants.js'
 import * as mapStandees from './mapStandees.ts'
 import { npcBlockedFor } from './mapNpcs.ts'
 import { mapWalkable, MAP_PLAYER_DEPTH, peerDepth } from './mapWalk.ts'
-import { standeeSheetKey } from '../../kernel/mapRenderer.ts'
 import { normalizeManifest } from '../../kernel/characterManifest.js'
 
 const frame = (x: number) => ({ x, y: 0, w: 32, h: 64 })
@@ -122,6 +123,23 @@ const standee = (id: number, x: number, y: number, message = 'Jogging Sunday?') 
   y,
   message,
   manifest: normalizeManifest({ postures: { idleDown: [frame(0), frame(32)] } }),
+})
+
+describe('preloadStandees', () => {
+  it('reads the registry list and queues one sheet per rigged Standee (#521)', () => {
+    const loaded: string[] = []
+    const standees = [
+      { id: 1, manifest: { sheet: { path: '/a.png' } } },
+      { id: 2, manifest: null },
+    ]
+    const scene: any = {
+      registry: { get: (k: string) => (k === 'bakedStandees' ? standees : undefined) },
+      load: { image: (key: string) => loaded.push(key) },
+    }
+    preloadStandees(scene)
+    expect(scene._bakedStandees).toBe(standees)
+    expect(loaded).toEqual([standeeSheetKey(1)])
+  })
 })
 
 describe('spawnStandees', () => {

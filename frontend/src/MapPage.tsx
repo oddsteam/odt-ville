@@ -7,6 +7,7 @@ import { trainerOpponent } from './game/phaser/trainerDuel.ts'
 import { MapsService, takeDraft, travel } from './maps/service.ts'
 import { loadMapBundle } from './maps/target.ts'
 import { applyMapTarget } from './kernel/mapTarget.ts'
+import type { BakedStandee } from './game/phaser/mapStandees.ts'
 import { warp } from './game/transition.ts'
 import bus from './game/phaser/bus.js'
 import PlacardPanel from './standees/PlacardPanel.tsx'
@@ -76,7 +77,7 @@ export default function MapPage({ draft = false }: { draft?: boolean }) {
   // The Standees standing on the map (#369, ADR-0015), each with its owner's rig
   // resolved by reference — handed to the runtime through the registry like the
   // NPC rigs. Empty on solo maps (Standees live on multiplayer maps only).
-  const standeesRef = useRef<readonly unknown[]>([])
+  const standeesRef = useRef<readonly BakedStandee[]>([])
   // The viewer's stable Keycloak id (#88) — presence filters its own echoed
   // frames by it. Only fetched for multiplayer maps; null keeps presence off.
   const ownIdRef = useRef<string | null>(null)
