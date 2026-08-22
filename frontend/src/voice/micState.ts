@@ -54,7 +54,10 @@ export const micState = {
   },
 
   // The mesh tore down (left the map): voice off, but the mute choice sticks.
-  deactivate(): void {
+  // A mesh passes its own setMute so a late second stop (MapScene SHUTDOWN
+  // after voiceSession already opened the next mesh) can't unbind the live one.
+  deactivate(setMute?: (muted: boolean) => void): void {
+    if (setMute && apply !== setMute) return
     apply = () => {}
     emit({ ...snapshot, active: false, live: false, denied: false })
   },
