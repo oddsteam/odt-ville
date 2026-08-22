@@ -227,17 +227,27 @@ export default class MapScene extends Phaser.Scene {
     // only on a multiplayer map and knows the slug to POST to. Standalone MapPage
     // has no overlay, so nothing listens; leaving emits `mapLeft` to hide it.
     bus.emit('mapEntered', { slug: map.slug, multiplayer: Boolean(map.multiplayer) })
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-      this.input.keyboard.off('keydown-ENTER', this.pressA, this)
-      this.input.keyboard.off('keydown-SPACE', this.pressA, this)
+    // The bus outlives the scene, so every subscription above must come off
+    // when the scene goes. SHUTDOWN covers scene.stop/start; DESTROY is the
+    // game.destroy() path (a page unmount), which Phaser fires *without* a
+    // SHUTDOWN — a listener left behind there runs on a dead scene whose
+    // `this.add` is null, throws, and stops the live scene's listener from
+    // ever running (own Standee never appears until a reload).
+    const unbindBus = () => {
       bus.off('dpadPress', this._onDpadPress)
       bus.off('dpadRelease', this._onDpadRelease)
       bus.off('aButton', this._onABtn)
       bus.off('standeeDeployed', this._onStandeeDeployed)
       bus.off('standeePickedUp', this._onStandeePickedUp)
       bus.off('standeeClosed', this._onStandeeClosed)
+    }
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.input.keyboard.off('keydown-ENTER', this.pressA, this)
+      this.input.keyboard.off('keydown-SPACE', this.pressA, this)
+      unbindBus()
       bus.emit('mapLeft')
     })
+    this.events.once(Phaser.Scenes.Events.DESTROY, unbindBus)
 
     // The camera inside a building behaves exactly as outside (#261): 1:1
     // pixels at the town's tile scale, clamped follow. A map smaller than the
