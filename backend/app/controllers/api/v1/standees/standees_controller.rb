@@ -25,14 +25,10 @@ module Api
         # POST /api/v1/maps/:slug/standees — deploy a Standee at the caller's
         # current cell. The server can't know where the avatar stands (position
         # is ephemeral, never persisted), so the client sends the cell it is on.
-        # Refused on a solo map: a generated hometown has an audience of one, so
-        # a Standee there would be seen by nobody (ADR-0015).
+        # The Placard's caps and the multiplayer-only rule are invariants of the
+        # record (#519), enforced by `create!` — a solo map or an over-long line
+        # raises RecordInvalid, rendered as a 422 by the base controller.
         def create
-          unless @map.multiplayer?
-            return render json: { error: "Standees can only be deployed on a multiplayer map" },
-                          status: :unprocessable_entity
-          end
-
           # The world-wide budget of 3 (#371): at the cap the deploy is refused
           # with a pointer to the Standees already out — never a silent replace.
           budget = ::Standees::Budget.for(current_user)
@@ -70,7 +66,7 @@ module Api
         # so the owner can redeploy immediately (the cap counts live rows, #371).
         def destroy
           standee = ::Standees::Standee.find(params[:id])
-          unless standee.user_id == current_user.id
+          unless standee.pickable_by?(current_user)
             return render json: { error: "You can only pick up your own Standee" }, status: :forbidden
           end
 

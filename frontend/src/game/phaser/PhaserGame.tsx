@@ -20,12 +20,13 @@ import type { HometownPolicy } from '../town.ts'
 import type { GroundTile } from '../../catalog/groundTiles/schema.ts'
 import type { MonsterPoolEntry } from '../../catalog/monsters/schema.ts'
 import type { Npc } from '../../catalog/npcs/schema.ts'
+import { SHORT_LINE_MAX, DETAIL_MAX } from '../../standees/schema.ts'
 
 // The Standee expiry window the deploy form offers (#374): a week by default,
-// a month at most. Literals rather than an import — the game black box takes no
-// standees/ import (ADR-0004), the same reason the budget arrives as a plain
-// shape — and the backend (`Standees::Standee::DEFAULT_DAYS`/`MAX_DAYS`) stays
-// the enforcement point; this only keeps the form from asking for a refusal.
+// a month at most. Still literals here — folding them into `standees/schema.ts`
+// alongside the length caps is #520; the backend
+// (`Standees::Standee::DEFAULT_DAYS`/`MAX_DAYS`) stays the enforcement point,
+// and this only keeps the form from asking for a refusal.
 const STANDEE_DEFAULT_DAYS = 7
 const STANDEE_MAX_DAYS = 30
 
@@ -735,7 +736,7 @@ export default function PhaserGame({
                       // in the field you asked for rather than making you click.
                       autoFocus
                       value={standeeLine}
-                      maxLength={60}
+                      maxLength={SHORT_LINE_MAX}
                       placeholder="Short line…"
                       onChange={(e) => setStandeeLine(e.target.value)}
                       onKeyDown={(e) => {
@@ -751,7 +752,7 @@ export default function PhaserGame({
                     <textarea
                       className="standee-detail"
                       value={standeeDetail}
-                      maxLength={500}
+                      maxLength={DETAIL_MAX}
                       rows={3}
                       placeholder="Details (optional)…"
                       onChange={(e) => setStandeeDetail(e.target.value)}

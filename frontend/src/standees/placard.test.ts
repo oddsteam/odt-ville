@@ -3,7 +3,8 @@
 // the overhead bubble both lean on.
 
 import { describe, expect, it } from 'vitest'
-import { SHORT_LINE_MAX, shortLine, attribution, replyHref, hasExpired, expiryNote } from './placard.ts'
+import { shortLine, attribution, replyHref, hasExpired, expiryNote } from './placard.ts'
+import { SHORT_LINE_MAX } from './schema.ts'
 
 describe('shortLine', () => {
   it('passes a line at or under the cap through unchanged', () => {

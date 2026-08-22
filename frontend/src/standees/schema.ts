@@ -7,6 +7,14 @@
 
 import * as Schema from 'effect/Schema'
 
+// The Placard's length caps (#519, ADR-0015): the short line floats over the
+// cutout's head, so it stays a glance; the detail body carries the specifics
+// (time, place, what to bring). The deploy form and the display helpers read
+// these; the server (`Standees::Standee`) is the enforcement point and mirrors
+// them exactly — a direct POST cannot get past a longer message.
+export const SHORT_LINE_MAX = 60
+export const DETAIL_MAX = 500
+
 // A Standee from GET /maps/:slug/standees. `character_manifest_id` names the
 // owner's rig (their pick, else the global active); null when the owner has no
 // manifest — the runtime draws the bundled fallback rather than crashing.

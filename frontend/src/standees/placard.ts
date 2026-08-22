@@ -3,11 +3,10 @@
 // service, so every surface that shows a Placard formats it the one way. The
 // reply-link validation (#373) lands here too, alongside these.
 
-// The short line's display cap. The line floats over the cutout's head and
-// heads the detail panel, so it stays a glance — never a paragraph. The detail
-// body carries the specifics (time, place, what to bring). Longer input is
-// clipped with an ellipsis rather than allowed to grow the bubble unbounded.
-export const SHORT_LINE_MAX = 60
+// The short line's display cap lives with the rest of the Standees contract
+// (#519). Longer input is clipped with an ellipsis here rather than allowed to
+// grow the bubble unbounded — the same cap the server enforces on write.
+import { SHORT_LINE_MAX } from './schema.ts'
 
 // The full Placard the shell renders on press-A (#372): the note plus who left
 // it. The game emits this exact shape over the `readStandee` seam; the shell
