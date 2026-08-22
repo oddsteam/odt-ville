@@ -7,10 +7,11 @@
 // 1.0, which is exactly what a meeting room wants (#486).
 //
 // Which room you are in is a function of *position* (#486): outside every
-// authored meeting rect you are proximity-gated into `map-<slug>`; inside one
-// you drop that room and join `meeting-<roomId>` with everyone else standing
-// there, no proximity cap. The resolver (room.ts) is handed plain rects — the
-// game runtime is never imported (voice-depends-only-on-shared-infrastructure).
+// authored meeting rect you are proximity-gated into the map's own room; inside
+// one you drop that room and join the meeting room with everyone else standing
+// there, no proximity cap. Room keys come from schema.ts's roomKey (#518). The
+// resolver (room.ts) is handed plain rects — the game runtime is never imported
+// (voice-depends-only-on-shared-infrastructure).
 
 import { Room, type RemoteTrack } from 'livekit-client'
 import { getAuthToken } from '../lib/authToken.ts'
@@ -24,7 +25,7 @@ import {
   type ScreenShare,
   type SelfView,
 } from './meetingState.ts'
-import { DWELL_MS, LEAVE_RADIUS, PREJOIN_RADIUS } from './schema.ts'
+import { DWELL_MS, LEAVE_RADIUS, PREJOIN_RADIUS, parseRoomKey, roomKey } from './schema.ts'
 import type { MicStatus, VoicePosition } from './schema.ts'
 import type { VoiceMesh } from './mesh.ts'
 
@@ -64,11 +65,11 @@ interface RemoteParticipantLike {
 export interface LivekitDeps {
   room: RoomLike
   url: string
-  // Mint (server-side, #308) the token for a room key — `map-<slug>` for the
-  // proximity room, `meeting-<roomId>` for a meeting room. Called once per join,
-  // so a room switch fetches the token scoped to the room it is joining.
-  getToken: (roomKey: string) => string | Promise<string>
-  // This map's proximity room key (`map-<slug>`), joined when outside every rect.
+  // Mint (server-side, #308) the token for a room key (schema.ts roomKey, #518) —
+  // the map's own room, or a meeting room. Called once per join, so a room switch
+  // fetches the token scoped to the room it is joining.
+  getToken: (key: string) => string | Promise<string>
+  // This map's proximity room key, joined when outside every rect.
   proximityRoom: string
   // This map's authored meeting rects (#486); empty when it authors none. Plain
   // data — voice never imports the map or the scene to get them.
@@ -144,8 +145,9 @@ export function createLivekitVoice(deps: LivekitDeps): VoiceMesh {
   const report = () =>
     deps.onStatus?.({ live: connected && !muted && !denied, muted, denied })
 
-  // A meeting room is one whose key we minted as `meeting-<roomId>` (#486).
-  const isMeetingRoom = (r: string | null) => r !== null && r.startsWith('meeting-')
+  // A meeting room is one whose key parses to the meeting kind (#486); the
+  // prefix convention lives in schema.ts (#518), never spelled by hand here.
+  const isMeetingRoom = (r: string | null) => r !== null && parseRoomKey(r).kind === 'meeting'
 
   // Fire onMeeting only on the edge: we hold a meeting room, or we don't.
   const reportMeeting = () => {
@@ -421,12 +423,13 @@ export function createLivekitVoice(deps: LivekitDeps): VoiceMesh {
 
 // Server-minted room token (#308): the secret never touches the browser. Lib-only
 // I/O keeps voice inside its arch boundary (getAuthToken lives in src/lib). The
-// room key names which token to mint: `meeting-<roomId>` asks Rails to authorize
+// room key names which token to mint: a meeting room key asks Rails to authorize
 // a meeting zone on this map (#486); anything else is the proximity room. Rails
 // verifies the meeting is authored on a map the caller can reach — the browser
 // never gets to name an arbitrary room.
-async function fetchRoomToken(slug: string, authToken: string, roomKey: string): Promise<string> {
-  const meetingId = roomKey.startsWith('meeting-') ? roomKey.slice('meeting-'.length) : null
+async function fetchRoomToken(slug: string, authToken: string, key: string): Promise<string> {
+  const ref = parseRoomKey(key)
+  const meetingId = ref.kind === 'meeting' ? ref.roomId : null
   const q = meetingId
     ? `map=${encodeURIComponent(slug)}&meeting=${encodeURIComponent(meetingId)}`
     : `map=${encodeURIComponent(slug)}`
@@ -456,7 +459,7 @@ export function connectLivekitRoom(
   const mesh = createLivekitVoice({
     room,
     url,
-    proximityRoom: `map-${slug}`,
+    proximityRoom: roomKey({ kind: 'map', slug }),
     meetingRects,
     getToken: (roomKey) => fetchRoomToken(slug, authToken, roomKey),
     // Flat MVP: attach every remote audio track at its default volume and let it

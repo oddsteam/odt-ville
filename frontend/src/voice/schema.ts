@@ -18,6 +18,28 @@ export interface VoicePosition {
   y: number
 }
 
+// A LiveKit room key names which room to join and mint a token for. Two kinds:
+// a map's proximity room and an authored meeting room (#486). The prefix strings
+// live ONLY here (#518) — room.ts, livekit.ts and the Rails controller all
+// compose/parse keys through these, never by hand, so a rename can't drift the
+// two sides apart. A drift 403s the token request and voice silently goes quiet.
+const MAP_PREFIX = 'map-'
+const MEETING_PREFIX = 'meeting-'
+
+export type RoomRef = { kind: 'map'; slug: string } | { kind: 'meeting'; roomId: string }
+
+export function roomKey(ref: RoomRef): string {
+  return ref.kind === 'meeting' ? `${MEETING_PREFIX}${ref.roomId}` : `${MAP_PREFIX}${ref.slug}`
+}
+
+// The inverse of roomKey: a key starting with the meeting prefix is a meeting
+// room, anything else is a map's proximity room. parseRoomKey(roomKey(x)) === x.
+export function parseRoomKey(key: string): RoomRef {
+  return key.startsWith(MEETING_PREFIX)
+    ? { kind: 'meeting', roomId: key.slice(MEETING_PREFIX.length) }
+    : { kind: 'map', slug: key.slice(MAP_PREFIX.length) }
+}
+
 // The local mic's transmit state (#282), reported by the mesh to the on-screen
 // indicator + mute toggle. `live` is the honest "you are being heard" light:
 // mic granted, not muted, and at least one peer in the pod. `denied` is a

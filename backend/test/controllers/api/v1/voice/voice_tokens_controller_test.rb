@@ -21,13 +21,17 @@ module Api
           JWT.decode(jwt, SECRET, true, algorithm: "HS256").first
         end
 
+        # Frontend↔backend key coupling (#518): "map-town" and "meeting-standup"
+        # below are the LITERAL strings the frontend's roomKey() produces
+        # (frontend/src/voice/schema.ts). If either side renames the convention,
+        # these assertions fail here before voice silently 403s in production.
         test "an authenticated user gets a token scoped to the map's room" do
           get "/api/v1/voice/token", params: { map: "town" }, headers: auth(@user)
 
           assert_response :success
           c = claims(json[:token])
           assert_equal @user.external_id, c["sub"]
-          assert_equal "town", json[:room].sub(/\Amap-/, "")
+          assert_equal "map-town", json[:room]
           assert_equal json[:room], c["video"]["room"]
           assert_equal true, c["video"]["roomJoin"]
         end

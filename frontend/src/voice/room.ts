@@ -1,9 +1,10 @@
-// The meeting-room resolver (#486). Membership stops being a pure function of
+// The meeting room resolver (#486). Membership stops being a pure function of
 // distance and becomes a function of *position*: standing inside an authored
 // meeting rect drops you into that room's call; stepping out returns you to the
 // map's proximity room. This module is handed the rects as plain data — it never
 // imports the map or the Phaser scene (voice-depends-only-on-shared-infrastructure).
 
+import { roomKey } from './schema.ts'
 import type { VoicePosition } from './schema.ts'
 import type { Zone } from '../kernel/schema.ts'
 
@@ -32,11 +33,11 @@ export function resolveRoom(
   proximityRoom: string,
 ): string {
   const hit = rects.find((r) => inRect(tile, r))
-  return hit ? `meeting-${hit.roomId}` : proximityRoom
+  return hit ? roomKey({ kind: 'meeting', roomId: hit.roomId }) : proximityRoom
 }
 
 // Reduce a map's authored zones to the meeting rects the resolver reads. Lives
-// here (not in the game) so both map-entry paths hand voice the same plain data.
+// here (not in the game) so both map entry paths hand voice the same plain data.
 export function meetingRectsOf(zones: readonly Zone[] | undefined): MeetingRect[] {
   return (zones ?? []).flatMap((z) =>
     z.payload.kind === 'meeting'

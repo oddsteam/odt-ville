@@ -25,7 +25,7 @@ module Api
         # The proximity room derives straight from the slug — any authenticated
         # user may open the map's own room (#308).
         def proximity_room
-          "map-#{params.require(:map)}"
+          ::Voice::RoomKey.map(params.require(:map))
         end
 
         # A meeting room (#486) is authored, so the caller can't name an arbitrary
@@ -40,7 +40,7 @@ module Api
             return
           end
 
-          "meeting-#{room_id}"
+          ::Voice::RoomKey.meeting(room_id)
         end
 
         def reachable?(map)
