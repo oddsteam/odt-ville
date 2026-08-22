@@ -31,7 +31,7 @@ module Api
         def relay(user, card)
           ::Cards::Registry.put(user.external_id, card)
           ActionCable.server.broadcast(
-            PresenceChannel::CARD_STREAM,
+            ::GameSession::PresenceChannel::CARD_STREAM,
             { type: "card", userId: user.external_id, card: card }
           )
         end

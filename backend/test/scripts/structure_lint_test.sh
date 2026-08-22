@@ -33,11 +33,16 @@ check "current app tree passes" 0 $?
 # 2. A flat model file (no matching domain subdirectory) fails.
 mk_app() { # builds a fresh fixture app root, echoes its path
   local root; root="$(mktemp -d "$tmp/app.XXXXXX")"
-  mkdir -p "$root/models" "$root/controllers/api/v1" "$root/serializers"
+  mkdir -p "$root/models" "$root/controllers/api/v1" "$root/serializers" \
+           "$root/services" "$root/channels/application_cable" "$root/clients"
   # framework base classes are always present in a real tree
   : > "$root/models/application_record.rb"
   : > "$root/controllers/api/v1/base_controller.rb"
   : > "$root/serializers/serialization.rb"
+  # ActionCable keeps its base classes under app/channels/application_cable —
+  # a subdirectory, so they are never flat and never flagged.
+  : > "$root/channels/application_cable/connection.rb"
+  : > "$root/channels/application_cable/channel.rb"
   echo "$root"
 }
 
@@ -77,5 +82,36 @@ check "file inside a domain subdirectory passes" 0 $?
 root="$(mk_app)"
 bash "$lint" "$root" >/dev/null 2>&1
 check "framework base classes alone pass" 0 $?
+
+# 8. A flat service file (no matching domain subdirectory) fails.
+root="$(mk_app)"
+: > "$root/services/geocoder.rb"
+bash "$lint" "$root" >/dev/null 2>&1
+check "flat service file fails" 1 $?
+
+# 9. A flat channel file (no matching domain subdirectory) fails.
+root="$(mk_app)"
+: > "$root/channels/foo_channel.rb"
+bash "$lint" "$root" >/dev/null 2>&1
+check "flat channel file fails" 1 $?
+
+# 10. A flat client file (no matching domain subdirectory) fails.
+root="$(mk_app)"
+: > "$root/clients/stripe_client.rb"
+bash "$lint" "$root" >/dev/null 2>&1
+check "flat client file fails" 1 $?
+
+# 11. A channel inside a domain namespace passes (like GameSession::Presence).
+root="$(mk_app)"
+mkdir -p "$root/channels/game_session"
+: > "$root/channels/game_session/presence_channel.rb"
+bash "$lint" "$root" >/dev/null 2>&1
+check "channel inside a domain namespace passes" 0 $?
+
+# 12. The ActionCable base classes under application_cable/ pass — they live in
+#     a subdirectory, so the flat-file rule never sees them.
+root="$(mk_app)"
+bash "$lint" "$root" >/dev/null 2>&1
+check "application_cable base classes pass" 0 $?
 
 exit $fail

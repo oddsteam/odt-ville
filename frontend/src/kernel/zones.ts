@@ -13,8 +13,11 @@ export interface ZoneEvent {
   zone: Zone
 }
 
-// Point-in-rect over the zone's w×h footprint (absent w/h mean one tile).
-const inZone = (z: Zone, x: number, y: number) =>
+// Point-in-rect over the zone's w×h footprint (absent w/h mean one tile). The
+// one home for this rule (#524): the runtime detector, the decorate editor's
+// hit-test (maps/zoneAuthor.ts), and the voice meeting resolver (voice/room.ts)
+// all read it here rather than each spelling the half-open [x,x+w)×[y,y+h) span.
+export const inZone = (z: Zone, x: number, y: number) =>
   x >= z.x && x < z.x + (z.w ?? 1) && y >= z.y && y < z.y + (z.h ?? 1)
 
 // `on_enter` is edge-triggered: it fires only when the step crosses from

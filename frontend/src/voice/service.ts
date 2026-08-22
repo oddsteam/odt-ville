@@ -6,12 +6,6 @@
 
 import { POD_CAP, VOICE_RADIUS, type VoicePeer, type VoicePosition } from './schema.ts'
 
-// Meeting-room membership (#486) is a function of *position*, not distance. The
-// resolver stays internal (only the media layer reads it); the map→rects
-// derivation is re-exposed here so the shell can hand voice its plain rects
-// without reaching past the public surface (ADR-0010).
-export { meetingRectsOf, type MeetingRect } from './room.ts'
-
 // ponytail: linear falloff, not inverse-square. It is predictable, never
 // divides by zero, and nobody can hear the difference over a voice channel.
 // Swap in a curve if playtesting says the drop-off feels wrong (#281).

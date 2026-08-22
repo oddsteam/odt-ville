@@ -3,7 +3,7 @@ require "test_helper"
 # Presence multiplayer (#88): per-map position broadcasting. Identity is
 # stamped server-side from the authenticated connection, the room join is
 # gated by the map's access policy (#83), and solo maps never open a room.
-class PresenceChannelTest < ActionCable::Channel::TestCase
+class GameSession::PresenceChannelTest < ActionCable::Channel::TestCase
   include ApiTestHelpers
 
   setup do
@@ -55,7 +55,7 @@ class PresenceChannelTest < ActionCable::Channel::TestCase
   test "subscribing attaches the shared card stream" do
     join(make_map)
 
-    assert_has_stream PresenceChannel::CARD_STREAM
+    assert_has_stream GameSession::PresenceChannel::CARD_STREAM
   end
 
   # Standees, live (#375): one stream per map, deliberately unpartitioned like
@@ -67,7 +67,7 @@ class PresenceChannelTest < ActionCable::Channel::TestCase
 
     join(map)
 
-    assert_has_stream PresenceChannel.standee_stream(map.id)
+    assert_has_stream GameSession::PresenceChannel.standee_stream(map.id)
   end
 
   test "a rejected join attaches no standee stream" do
@@ -76,7 +76,7 @@ class PresenceChannelTest < ActionCable::Channel::TestCase
     join(map)
 
     assert subscription.rejected?
-    assert_has_no_stream PresenceChannel.standee_stream(map.id)
+    assert_has_no_stream GameSession::PresenceChannel.standee_stream(map.id)
   end
 
   # World entry (#318): the card stream only carries changes going forward, so
