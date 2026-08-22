@@ -3,10 +3,13 @@
 // service, so every surface that shows a Placard formats it the one way. The
 // reply-link validation (#373) lands here too, alongside these.
 
-// The short line's display cap lives with the rest of the Standees contract
-// (#519). Longer input is clipped with an ellipsis here rather than allowed to
-// grow the bubble unbounded — the same cap the server enforces on write.
-import { SHORT_LINE_MAX } from './schema.ts'
+// The short line's display cap and the expiry predicate live with the rest of
+// the Standees contract (#519, #520). Longer input is clipped with an ellipsis
+// here rather than allowed to grow the bubble unbounded — the same cap the
+// server enforces on write; `hasExpired` is re-exported so the Placard's
+// consumers keep one import for the note's helpers.
+import { SHORT_LINE_MAX, hasExpired } from './schema.ts'
+export { hasExpired }
 
 // The full Placard the shell renders on press-A (#372): the note plus who left
 // it. The game emits this exact shape over the `readStandee` seam; the shell
@@ -49,16 +52,6 @@ export function replyHref(url: string): string | null {
   } catch {
     return null
   }
-}
-
-// Whether a Standee's moment has passed (#374). Inclusive at the boundary, so
-// this agrees with the server's `expires_at >= now` load scope rather than
-// retiring a cutout the load query would still have returned. An unparseable
-// stamp is treated as still standing: a bad date must never silently delete
-// someone's Standee — the next load settles it.
-export function hasExpired(expiresAt: string, now: number = Date.now()): boolean {
-  const at = Date.parse(expiresAt)
-  return Number.isNaN(at) ? false : now > at
 }
 
 // When the Standee goes, for the detail panel. The message says "Sunday"; this

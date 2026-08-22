@@ -16,6 +16,7 @@ import { framesForFacing, characterScale } from '../../kernel/characterManifest.
 import { MAP_PLAYER_DEPTH } from './mapWalk.ts'
 import { peerSheetKey } from './characterRig.js'
 import type { StandeeNote } from '../standees.ts'
+import { hasExpired } from '../../standees/schema.ts'
 
 // The Phaser scene, structurally — same loose convention as the renderers.
 type Scene = any
@@ -263,18 +264,15 @@ export function placardOf(s: LiveStandee): Placard {
 }
 
 // The cutouts whose moment has passed (#374) — the scene's whole retirement
-// mechanism, run off the clock it already ticks. Inclusive at the boundary, so
-// it agrees with the server's load scope rather than retiring a Standee the
-// next load would still return; a missing or unreadable stamp leaves the cutout
+// mechanism, run off the clock it already ticks. The per-cutout rule is the
+// contract's `hasExpired` (#520): inclusive at the boundary so it agrees with
+// the server's load scope, and a missing or unreadable stamp leaves the cutout
 // standing, because a bad date must never silently delete someone's Standee.
 export function expiredStandees<T extends { expiresAt?: string }>(
   standees: ReadonlyArray<T>,
   now: number,
 ): T[] {
-  return standees.filter((s) => {
-    const at = Date.parse(s.expiresAt || '')
-    return !Number.isNaN(at) && now > at
-  })
+  return standees.filter((s) => hasExpired(s.expiresAt || '', now))
 }
 
 // One cutout. With a loaded rig sheet, the owner's idle-down frame sliced from

@@ -20,15 +20,12 @@ import type { HometownPolicy } from '../town.ts'
 import type { GroundTile } from '../../catalog/groundTiles/schema.ts'
 import type { MonsterPoolEntry } from '../../catalog/monsters/schema.ts'
 import type { Npc } from '../../catalog/npcs/schema.ts'
-import { SHORT_LINE_MAX, DETAIL_MAX } from '../../standees/schema.ts'
-
-// The Standee expiry window the deploy form offers (#374): a week by default,
-// a month at most. Still literals here — folding them into `standees/schema.ts`
-// alongside the length caps is #520; the backend
-// (`Standees::Standee::DEFAULT_DAYS`/`MAX_DAYS`) stays the enforcement point,
-// and this only keeps the form from asking for a refusal.
-const STANDEE_DEFAULT_DAYS = 7
-const STANDEE_MAX_DAYS = 30
+import {
+  SHORT_LINE_MAX,
+  DETAIL_MAX,
+  STANDEE_DEFAULT_DAYS,
+  STANDEE_MAX_DAYS,
+} from '../../standees/schema.ts'
 
 // Player walks — rpg-char-01 sprite sheet from the pokemon-js external
 // assets. 32×32 PNGs, rows = direction (r0 down, r1 left, r2 right,

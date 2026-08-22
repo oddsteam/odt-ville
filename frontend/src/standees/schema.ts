@@ -15,6 +15,24 @@ import * as Schema from 'effect/Schema'
 export const SHORT_LINE_MAX = 60
 export const DETAIL_MAX = 500
 
+// How long a cutout stands (#374): the deploy form's default of a week and its
+// cap of a month, in days. The server (`Standees::Standee::DEFAULT_DAYS`/
+// `MAX_DAYS`) is the enforcement point and mirrors these — the form only keeps
+// itself from asking for a refusal.
+export const STANDEE_DEFAULT_DAYS = 7
+export const STANDEE_MAX_DAYS = 30
+
+// Whether a Standee's moment has passed (#374). Inclusive at the boundary, so
+// this agrees with the server's `expires_at >= now` load scope rather than
+// retiring a cutout the load query would still have returned. An unparseable
+// stamp is treated as still standing: a bad date must never silently delete
+// someone's Standee — the next load settles it. Lives with the contract so the
+// Placard helpers and the scene's retirement sweep share the one rule.
+export function hasExpired(expiresAt: string, now: number = Date.now()): boolean {
+  const at = Date.parse(expiresAt)
+  return Number.isNaN(at) ? false : now > at
+}
+
 // A Standee from GET /maps/:slug/standees. `character_manifest_id` names the
 // owner's rig (their pick, else the global active); null when the owner has no
 // manifest — the runtime draws the bundled fallback rather than crashing.
