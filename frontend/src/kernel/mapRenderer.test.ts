@@ -40,7 +40,8 @@ describe('bakedDraws fg overlay', () => {
     const base = draws.find((d) => d.key === objectTextureKey(1))
     expect(base).toBeDefined()
     // The base art keeps the entity band; the overlay rides one depth above it.
-    expect(base?.depth).toBe(MAP_ENTITY_DEPTH)
+    expect(base?.depth).toBeGreaterThanOrEqual(MAP_ENTITY_DEPTH)
+    expect(base?.depth).toBeLessThan(MAP_ENTITY_DEPTH + 0.5)
     expect(base?.fgMaskKey).toBe(objectForegroundKey(1))
     expect(base?.fgDepth).toBe(MAP_ENTITY_FG_DEPTH)
     expect(base?.fgDepth).toBeGreaterThan(base?.depth ?? 0)
@@ -64,6 +65,22 @@ describe('bakedDraws fg overlay', () => {
     const billboard = draws.find((d) => d.key === 'bake.t')
     expect(billboard?.frames).toEqual([3, 4])
     expect(billboard?.fps).toBe(2)
+  })
+
+  it('draws the prop whose footprint bottom is lower in front of one stacked above it', () => {
+    // A 1×1 at (1,2) (bottom row 3) placed BEFORE a 2×2 at (0,0) (bottom row 2)
+    // still draws in front: depth follows the footprint bottom, not stamp order.
+    const draws = bakedDraws(
+      mapWith([
+        { kind: 'prop', object_id: 2, x: 1, y: 2 },
+        { kind: 'prop', object_id: 1, x: 0, y: 0 },
+      ]),
+      OBJECTS,
+    )
+    const low = draws.find((d) => d.key === objectTextureKey(2))
+    const high = draws.find((d) => d.key === objectTextureKey(1))
+    expect(low?.depth).toBeGreaterThan(high?.depth ?? Infinity)
+    expect(low?.depth).toBeLessThan(MAP_ENTITY_DEPTH + 0.5)
   })
 
   it('carries no overlay for legacy tileset entities', () => {

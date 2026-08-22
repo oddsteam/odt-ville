@@ -1,6 +1,6 @@
 // Pins the prop-placement model (#139, ADR-0008): props are references to
 // saved tile objects placed at their authored footprint — a 2×2 object claims
-// 4 grid cells (occupancy, overlap replacement, edge clamping, erase from any
+// 4 grid cells (occupancy, stacking, edge clamping, erase from any
 // covered cell) — baked to object_id entities and reconstructed on re-open.
 
 import { describe, expect, it } from 'vitest'
@@ -13,16 +13,13 @@ const bounds = { cols: 4, rows: 4 }
 const place = (props: readonly PlacedProp[], p: PlacedProp) => placeProp(props, p, size, bounds)
 
 describe('placeProp', () => {
-  it('replaces any prop whose footprint overlaps the new one', () => {
+  it('stacks a prop on top of one its footprint overlaps', () => {
     const one = place([], { object_id: 7, x: 1, y: 1 }) // covers (1..2, 1..2)
     expect(one).toHaveLength(1)
 
-    // A 1×1 stamped on a covered (non-anchor) cell replaces the 2×2 under it.
-    const restamped = place(one, { object_id: 9, x: 2, y: 2 })
-    expect(restamped).toEqual([{ object_id: 9, x: 2, y: 2 }])
-
-    // A non-overlapping cell is a second prop.
-    expect(place(restamped, { object_id: 9, x: 0, y: 0 })).toHaveLength(2)
+    // A 1×1 stamped on a covered (non-anchor) cell sits on the 2×2, appended last.
+    const stacked = place(one, { object_id: 9, x: 2, y: 2 })
+    expect(stacked).toEqual([{ object_id: 7, x: 1, y: 1 }, { object_id: 9, x: 2, y: 2 }])
   })
 
   it('allows a footprint that overflows the right/bottom edge (#340)', () => {
@@ -114,11 +111,11 @@ describe('nudgeProp', () => {
     expect(nudge(unit, 0, 'left')).toEqual({ props: unit, index: 0 })
   })
 
-  it('re-places through placeProp so a nudge onto another prop replaces it', () => {
-    // Two props; nudging the first onto the second swaps it out and the moved
+  it('re-places through placeProp so a nudge onto another prop stacks on it', () => {
+    // Two props; nudging the first onto the second keeps both and the moved
     // prop lands last in the list (placeProp append order) → its new index.
     const two = [{ object_id: 9, x: 0, y: 0 }, { object_id: 9, x: 1, y: 0 }]
-    expect(nudge(two, 0, 'right')).toEqual({ props: [{ object_id: 9, x: 1, y: 0 }], index: 0 })
+    expect(nudge(two, 0, 'right')).toEqual({ props: [{ object_id: 9, x: 1, y: 0 }, { object_id: 9, x: 1, y: 0 }], index: 1 })
   })
 
   it('is a no-op for an out-of-range index', () => {
@@ -236,6 +233,12 @@ describe('propGhost', () => {
   it('in erase mode returns the footprint of the prop under the cursor', () => {
     // A covered (non-anchor) cell resolves to the whole 2×2 that a click removes.
     expect(propGhost({ x: 2, y: 2 }, 'erase', props, size, bounds)).toEqual({ x: 1, y: 1, w: 2, h: 2, valid: true })
+  })
+
+  it('in select mode returns the topmost prop under the cursor, null off any', () => {
+    const stacked = [...props, { object_id: 9, x: 2, y: 2 }]
+    expect(propGhost({ x: 2, y: 2 }, 'select', stacked, size, bounds)).toEqual({ x: 2, y: 2, w: 1, h: 1, valid: true })
+    expect(propGhost({ x: 0, y: 0 }, 'select', stacked, size, bounds)).toBeNull()
   })
 
   it('in erase mode returns null off any prop', () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { bakedDraws, bakedTextureKey, objectTextureKey } from '../src/kernel/mapRenderer.ts'
+import { bakedDraws, bakedTextureKey, entityDepth, objectTextureKey } from '../src/kernel/mapRenderer.ts'
 import type { BakedGround, BakedMap } from '../src/kernel/schema.ts'
 
 const map: BakedMap = {
@@ -47,12 +47,12 @@ describe('bakedDraws', () => {
     expect(bakedDraws(uniform).map((t) => t.frame)).toEqual([9, 9])
   })
 
-  it('draws entities above the flat tiles at depth 1', () => {
+  it('draws entities above the flat tiles, in the entity band', () => {
     expect(bakedDraws(map)).toEqual([
       { x: 0, y: 0, key: bakedTextureKey('Terra'), frame: 0, depth: 0 },
       { x: 1, y: 0, key: bakedTextureKey('Terra'), frame: 3, depth: 0 },
       { x: 1, y: 1, key: bakedTextureKey('Terra'), frame: 7, depth: 0 },
-      { x: 1, y: 0, key: bakedTextureKey('Terra'), frame: 12, depth: 1, w: 1, h: 1 },
+      { x: 1, y: 0, key: bakedTextureKey('Terra'), frame: 12, depth: entityDepth(0, 1), w: 1, h: 1 },
     ])
   })
 
@@ -85,7 +85,7 @@ describe('bakedDraws object entities', () => {
     const m = { ...bare, entities: [{ kind: 'prop', object_id: 7, x: 1, y: 0 }] }
     const objects = new Map([[7, { footprint_w: 2, footprint_h: 3 }]])
     expect(bakedDraws(m, objects)).toEqual([
-      { x: 1, y: 0, key: objectTextureKey(7), frame: 0, depth: 1, w: 2, h: 3 },
+      { x: 1, y: 0, key: objectTextureKey(7), frame: 0, depth: entityDepth(0, 3), w: 2, h: 3 },
     ])
   })
 
