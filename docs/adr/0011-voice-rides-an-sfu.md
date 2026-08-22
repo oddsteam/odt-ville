@@ -1,5 +1,9 @@
 # Voice media rides a LiveKit SFU, not a peer mesh; Cloud first, a VPS as the exit
 
+> **Status: mesh removed (#517).** The peer transport, its ActionCable
+> signalling relay, and the SFU opt-in flag are deleted; LiveKit is the
+> only `connectVoice`.
+
 Proximity voice (#159) was built as a hand-rolled peer-to-peer mesh: one
 `RTCPeerConnection` per peer inside `VOICE_RADIUS`, SDP/ICE over an
 authenticated ActionCable relay (#279), mic consent and track-level mute

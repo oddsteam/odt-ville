@@ -1,10 +1,10 @@
 // The LiveKit SFU voice path (#309, ADR-0011), unit-tested against a fake Room
-// (jsdom has no livekit-client / no real SFU). Covers: the flag gate, joining a
+// (jsdom has no livekit-client / no real SFU). Covers: joining a
 // room + publishing the mic, remote audio attach at constant volume, mute
 // mapping to setMicrophoneEnabled, and stop disconnecting.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createLivekitVoice, voiceSfuEnabled, type RoomLike } from './livekit.ts'
+import { createLivekitVoice, type RoomLike } from './livekit.ts'
 import type { MeetingRect } from './room.ts'
 import { DWELL_MS, LEAVE_RADIUS, PREJOIN_RADIUS, type MicStatus, type VoicePosition } from './schema.ts'
 import type { CameraStatus, RemoteTile, ScreenShare } from './meetingState.ts'
@@ -123,16 +123,6 @@ function harness(meetingRects: MeetingRect[] = []) {
 const at = (x: number): VoicePosition => ({ x, y: 0 })
 // A one-peer roster placed `d` tiles from the origin (where we stand).
 const roster = (d: number) => new Map([['peer', at(d)]])
-
-describe('voiceSfuEnabled flag (#309)', () => {
-  it('is off unless the flag is an explicit truthy string', () => {
-    expect(voiceSfuEnabled({})).toBe(false)
-    expect(voiceSfuEnabled({ VITE_VOICE_SFU: 'false' })).toBe(false)
-    expect(voiceSfuEnabled({ VITE_VOICE_SFU: '0' })).toBe(false)
-    expect(voiceSfuEnabled({ VITE_VOICE_SFU: '1' })).toBe(true)
-    expect(voiceSfuEnabled({ VITE_VOICE_SFU: 'true' })).toBe(true)
-  })
-})
 
 describe('createLivekitVoice (#309)', () => {
   it('joins the room and publishes the mic once a peer is near', async () => {

@@ -1,7 +1,6 @@
-// Proximity voice on a LiveKit SFU (ADR-0011, #309). The go/no-go slice: two
-// browsers in the same map hear each other over LiveKit, where the mesh could
-// not (#290, residential NAT). Runs behind VITE_VOICE_SFU, BESIDE the mesh —
-// this file adds; it deletes nothing. mesh.ts / iceConfig.ts stay untouched.
+// Proximity voice on a LiveKit SFU (ADR-0011, #309). Two browsers in the same
+// map hear each other over LiveKit, where the mesh could not (#290, residential
+// NAT). This is the only transport now — ADR-0011 retired the peer mesh (#517).
 //
 // FLAT audio on purpose: everyone in the room at constant volume. Distance-
 // scaled gain is a later slice — inside a room, everyone hears everyone at gain
@@ -28,12 +27,6 @@ import {
 import { DWELL_MS, LEAVE_RADIUS, PREJOIN_RADIUS } from './schema.ts'
 import type { MicStatus, VoicePosition } from './schema.ts'
 import type { VoiceMesh } from './mesh.ts'
-
-// A Vite flag is a string, so `VITE_VOICE_SFU=false` is a truthy string — the
-// classic footgun. On only for an explicit truthy value.
-export function voiceSfuEnabled(env: { VITE_VOICE_SFU?: string }): boolean {
-  return env.VITE_VOICE_SFU === '1' || env.VITE_VOICE_SFU === 'true'
-}
 
 // Just enough of livekit-client's Room to test the join/mute/stop wiring against
 // a fake — the adapter below hands the real Room in.
