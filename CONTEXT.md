@@ -109,6 +109,7 @@ canonical map.
 | **posture** | `src/posture/` | `Posture::` | — |
 | **cards** | *(none — the badge renders inside `game`)* | `Cards::` | — *(in-memory; Eira is the store of record)* |
 | **standees** | `src/standees/` | `Standees::` | `standees` |
+| **voice** | `src/voice/` | `Voice::` | — *(no tables; the LiveKit server is the store of record, ADR-0011)* |
 
 Frontend-only modules (no server state, no backend counterpart — legal and
 expected): `game`, `kernel`, `lib`, the three mappers
@@ -547,6 +548,18 @@ in-app editor — fixed, shared). _Avoid_ calling the authored map a different
   the trigger and emits a semantic event, the **shell decides behaviour**
   (same pattern as `onEnterCommunity` / `house.type → detail component`).
 
+**Meeting Room** (2026-08-22) — an authored Zone with `kind: "meeting"` and a
+`roomId` (maps domain: placed in the editor, validated by
+`Maps::DocumentValidator`). Standing inside it, the **voice** module resolves
+the zone into a LiveKit **room key** (`meeting-<roomId>`, one home per side in
+`voice/schema.ts` and `Voice::RoomKey`) and opens the meeting HUD — camera,
+screen share, filmstrip. The game only reports where the player stands; it
+never knows a meeting exists. A Meeting Room has **no server state**: no
+table, no membership — whoever is standing in the rect is in the call.
+_Avoid_: a `meeting` module (it is a voice feature keyed by a maps zone), or
+treating the room key as a name the game or the map document knows. Whether
+ambient proximity voice survives alongside meeting rooms is open — #464.
+
 **Collision mask** (2026-07-03) — a per-cell "blocked" grid on a
 map, painted directly in the in-app editor. It is **not** a Placed Entity: it
 has no art and no trigger — it only vetoes walkability. It exists because a
@@ -680,8 +693,9 @@ and get specced in the multi-map PRD.
   `claim{role|group}` · `members` (`invite{userIds}` deferred), enforced
   server-side at list + load/join. Distinct from the ADR-0001 in-game entry gate.
 - **Multiplayer is a `Map` property** — MVP = presence only (per-map
-  ActionCable broadcasting `{userId,x,y,facing}`, stable Keycloak id); proximity
-  voice is a later *separate* SFU/WebRTC service over the same position stream.
+  ActionCable broadcasting `{userId,x,y,facing}`, stable Keycloak id). Proximity
+  voice is in-tree — the `voice` module on a LiveKit SFU (ADR-0011; the P2P
+  mesh was removed in #517) — and reads the same position stream.
   Generated hometowns stay solo; authoritative shared world-state is out.
 - **Editor = same SPA `/editor` route**, code-split; the document is the seam;
   editor and Game Runtime never import each other. Preview = shared WYSIWYG
