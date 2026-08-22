@@ -284,8 +284,10 @@ export default class MapScene extends Phaser.Scene {
     this.cardBadges = new Map()
     // Proximity voice (#280): an opaque handle the shell injects for multiplayer
     // maps only (solo maps and the hometown get none). The game never imports
-    // voice — it just feeds it our tile and the roster and lets it mesh WebRTC
-    // audio to pod peers. Absent means voice off, not an error.
+    // voice — it just feeds it our tile and a {x,y} projection of the roster and
+    // lets it carry audio to pod peers. Absent means voice off, not an error. The
+    // shell session owns teardown now (#522), so the scene never stops it.
+    /** @type {import('../../../voice/schema.ts').VoiceHandle | null} */
     this.voice = this.registry.get('voice') || null
     if (this.presence) {
       this.presence.onFrame((frame) => this.wireFrame(frame))
@@ -294,9 +296,6 @@ export default class MapScene extends Phaser.Scene {
       // roster sync — see presence.ts).
       this.sendPosition()
       this.spawnSelfPlate()
-    }
-    if (this.voice) {
-      this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.voice.stop())
     }
 
     // Test API — same shape the town/interior scenes publish, so the walking
@@ -462,12 +461,16 @@ export default class MapScene extends Phaser.Scene {
     this.syncVoice()
   }
 
-  // Reconcile the voice mesh with who is in earshot now. Our RemotePlayer
-  // roster satisfies voice's {x, y} structurally (#278), so it hands over
-  // unchanged. Called on our own step (above) and on every peer frame (below),
-  // so a peer walking into range while we stand still still opens a link.
+  // Reconcile voice with who is in earshot now. Hand it a bare {x, y} projection
+  // of the roster (#522) rather than the RemotePlayer sprites — voice needs only
+  // the tiles (#278) and must never reach into game objects. Called on our own
+  // step (above) and on every peer frame (below), so a peer walking into range
+  // while we stand still still opens a link.
   syncVoice() {
-    this.voice?.update(this.playerTile, this.remoteRoster)
+    if (!this.voice) return
+    const roster = new Map()
+    for (const [id, p] of this.remoteRoster) roster.set(id, { x: p.x, y: p.y })
+    this.voice.update(this.playerTile, roster)
   }
 
   dropPeer(userId) {

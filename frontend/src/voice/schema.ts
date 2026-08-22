@@ -40,14 +40,30 @@ export function parseRoomKey(key: string): RoomRef {
     : { kind: 'map', slug: key.slice(MAP_PREFIX.length) }
 }
 
-// The local mic's transmit state (#282), reported by the mesh to the on-screen
-// indicator + mute toggle. `live` is the honest "you are being heard" light:
-// mic granted, not muted, and at least one peer in the pod. `denied` is a
+// The local mic's transmit state (#282), reported by the voice handle to the
+// on-screen indicator + mute toggle. `live` is the honest "you are being heard"
+// light: mic granted, not muted, and at least one peer in the pod. `denied` is a
 // declined browser permission — voice cleanly off, not an error.
 export interface MicStatus {
   live: boolean
   muted: boolean
   denied: boolean
+}
+
+// The voice port (#280, #522): the opaque handle the shell injects into the game
+// scene via the Phaser registry (the same path presence takes, ADR-0004; the
+// game runtime never imports voice). connectVoice (voice/write.ts) is the only
+// producer. The scene feeds it our tile and a {x,y} projection of the roster and
+// drives the mic; the meeting HUD drives the camera and screen share. No optional
+// methods — LiveKit is the one transport now (ADR-0011), so every method is real.
+export interface VoiceHandle {
+  update(own: VoicePosition, roster: Map<string, VoicePosition>): void
+  setMute(muted: boolean): void
+  // Publish/unpublish the local camera in a meeting room (#487).
+  setCamera(on: boolean): void
+  // Share/stop sharing the screen in a meeting room (#489).
+  setScreenShare(on: boolean): Promise<void>
+  stop(): void
 }
 
 // The AUDIBLE radius, in tiles: where podFor's gain math applies. Tightened

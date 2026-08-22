@@ -6,9 +6,11 @@
 import { describe, expect, it } from 'vitest'
 import { voiceSession } from './voiceSession.ts'
 
-const mesh = (log: unknown[], slug: string) => ({
+const handle = (log: unknown[], slug: string) => ({
   update: () => {},
   setMute: () => {},
+  setCamera: () => {},
+  setScreenShare: async () => {},
   stop: () => log.push(['stop', slug]),
 })
 
@@ -16,7 +18,7 @@ const deps = (log: unknown[], ownId: string | null = 'kc-1') => ({
   viewerId: async () => ownId,
   connect: (slug: string, id: string) => {
     log.push(['connect', slug, id])
-    return mesh(log, slug)
+    return handle(log, slug)
   },
 })
 

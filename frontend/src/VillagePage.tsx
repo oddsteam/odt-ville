@@ -21,7 +21,7 @@ import { subscribeAuthToken } from './lib/authToken.ts'
 import { connectPresence } from './lib/presenceClient.ts'
 import { presenceSession } from './lib/presenceSession.ts'
 import { voiceSession } from './lib/voiceSession.ts'
-import { connectVoice } from './voice/mesh.ts'
+import { connectVoice } from './voice/write.ts'
 import { ViewerService } from './viewer/service.ts'
 import { loadManifestById } from './character/service.ts'
 import { trackEnterDoor, trackInteractBoard, trackEncounter } from './analytics/events.ts'
@@ -199,9 +199,9 @@ export default function VillagePage() {
   useEffect(() => () => presenceRef.current.close(), [])
 
   // Proximity voice for door-entered maps (#287) — the counterpart of the
-  // presence session above. Same "one mesh at a time" lifecycle: a door never
-  // routes, so the shell tears down the previous map's mesh before opening the
-  // next. The viewer id is fetched the same way; the wire lives in voice/mesh.
+  // presence session above. Same "one handle at a time" lifecycle: a door never
+  // routes, so the shell tears down the previous map's voice before opening the
+  // next. The viewer id is fetched the same way; the wire lives in voice/write.
   const voiceRef = useRef(
     voiceSession({
       viewerId: () =>

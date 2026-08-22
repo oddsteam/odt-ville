@@ -44,23 +44,6 @@ describe('micState', () => {
     expect(nextMesh).toHaveBeenCalledWith(true) // the fresh mesh starts muted
   })
 
-  // The door path opens the next mesh before the old MapScene's SHUTDOWN stops
-  // the last one a second time. That late stop must not unbind the LIVE mesh,
-  // or the button flips the icon while the mic keeps broadcasting.
-  it('ignores a stale deactivate from a mesh that is no longer bound', () => {
-    const oldMesh = vi.fn()
-    micState.activate(oldMesh)
-    micState.deactivate(oldMesh) // voiceSession.close()
-    const newMesh = vi.fn()
-    micState.activate(newMesh)
-    micState.deactivate(oldMesh) // the old scene's SHUTDOWN, arriving late
-    micState.status({ live: true, muted: false, denied: false })
-
-    micState.toggle()
-    expect(newMesh).toHaveBeenLastCalledWith(true)
-    expect(micState.get().active).toBe(true)
-  })
-
   it('reflects the mesh status report', () => {
     micState.activate(() => {})
     micState.status({ live: true, muted: false, denied: false })

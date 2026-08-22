@@ -26,8 +26,7 @@ import {
   type SelfView,
 } from './meetingState.ts'
 import { DWELL_MS, LEAVE_RADIUS, PREJOIN_RADIUS, parseRoomKey, roomKey } from './schema.ts'
-import type { MicStatus, VoicePosition } from './schema.ts'
-import type { VoiceMesh } from './mesh.ts'
+import type { MicStatus, VoiceHandle, VoicePosition } from './schema.ts'
 
 // Just enough of livekit-client's Room to test the join/mute/stop wiring against
 // a fake — the adapter below hands the real Room in.
@@ -111,7 +110,7 @@ const LOCAL_TRACK_UNPUBLISHED = 'localTrackUnpublished'
 // Our own share sits in `shares` under this key, so "newest wins" covers it too.
 const ME = 'me'
 
-export function createLivekitVoice(deps: LivekitDeps): VoiceMesh {
+export function createLivekitVoice(deps: LivekitDeps): VoiceHandle {
   const { room, url, getToken, proximityRoom, attach, detach } = deps
   const meetingRects = deps.meetingRects ?? []
   const dwellMs = deps.dwellMs ?? DWELL_MS
@@ -450,7 +449,7 @@ export function connectLivekitRoom(
   slug: string,
   _ownId: string,
   meetingRects: readonly MeetingRect[] = [],
-): VoiceMesh | null {
+): VoiceHandle | null {
   const url = import.meta.env.VITE_LIVEKIT_URL as string | undefined
   const authToken = getAuthToken()
   if (!url || !authToken) return null
@@ -478,8 +477,8 @@ export function connectLivekitRoom(
     onMeeting: (inMeeting) =>
       inMeeting
         ? meetingState.enter(
-            (on) => mesh.setCamera?.(on),
-            (on) => void mesh.setScreenShare?.(on),
+            (on) => mesh.setCamera(on),
+            (on) => void mesh.setScreenShare(on),
           )
         : meetingState.leave(),
     onCamera: (s) => meetingState.cameraStatus(s),
@@ -499,9 +498,11 @@ export function connectLivekitRoom(
   return {
     update: mesh.update,
     setMute: mesh.setMute,
+    setCamera: mesh.setCamera,
+    setScreenShare: mesh.setScreenShare,
     stop: () => {
       mesh.stop()
-      micState.deactivate(mesh.setMute)
+      micState.deactivate()
     },
   }
 }

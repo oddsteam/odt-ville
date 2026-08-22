@@ -20,6 +20,10 @@ import type { HometownPolicy } from '../town.ts'
 import type { GroundTile } from '../../catalog/groundTiles/schema.ts'
 import type { MonsterPoolEntry } from '../../catalog/monsters/schema.ts'
 import type { Npc } from '../../catalog/npcs/schema.ts'
+// Type-only (#522): the handle the shell injects into MapScene via the registry.
+// Elided at compile time, so this is not a runtime import — the game runtime
+// still never imports voice (game-runtime-never-imports-voice stays satisfied).
+import type { VoiceHandle } from '../../voice/schema.ts'
 import {
   SHORT_LINE_MAX,
   DETAIL_MAX,
@@ -124,7 +128,7 @@ export type PhaserGameProps = {
     // shell like bakedNpcs, so the portal path can't drop them (the #294/#295 trap).
     bakedStandees?: unknown
     presence?: unknown
-    voice?: unknown
+    voice?: VoiceHandle | null
   } | null>
   // Deploy a Standee (#369, ADR-0015): the overlay's deploy control calls in
   // here so the write stays out of the game black box (ADR-0004) — the shell

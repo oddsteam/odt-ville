@@ -18,7 +18,7 @@ import { pickWild, wildStepGate } from './game/encounters.js'
 import { runEdge } from './lib/runEdge.ts'
 import { subscribeAuthToken } from './lib/authToken.ts'
 import { connectPresence } from './lib/presenceClient.ts'
-import { connectVoice } from './voice/mesh.ts'
+import { connectVoice } from './voice/write.ts'
 import { meetingRectsOf } from './voice/service.ts'
 import { ViewerService } from './viewer/service.ts'
 import { loadManifestById, loadMyManifest } from './character/service.ts'
@@ -187,11 +187,11 @@ export default function MapPage({ draft = false }: { draft?: boolean }) {
     // stay offline. The handle rides the registry like onZone: the scene
     // renders peers and broadcasts steps, the shell owns the wire.
     const presence = map.multiplayer && ownIdRef.current ? connectPresence(map.slug) : null
-    // Proximity voice (#280): mesh WebRTC audio to pod peers, driven by the same
-    // roster MapScene renders. Explicit guard — a solo map, and the generated
-    // hometown (no Maps::Map row, so never `multiplayer`), open no voice; media
-    // is P2P and never touches the app server. Injected via the registry like
-    // presence, so the game imports no voice code (ADR-0004, arch rule #278).
+    // Proximity voice (#280): LiveKit audio to pod peers (ADR-0011), driven by
+    // the same roster MapScene renders. Explicit guard — a solo map, and the
+    // generated hometown (no Maps::Map row, so never `multiplayer`), open no
+    // voice. Injected via the registry like presence, so the game imports no
+    // voice code (ADR-0004, arch rule #278).
     const voice =
       map.multiplayer && ownIdRef.current
         ? connectVoice(map.slug, ownIdRef.current, meetingRectsOf(map.zones))
@@ -285,6 +285,10 @@ export default function MapPage({ draft = false }: { draft?: boolean }) {
       }
     })
     return () => {
+      // The shell owns voice teardown now (#522): the scene no longer stops it
+      // on SHUTDOWN, so stop it here as the game is torn down (route change or
+      // unmount) — one owner, no leaked mic or LiveKit session.
+      voice?.stop()
       presence?.disconnect()
       game.destroy(true)
     }
