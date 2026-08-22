@@ -3,9 +3,16 @@
 # Structure lint — enforces ADR-0010's mirrored-domain-module layout on the
 # backend (issue #221). The backend's equivalent of the frontend `pnpm arch`
 # ratchet: it fails when any `.rb` file lands flat — outside a domain
-# subdirectory — in one of the three namespaced layers:
+# subdirectory — in one of the namespaced layers:
 #
 #   app/models  app/controllers/api/v1  app/serializers
+#   app/services  app/channels  app/clients
+#
+# The channels/services/clients layers were added by #525: the flat,
+# un-namespaced PresenceChannel (presence/cards/standees god-channel) was
+# invisible to CI until then. ActionCable keeps its base classes under
+# app/channels/application_cable/ — a subdirectory, so they are never flat and
+# so never flagged by the depth-1 rule below.
 #
 # Because the namespacing move (#217, #218, #219) is total there is no
 # baseline to manage: a flat file is a failure, forever. New code conforms;
@@ -42,11 +49,14 @@ allowlist=(
   serialization.rb
 )
 
-# The three layers that ADR-0010 namespaces by domain.
+# The layers that ADR-0010 namespaces by domain.
 layers=(
   models
   controllers/api/v1
   serializers
+  services
+  channels
+  clients
 )
 
 is_allowlisted() {

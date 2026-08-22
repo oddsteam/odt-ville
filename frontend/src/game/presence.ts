@@ -91,7 +91,7 @@ export function applyFrame(
   return known ? { action: 'move', echo: false } : { action: 'spawn', echo: true }
 }
 
-// Must match PresenceChannel::CELL — the server partitions on the same grid.
+// Must match GameSession::PresenceChannel::CELL — the server partitions on the same grid.
 const CELL = 12
 const cellOf = (n: number) => Math.floor(n / CELL)
 

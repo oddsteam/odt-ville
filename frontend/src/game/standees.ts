@@ -1,6 +1,6 @@
 // Standees appearing and vanishing live (#375): pure frame-folding for the
 // Standee roster, the mirror of presence.ts:applyFrame. No Phaser, no network —
-// MapScene renders off the returned action, PresenceChannel's map-wide
+// MapScene renders off the returned action, GameSession::PresenceChannel's map-wide
 // `standees:map:<id>` stream owns the wire.
 //
 // The stream is deliberately unpartitioned: a deploy is rarer than a card

@@ -100,7 +100,7 @@ module Api
         # left is by definition not the owner.
         def broadcast(map_id, frame)
           ActionCable.server.broadcast(
-            PresenceChannel.standee_stream(map_id),
+            ::GameSession::PresenceChannel.standee_stream(map_id),
             frame.merge(userId: current_user.external_id)
           )
         end

@@ -30,7 +30,7 @@ export function connectPresence(slug: string): PresenceHandle | null {
   // (and re-announces us after a reconnect for free).
   let lastPos: { x: number; y: number; facing: string } | null = null
   const sub = consumer.subscriptions.create(
-    { channel: 'PresenceChannel', slug },
+    { channel: 'GameSession::PresenceChannel', slug },
     {
       received: (frame: unknown) => handler?.(frame),
       connected: () => {

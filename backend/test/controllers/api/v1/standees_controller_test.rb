@@ -365,11 +365,11 @@ module Api
       test "a successful deploy broadcasts the new Standee on the map's standee stream" do
         map = make_map(slug: "plaza")
 
-        assert_broadcasts PresenceChannel.standee_stream(map.id), 1 do
+        assert_broadcasts GameSession::PresenceChannel.standee_stream(map.id), 1 do
           deploy("plaza", message: "Board games at 4")
         end
 
-        frame = broadcasts(PresenceChannel.standee_stream(map.id)).last.then { |f| JSON.parse(f).deep_symbolize_keys }
+        frame = broadcasts(GameSession::PresenceChannel.standee_stream(map.id)).last.then { |f| JSON.parse(f).deep_symbolize_keys }
         assert_equal "standee:deploy", frame[:type]
         # The owner's own id rides along so their own echo is suppressed client
         # side — their cutout is already standing.
@@ -380,7 +380,7 @@ module Api
       test "a refused deploy broadcasts nothing" do
         map = make_map(slug: "hometown", multiplayer: false)
 
-        assert_no_broadcasts PresenceChannel.standee_stream(map.id) do
+        assert_no_broadcasts GameSession::PresenceChannel.standee_stream(map.id) do
           deploy("hometown")
         end
       end
@@ -389,11 +389,11 @@ module Api
         map = make_map(slug: "plaza")
         standee = ::Standees::Standee.create!(map: map, user: @user, cell_x: 1, cell_y: 2, message: "mine")
 
-        assert_broadcasts PresenceChannel.standee_stream(map.id), 1 do
+        assert_broadcasts GameSession::PresenceChannel.standee_stream(map.id), 1 do
           delete "/api/v1/standees/#{standee.id}", headers: auth(@user)
         end
 
-        frame = broadcasts(PresenceChannel.standee_stream(map.id)).last.then { |f| JSON.parse(f).deep_symbolize_keys }
+        frame = broadcasts(GameSession::PresenceChannel.standee_stream(map.id)).last.then { |f| JSON.parse(f).deep_symbolize_keys }
         assert_equal "standee:pickup", frame[:type]
         assert_equal standee.id, frame[:id]
       end
@@ -403,7 +403,7 @@ module Api
         _, other = setup_company
         standee = ::Standees::Standee.create!(map: map, user: other, cell_x: 1, cell_y: 2, message: "theirs")
 
-        assert_no_broadcasts PresenceChannel.standee_stream(map.id) do
+        assert_no_broadcasts GameSession::PresenceChannel.standee_stream(map.id) do
           delete "/api/v1/standees/#{standee.id}", headers: auth(@user)
         end
         assert_response :forbidden
