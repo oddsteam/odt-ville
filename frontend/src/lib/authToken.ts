@@ -5,16 +5,17 @@
 //
 // In prod a real OIDC flow (keycloak-js) owns token persistence/refresh, so the
 // store stays in-memory there. In DEV the switcher's token would otherwise die
-// on every full page reload — including typing a URL like /admin — leaving the
+// on every full page reload — or in a new tab (Preview in game opens one;
+// sessionStorage is per-tab) — leaving the
 // app unauthenticated and unable to reach the gated routes. So DEV-only we
-// mirror it to sessionStorage and restore on load, keeping the switcher's
+// mirror it to localStorage and restore on load, keeping the switcher's
 // "logged in" state across reloads.
-// ponytail: DEV-only sessionStorage; the node test env has no sessionStorage, so
+// ponytail: DEV-only localStorage; the node test env has no localStorage, so
 // `persist` is false there and the store stays purely in-memory for tests.
-const persist = import.meta.env.DEV && typeof sessionStorage !== 'undefined'
+const persist = import.meta.env.DEV && typeof localStorage !== 'undefined'
 const KEY = 'odtville.devToken'
 
-let current: string | null = persist ? sessionStorage.getItem(KEY) : null
+let current: string | null = persist ? localStorage.getItem(KEY) : null
 const listeners = new Set<() => void>()
 
 export function getAuthToken(): string | null {
@@ -24,8 +25,8 @@ export function getAuthToken(): string | null {
 export function setAuthToken(token: string | null): void {
   current = token
   if (persist) {
-    if (token) sessionStorage.setItem(KEY, token)
-    else sessionStorage.removeItem(KEY)
+    if (token) localStorage.setItem(KEY, token)
+    else localStorage.removeItem(KEY)
   }
   for (const listener of listeners) listener()
 }
