@@ -14,7 +14,7 @@ module Standees
       @company, @user = setup_company
     end
 
-    def make_map(slug: "plaza", multiplayer: true)
+    def make_map(slug: "plaza-#{SecureRandom.hex(3)}", multiplayer: true)
       ::Maps::Map.create!(
         slug: slug, title: slug.titleize, multiplayer: multiplayer,
         access_policy: { "kind" => "public" }, cols: 8, rows: 8, baked: {}
