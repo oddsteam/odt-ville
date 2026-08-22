@@ -77,6 +77,13 @@ export const MAP_ENTITY_DEPTH = 1
 // counterpart to town's buildingOverlayDepth ((row+h)*10 + 2) south band.
 export const MAP_ENTITY_FG_DEPTH = MAP_ENTITY_DEPTH + 1
 
+// Where in the entity band a placed thing draws: props stack (#139 dropped
+// overlap replacement), so the one whose footprint bottom is further south
+// draws in front, like town's row sort. The step is tiny so every entity stays
+// inside the band — above the overhang avatar (−0.5), below the foreground one
+// (+0.5) — for any map under 500 rows.
+export const entityDepth = (y: number, h: number) => MAP_ENTITY_DEPTH + (y + h) * 0.001
+
 // The blinking-zone marker's depth: above every ground stack, below the entity
 // band, so a prop standing on the zone covers the glow instead of being lit by
 // it. Nothing is drawn *inside* the zone rect either (see blinkRects) — the
@@ -155,7 +162,7 @@ function npcDraw(e: BakedEntity, rig?: NpcRig): (BakedDraw & { depth: number }) 
     originX: 0.5,
     originY: 1,
     scale: characterScale(rig),
-    depth: MAP_ENTITY_DEPTH,
+    depth: entityDepth(e.y, 1),
     // The entity this stamp came from, so the runtime can pair the sprite with
     // the NPC it draws — rig it, animate it, and own its cell from there (#295).
     npc: e,
@@ -213,7 +220,7 @@ export function bakedDraws(
         y: e.y,
         key: objectTextureKey(e.object_id),
         frame: 0,
-        depth: MAP_ENTITY_DEPTH,
+        depth: entityDepth(e.y, obj.footprint_h),
         w: obj.footprint_w,
         h: obj.footprint_h,
         // An object with a foreground mask (#168) also stamps a second copy of
@@ -228,7 +235,7 @@ export function bakedDraws(
         y: e.y,
         key: bakedTextureKey(e.tileset),
         frame: e.frame,
-        depth: MAP_ENTITY_DEPTH,
+        depth: entityDepth(e.y, 1),
         w: 1,
         h: 1,
         // An ambient animated prop (#85) carries its frame cycle to the stamp.

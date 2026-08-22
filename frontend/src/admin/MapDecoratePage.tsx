@@ -45,7 +45,10 @@ export default function MapDecoratePage() {
   // paint/erase the collision mask. `settings` (#91) only shows the panel —
   // clicks on the map do nothing.
   const [mode, setMode] = useState<'props' | 'npcs' | 'zones' | 'collision' | 'settings'>('props')
-  const [propTool, setPropTool] = useState<number | 'erase' | null>(null)
+  // 'select' is the arrow: a click picks the topmost placed prop under it
+  // without stamping; with an object armed a click always stamps (stacking on
+  // whatever is there).
+  const [propTool, setPropTool] = useState<number | 'erase' | 'select' | null>(null)
   // The placed prop armed for arrow-key nudging (#341) — its index in `props`.
   // Set on placing one or clicking one; cleared on Escape, an empty click, or
   // leaving props mode. Nudging re-places through the pure grid ops, so it can
@@ -67,7 +70,7 @@ export default function MapDecoratePage() {
   // `npcRigs` are their character manifests, fetched so the preview draws each
   // NPC's own sprite rather than a placeholder.
   const [placedNpcs, setPlacedNpcs] = useState<PlacedNpc[]>([])
-  const [npcTool, setNpcTool] = useState<number | 'erase' | null>(null)
+  const [npcTool, setNpcTool] = useState<number | 'erase' | 'select' | null>(null)
   const [selectedNpc, setSelectedNpc] = useState<number | null>(null)
   const [npcRigs, setNpcRigs] = useState<readonly { id: number; manifest: unknown }[]>([])
   // Search box over the palette — filters objects by name/kind (#165).
@@ -85,7 +88,7 @@ export default function MapDecoratePage() {
   const [saved, setSaved] = useState(false)
 
   // Footprints off the fetched objects drive grid occupancy — a 2×2 object
-  // claims 4 cells (markers, erase, overlap replacement, edge refusal). An
+  // claims 4 cells (markers, erase, stacking, edge refusal). An
   // unknown reference falls back to 1×1 (#140 refines the dangling case).
   const byId = useMemo(() => new Map(palette.map((o) => [o.id, o])), [palette])
   const sizeOf: SizeOf = (id) => {
@@ -269,11 +272,11 @@ export default function MapDecoratePage() {
         setSelectedNpc(null)
         return
       }
-      // Like zones: a click on a placed NPC selects it for the inspector, an
-      // empty cell stamps the picked one facing the default and selects that.
-      const hit = npcIndexAt(placedNpcs, x, y)
-      if (hit >= 0) {
-        setSelectedNpc(hit)
+      // The arrow selects the placed NPC under the click (or clears); an armed
+      // NPC stamps facing the default and selects that.
+      if (npcTool === 'select') {
+        const hit = npcIndexAt(placedNpcs, x, y)
+        setSelectedNpc(hit >= 0 ? hit : null)
         return
       }
       if (npcTool == null) return
@@ -287,13 +290,13 @@ export default function MapDecoratePage() {
       setSelectedProp(null)
       return
     }
-    // Like NPCs/zones: a click on a placed prop selects it for arrow-key
-    // nudging (#341); an empty cell stamps the picked object and selects that.
-    // placeProp appends the new prop last, so its index is the fresh length−1
-    // (any overlapped props it replaced are already dropped).
-    const hit = propIndexAt(props, x, y, sizeOf)
-    if (hit >= 0) {
-      setSelectedProp(hit)
+    // The arrow selects the topmost placed prop under the click (or clears)
+    // for arrow-key nudging (#341); an armed object stamps and selects that —
+    // placeProp appends it last, so its index is the fresh length−1 (it stacks
+    // on anything it overlaps).
+    if (propTool === 'select') {
+      const hit = propIndexAt(props, x, y, sizeOf)
+      setSelectedProp(hit >= 0 ? hit : null)
       return
     }
     const next = placeProp(props, { object_id: propTool, x, y }, sizeOf, { cols: baked.cols, rows: baked.rows })
@@ -316,7 +319,7 @@ export default function MapDecoratePage() {
     if (!g) return null
     // The art rides along whole (#437): an animated object's `image` is a frame
     // strip the preview must show one frame of, which needs its frame count/fps.
-    const art = propTool === 'erase' ? undefined : byId.get(propTool)
+    const art = typeof propTool === 'number' ? byId.get(propTool) : undefined
     return { x: g.x, y: g.y, w: g.w, h: g.h, art, refused: !g.valid }
     // sizeOf is derived from byId; listing byId keeps the footprint lookup fresh.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -436,6 +439,8 @@ export default function MapDecoratePage() {
           <div className="decorate-palette">
             <input type="search" placeholder="Search objects…" value={query} onChange={(e) => setQuery(e.target.value)} />
             <div className="admin-field-inline">
+              <button onClick={() => setPropTool('select')}
+                style={{ outline: propTool === 'select' ? '2px solid #fff' : 'none' }}>Select</button>
               <button onClick={() => setPropTool('erase')}
                 style={{ outline: propTool === 'erase' ? '2px solid #fff' : 'none' }}>Erase prop</button>
               {props.length > 0 && <span className="admin-hint">{props.length} placed</span>}
@@ -443,7 +448,7 @@ export default function MapDecoratePage() {
             <p className="admin-hint">
               {selection
                 ? `Selected at (${selection.x}, ${selection.y}) — arrow keys nudge (off any edge), Escape to deselect.`
-                : 'Click a placed object to select it, then arrow keys nudge — including off an edge.'}
+                : 'Select, then click a placed object; arrow keys nudge — including off an edge. A picked object stamps on top of whatever is there.'}
             </p>
             {palette.length === 0 && (
               <p className="admin-msg admin-msg-error">No saved objects yet — add some in the Objects tool first.</p>
@@ -477,6 +482,8 @@ export default function MapDecoratePage() {
         {mode === 'npcs' && (
           <div className="decorate-palette">
             <div className="admin-field-inline">
+              <button onClick={() => setNpcTool('select')}
+                style={{ outline: npcTool === 'select' ? '2px solid #fff' : 'none' }}>Select</button>
               <button onClick={() => setNpcTool('erase')}
                 style={{ outline: npcTool === 'erase' ? '2px solid #fff' : 'none' }}>Erase NPC</button>
               {placedNpcs.length > 0 && <span className="admin-hint">{placedNpcs.length} placed</span>}
@@ -492,7 +499,7 @@ export default function MapDecoratePage() {
                 </button>
               ))}
             </div>
-            {!placedNpc && <p className="admin-hint">Click the map to place an NPC, or click a placed one to turn it.</p>}
+            {!placedNpc && <p className="admin-hint">Click the map to place an NPC; Select, then click a placed one to turn it.</p>}
             {placedNpc && (
               <div className="admin-field" style={{ display: 'grid', gap: 6 }}>
                 <strong>{npcName(placedNpc.npc_id)} at ({placedNpc.x}, {placedNpc.y})</strong>

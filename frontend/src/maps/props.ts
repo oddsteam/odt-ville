@@ -4,7 +4,7 @@
 // masks live on the object; the map stores only the reference, so editing the
 // object rethemes every map that placed it. A prop *occupies* its authored
 // footprint on the grid (fractions round up to whole cells): placement
-// replaces whatever it overlaps, may overflow the map edge as long as one cell
+// stacks on whatever it overlaps, may overflow the map edge as long as one cell
 // stays on-map (#340, and via nudging any edge into a negative anchor — #341),
 // and erasing works from any covered cell. Pure and Phaser-free.
 
@@ -43,12 +43,6 @@ function rectOf(p: PlacedProp, sizeOf: SizeOf) {
   return { x: p.x, y: p.y, w: cells(w), h: cells(h) }
 }
 
-function overlaps(a: PlacedProp, b: PlacedProp, sizeOf: SizeOf): boolean {
-  const ra = rectOf(a, sizeOf)
-  const rb = rectOf(b, sizeOf)
-  return ra.x < rb.x + rb.w && rb.x < ra.x + ra.w && ra.y < rb.y + rb.h && rb.y < ra.y + ra.h
-}
-
 // Does a footprint rect keep at least one whole cell on the cols×rows map?
 // Large edge scenery may overflow the right/bottom (and, with nudging, the
 // top/left) as long as some cell still lands on-map (#340, #341) — a footprint
@@ -60,10 +54,11 @@ function anyCellOnMap(
   return r.x < bounds.cols && r.x + r.w > 0 && r.y < bounds.rows && r.y + r.h > 0
 }
 
-// Stamp a prop, replacing every prop its footprint overlaps (a re-stamp swaps,
-// a move is erase-then-place). A footprint that lands entirely off the cols×rows
-// grid is refused — the input comes back unchanged; overflow past any edge is
-// allowed so long as one cell stays on-map (#340). Fresh list otherwise.
+// Stamp a prop on top of whatever is there — props stack (a bench under a
+// tree's canopy), appended last so it draws and selects topmost; a move is
+// erase-then-place. A footprint that lands entirely off the cols×rows grid is
+// refused — the input comes back unchanged; overflow past any edge is allowed
+// so long as one cell stays on-map (#340). Fresh list otherwise.
 export function placeProp(
   props: readonly PlacedProp[],
   prop: PlacedProp,
@@ -72,12 +67,12 @@ export function placeProp(
 ): PlacedProp[] {
   const r = rectOf(prop, sizeOf)
   if (!anyCellOnMap(r, bounds)) return props as PlacedProp[]
-  return [...props.filter((p) => !overlaps(p, prop, sizeOf)), prop]
+  return [...props, prop]
 }
 
 // Which placed prop a cell lands on — any cell of its footprint, not just the
 // anchor — for click-selection in decorate mode (#341). Later props win where
-// footprints overlap, matching placeProp's replacement order (a re-stamp sits
+// footprints overlap, matching placeProp's append order (a re-stamp sits
 // last). -1 off any prop. Rect-based, so a negative-anchor prop is found from
 // its on-map cell.
 export function propIndexAt(props: readonly PlacedProp[], x: number, y: number, sizeOf: SizeOf): number {
@@ -98,7 +93,7 @@ const NUDGE: Record<NudgeDir, { dx: number; dy: number }> = {
 }
 
 // Move the selected prop one cell in `dir`, re-placing through placeProp so
-// overlap replacement and save behaviour stay uniform (#341). The move is the
+// edge rules and save behaviour stay uniform (#341). The move is the
 // fine-positioning tool for large art and the only way to reach a negative
 // anchor (top/left overhang) — a grid click can only name an on-map cell. A
 // nudge that would push the last footprint cell off the map is refused: the
@@ -153,15 +148,20 @@ export function coveredCells(props: readonly PlacedProp[], sizeOf: SizeOf): Set<
 // tile, with `valid` false only when no cell lands on the grid (the same
 // refusal placeProp enforces) so the caller can tint it red — edge overflow is
 // valid (#340). In erase mode it's
-// the footprint of the prop under the cursor — what a click removes — or null
+// the footprint of the prop under the cursor — what a click removes — or null;
+// select mode outlines the topmost prop there (what a click selects) — or null
 // when there's none. Pure presentation: never touches the placed list.
 export function propGhost(
   hover: { x: number; y: number },
-  tool: number | 'erase',
+  tool: number | 'erase' | 'select',
   props: readonly PlacedProp[],
   sizeOf: SizeOf,
   bounds: { cols: number; rows: number },
 ): { x: number; y: number; w: number; h: number; valid: boolean } | null {
+  if (tool === 'select') {
+    const i = propIndexAt(props, hover.x, hover.y, sizeOf)
+    return i >= 0 ? { ...rectOf(props[i], sizeOf), valid: true } : null
+  }
   if (tool === 'erase') {
     const hit = props.find((p) => {
       const r = rectOf(p, sizeOf)
