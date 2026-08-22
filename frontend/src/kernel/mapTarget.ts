@@ -6,6 +6,8 @@
 // Session-stable keys (`npcs`, `characterManifest`) are set once at game boot
 // and stay out of this. Pure — lives in the kernel so the game can import it.
 
+import type { BakedStandee } from '../game/phaser/mapStandees.ts'
+
 export type MapTarget = {
   map: unknown
   objects: unknown
@@ -13,7 +15,7 @@ export type MapTarget = {
   // The Standees standing on this map (#369, ADR-0015): runtime-placed cutouts
   // read alongside the map, never baked into it. A per-target input like
   // bakedNpcs, so it rides the same single chokepoint and both entry paths get it.
-  bakedStandees: unknown
+  bakedStandees: readonly BakedStandee[]
   entrySpawnId: string | undefined
   // Where this hop came from, so an unnamed portal can land the avatar on the
   // door back rather than the target's centre (spawnTile's reciprocal-door

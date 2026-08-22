@@ -8,6 +8,7 @@ import MobileDpad from '../MobileDpad.tsx'
 import PerfStallNotice from '../PerfStallNotice.tsx'
 import bus from './bus.js'
 import { villageZone } from './villageZone.ts'
+import type { BakedStandee } from './mapStandees.ts'
 import { silenceKeyboard } from './gameKeyboard.ts'
 import { applyMapTarget } from '../../kernel/mapTarget.ts'
 import { warp } from '../transition.ts'
@@ -126,7 +127,7 @@ export type PhaserGameProps = {
     bakedNpcs?: unknown
     // The Standees standing on the target (#369, ADR-0015) — resolved by the
     // shell like bakedNpcs, so the portal path can't drop them (the #294/#295 trap).
-    bakedStandees?: unknown
+    bakedStandees: readonly BakedStandee[]
     presence?: unknown
     voice?: VoiceHandle | null
   } | null>
@@ -325,7 +326,7 @@ export default function PhaserGame({
         map: loaded.map,
         objects: loaded.objects,
         bakedNpcs: loaded.bakedNpcs ?? [],
-        bakedStandees: loaded.bakedStandees ?? [],
+        bakedStandees: loaded.bakedStandees,
         entrySpawnId: portal.entrySpawnId,
         fromSlug,
         presence: loaded.presence ?? null,
