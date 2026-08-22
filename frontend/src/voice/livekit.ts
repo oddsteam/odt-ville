@@ -505,7 +505,7 @@ export function connectLivekitRoom(
     setMute: mesh.setMute,
     stop: () => {
       mesh.stop()
-      micState.deactivate()
+      micState.deactivate(mesh.setMute)
     },
   }
 }
