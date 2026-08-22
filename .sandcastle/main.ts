@@ -1,4 +1,5 @@
 import { execSync } from "node:child_process";
+import { writeFileSync } from "node:fs";
 import { run, claudeCode } from "@ai-hero/sandcastle";
 import { docker } from "@ai-hero/sandcastle/sandboxes/docker";
 
@@ -51,6 +52,39 @@ const result = await run({
     },
   },
 });
+
+// Every iteration ends by printing its manual-verification guide wrapped in
+// <verify issue="N" title="…"> (see prompt.md §7). Collect them all here and
+// hand the user one digest — the per-issue closing comments on GitHub are the
+// durable copy; this is the one the user actually sees at the end of the run.
+const verifyBlocks = [
+  ...result.stdout.matchAll(
+    /<verify\s+issue="(\d+)"(?:\s+title="([^"]*)")?(?:\s+(skipped)="true")?\s*>([\s\S]*?)<\/verify>/g,
+  ),
+].map(([, issue, title, skipped, body]) => ({
+  issue,
+  title: title ?? "",
+  skipped: Boolean(skipped),
+  body: body.trim(),
+}));
+
+if (verifyBlocks.length > 0) {
+  const digest = verifyBlocks
+    .map(
+      (b) =>
+        `# #${b.issue} ${b.title}${b.skipped ? " — SKIPPED" : ""}\n\n${b.body}\n`,
+    )
+    .join("\n---\n\n");
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const digestPath = `.sandcastle/logs/verify-${stamp}.md`;
+  writeFileSync(digestPath, digest);
+  console.log(`\n${"=".repeat(72)}\nHOW TO VERIFY THIS RUN (${verifyBlocks.length} issue(s)) — saved to ${digestPath}\n${"=".repeat(72)}\n`);
+  console.log(digest);
+} else if (result.commits.length > 0) {
+  console.log(
+    "\n⚠️  Commits landed but no <verify> blocks were found in the agent output — check the closing comments on the issues for the manual-verification guides.",
+  );
+}
 
 // After the run merges to main: if the agent actually landed work, spin up the
 // dev stack on the host (detached) so the merged change is testable, and print

@@ -129,7 +129,24 @@ EOF
 )"
 ```
 
-Then print the same guide as the final output of this iteration, so it appears in the run log as well as on GitHub.
+Then **send the same guide back to the hub**: print it as the final output of this iteration, wrapped in a `<verify>` tag with the issue number. The hub (`.sandcastle/main.ts`) collects every `<verify>` block across the whole run and hands the user one digest at the end — if the tag is missing or malformed, your guide is lost to the user.
+
+```
+<verify issue="<ID>" title="<issue title>">
+## Manual verification
+
+**What to look for:** …
+
+**How to check it:**
+1. …
+
+**Already proven by tests:** …
+
+**Needs a human eye:** …
+</verify>
+```
+
+One `<verify>` block per iteration, emitted only after the issue is closed. If you abort the issue instead (blocked, red gate), emit `<verify issue="<ID>" title="<issue title>" skipped="true">` with the one-line reason so the digest shows it was not done.
 
 ## Rules
 
