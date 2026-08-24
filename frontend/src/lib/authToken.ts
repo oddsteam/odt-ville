@@ -10,9 +10,10 @@
 // app unauthenticated and unable to reach the gated routes. So DEV-only we
 // mirror it to localStorage and restore on load, keeping the switcher's
 // "logged in" state across reloads.
-// ponytail: DEV-only localStorage; the node test env has no localStorage, so
-// `persist` is false there and the store stays purely in-memory for tests.
-const persist = import.meta.env.DEV && typeof localStorage !== 'undefined'
+// ponytail: DEV-only localStorage; feature-detect getItem, not just the binding
+// — Node 25 ships an inert `localStorage` global (object, no methods) unless
+// `--localstorage-file` is set, so the node test env has one that would throw.
+const persist = import.meta.env.DEV && typeof localStorage?.getItem === 'function'
 const KEY = 'odtville.devToken'
 
 let current: string | null = persist ? localStorage.getItem(KEY) : null
