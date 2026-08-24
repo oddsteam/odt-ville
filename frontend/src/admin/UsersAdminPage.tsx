@@ -3,7 +3,8 @@ import { AdminUsersService } from '../auth/service.ts'
 import { ViewerService } from '../viewer/service.ts'
 import type { AdminUser } from '../auth/schema.ts'
 import { hasAdmin, revokeControl, rowBadges } from './roleBadges.ts'
-import { createPayload } from './clientOnboarding.ts'
+import { createPayload, siteOptions } from './clientOnboarding.ts'
+import { EmployeesService } from '../org/service.ts'
 import { runEdge } from '../lib/runEdge.ts'
 
 // The read-only admin roster (#430): who has logged in, and who is an admin
@@ -44,10 +45,14 @@ export default function UsersAdminPage() {
   // by user id so each row's text input edits independently before its Save.
   const [savingId, setSavingId] = useState<number | null>(null)
   const [siteDrafts, setSiteDrafts] = useState<Record<number, string>>({})
+  // The Site names for the client-site pickers (#503 endpoint). A bare list
+  // keeps admins from typing a site that has no buildings (empty town).
+  const [sites, setSites] = useState<readonly string[]>([])
 
   useEffect(() => {
     runEdge(AdminUsersService.list()).then(setUsers, (e: Error) => setError(e.message))
     runEdge(ViewerService.get()).then((v) => setMeId(v.user.id), () => {})
+    runEdge(EmployeesService.listSites()).then(setSites, () => setSites([]))
   }, [])
 
   function makeAdmin(id: number) {
@@ -155,12 +160,18 @@ export default function UsersAdminPage() {
           value={newEmail}
           onChange={(e) => setNewEmail(e.target.value)}
         />
-        <input
-          type="text"
-          placeholder="Client site (e.g. KTB)"
+        <select
+          aria-label="Client site"
           value={newSite}
           onChange={(e) => setNewSite(e.target.value)}
-        />
+        >
+          <option value="">No site (unassigned)</option>
+          {siteOptions(sites, newSite).map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </select>
         <label>
           <input
             type="checkbox"
@@ -207,14 +218,20 @@ export default function UsersAdminPage() {
                     </label>
                   </td>
                   <td>
-                    <input
-                      type="text"
-                      placeholder="—"
+                    <select
+                      aria-label={`Client site for ${u.name}`}
                       value={siteDrafts[u.id] ?? u.client_site ?? ''}
                       onChange={(e) =>
                         setSiteDrafts((d) => ({ ...d, [u.id]: e.target.value }))
                       }
-                    />{' '}
+                    >
+                      <option value="">—</option>
+                      {siteOptions(sites, siteDrafts[u.id] ?? u.client_site ?? '').map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>{' '}
                     <button
                       type="button"
                       disabled={savingId === u.id}
