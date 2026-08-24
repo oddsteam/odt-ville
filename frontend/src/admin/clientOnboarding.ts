@@ -23,3 +23,14 @@ export function createPayload(form: CreateForm): {
     client_site: form.clientSite.trim() || null,
   }
 }
+
+// Options for a client-site dropdown: the fetched Site names, with the row's
+// current value kept (prepended) if it is a non-blank name the list doesn't
+// carry — so a legacy or since-removed site stays visible and selectable
+// rather than silently vanishing when the field becomes a <select>.
+export function siteOptions(
+  sites: readonly string[],
+  current: string | null,
+): readonly string[] {
+  return current && !sites.includes(current) ? [current, ...sites] : sites
+}
