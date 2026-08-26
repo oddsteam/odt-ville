@@ -1,6 +1,6 @@
 // Presence multiplayer (#88): pure frame-folding for the remote-player
 // roster. No Phaser, no network — MapScene renders off the returned action,
-// the cable client (lib/presenceClient) owns the wire.
+// the cable client (game-session/presenceClient) owns the wire.
 
 import type { Direction } from './phaser/movement.ts'
 

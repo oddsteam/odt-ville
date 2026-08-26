@@ -24,7 +24,7 @@ vi.mock('@rails/actioncable', () => ({
 }))
 vi.mock('../src/lib/authToken.ts', () => ({ getAuthToken: () => 'test-token' }))
 
-const { connectPresence } = await import('../src/lib/presenceClient.ts')
+const { connectPresence } = await import('../src/game-session/presenceClient.ts')
 
 describe('connectPresence', () => {
   beforeEach(() => {

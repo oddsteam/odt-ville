@@ -4,7 +4,7 @@
 // at a time, the counterpart of presenceSession (#269).
 
 import { describe, expect, it } from 'vitest'
-import { voiceSession } from './voiceSession.ts'
+import { voiceSession } from './session.ts'
 
 const handle = (log: unknown[], slug: string) => ({
   update: () => {},

@@ -10,7 +10,7 @@
 // presence guard exactly — a solo map or an unknown viewer opens nothing, which
 // is voice off, not an error.
 
-import type { VoiceHandle } from '../voice/schema.ts'
+import type { VoiceHandle } from './schema.ts'
 import type { Zone } from '../kernel/schema.ts'
 
 export interface VoiceSessionDeps {
