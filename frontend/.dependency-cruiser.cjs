@@ -110,6 +110,9 @@ const VOICE = '^src/voice/'
 
 // The shared src/lib grab-bag: like the kernel, it exists to be imported
 // broadly, so (with the kernel) it is exempt as a cross-module import TARGET.
+// Its exemption as a target cuts both ways (#523): to earn "import me anywhere"
+// it must depend on nobody but shared infrastructure — the lib-is-leaf rule
+// below enforces that, so lib can never become a back door into an app module.
 const LIB = '^src/lib/'
 
 // Every domain module's PUBLIC SURFACE (ADR-0010): the only files another
@@ -214,6 +217,25 @@ module.exports = {
         // another module past its public surface is forbidden.
         pathNot: ['^src/$1/', KERNEL, LIB, ...PUBLIC_SURFACE],
       },
+    },
+    {
+      name: 'lib-is-leaf',
+      comment:
+        '#523: src/lib is exempt as an import TARGET (imported broadly like the ' +
+        'kernel), which makes it a potential back door — a lib file reaching ' +
+        'into an app module would launder that dependency past every other ' +
+        'rule. So lib depends on nobody but itself and the kernel: genuine ' +
+        'shared infrastructure (authToken, http, runEdge, runtime, ' +
+        'tilesetWindow), never app orchestration. Orchestration that lived here ' +
+        '(voiceSession, presenceSession/presenceClient) was single-consumer ' +
+        'shell code and moved to voice/ and game-session/. NOTE: depcruise ' +
+        'sees value imports only (tsPreCompilationDeps is off), so a type-only ' +
+        'lib -> app import still slips through — a known gap, tracked for a ' +
+        'follow-up that flips the flag and fixes the black-box type edges it ' +
+        'surfaces.',
+      severity: 'error',
+      from: { path: LIB },
+      to: { path: '^src/', pathNot: [LIB, KERNEL] },
     },
     {
       name: 'communities-reusable-from-any-shell',

@@ -4,7 +4,7 @@
 // the registry — the game never imports a data service (ADR-0004).
 
 import { createConsumer } from '@rails/actioncable'
-import { getAuthToken } from './authToken.ts'
+import { getAuthToken } from '../lib/authToken.ts'
 
 export interface PresenceHandle {
   send(pos: { x: number; y: number; facing: string }): void
