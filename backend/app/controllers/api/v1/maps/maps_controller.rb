@@ -11,7 +11,7 @@ module Api
       class MapsController < BaseController
         # Authoring writes require the `admin` realm role (#100), as the other
         # mapper endpoints do; the reads are per-user via the access policy.
-        before_action -> { require_role!("admin") }, only: %i[create update]
+        before_action -> { require_role!("admin") }, only: %i[create update destroy]
 
         # GET /api/v1/maps — identity-only list of the maps this user may access
         # (map picker, portal targets). Deliberately omits the heavy baked/source
@@ -62,6 +62,13 @@ module Api
           end
           map.update!(attrs)
           render json: ::Maps::MapSerializer.call(map)
+        end
+
+        # DELETE /api/v1/maps/:slug — remove a saved map outright. Memberships
+        # delete via the model, standees via the DB cascade; unknown slug → 404.
+        def destroy
+          ::Maps::Map.find_by!(slug: params[:slug]).destroy!
+          head :no_content
         end
 
         private

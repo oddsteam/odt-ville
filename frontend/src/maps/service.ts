@@ -156,7 +156,14 @@ export const saveDecorations = (
     return yield* decode(path, decodeOne)(raw)
   })
 
-export const MapsService = { get, create, list, saveDecorations } as const
+// DELETE /maps/:slug -> remove a saved map (admin console). 204, no body.
+export const destroy = (slug: string): Effect.Effect<unknown, HttpError, Http> =>
+  Effect.gen(function* () {
+    const http = yield* Http
+    return yield* http.del(`/maps/${encodeURIComponent(slug)}`)
+  })
+
+export const MapsService = { get, create, list, saveDecorations, destroy } as const
 
 // Pure map-authoring reads re-exposed on the read surface (ADR-0010):
 // cross-module callers reach them here, not via ./props.ts / ./tiledImport.ts.
