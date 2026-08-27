@@ -67,10 +67,9 @@ export interface VoiceHandle {
 }
 
 // The AUDIBLE radius, in tiles: where podFor's gain math applies. Tightened
-// 6 -> 2 (ADR-0011, #310) so people stop stepping into conversations by
-// accident. Membership is a *separate*, wider band (below) — you are connected
-// before you are audible, and stay connected after, so a boundary never thrashes.
-export const VOICE_RADIUS = 2
+// 6 -> 2 (ADR-0011, #310), then 2 -> 1.5 so only the eight surrounding tiles
+// (orthogonal d=1, diagonal d≈1.41) are in earshot — "one tile" of reach.
+export const VOICE_RADIUS = 1.5
 
 // The mesh is O(n^2) connections — six peers is 15 links, which is already the
 // point where a laptop fan notices. Beyond this the nearest peers win.
@@ -81,20 +80,12 @@ export const POD_CAP = 6
 // dead-band + dwell keep someone pacing a boundary from thrashing a billable
 // LiveKit session (bills round up to a 1-minute floor per join, #298).
 
-// Walk speed in tiles/sec: one tile per MOVE_MS (170ms, src/game/constants.js).
-// Inlined, not imported — voice must not depend on the game runtime (arch rule
-// voice-depends-only-on-shared-infrastructure). Keep in step with MOVE_MS.
-const WALK_TILES_PER_SEC = 1000 / 170
-
-// Measured LiveKit Cloud room-join latency (#310 spike output): room.connect()
-// resolves in ~this long with the token pre-fetched. createLivekitVoice emits
-// the live measurement (onJoinLatency) to refine this. Raise it if joins run slower.
-const JOIN_LATENCY_MS = 500
-
-// Pre-join band = walk_speed x join_latency, rounded up (ADR-0011): enough lead
-// time to finish the join before the peer is audible. Derived from the latency
-// measurement, NOT scaled down from VOICE_RADIUS — the two do not scale together.
-export const PREJOIN_RADIUS = Math.ceil((WALK_TILES_PER_SEC * JOIN_LATENCY_MS) / 1000)
+// Pre-join band = the audible band. Audio is FLAT inside a room (livekit.ts):
+// connecting IS hearing, so any band wider than VOICE_RADIUS widens earshot
+// with it — the old latency-derived 3-tile band is what made voice carry
+// "too far". The cost of collapsing them: the ~500ms room join now starts only
+// when a peer is already adjacent, so their first beat can be clipped.
+export const PREJOIN_RADIUS = VOICE_RADIUS
 
 // Leave band: one tile beyond pre-join, so the connected set is sticky — a peer
 // drifting back out past pre-join stays connected until they clear this too.

@@ -205,6 +205,17 @@ describe('proximity-gated membership (#310)', () => {
     expect(latencies[0]).toBeGreaterThanOrEqual(0)
   })
 
+  it('connects only within one tile: two tiles away stays out, a diagonal neighbour joins', async () => {
+    const { room, mesh } = harness()
+    mesh.update(at(0), roster(2)) // two tiles away: out of earshot
+    await flush()
+    expect(room.connected).toBe(false)
+
+    mesh.update(at(0), new Map([['peer', { x: 1, y: 1 }]])) // diagonal neighbour
+    await flush()
+    expect(room.connected).toBe(true)
+  })
+
   it('joins only once while a peer stays in range', async () => {
     const { room, mesh } = harness()
     let connects = 0
