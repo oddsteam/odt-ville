@@ -256,6 +256,32 @@ module Api
         assert_equal "atrium", json[:slug]
       end
 
+      # Delete (map admin): an admin removes a saved map outright. Standees and
+      # memberships cascade at the DB/model layer, so the row just goes.
+      test "an admin deletes a map" do
+        make_map
+
+        assert_difference "::Maps::Map.count", -1 do
+          delete "/api/v1/maps/atrium", headers: auth(@user, roles: ["admin"])
+        end
+        assert_response :no_content
+      end
+
+      test "a non-admin is forbidden from deleting a map" do
+        make_map
+
+        assert_no_difference "::Maps::Map.count" do
+          delete "/api/v1/maps/atrium", headers: auth(@user)
+        end
+        assert_response :forbidden
+      end
+
+      test "deleting an unknown slug returns 404" do
+        delete "/api/v1/maps/does-not-exist", headers: auth(@user, roles: ["admin"])
+
+        assert_response :not_found
+      end
+
       test "a non-admin is forbidden from creating a map" do
         assert_no_difference "::Maps::Map.count" do
           post "/api/v1/maps", params: create_params, headers: auth(@user), as: :json

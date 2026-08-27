@@ -175,6 +175,7 @@ Rails.application.routes.draw do
         get "maps/:slug", to: "maps#show"
         post "maps", to: "maps#create"
         patch "maps/:slug", to: "maps#update"
+        delete "maps/:slug", to: "maps#destroy"
       end
 
       # The Standees domain (ADR-0010, ADR-0015): peer-to-peer cutouts read

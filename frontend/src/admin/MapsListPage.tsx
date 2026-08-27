@@ -12,6 +12,15 @@ export default function MapsListPage() {
   const [maps, setMaps] = useState<readonly MapSummary[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
+  // Delete a saved map after a native confirm — destructive and rare, so the
+  // browser prompt is enough; the row drops from the list on success.
+  const remove = (m: MapSummary) => {
+    if (!window.confirm(`Delete map "${m.title}" (${m.slug})? This cannot be undone.`)) return
+    runEdge(MapsService.destroy(m.slug))
+      .then(() => setMaps((prev) => prev?.filter((x) => x.slug !== m.slug) ?? prev))
+      .catch((e) => setError((e as Error).message))
+  }
+
   useEffect(() => {
     let live = true
     runEdge(MapsService.list())
@@ -57,6 +66,22 @@ export default function MapsListPage() {
                   <Link to={`${m.slug}/decorate`}>Decorate</Link>
                   {' · '}
                   <Link to={`/maps/${m.slug}`}>Play</Link>
+                  {' · '}
+                  <button
+                    type="button"
+                    onClick={() => remove(m)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      padding: 0,
+                      color: '#b91c1c',
+                      cursor: 'pointer',
+                      textDecoration: 'underline',
+                      font: 'inherit',
+                    }}
+                  >
+                    Delete
+                  </button>
                 </td>
               </tr>
             ))}
