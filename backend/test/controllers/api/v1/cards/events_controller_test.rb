@@ -83,7 +83,7 @@ module Api
         test "a posted card is relayed to connected clients" do
           frame = { type: "card", userId: @user.external_id, card: CARD }
 
-          assert_broadcast_on(GameSession::PresenceChannel::CARD_STREAM, frame) do
+          assert_broadcast_on(::GameSession::PresenceChannel::CARD_STREAM, frame) do
             post_event(email: "alice@odds.team", card: CARD)
           end
         end
@@ -91,13 +91,13 @@ module Api
         test "a null card relays the clear" do
           frame = { type: "card", userId: @user.external_id, card: nil }
 
-          assert_broadcast_on(GameSession::PresenceChannel::CARD_STREAM, frame) do
+          assert_broadcast_on(::GameSession::PresenceChannel::CARD_STREAM, frame) do
             post_event(email: "alice@odds.team", card: nil)
           end
         end
 
         test "an email we do not know relays nothing" do
-          assert_no_broadcasts(GameSession::PresenceChannel::CARD_STREAM) do
+          assert_no_broadcasts(::GameSession::PresenceChannel::CARD_STREAM) do
             post_event(email: "nobody@odds.team", card: CARD)
           end
         end
