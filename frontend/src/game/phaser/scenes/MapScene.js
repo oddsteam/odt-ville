@@ -22,6 +22,7 @@ import { applyFrame, pruneOutOfRange } from '../../presence.ts'
 import { PeerStepQueue } from '../../presenceQueue.ts'
 import { applyStandeeFrame } from '../../standees.ts'
 import { loadAvatar } from '../peerAvatar.ts'
+import { miniMapLayout, miniMapDot } from '../miniMap.ts'
 import { updateProximityStamps } from '../../../kernel/entityLoader.ts'
 import { badgeText, cardHref, statusColor } from '../cardBadge.ts'
 import { interactZoneEvents, sightZoneEvents, zoneEvents } from '../../../kernel/zones.ts'
@@ -319,6 +320,8 @@ export default class MapScene extends Phaser.Scene {
       this.spawnSelfPlate()
     }
 
+    this.spawnMiniMap(map)
+
     // Test API — same shape the town/interior scenes publish, so the walking
     // e2e scripts can read state off the canvas.
     if (typeof window !== 'undefined') {
@@ -359,6 +362,50 @@ export default class MapScene extends Phaser.Scene {
     }
   }
 
+  // Mini map: a screen-fixed corner box — us as a white dot, every peer a green
+  // one. Geometry lives in miniMap.ts; the dots reconcile against the roster
+  // each frame in update(), so joins, moves and leaves need no extra wiring.
+  // Rebuilt every create() because the instance survives stop/start (#249) and
+  // each map has its own size.
+  spawnMiniMap(map) {
+    const { width, height, cell } = miniMapLayout(map.cols, map.rows)
+    this.miniCell = cell
+    this.miniDots = new Map()
+    const bg = this.add.rectangle(0, 0, width, height, 0x000000, 0.5).setOrigin(0)
+    this.miniSelf = this.add.circle(0, 0, Math.max(2, cell / 2), 0xffffff)
+    // Pinned to the camera by position, not scrollFactor — scrollFactor 0 pins
+    // plain objects (the town dev panel) but not a container's rendered
+    // children, which kept scrolling with the world. Pinning on the camera's
+    // followupdate (fired in preRender, after the follow scroll is computed)
+    // instead of in update() kills the one-frame lag a scene-update pin has.
+    this.miniMap = this.add.container(0, 0, [bg, this.miniSelf]).setDepth(MAP_NAMEPLATE_DEPTH + 1)
+    const cam = this.cameras.main
+    const pin = () => this.miniMap.setPosition(cam.scrollX + 8, cam.scrollY + 8)
+    pin()
+    cam.on('followupdate', pin)
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => cam.off('followupdate', pin))
+  }
+
+  syncMiniMap() {
+    const self = miniMapDot(this.playerTile, this.miniCell)
+    this.miniSelf.setPosition(self.x, self.y)
+    for (const [userId, state] of this.remoteRoster) {
+      let dot = this.miniDots.get(userId)
+      if (!dot) {
+        dot = this.add.circle(0, 0, Math.max(2, this.miniCell / 2), 0x4ade80)
+        this.miniMap.add(dot)
+        this.miniDots.set(userId, dot)
+      }
+      const p = miniMapDot(state, this.miniCell)
+      dot.setPosition(p.x, p.y)
+    }
+    for (const [userId, dot] of this.miniDots) {
+      if (this.remoteRoster.has(userId)) continue
+      dot.destroy()
+      this.miniDots.delete(userId)
+    }
+  }
+
   update(_time, delta) {
     // Swing every proximity object toward or away from us (#438) — a door opens
     // as you walk up and closes behind you. Ahead of the input guards, so it
@@ -382,6 +429,9 @@ export default class MapScene extends Phaser.Scene {
       const body = this.remoteSprites.get(userId)
       if (body) plate.setPosition(body.x, body.y)
     }
+    // Keep the mini map honest every frame — ahead of the input guard below,
+    // so peer dots keep moving while our own avatar is mid-tween or reading.
+    if (this.miniMap) this.syncMiniMap()
     // A Standee retires itself when its moment passes (#374) — off the clock
     // this loop already runs on, so there is no sweeper job and no server tick.
     // Ahead of the input guards below: a cutout dying while you stand reading
