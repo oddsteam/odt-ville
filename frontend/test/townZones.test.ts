@@ -37,28 +37,12 @@ describe('buildTown zones', () => {
     expect(z?.payload).toEqual({ kind: 'encounter', pool: 'plaza-rares' })
   })
 
-  it('emits the gate trainer as an on_sight zone one east of the entrance, looking left', () => {
-    const trainer = town.zones.filter((z) => z.payload.kind === 'trainer')
-    expect(trainer).toHaveLength(1)
-    const z = trainer[0]
-    expect(z).toMatchObject({
-      trigger: 'on_sight',
-      x: town.entrance.x + 1,
-      y: town.entrance.y - 1,
-      facing: 'left',
-      range: 5,
-      payload: { kind: 'trainer', npcId: 0 },
-    })
+  it('emits no gate trainer — the entrance is unguarded', () => {
+    expect(town.zones.filter((z) => z.payload.kind === 'trainer')).toHaveLength(0)
   })
 
-  it('references the gate NPC the policy resolves', () => {
-    const withNpc = buildTown(5, undefined, undefined, undefined, undefined, {
-      tree: null,
-      flowerGroup: null,
-      flowerSingle: null,
-      gateNpcId: 7,
-    })
-    const z = withNpc.zones.find((zz) => zz.payload.kind === 'trainer')
-    expect(z?.payload).toEqual({ kind: 'trainer', npcId: 7 })
+  it('places no signpost tile anywhere', () => {
+    for (let y = 0; y < town.rows; y++)
+      for (let x = 0; x < town.cols; x++) expect(tileChar(town, x, y)).not.toBe('s')
   })
 })

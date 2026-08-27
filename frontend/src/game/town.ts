@@ -325,7 +325,6 @@ export function buildTown(
     if (x === entranceCol && y >= lastStreetPath) return ':'
     if (y >= fieldTop && y <= fieldBottom && x >= fieldLeft && x <= fieldRight)
       return 'g'
-    if (y === rows - 2 && x === entranceCol - 1) return 's'
     if (!buildingRows.has(y) && flowerAt(x, y)) return '*'
     return '.'
   }
@@ -343,9 +342,9 @@ export function buildTown(
   // The interactive regions (#255), payloads from policy. The tall-grass field
   // is two encounter zones flanking the entrance avenue — the road column cuts
   // through the field rect and must stay a safe corridor, and a Zone is a rect.
-  // The gate trainer stands one tile east of the entrance, on the row just
-  // inside the south margin, looking left across the road — five tiles,
-  // clipped to the map because the kernel cone is unclipped.
+  // No gate trainer and no entrance signpost any more — the hometown gate is
+  // unguarded by design now (the old on_sight zone and 's' tile were removed
+  // on request; TownScene's addGateTrainer no-ops when no on_sight zone exists).
   const grass = (left: number, right: number): Zone => ({
     trigger: 'on_enter',
     x: left,
@@ -357,14 +356,6 @@ export function buildTown(
   const zones: Zone[] = [
     grass(fieldLeft, entranceCol - 1),
     grass(entranceCol + 1, fieldRight),
-    {
-      trigger: 'on_sight',
-      x: entrance.x + 1,
-      y: entrance.y - 1,
-      facing: 'left',
-      range: Math.min(5, entrance.x + 1),
-      payload: { kind: 'trainer', npcId: policy?.gateNpcId ?? 0 },
-    },
   ]
 
   return { ...grid, plots, entrance, entities: placeFoliage(grid, policy), zones }
