@@ -53,6 +53,12 @@ module GameSession
       # No cell until the first `move` says where we stand; the client replays
       # its position on `connected`, so that gap is one round trip.
       @cell = nil
+      # Identity that can't change mid-connection in any way that matters (#543):
+      # resolve it once here rather than re-query the effective manifest — a
+      # find_by(active: true) — on every move frame. The card is deliberately
+      # NOT memoized (see broadcast): it changes live over the card stream.
+      @name = current_user.name
+      @manifest_id = current_user.effective_character_manifest&.id
     end
 
     def move(data)
@@ -111,8 +117,8 @@ module GameSession
         stream_name(*@cell),
         frame.merge(
           userId: current_user.external_id,
-          name: current_user.name,
-          manifestId: current_user.effective_character_manifest&.id,
+          name: @name,
+          manifestId: @manifest_id,
           card: Cards::Registry.for(current_user.external_id)
         )
       )

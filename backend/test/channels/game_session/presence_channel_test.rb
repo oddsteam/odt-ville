@@ -214,6 +214,26 @@ class GameSession::PresenceChannelTest < ActionCable::Channel::TestCase
     end
   end
 
+  # #543: the effective manifest can't change mid-connection in any way that
+  # matters, so it's resolved once at subscribe rather than re-queried on every
+  # move frame (find_by(active: true) per step, per walking player otherwise).
+  test "the manifest is resolved once per connection, not once per move" do
+    ::Character::CharacterManifest.create!(name: "global", data: {}, active: true)
+    map = make_map
+    calls = 0
+    original = @user.method(:effective_character_manifest)
+    @user.define_singleton_method(:effective_character_manifest) do
+      calls += 1
+      original.call
+    end
+
+    join(map)
+    perform :move, x: 3, y: 4, facing: "down"
+    perform :move, x: 15, y: 4, facing: "down"
+
+    assert_equal 1, calls
+  end
+
   def manifest_frame(manifest_id)
     {
       type: "move", userId: @user.external_id, name: @user.name,
