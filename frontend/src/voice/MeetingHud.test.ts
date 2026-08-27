@@ -5,7 +5,7 @@
 // mirroring the mic-blocked state's shape.
 
 import { describe, expect, it } from 'vitest'
-import { cameraView, shareView, tileView } from './MeetingHud.tsx'
+import { cameraView, shareView, surfaceView, tileView } from './MeetingHud.tsx'
 import type { RemoteTile, ShareTile } from './meetingState.ts'
 
 describe('cameraView', () => {
@@ -55,6 +55,20 @@ describe('tileView (#488)', () => {
 
   it('uses a fallback glyph when the name is blank', () => {
     expect(tileView(tile({ name: '   ' })).initial).toBe('?')
+  })
+})
+
+describe('surfaceView', () => {
+  it('shrinks to a thumbnail so the player can see the game and walk away', () => {
+    const v = surfaceView(true)
+    expect(v.width).toBe('240px')
+    expect(v.toggleTitle).toMatch(/expand/i)
+  })
+
+  it('is large by default so a shared screen stays legible', () => {
+    const v = surfaceView(false)
+    expect(v.width).toBe('min(960px, 90vw)')
+    expect(v.toggleTitle).toMatch(/shrink/i)
   })
 })
 

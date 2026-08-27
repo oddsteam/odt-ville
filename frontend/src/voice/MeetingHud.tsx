@@ -1,4 +1,4 @@
-import { useEffect, useRef, useSyncExternalStore, type RefObject } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore, type RefObject } from 'react'
 import { meetingState, type CameraStatus, type RemoteTile, type ScreenShare, type SelfView as Track } from './meetingState.ts'
 import { micState } from './micState.ts'
 import { micView } from './MicIndicator.tsx'
@@ -74,18 +74,61 @@ function useAttach(ref: RefObject<HTMLVideoElement | null>, track: Track | null)
   }, [ref, track])
 }
 
+// The surface's two sizes: large (legible) and a thumbnail. Shrinking frees the
+// game canvas underneath — the whole HUD panel blocks clicks over its area, so
+// the thumbnail is how you glance at a share while walking your avatar away.
+export interface SurfaceView {
+  width: string
+  toggleIcon: string
+  toggleTitle: string
+}
+export function surfaceView(minimized: boolean): SurfaceView {
+  return minimized
+    ? { width: '240px', toggleIcon: '⤢', toggleTitle: 'Expand the shared screen' }
+    : { width: 'min(960px, 90vw)', toggleIcon: '⤡', toggleTitle: 'Shrink the shared screen so you can see the game' }
+}
+
+const SURFACE_BUTTON = {
+  border: 'none',
+  borderRadius: 4,
+  padding: '2px 6px',
+  color: '#fff',
+  background: 'rgba(0,0,0,0.6)',
+  font: '600 14px/1 system-ui, sans-serif',
+  cursor: 'pointer',
+} as const
+
 // The focused share surface (#489): the sharer's screen, large, above the strip.
 // `contain`, not `cover` — a screen must stay legible edge to edge.
 function ShareSurface({ share }: { share: ScreenShare }) {
   const ref = useRef<HTMLVideoElement>(null)
+  const box = useRef<HTMLDivElement>(null)
+  const [minimized, setMinimized] = useState(false)
   useAttach(ref, share.focused?.video ?? null)
   if (!share.focused) return null
+  const v = surfaceView(minimized)
   return (
-    <div style={{ position: 'relative', width: 'min(960px, 90vw)', aspectRatio: '16 / 9', background: '#000', borderRadius: 8, overflow: 'hidden' }}>
+    <div ref={box} style={{ position: 'relative', width: v.width, aspectRatio: '16 / 9', background: '#000', borderRadius: 8, overflow: 'hidden' }}>
       <video ref={ref} autoPlay playsInline style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
       <span style={{ position: 'absolute', left: 8, bottom: 8, color: '#fff', background: 'rgba(0,0,0,0.6)', borderRadius: 4, padding: '2px 6px', font: '600 12px/1 system-ui, sans-serif' }}>
         {shareView(share).caption}
       </span>
+      <div style={{ position: 'absolute', right: 4, top: 4, display: 'flex', gap: 4 }}>
+        <button type="button" title={v.toggleTitle} onClick={() => setMinimized(!minimized)} style={SURFACE_BUTTON}>
+          {v.toggleIcon}
+        </button>
+        {!minimized && (
+          <button
+            type="button"
+            title="View the shared screen fullscreen (Esc exits)"
+            // ponytail: native fullscreen — Esc/browser chrome handle the exit; guarded, jsdom has no requestFullscreen
+            onClick={() => void box.current?.requestFullscreen?.().catch(() => {})}
+            style={SURFACE_BUTTON}
+          >
+            ⛶
+          </button>
+        )}
+      </div>
     </div>
   )
 }

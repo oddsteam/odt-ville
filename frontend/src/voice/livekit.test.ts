@@ -39,6 +39,7 @@ class FakeRoom implements RoomLike {
   videoTrack = new FakeTrack('video')
   screenEnabled: boolean | null = null
   screenDenied = false // the user dismissed the browser's picker
+  screenOptions: unknown // the capture options the publish was started with
   screenTrack = new FakeTrack('video', 'screen_share')
   disconnected = false
   localParticipant = {
@@ -50,9 +51,10 @@ class FakeRoom implements RoomLike {
       this.cameraEnabled = enabled
       return enabled ? { videoTrack: this.videoTrack } : undefined
     },
-    setScreenShareEnabled: async (enabled: boolean) => {
+    setScreenShareEnabled: async (enabled: boolean, options?: unknown) => {
       if (enabled && this.screenDenied) throw new Error('NotAllowedError')
       this.screenEnabled = enabled
+      this.screenOptions = options
       return enabled ? { videoTrack: this.screenTrack } : undefined
     },
   }
@@ -617,6 +619,15 @@ describe('screen share (#489)', () => {
     h.room.emit('trackSubscribed', screen(), {}, peer('bob', 'Bob'))
     h.mesh.stop()
     expect(h.share().focused).toBe(null)
+  })
+
+  it('captures at 1080p30 with the detail hint, so shared text stays legible', async () => {
+    const h = await enter()
+    await h.mesh.setScreenShare?.(true)
+    expect(h.room.screenOptions).toEqual({
+      resolution: { width: 1920, height: 1080, frameRate: 30 },
+      contentHint: 'detail',
+    })
   })
 
   it('publishes my screen on start and focuses it as mine', async () => {
