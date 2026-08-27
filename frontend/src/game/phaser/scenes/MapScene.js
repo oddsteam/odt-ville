@@ -19,6 +19,7 @@ import {
 import bus from '../bus.js'
 import { deltaFor, resolveDirection, stepTile } from '../movement.ts'
 import { applyFrame, pruneOutOfRange } from '../../presence.ts'
+import { PeerStepQueue } from '../../presenceQueue.ts'
 import { applyStandeeFrame } from '../../standees.ts'
 import { loadAvatar } from '../peerAvatar.ts'
 import { updateProximityStamps } from '../../../kernel/entityLoader.ts'
@@ -273,6 +274,14 @@ export default class MapScene extends Phaser.Scene {
     this.presence = this.registry.get('presence') || null
     this.remoteRoster = new Map()
     this.remoteSprites = new Map()
+    // Jitter buffer (#542): a per-peer step queue and the tile each peer is
+    // currently *rendered* on. Presence frames burst through the tunnel; rather
+    // than tween straight to newest on every frame (which sprints the peer), we
+    // queue steps and play them back one MOVE_MS slide at a time. The roster
+    // still folds to newest immediately — only the render is buffered — so
+    // peerTiles is the slide's "from" tile, not the roster's.
+    this.peerQueues = new Map()
+    this.peerTiles = new Map()
     // A peer's nameplate (label + face chip + card badge) lives in its own
     // container, not the body one (#483): a Phaser container forces one depth on
     // every child, and the body drops to the walk-under / masked band on a masked
@@ -501,6 +510,10 @@ export default class MapScene extends Phaser.Scene {
     // Destroyed with the plate container above; drop the handle so a rejoin
     // builds a fresh badge instead of trying to destroy a dead one.
     this.cardBadges.delete(userId)
+    // Drop the jitter buffer (#542) so a queued onComplete can't chain a slide
+    // onto a destroyed body, and a rejoin starts from an empty queue.
+    this.peerQueues.delete(userId)
+    this.peerTiles.delete(userId)
   }
 
   // Hang what this peer is working on over their head (#317). Rebuilt rather
@@ -575,10 +588,6 @@ export default class MapScene extends Phaser.Scene {
   }
 
   presenceFrame(frame) {
-    // Snapshot the peer's tile before applyFrame folds the new one in: a move's
-    // depth slide needs where they stepped *from* (#402), and applyFrame
-    // replaces the roster entry outright.
-    const prev = this.remoteRoster.get(frame.userId)
     const { action, echo } = applyFrame(this.remoteRoster, frame, this.presence.ownId)
     if (echo) this.sendPosition()
     if (action === 'none') return
@@ -597,8 +606,8 @@ export default class MapScene extends Phaser.Scene {
       return
     }
     this.loadPeerCharacter(state.manifestId)
-    const feet = this.peerFeet(state)
     if (action === 'spawn') {
+      const feet = this.peerFeet(state)
       // A sprite, not an image: peers play their own walk loop (#267). The body
       // container holds the sprite alone — the plate (label + chip + badge) is a
       // sibling (#483), so applyPeerLook still reads the body's list[0].
@@ -612,6 +621,9 @@ export default class MapScene extends Phaser.Scene {
         peerDepth(state.y, this.playerTile.y, this.isOverhang(state.x, state.y), this.isForeground(state.x, state.y)),
       )
       this.remoteSprites.set(frame.userId, remote)
+      // Seed the jitter buffer's "from" tile (#542) so the first queued slide
+      // reads a real origin cell, not the destination.
+      this.peerTiles.set(frame.userId, { x: state.x, y: state.y })
       // The nameplate rides its own container at MAP_NAMEPLATE_DEPTH (#483), so
       // it never sinks under prop art when the body drops onto a masked tile. It
       // tracks the body's position every frame in update().
@@ -635,31 +647,71 @@ export default class MapScene extends Phaser.Scene {
       })
       return
     }
-    const remote = this.remoteSprites.get(frame.userId)
-    if (!remote) return
-    // Walk while the step tween runs, settle to idle on arrival (#267). Kill the
-    // previous tween first: a frame that lands just before its predecessor
-    // finished would otherwise let the stale onComplete idle a walking peer.
+    if (!this.remoteSprites.has(frame.userId)) return
+    // Jitter buffer (#542): queue the step rather than tweening straight to the
+    // newest tile. Frames arrive in bursts through the tunnel, and killing the
+    // in-flight slide on every frame is what makes a peer sprint. Enqueue the
+    // step and let it play back one MOVE_MS slide at a time; once the backlog
+    // runs long, snap to the newest tile — a clean teleport beats a sprint.
+    let queue = this.peerQueues.get(frame.userId)
+    if (!queue) {
+      queue = new PeerStepQueue()
+      this.peerQueues.set(frame.userId, queue)
+    }
+    const { snap, step } = queue.push({ x: state.x, y: state.y, facing: state.facing })
+    if (snap) this.snapPeer(frame.userId, step)
+    else if (!queue.playing) this.playPeerStep(frame.userId)
+  }
+
+  // Slide a peer to the next queued tile, chaining one MOVE_MS step at a time
+  // (#542). The roster holds their newest state — only the render is buffered —
+  // so the look/manifest come from the roster while the tile and facing come
+  // from the queued step, so the walk animation plays the direction that step
+  // actually moved.
+  playPeerStep(userId) {
+    const queue = this.peerQueues.get(userId)
+    const step = queue?.next()
+    if (!step) return
+    const remote = this.remoteSprites.get(userId)
+    const state = this.remoteRoster.get(userId)
+    if (!remote || !state) return
+    // Kill the in-flight tween before starting the next: its stale onComplete
+    // would otherwise idle a peer that is still walking through the queue.
     this.tweens.killTweensOf(remote)
-    this.applyPeerLook(remote, state, true)
-    // Re-derive depth on the move, exactly as the local avatar does each step:
-    // hold the walk-under band for the whole slide while either end of the step
-    // overhangs (#402) — so a peer stepping out of an overhang cell doesn't pop
-    // over the art it is still standing in front of — otherwise sort against the
-    // local avatar's row (#403), keyed on the destination cell. onComplete
-    // settles to the landed cell's own depth.
-    const to = { x: state.x, y: state.y }
-    remote.setDepth(peerSlideDepth(prev ?? to, to, this.playerTile.y, this.isOverhang, this.isForeground))
+    this.applyPeerLook(remote, { ...state, facing: step.facing }, true)
+    // Depth slides from the tile the peer is *rendered* on to the step's tile
+    // (#402/#403), not from the roster's newest — the render lags the roster.
+    const from = this.peerTiles.get(userId) ?? step
+    this.peerTiles.set(userId, { x: step.x, y: step.y })
+    remote.setDepth(peerSlideDepth(from, step, this.playerTile.y, this.isOverhang, this.isForeground))
+    const feet = this.peerFeet({ ...state, x: step.x, y: step.y })
     this.tweens.add({
       targets: remote,
       x: feet.x,
       y: feet.y,
       duration: MOVE_MS,
       onComplete: () => {
-        this.applyPeerLook(remote, state, false)
-        remote.setDepth(peerDepth(to.y, this.playerTile.y, this.isOverhang(to.x, to.y), this.isForeground(to.x, to.y)))
+        this.applyPeerLook(remote, { ...state, facing: step.facing }, false)
+        remote.setDepth(peerDepth(step.y, this.playerTile.y, this.isOverhang(step.x, step.y), this.isForeground(step.x, step.y)))
+        // Chain the next queued step, or settle to idle here if drained.
+        this.playPeerStep(userId)
       },
     })
+  }
+
+  // Teleport a peer to the newest tile (#542): the backlog ran too long to slide
+  // without sprinting, so the queue dropped it and we place the peer where they
+  // actually are, idle.
+  snapPeer(userId, step) {
+    const remote = this.remoteSprites.get(userId)
+    const state = this.remoteRoster.get(userId)
+    if (!remote || !state) return
+    this.tweens.killTweensOf(remote)
+    this.applyPeerLook(remote, { ...state, facing: step.facing }, false)
+    this.peerTiles.set(userId, { x: step.x, y: step.y })
+    const feet = this.peerFeet({ ...state, x: step.x, y: step.y })
+    remote.setPosition(feet.x, feet.y)
+    remote.setDepth(peerDepth(step.y, this.playerTile.y, this.isOverhang(step.x, step.y), this.isForeground(step.x, step.y)))
   }
 
   // Where a peer's feet belong on their tile. The lift is theirs, not ours
@@ -751,6 +803,11 @@ export default class MapScene extends Phaser.Scene {
       this.applyPeerLook(remote, state, false)
       const feet = this.peerFeet(state)
       remote.setPosition(feet.x, feet.y)
+      // Killing the tween breaks any in-flight jitter-buffer chain (#542), and
+      // we've just snapped this peer to their newest tile — so clear the queue
+      // and re-seed the render tile rather than leave a stuck backlog.
+      this.peerQueues.get(userId)?.clear()
+      this.peerTiles.set(userId, { x: state.x, y: state.y })
     }
   }
 

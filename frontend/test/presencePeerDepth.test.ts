@@ -37,6 +37,8 @@ function fakeScene(overhang: string[] = [], fg: string[] = []) {
     peerChars: new Map(),
     remoteRoster: new Map(),
     remoteSprites: new Map(),
+    peerQueues: new Map(),
+    peerTiles: new Map(),
     remotePlates: new Map(),
     cardBadges: new Map(),
     avatarsAsked: new Set(),

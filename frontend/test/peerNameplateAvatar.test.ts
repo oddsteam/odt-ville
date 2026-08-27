@@ -45,6 +45,8 @@ function fakeScene() {
     peerChars: new Map(),
     remoteRoster: new Map(),
     remoteSprites: new Map(),
+    peerQueues: new Map(),
+    peerTiles: new Map(),
     remotePlates: new Map(),
     avatarsAsked: new Set(),
     cardBadges: new Map(),
