@@ -33,12 +33,18 @@ describe('MonsterSummary schema', () => {
     encounter_dialog: 'A wild Slime appears!',
     encounter_rate: 3,
     enabled: true,
+    pool: null,
     probability: 0.75,
     updated_at: '2026-06-28T00:00:00.000Z',
   }
 
   it('decodes a well-formed roster row from the Rails monster endpoint', () => {
     expect(Either.isRight(Schema.decodeUnknownEither(MonsterSummary)(valid))).toBe(true)
+  })
+
+  it('carries the named pool tag when set (#87)', () => {
+    const decoded = Schema.decodeUnknownSync(MonsterSummary)({ ...valid, pool: 'cave' })
+    expect(decoded.pool).toBe('cave')
   })
 
   it('allows a null encounter_dialog', () => {
@@ -65,6 +71,7 @@ describe('Monster schema (full record from create/update)', () => {
     encounter_dialog: 'A wild Slime appears!',
     encounter_rate: 3,
     enabled: true,
+    pool: null,
     probability: 0.75,
     updated_at: '2026-06-28T00:00:00.000Z',
     image: 'data:image/png;base64,abc',
@@ -89,6 +96,7 @@ describe('NewMonster schema (create body)', () => {
     encounter_dialog: 'A wild Slime appears!',
     encounter_rate: 3,
     enabled: true,
+    pool: 'cave',
   }
 
   it('encodes a well-formed create body', () => {
@@ -110,6 +118,7 @@ describe('UpdateMonster schema (edit body — every field optional)', () => {
       encounter_dialog: 'Bow!',
       encounter_rate: 4,
       enabled: false,
+      pool: 'cave',
     }
     expect(Either.isRight(Schema.encodeUnknownEither(UpdateMonster)(body))).toBe(true)
   })

@@ -39,7 +39,10 @@ module Api
             image_data_url: params[:image],
             encounter_dialog: params[:encounter_dialog],
             encounter_rate: params.key?(:encounter_rate) ? params[:encounter_rate] : 0,
-            enabled: params.key?(:enabled) ? params[:enabled] : true
+            enabled: params.key?(:enabled) ? params[:enabled] : true,
+            # A blank tag stores nil (#87): only a real slug names a filterable
+            # pool, so `pool` can't silently strand a monster in the "" group.
+            pool: params[:pool].presence
           )
           monster.save!
           render json: ::Catalog::MonsterSerializer.call(monster), status: :created
@@ -63,6 +66,7 @@ module Api
           monster.encounter_dialog = params[:encounter_dialog] if params.key?(:encounter_dialog)
           monster.encounter_rate = params[:encounter_rate] if params.key?(:encounter_rate)
           monster.enabled = params[:enabled] if params.key?(:enabled)
+          monster.pool = params[:pool].presence if params.key?(:pool)
           monster.save!
           render json: ::Catalog::MonsterSerializer.call(monster)
         end

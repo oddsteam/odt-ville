@@ -15,6 +15,9 @@ module Catalog
         encounter_dialog: monster.encounter_dialog,
         encounter_rate: monster.encounter_rate,
         enabled: monster.enabled,
+        # The named wild-encounter group this monster spawns in (#87); nil =
+        # global-only. Roster + edit form read it here.
+        pool: monster.pool,
         probability: monster.probability(pool_total),
         updated_at: monster.updated_at
       }

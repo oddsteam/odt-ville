@@ -116,6 +116,33 @@ module Api
         assert_in_delta 1.0, json[:probability], 1e-9, "lone enabled monster is the whole pool"
       end
 
+      test "create persists the pool tag and echoes it back (#87)" do
+        post "/api/v1/monsters",
+             params: { name: "Bat", image: "data:img", encounter_rate: 1, pool: "cave" },
+             headers: auth(@user, roles: ["admin"])
+
+        assert_response :created
+        assert_equal "cave", json[:pool]
+        assert_equal "cave", ::Catalog::Monster.find_by!(name: "Bat").pool
+      end
+
+      test "update sets the pool tag, and a blank clears it to nil (#87)" do
+        monster = ::Catalog::Monster.create!(name: "Bat", image: "data:img", encounter_rate: 1)
+
+        patch "/api/v1/monsters/#{monster.id}",
+              params: { pool: "cave" },
+              headers: auth(@user, roles: ["admin"])
+        assert_response :success
+        assert_equal "cave", json[:pool]
+
+        patch "/api/v1/monsters/#{monster.id}",
+              params: { pool: "" },
+              headers: auth(@user, roles: ["admin"])
+        assert_response :success
+        assert_nil json[:pool]
+        assert_nil monster.reload.pool, "a blank tag stores nil, so it never names a filterable group"
+      end
+
       test "create defaults a missing enabled flag to on" do
         post "/api/v1/monsters",
              params: { name: "Wolf", image: "data:img", encounter_rate: 3 },
