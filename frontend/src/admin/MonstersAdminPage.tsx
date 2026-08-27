@@ -54,6 +54,7 @@ export default function MonstersAdminPage() {
   const [imageReplaced, setImageReplaced] = useState(false)
   const [dialog, setDialog] = useState('')
   const [rate, setRate] = useState('0')
+  const [pool, setPool] = useState('')
   const [enabled, setEnabled] = useState(true)
   const [busy, setBusy] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
@@ -92,6 +93,7 @@ export default function MonstersAdminPage() {
     setImageReplaced(false)
     setDialog('')
     setRate('0')
+    setPool('')
     setEnabled(true)
     setFormError(null)
     setImageWarning(null)
@@ -110,6 +112,7 @@ export default function MonstersAdminPage() {
       setImageReplaced(false)
       setDialog(m.encounter_dialog ?? '')
       setRate(String(m.encounter_rate))
+      setPool(m.pool ?? '')
       setEnabled(m.enabled)
     } catch (e) {
       setFormError((e as Error).message)
@@ -181,6 +184,7 @@ export default function MonstersAdminPage() {
               encounter_dialog: dialog,
               encounter_rate: Number(rate) || 0,
               enabled,
+              pool: pool.trim(),
             }),
           )
         } else {
@@ -191,6 +195,7 @@ export default function MonstersAdminPage() {
             encounter_dialog: dialog,
             encounter_rate: Number(rate) || 0,
             enabled,
+            pool: pool.trim(),
             ...(imageReplaced && image ? { image } : {}),
           }
           await runEdge(MonstersWrite.update(editingId, body))
@@ -203,7 +208,7 @@ export default function MonstersAdminPage() {
         setBusy(false)
       }
     },
-    [name, image, imageReplaced, dialog, rate, enabled, editingId, resetForm, load],
+    [name, image, imageReplaced, dialog, rate, pool, enabled, editingId, resetForm, load],
   )
 
   if (error) return <p className="admin-msg admin-msg-error">{error}</p>
@@ -264,6 +269,20 @@ export default function MonstersAdminPage() {
           </span>
         </label>
 
+        <label className="admin-field">
+          <span className="admin-label">Pool</span>
+          <input
+            value={pool}
+            onChange={(e) => setPool(e.target.value)}
+            disabled={busy}
+            placeholder="(global pool)"
+          />
+          <span className="admin-hint">
+            Matches an encounter zone&rsquo;s Pool slug (#87) — only zones naming this pool
+            spawn it. Empty = spawns in the global pool only.
+          </span>
+        </label>
+
         <label className="admin-field admin-field-inline">
           <input
             type="checkbox"
@@ -296,6 +315,7 @@ export default function MonstersAdminPage() {
             <tr>
               <th>Name</th>
               <th>Encounter rate</th>
+              <th>Pool</th>
               <th>Probability</th>
               <th />
             </tr>
@@ -305,6 +325,7 @@ export default function MonstersAdminPage() {
               <tr key={m.id} className={m.enabled ? undefined : 'admin-row-off'}>
                 <td>{m.name}</td>
                 <td>{m.encounter_rate}</td>
+                <td>{m.pool ?? '—'}</td>
                 <td>{percent(m.probability)}</td>
                 <td>
                   <button type="button" onClick={() => toggleEnabled(m)} disabled={busy}>

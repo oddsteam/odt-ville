@@ -14,6 +14,9 @@ export const MonsterSummary = Schema.Struct({
   encounter_dialog: Schema.NullOr(Schema.String),
   encounter_rate: Schema.Number,
   enabled: Schema.Boolean,
+  // The named wild-encounter group this monster spawns in (#87), matching an
+  // encounter Zone's Pool slug; null = spawns only in the global pool.
+  pool: Schema.NullOr(Schema.String),
   probability: Schema.Number,
   updated_at: Schema.String,
 })
@@ -49,6 +52,8 @@ export const NewMonster = Schema.Struct({
   encounter_dialog: Schema.String,
   encounter_rate: Schema.Number,
   enabled: Schema.Boolean,
+  // Pool slug; the server stores a blank as null (global-only).
+  pool: Schema.String,
 })
 export type NewMonster = Schema.Schema.Type<typeof NewMonster>
 
