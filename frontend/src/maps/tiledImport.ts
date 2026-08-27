@@ -98,7 +98,12 @@ function toGround(map: TiledMap): BakedGround {
   }
 
   const used = new Set<string>()
-  tileLayers.forEach((layer, depth) => {
+  tileLayers.forEach((layer, index) => {
+    // Ground depths live below the entity band (MAP_ENTITY_DEPTH = 1): the map
+    // baker stacks terrains at index*0.1, so tile layers scale the same way —
+    // a raw layer index of 1+ would draw *over* placed props. Clamped so even
+    // a 10+-layer export stays under the band.
+    const depth = Math.min(index, 9) * 0.1
     const data = layer.data ?? []
     for (let i = 0; i < cols * rows; i++) {
       const gid = (data[i] ?? 0) & GID_MASK
