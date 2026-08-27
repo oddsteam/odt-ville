@@ -1462,3 +1462,33 @@ button:disabled {
   font-size: 9px;
   padding: 9px 12px;
 }
+
+/* ---- Pre-login realm chooser (#539) ----------------------- */
+
+.login-chooser {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 24px;
+  text-align: center;
+}
+
+.login-chooser h1 {
+  color: var(--paper);
+  font-size: 18px;
+  margin: 0;
+}
+
+.login-chooser p {
+  color: var(--paper-dk);
+  font-size: 10px;
+  margin: 0 0 10px;
+}
+
+.login-chooser button {
+  width: min(320px, 100%);
+  padding: 12px;
+}

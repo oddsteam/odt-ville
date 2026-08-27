@@ -30,6 +30,11 @@ services:
       KEYCLOAK_ISSUER: https://sso.odd.works/realms/odt
       KEYCLOAK_AUDIENCE: odt-ville-web
       KEYCLOAK_JWKS_URI: https://sso.odd.works/realms/odt/protocol/openid-connect/certs
+      # Second trusted realm for external client users (#539): tokens are routed
+      # to a per-realm verifier by their `iss` (Auth::IssuerRouter). Requires the
+      # org admin to create an `odt-ville-web` public client in realm `external`.
+      KEYCLOAK_EXTERNAL_ISSUER: https://sso.odd.works/realms/external
+      KEYCLOAK_EXTERNAL_JWKS_URI: https://sso.odd.works/realms/external/protocol/openid-connect/certs
       # ── LiveKit voice credentials & rotation (ADR-0011, #298) ──────────────────
       # The backend mints LiveKit room tokens from LIVEKIT_API_KEY / _SECRET, and
       # the frontend dials VITE_LIVEKIT_URL — all three are declared in compose.yaml
@@ -70,6 +75,10 @@ services:
     environment:
       VITE_KEYCLOAK_URL: https://sso.odd.works
       VITE_KEYCLOAK_REALM: odt
+      # External clients realm (#539): setting this turns on the pre-login
+      # chooser ("Continue with ODT SSO" / "Continue with External"). Must match
+      # the backend's KEYCLOAK_EXTERNAL_ISSUER realm above.
+      VITE_KEYCLOAK_EXTERNAL_REALM: external
       # coturn TURN relay for strict-NAT voice clients (#283). Set these three to
       # a running coturn (server provisioning is HITL — see below); they inline
       # into the build so iceConfig() hands them to every RTCPeerConnection.
