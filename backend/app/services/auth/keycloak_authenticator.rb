@@ -32,14 +32,27 @@ module Auth
       @instance = nil
     end
 
+    # One verifier per configured realm: KEYCLOAK_EXTERNAL_ISSUER (#539) adds a
+    # second trusted realm behind an IssuerRouter; without it, the single
+    # verifier is returned as before.
     def self.from_env(env = ENV)
       issuer = env.fetch("KEYCLOAK_ISSUER", "http://localhost:8080/realms/odtville")
-      new(
-        issuer: issuer,
-        audience: env.fetch("KEYCLOAK_AUDIENCE", "odt-ville-web"),
-        jwks_uri: env["KEYCLOAK_JWKS_URI"]
+      audience = env.fetch("KEYCLOAK_AUDIENCE", "odt-ville-web")
+      primary = new(issuer: issuer, audience: audience, jwks_uri: env["KEYCLOAK_JWKS_URI"])
+
+      external_issuer = env["KEYCLOAK_EXTERNAL_ISSUER"].to_s
+      return primary if external_issuer.strip.empty?
+
+      external = new(
+        issuer: external_issuer,
+        audience: env.fetch("KEYCLOAK_EXTERNAL_AUDIENCE", audience),
+        jwks_uri: env["KEYCLOAK_EXTERNAL_JWKS_URI"]
       )
+      IssuerRouter.new([ primary, external ])
     end
+
+    # The normalized issuer, exposed so IssuerRouter can key verifiers by realm.
+    attr_reader :issuer
 
     def initialize(issuer:, audience:, jwks_uri: nil, jwks_loader: nil, cache_ttl: 600)
       @issuer = issuer.to_s.chomp("/")

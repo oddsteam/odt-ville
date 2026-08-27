@@ -8,6 +8,10 @@
 export const REALM = import.meta.env.VITE_KEYCLOAK_REALM || 'odtville'
 export const CLIENT_ID = 'odt-ville-web'
 
+// Second realm for external client users (#539). Empty = single-realm mode,
+// no chooser — dev and any deploy without the var behave exactly as before.
+export const EXTERNAL_REALM = import.meta.env.VITE_KEYCLOAK_EXTERNAL_REALM || ''
+
 export const KEYCLOAK_URL = (
   import.meta.env.VITE_KEYCLOAK_URL || 'http://localhost:8080'
 ).replace(/\/$/, '')

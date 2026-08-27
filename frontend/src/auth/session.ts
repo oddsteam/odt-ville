@@ -6,7 +6,8 @@
 import Keycloak from 'keycloak-js'
 
 import { setAuthToken } from '../lib/authToken.ts'
-import { REALM, CLIENT_ID, KEYCLOAK_URL } from './config.ts'
+import { REALM, EXTERNAL_REALM, CLIENT_ID, KEYCLOAK_URL } from './config.ts'
+import { chosenRealm, clearRealmChoice } from './realmChoice.ts'
 
 // The slice of keycloak-js we depend on — narrow so the refresh wiring is
 // unit-testable with a fake (the real Keycloak instance satisfies it).
@@ -31,13 +32,23 @@ export function startKeycloakSession(kc: KeycloakSession): void {
 let keycloak: Keycloak | null = null
 
 // Sign the user in before the app renders. DEV: skip — the switcher owns tokens.
-// PROD: force a redirect login, then start the refresh loop.
-export async function bootstrapAuth(): Promise<void> {
-  if (import.meta.env.DEV) return
+// PROD: force a redirect login, then start the refresh loop. With an external
+// realm configured (#539) the realm must be picked before the redirect, so an
+// unmade choice short-circuits to 'choose' and main.tsx renders the chooser.
+export async function bootstrapAuth(): Promise<'ready' | 'choose'> {
+  if (import.meta.env.DEV) return 'ready'
 
-  keycloak = new Keycloak({ url: KEYCLOAK_URL, realm: REALM, clientId: CLIENT_ID })
+  let realm = REALM
+  if (EXTERNAL_REALM) {
+    const chosen = chosenRealm()
+    if (!chosen) return 'choose'
+    realm = chosen
+  }
+
+  keycloak = new Keycloak({ url: KEYCLOAK_URL, realm, clientId: CLIENT_ID })
   await keycloak.init({ onLoad: 'login-required', checkLoginIframe: false })
   startKeycloakSession(keycloak)
+  return 'ready'
 }
 
 // Sign out from both paths. Always drop the bearer (clears the persisted dev
@@ -45,6 +56,7 @@ export async function bootstrapAuth(): Promise<void> {
 // its login. DEV: reload home — the switcher logs back in.
 export function logout(): void {
   setAuthToken(null)
+  clearRealmChoice()
   if (keycloak) {
     keycloak.logout({ redirectUri: window.location.origin })
   } else if (typeof window !== 'undefined') {

@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import App from './App.tsx'
 import { bootstrapAuth } from './auth/session.ts'
+import { RealmChooser } from './auth/RealmChooser.tsx'
 import { initAnalytics } from './analytics/posthog.ts'
 import './styles.css'
 
@@ -11,12 +12,18 @@ import './styles.css'
 initAnalytics()
 
 // Sign in before rendering (prod redirects to Keycloak; dev resolves at once).
-bootstrapAuth().then(() => {
+// 'choose' = dual-realm prod with no realm picked yet (#539): render the
+// chooser instead — picking a realm reloads into the redirect login.
+bootstrapAuth().then((state) => {
   createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
+      {state === 'choose' ? (
+        <RealmChooser />
+      ) : (
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
+      )}
     </React.StrictMode>,
   )
 })
