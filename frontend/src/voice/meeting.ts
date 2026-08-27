@@ -30,7 +30,21 @@ export interface RemoteParticipantLike {
 // The bit of livekit's LocalParticipant the meeting publishes through.
 export interface LocalPublisher {
   setCameraEnabled(enabled: boolean): Promise<PublicationLike | undefined>
-  setScreenShareEnabled(enabled: boolean): Promise<PublicationLike | undefined>
+  setScreenShareEnabled(enabled: boolean, options?: ScreenShareCapture): Promise<PublicationLike | undefined>
+}
+
+// The slice of livekit's ScreenShareCaptureOptions we set (structurally
+// assignable to the real thing, so this module still never imports livekit).
+export interface ScreenShareCapture {
+  resolution: { width: number; height: number; frameRate: number }
+  contentHint: 'detail'
+}
+
+// A shared screen is mostly text: capture at 1080p30 and tell the browser to
+// keep detail over motion, instead of livekit's blurry 15fps default (#489).
+export const SCREEN_SHARE_CAPTURE: ScreenShareCapture = {
+  resolution: { width: 1920, height: 1080, frameRate: 30 },
+  contentHint: 'detail',
 }
 
 export interface MeetingDeps {
@@ -197,7 +211,7 @@ export function createMeeting(deps: MeetingDeps): Meeting {
         return
       }
       try {
-        const pub = await local.setScreenShareEnabled(true)
+        const pub = await local.setScreenShareEnabled(true, SCREEN_SHARE_CAPTURE)
         if (!pub?.videoTrack) return
         shares.set(ME, { name: 'You', video: pub.videoTrack })
         syncShare()

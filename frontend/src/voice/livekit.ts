@@ -17,7 +17,7 @@
 // screen share, the remote filmstrip — lives in meeting.ts, which we hand the
 // room's local publisher and forward the room events to.
 
-import { Room, type RemoteTrack } from 'livekit-client'
+import { Room, ScreenSharePresets, type RemoteTrack } from 'livekit-client'
 import { getAuthToken } from '../lib/authToken.ts'
 import { micState } from './micState.ts'
 import { podFor } from './service.ts'
@@ -28,6 +28,7 @@ import {
   type PublicationLike,
   type RemoteParticipantLike,
   type RemoteTrackLike,
+  type ScreenShareCapture,
 } from './meeting.ts'
 import { meetingState } from './meetingState.ts'
 import { DWELL_MS, LEAVE_RADIUS, PREJOIN_RADIUS, parseRoomKey, roomKey } from './schema.ts'
@@ -43,7 +44,7 @@ export interface RoomLike {
   localParticipant: {
     setMicrophoneEnabled(enabled: boolean): Promise<unknown>
     setCameraEnabled(enabled: boolean): Promise<PublicationLike | undefined>
-    setScreenShareEnabled(enabled: boolean): Promise<PublicationLike | undefined>
+    setScreenShareEnabled(enabled: boolean, options?: ScreenShareCapture): Promise<PublicationLike | undefined>
   }
   // Participants already in the room at connect time (#488) — livekit populates
   // this before we get any participantConnected event. Absent in the mesh tests.
@@ -323,7 +324,11 @@ export function connectLivekitRoom(
   const authToken = getAuthToken()
   if (!url || !authToken) return null
 
-  const room = new Room()
+  // Screen shares publish at 1080p30's bitrate, matching the capture options in
+  // meeting.ts — the default encoding budget makes shared text mushy (#489).
+  const room = new Room({
+    publishDefaults: { screenShareEncoding: ScreenSharePresets.h1080fps30.encoding },
+  })
   const mesh = createLivekitVoice({
     room,
     url,
