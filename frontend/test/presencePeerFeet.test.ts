@@ -25,7 +25,9 @@ const RIG = {
 
 function fakeSprite() {
   return {
-    setTexture() {
+    texture: { key: '' },
+    setTexture(key: string) {
+      this.texture = { key }
       return this
     },
     setFlipX() {

@@ -14,6 +14,7 @@ import {
   characterScale,
   peerSheetKey,
   applyFacing,
+  applyPeerRig,
 } from '../characterRig.js'
 import bus from '../bus.js'
 import { deltaFor, resolveDirection, stepTile } from '../movement.ts'
@@ -735,10 +736,7 @@ export default class MapScene extends Phaser.Scene {
       img.setTexture(`player.${state.facing}.0`).setFlipX(false).setDisplaySize(96, 96)
       return
     }
-    img.setTexture(peerSheetKey(state.manifestId))
-    img.setScale(rig.scale)
-    // Peers never climb: the ladder pose is the local player's own tile state.
-    applyFacing(img, rig.charDir, state.facing, walking, false)
+    applyPeerRig(img, rig, peerSheetKey(state.manifestId), state.facing, walking)
   }
 
   // A character settled — re-render every peer on it, since they've been

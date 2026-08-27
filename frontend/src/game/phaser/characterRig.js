@@ -131,6 +131,18 @@ export function buildCharacterRig(scene, manifest, sheetKey = CHAR_SHEET_KEY) {
 // exactly one peer texture.
 export const peerSheetKey = (manifestId) => `peer.sheet.${manifestId}`
 
+// Mount a peer's rigged sheet and face it. `setTexture` with no frame argument
+// resets Phaser to the sheet's frame 0 — the south idle pose — so calling it on
+// every move frame flashes south for a frame mid-walk (#541). Guard on the
+// mounted key so a peer already wearing this sheet keeps its walk frame; only a
+// manifest change (a different sheet key) swaps the texture.
+export function applyPeerRig(img, rig, sheetKey, facing, walking) {
+  if (img.texture.key !== sheetKey) img.setTexture(sheetKey)
+  img.setScale(rig.scale)
+  // Peers never climb: the ladder pose is the local player's own tile state.
+  applyFacing(img, rig.charDir, facing, walking, false)
+}
+
 // Point the manifest sprite the right way. `walking` plays the walk loop —
 // swapped for the climb loop when `climbing` (on a ladder, #54); when standing
 // we play the idle loop (multi-frame idle) or snap to its idle frame.

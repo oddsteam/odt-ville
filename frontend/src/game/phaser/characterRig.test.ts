@@ -8,7 +8,7 @@ vi.mock('../../kernel/composeLook.ts', () => ({
   composeLook: vi.fn((images: any[]) => ({ sentinel: images.length })),
 }))
 
-import { preloadCharacter, queueCharacterSheet, peerSheetKey, CHAR_SHEET_KEY } from './characterRig.js'
+import { preloadCharacter, queueCharacterSheet, peerSheetKey, applyPeerRig, CHAR_SHEET_KEY } from './characterRig.js'
 import { composeLook } from '../../kernel/composeLook.ts'
 
 function fakeScene(manifest: any, present: string[] = []) {
@@ -119,6 +119,68 @@ describe('queueCharacterSheet — peer path bakes a Look under its own key', () 
     const scene = fakeScene(null)
     expect(queueCharacterSheet(scene, { name: 'bare' }, peerSheetKey(9))).toBe(false)
     expect(scene.loaded).toEqual([])
+  })
+})
+
+// A peer flashed the south idle pose for a frame on every step (#541):
+// setTexture with no frame arg resets Phaser to the sheet's frame 0. applyPeerRig
+// guards that so a peer already wearing its sheet keeps its walk frame.
+describe('applyPeerRig — no south flash on a same-sheet step', () => {
+  function fakeImg(startKey: string) {
+    const img: any = {
+      texture: { key: startKey },
+      scale: 1,
+      flip: false,
+      played: [] as string[],
+      frames: [] as string[],
+      setTexture: vi.fn((k: string) => {
+        img.texture = { key: k }
+        return img
+      }),
+      setScale: vi.fn((s: number) => {
+        img.scale = s
+        return img
+      }),
+      setFlipX: vi.fn((f: boolean) => {
+        img.flip = f
+        return img
+      }),
+      setFrame: vi.fn((f: string) => {
+        img.frames.push(f)
+        return img
+      }),
+      anims: {
+        play: vi.fn((k: string) => img.played.push(k)),
+        stop: vi.fn(),
+      },
+    }
+    return img
+  }
+  const rig = {
+    scale: 2,
+    charDir: {
+      left: { walkAnimKey: 'peer.sheet.5.anim.walk-left', walkFrame: 'walk-left.0', walkFlip: false },
+    },
+  }
+
+  it('does not reset the texture on a second step with the same sheet', () => {
+    const key = peerSheetKey(5)
+    const img = fakeImg('player.down.0')
+
+    applyPeerRig(img, rig, key, 'left', true)
+    expect(img.setTexture).toHaveBeenCalledWith(key) // first sighting mounts the sheet
+    img.setTexture.mockClear()
+    img.setFrame.mockClear()
+
+    applyPeerRig(img, rig, key, 'left', true)
+    expect(img.setTexture).not.toHaveBeenCalled() // no reset to frame 0 (south idle)
+    expect(img.setFrame).not.toHaveBeenCalled() // walk anim keeps playing, frame untouched
+  })
+
+  it('switches texture when the peer manifest changes to a new sheet', () => {
+    const img = fakeImg(peerSheetKey(5))
+    applyPeerRig(img, rig, peerSheetKey(9), 'left', true)
+    expect(img.setTexture).toHaveBeenCalledWith(peerSheetKey(9))
   })
 })
 
