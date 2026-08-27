@@ -46,11 +46,13 @@ describe('importTiledGround', () => {
 
     expect(g.cols).toBe(2)
     expect(g.rows).toBe(1)
-    // gid 1 → A frame 0 at depth 0; gid 5 → A frame 4; gid 100 → B frame 0 at depth 1.
+    // gid 1 → A frame 0 at depth 0; gid 5 → A frame 4; gid 100 → B frame 0 at
+    // depth 0.1 — layer order scaled into the sub-entity band (index*0.1), so a
+    // second Tiled layer never draws over placed props (MAP_ENTITY_DEPTH = 1).
     expect(g.cells[0][0]).toEqual([{ tileset: 'A', frame: 0, depth: 0 }])
     expect(g.cells[0][1]).toEqual([
       { tileset: 'A', frame: 4, depth: 0 },
-      { tileset: 'B', frame: 0, depth: 1 },
+      { tileset: 'B', frame: 0, depth: 0.1 },
     ])
     // Only referenced tilesets, carrying {name, cell}. Object layer ignored.
     expect(g.tilesets).toEqual([
@@ -80,9 +82,11 @@ describe('importTiledGround', () => {
 
     expect([g.cols, g.rows]).toEqual([30, 20])
     expect(g.tilesets.every((t) => t.cell === 32)).toBe(true)
-    // Its four tile layers stack, so the busiest cell carries several depths.
+    // Its four tile layers stack, so the busiest cell carries several depths —
+    // all inside the sub-entity band so props draw over every ground layer.
     const maxDepth = Math.max(...g.cells.flat(2).map((l) => l.depth))
     expect(maxDepth).toBeGreaterThan(0)
+    expect(maxDepth).toBeLessThan(1)
   })
 })
 
