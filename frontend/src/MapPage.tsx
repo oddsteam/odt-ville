@@ -1,12 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import Phaser from 'phaser'
-import MapScene from './game/phaser/scenes/MapScene.js'
-import EncounterScene from './game/phaser/scenes/EncounterScene.js'
+import { bootMapGame } from './game/phaser/mapGame.ts'
 import { trainerOpponent } from './game/phaser/trainerDuel.ts'
 import { MapsService, takeDraft, travel } from './maps/service.ts'
-import { loadMapBundle } from './maps/target.ts'
-import { applyMapTarget } from './kernel/mapTarget.ts'
+import { loadMapInputs } from './maps/target.ts'
 import type { BakedStandee } from './game/phaser/mapStandees.ts'
 import { warp } from './game/transition.ts'
 import bus from './game/phaser/bus.js'
@@ -14,13 +12,11 @@ import PlacardPanel from './standees/PlacardPanel.tsx'
 import { StandeesWrite } from './standees/write.ts'
 import type { Placard } from './standees/placard.ts'
 import { MonstersService } from './catalog/monsters/service.ts'
-import { NpcsService } from './catalog/npcs/service.ts'
 import { pickWild, wildStepGate } from './game/encounters.js'
 import { runEdge } from './lib/runEdge.ts'
 import { subscribeAuthToken } from './lib/authToken.ts'
 import { connectPresence } from './game-session/presenceClient.ts'
 import { connectVoice } from './voice/write.ts'
-import { ViewerService } from './viewer/service.ts'
 import { loadManifestById, loadMyManifest } from './character/service.ts'
 import type { BakedMap, Zone } from './kernel/schema.ts'
 import type { Npc } from './catalog/npcs/schema.ts'
@@ -100,14 +96,12 @@ export default function MapPage({ draft = false }: { draft?: boolean }) {
     ])
       .then(async ([m, manifest]) => {
         if (!m) throw new Error('No draft to preview — use "Preview in game" in the editor.')
-        const npcs = await runEdge(NpcsService.list()).catch(() => [] as readonly Npc[])
         // Objects + placed-NPC rigs assembled by the shared helper (#303), the
-        // same bundle the portal path loads.
-        const { objects, bakedNpcs, bakedStandees } = await loadMapBundle(m, npcs)
-        const viewer = m.multiplayer ? await runEdge(ViewerService.get()).catch(() => null) : null
+        // same bundle the portal path loads; plus the NPC catalog and viewer.
+        const { npcs, objects, bakedNpcs, bakedStandees, ownId, ownName } = await loadMapInputs(m)
         if (!active) return
-        ownIdRef.current = viewer?.user.external_id ?? null
-        ownNameRef.current = viewer?.user.name ?? null
+        ownIdRef.current = ownId
+        ownNameRef.current = ownName
         manifestRef.current = manifest
         objectsRef.current = objects
         npcsRef.current = npcs
@@ -165,23 +159,6 @@ export default function MapPage({ draft = false }: { draft?: boolean }) {
   // town scene uses for its catalog.
   useEffect(() => {
     if (!map || !hostRef.current) return undefined
-    const game = new Phaser.Game({
-      type: Phaser.AUTO,
-      parent: hostRef.current,
-      width: map.cols * 48,
-      height: map.rows * 48,
-      backgroundColor: '#000000',
-      pixelArt: true,
-      antialias: false,
-      scale: { mode: Phaser.Scale.RESIZE, autoCenter: Phaser.Scale.CENTER_BOTH },
-      // EncounterScene rides alongside the map so a trainer Zone (#259) can duel
-      // in place; it launches paused over MapScene and resumes 'Map' on close.
-      scene: [MapScene, EncounterScene],
-    })
-    // Session-stable inputs for this fresh game (the town keeps these across
-    // hops; here each map boots its own game, so set them once at boot).
-    game.registry.set('characterManifest', manifestRef.current)
-    game.registry.set('npcs', npcsRef.current)
     // Presence (#88): a multiplayer map opens its per-map room; solo maps —
     // and the generated hometown, which never renders through this page —
     // stay offline. The handle rides the registry like onZone: the scene
@@ -196,21 +173,25 @@ export default function MapPage({ draft = false }: { draft?: boolean }) {
       map.multiplayer && ownIdRef.current
         ? connectVoice(map.slug, ownIdRef.current, map.zones ?? [])
         : null
-    // The per-target keys in one place (#303), shared with the portal path.
+    // Config + every registry key, shared with DiscordShell (#569).
     // `loadManifest` rides the presence bundle (#266): frames name their
     // sender's character and the scene asks for it through here.
-    applyMapTarget(game.registry, {
-      map,
-      objects: objectsRef.current,
-      bakedNpcs: npcRigsRef.current,
-      bakedStandees: standeesRef.current,
-      entrySpawnId: entrySpawnIdRef.current,
-      fromSlug: fromSlugRef.current,
-      presence: presence
-        ? { ownId: ownIdRef.current, ownName: ownNameRef.current, loadManifest: loadManifestById, ...presence }
-        : null,
-      voice,
-    })
+    const game = bootMapGame(
+      hostRef.current,
+      { type: Phaser.AUTO, manifest: manifestRef.current, npcs: npcsRef.current },
+      {
+        map,
+        objects: objectsRef.current,
+        bakedNpcs: npcRigsRef.current,
+        bakedStandees: standeesRef.current,
+        entrySpawnId: entrySpawnIdRef.current,
+        fromSlug: fromSlugRef.current,
+        presence: presence
+          ? { ownId: ownIdRef.current, ownName: ownNameRef.current, loadManifest: loadManifestById, ...presence }
+          : null,
+        voice,
+      },
+    )
     // Encounter zones fire per landing step (#255); this gate owns the roll
     // rate and the post-encounter grace for this game's lifetime.
     const grassGate = wildStepGate()

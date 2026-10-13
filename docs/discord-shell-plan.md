@@ -24,6 +24,16 @@ build issues. Context: ADR-0022, issue #559 (staged pivot), `docs/handoff-discor
 - No Site link (sites retire at stage 2). Multi-tenant by guild id (#559 c6).
 - Rows added by us via `rails runner`; no admin UI in v1.
 - Unknown guild → the Activity shows "this server is not set up yet".
+- Built in #569: model `Discord::Guild`, `GET /api/v1/discord/guilds/:guild_id/map`
+  → `{ slug }` (404 = not set up). Register a server (guild id from Discord:
+  Developer Mode → right-click the server → Copy Server ID). The map must be
+  `multiplayer` with a `public` access policy — Discord players carry no roles:
+
+  ```bash
+  # local: docker compose exec backend ./bin/rails runner '...'
+  # homeserver: see the "homeserver migrations" memory (rbenv shims over SSH)
+  bin/rails runner 'Discord::Guild.create!(guild_id: "<GUILD_ID>", map: Maps::Map.find_by!(slug: "office-ktb"))'
+  ```
 
 ## 3. Bot service
 
@@ -69,8 +79,16 @@ build issues. Context: ADR-0022, issue #559 (staged pivot), `docs/handoff-discor
 ## 7. Deploy
 
 - Two Discord apps. **Dev**: the spike's app, URL mapping → local tunnel.
-  **Prod**: a new app, URL mapping → `odt-ville.p2d.uk/discord.html`, served
-  by the existing homeserver prod build (hashed assets, no cache mixing).
+  **Prod**: a new app, served by the existing homeserver prod build (hashed
+  assets, no cache mixing).
+- URL mapping: exactly one, PREFIX `/` → TARGET `odt-ville.p2d.uk` (the bare
+  host, no path). Discord appends the request path to the target, so a target
+  of `odt-ville.p2d.uk/discord.html` would send `/api/...`, `/api/cable` and
+  `/assets/...` to `/discord.html/api/...` and break. Discord launches the
+  Activity at `/?instance_id=…&frame_id=…`; `frontend/vite-discord-entry.js`
+  (dev server and `vite preview`) serves `discord.html` for `/` when `frame_id`
+  is present, and the web app's `/` otherwise. No new hostname, tunnel or
+  path rewriting of app URLs. Dev: same, mapping `/` → the dev tunnel host.
 - Each app has its own bot token + client secret in that box's `.env`.
 - Teammates stay on prod while we change dev.
 

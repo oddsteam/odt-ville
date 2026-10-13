@@ -97,8 +97,22 @@ const CATALOG_WRITES = '^src/catalog/[^/]+/write\\.ts$'
 // Game Runtime (the black box), minus the kernel files under src/game/.
 const GAME = '^src/game/'
 
+// The web shell (Keycloak, hometowns, LiveKit) — retired at stage 2 (ADR-0022).
+const WEB_SHELL = '^src/(App|RootLayout|VillagePage|MapPage|main)\\.tsx$'
+
+// The Discord Activity shell (ADR-0022, #568). Layout choice: its composition
+// root is a ROOT-level file, src/DiscordShell.tsx, in the SHELL group — like
+// MapPage, a root file is outside the cross-module rule's `from`, so later
+// slices can boot the game black box (MapScene) the same way MapPage does
+// without promoting new public surfaces. src/discord/main.tsx (the
+// discord.html entry) joins SHELL only so it may import that root.
+// src/discord/ holds the Discord-only helpers (SDK sign-in, later the bot-move
+// voice handle) and obeys every module rule. The
+// discord-shell-no-web-only-modules rule fences both halves.
+const DISCORD_SHELL = ['^src/discord/', '^src/DiscordShell\\.tsx$']
+
 // The shell: composes everything; nothing may depend on it.
-const SHELL = '^src/(App|RootLayout|VillagePage|MapPage|main)\\.tsx$'
+const SHELL = [WEB_SHELL, '^src/DiscordShell\\.tsx$', '^src/discord/main\\.tsx$']
 
 // Proximity voice (#159, #278). Kept extractable from the day it was created:
 // it owns pod membership now and WebRTC signalling/media later, and none of
@@ -277,6 +291,19 @@ module.exports = {
       severity: 'error',
       from: { path: '^src/', pathNot: SHELL },
       to: { path: SHELL },
+    },
+    {
+      name: 'discord-shell-no-web-only-modules',
+      comment:
+        'ADR-0022 / plan decision 4: the Discord shell shares only the game ' +
+        'black box, kernel, maps, catalog, communities (and lib). It never ' +
+        'reaches Keycloak (auth/), LiveKit (voice/), the admin/editor apps or ' +
+        'the web shell, so stage 2 can delete those without touching it.',
+      severity: 'error',
+      from: { path: DISCORD_SHELL },
+      to: {
+        path: ['^src/auth/', '^src/voice/', '^src/admin/', '^src/(tileMapper|groundMapper|spriteMapper)/', WEB_SHELL],
+      },
     },
   ],
   options: {

@@ -70,6 +70,16 @@ Rails.application.routes.draw do
         put  "game/session", to: "game_sessions#update"
       end
 
+      # The Discord shell (ADR-0022, #568) — controllers under Api::V1::Discord::.
+      scope module: :discord do
+        # Activity sign-in: OAuth code in, our `dsc.` session token out.
+        post "discord/session", to: "sessions#create"
+        # Which map this server runs (#569); 404 = not set up yet.
+        get "discord/guilds/:guild_id/map", to: "guilds#map"
+        # Walked into a meeting zone (#571): the bot moves the SESSION user only.
+        post "discord/move", to: "moves#create"
+      end
+
       # The Posture domain (ADR-0010) — controller under Api::V1::Posture::,
       # URLs unchanged.
       scope module: :posture do
