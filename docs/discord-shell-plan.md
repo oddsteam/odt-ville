@@ -24,6 +24,16 @@ build issues. Context: ADR-0022, issue #559 (staged pivot), `docs/handoff-discor
 - No Site link (sites retire at stage 2). Multi-tenant by guild id (#559 c6).
 - Rows added by us via `rails runner`; no admin UI in v1.
 - Unknown guild → the Activity shows "this server is not set up yet".
+- Built in #569: model `Discord::Guild`, `GET /api/v1/discord/guilds/:guild_id/map`
+  → `{ slug }` (404 = not set up). Register a server (guild id from Discord:
+  Developer Mode → right-click the server → Copy Server ID). The map must be
+  `multiplayer` with a `public` access policy — Discord players carry no roles:
+
+  ```bash
+  # local: docker compose exec backend ./bin/rails runner '...'
+  # homeserver: see the "homeserver migrations" memory (rbenv shims over SSH)
+  bin/rails runner 'Discord::Guild.create!(guild_id: "<GUILD_ID>", map: Maps::Map.find_by!(slug: "office-ktb"))'
+  ```
 
 ## 3. Bot service
 

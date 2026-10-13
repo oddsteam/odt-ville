@@ -74,6 +74,8 @@ Rails.application.routes.draw do
       scope module: :discord do
         # Activity sign-in: OAuth code in, our `dsc.` session token out.
         post "discord/session", to: "sessions#create"
+        # Which map this server runs (#569); 404 = not set up yet.
+        get "discord/guilds/:guild_id/map", to: "guilds#map"
       end
 
       # The Posture domain (ADR-0010) — controller under Api::V1::Posture::,

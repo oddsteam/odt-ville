@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_13_000001) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_13_000002) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -75,6 +75,15 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_13_000001) do
     t.string "title", null: false
     t.datetime "updated_at", null: false
     t.index ["board_id"], name: "index_content_items_on_board_id"
+  end
+
+  create_table "discord_guilds", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "guild_id", null: false
+    t.bigint "map_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["guild_id"], name: "index_discord_guilds_on_guild_id", unique: true
+    t.index ["map_id"], name: "index_discord_guilds_on_map_id"
   end
 
   create_table "ground_tiles", force: :cascade do |t|
@@ -286,6 +295,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_13_000001) do
   add_foreign_key "catalog_npcs", "character_manifests", on_delete: :nullify
   add_foreign_key "character_manifests", "users", column: "owner_id", on_delete: :nullify
   add_foreign_key "content_items", "boards"
+  add_foreign_key "discord_guilds", "maps"
   add_foreign_key "houses", "companies"
   add_foreign_key "houses", "tile_objects", on_delete: :nullify
   add_foreign_key "maps_map_memberships", "maps"
