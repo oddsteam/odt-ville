@@ -17,30 +17,38 @@ export const MOVING_NOTICE = 'Moving you to the meeting room. Press the Activity
 export const NO_CHANNEL_NOTICE = 'This room has no voice channel.'
 export const MOVE_FAILED_NOTICE = 'Could not move you to the meeting room.'
 
-// The meeting room's name at this tile (its label, else its roomId — the
-// channel is matched by name inclusion server-side), or null outside one.
-function roomAt(zones: readonly Zone[], x: number, y: number): string | null {
+// The meeting room at this tile, or null outside one.
+function roomAt(zones: readonly Zone[], x: number, y: number) {
   for (const z of zones) {
-    if (z.payload.kind === 'meeting' && inZone(z, x, y)) return z.payload.label ?? z.payload.roomId
+    if (z.payload.kind === 'meeting' && inZone(z, x, y)) return z.payload
   }
   return null
 }
 
+// `onRoom` records the player's last room (#572): the roomId on entering a
+// meeting room — awaited before the move, since the move closes the Activity —
+// and null on walking out, so a normal re-open spawns as usual. A failed save
+// never blocks the move.
 export function connectDiscordMeetings({
   guildId,
   zones,
   notify,
+  onRoom = async () => {},
   fetchFn = fetch,
 }: {
   guildId: string
   zones: readonly Zone[]
   notify: (message: string | null) => void
+  onRoom?: (roomId: string | null) => Promise<unknown>
   fetchFn?: typeof fetch
 }) {
-  let current: string | null | undefined // undefined = no update yet (spawn)
+  let current: string | null | undefined // roomId; undefined = no update yet (spawn)
 
-  async function move(room: string) {
+  // `room` is the channel name to match: the label, else the roomId (matched
+  // by name inclusion server-side).
+  async function move(roomId: string, room: string) {
     notify(MOVING_NOTICE)
+    await onRoom(roomId).catch(() => {})
     const res = await fetchFn('/api/v1/discord/move', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getAuthToken()}` },
@@ -54,12 +62,14 @@ export function connectDiscordMeetings({
   return {
     update(own: { x: number; y: number }) {
       const room = roomAt(zones, own.x, own.y)
-      if (room === current) return
+      const roomId = room?.roomId ?? null
+      if (roomId === current) return
       const spawn = current === undefined
-      current = room
+      current = roomId
       if (spawn) return
-      if (room) void move(room)
-      else notify(null)
+      if (room) return void move(room.roomId, room.label ?? room.roomId)
+      notify(null)
+      void onRoom(null).catch(() => {})
     },
     setMute() {},
     setCamera() {},

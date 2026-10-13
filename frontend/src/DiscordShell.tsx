@@ -6,6 +6,8 @@ import { guildMapSlug } from './discord/guildMap'
 import { mapPresence } from './discord/presence'
 import { connectPresence } from './game-session/presenceClient.ts'
 import { connectDiscordMeetings } from './discord/meetingMove'
+import { spawnInLastRoom } from './discord/lastRoom'
+import { GameSessionService } from './game-session/service.ts'
 import { bootMapGame } from './game/phaser/mapGame.ts'
 import { MapsService } from './maps/service.ts'
 import { loadMapInputs } from './maps/target.ts'
@@ -25,7 +27,9 @@ import type { BakedMap } from './kernel/schema.ts'
 
 const CLIENT_ID = import.meta.env.VITE_DISCORD_CLIENT_ID as string
 
-type Boot = { map: BakedMap; manifest: unknown; guildId: string } & Awaited<ReturnType<typeof loadMapInputs>>
+type Boot = { map: BakedMap; entrySpawnId: string | undefined; manifest: unknown; guildId: string } & Awaited<
+  ReturnType<typeof loadMapInputs>
+>
 type State =
   | { kind: 'loading' }
   | { kind: 'notSetUp' }
@@ -47,11 +51,17 @@ export default function DiscordShell() {
         // One map per server (plan decision 2/6).
         const slug = await guildMapSlug(sdk.guildId)
         if (!slug) return setState({ kind: 'notSetUp' })
-        const [map, manifest] = await Promise.all([
+        const [authored, manifest, lastRoom] = await Promise.all([
           runEdge(MapsService.get(slug)),
           loadMyManifest().catch(() => null),
+          runEdge(GameSessionService.get()).then((s) => s.last_room, () => null),
         ])
-        setState({ kind: 'ready', boot: { map, manifest, guildId: sdk.guildId as string, ...(await loadMapInputs(map)) } })
+        // Re-opened after a meeting move: land inside that room (#572).
+        const { map, entrySpawnId } = spawnInLastRoom(authored, lastRoom)
+        setState({
+          kind: 'ready',
+          boot: { map, entrySpawnId, manifest, guildId: sdk.guildId as string, ...(await loadMapInputs(map)) },
+        })
       })
       .catch((e: unknown) => setState({ kind: 'error', message: String((e as Error)?.message ?? e) }))
   }, [])
@@ -71,12 +81,18 @@ export default function DiscordShell() {
         // Standees are out of v1 (plan decision 6): nobody here renders the
         // Placard panel, and an unanswered press-A would freeze input.
         bakedStandees: [],
-        entrySpawnId: undefined,
+        entrySpawnId: boot.entrySpawnId,
         fromSlug: undefined,
         // No onZone — portals/links/encounters are cut from v1.
         presence,
         // Meeting zones move you to their Discord voice channel (#571).
-        voice: connectDiscordMeetings({ guildId: boot.guildId, zones: boot.map.zones ?? [], notify: setNotice }),
+        // It also records the room as last_room (null on walking out) for #572.
+        voice: connectDiscordMeetings({
+          guildId: boot.guildId,
+          zones: boot.map.zones ?? [],
+          notify: setNotice,
+          onRoom: (room) => runEdge(GameSessionService.save({ last_room: room })),
+        }),
       },
     )
     return () => {
