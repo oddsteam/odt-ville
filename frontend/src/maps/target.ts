@@ -9,6 +9,8 @@ import { TileObjectsService } from '../catalog/tileObjects/service.ts'
 import { objectIdsFrom } from './props.ts'
 import { loadNpcRigs, loadManifestById } from '../character/service.ts'
 import { StandeesService } from '../standees/service.ts'
+import { NpcsService } from '../catalog/npcs/service.ts'
+import { ViewerService } from '../viewer/service.ts'
 import type { BakedMap } from '../kernel/schema.ts'
 import type { Npc } from '../catalog/npcs/schema.ts'
 
@@ -23,6 +25,18 @@ export async function loadMapBundle(map: BakedMap, npcs: readonly Npc[]) {
   const bakedNpcs = await loadNpcRigs(npcs.filter((n) => placed.has(n.id)))
   const bakedStandees = await loadStandees(map)
   return { objects, bakedNpcs, bakedStandees }
+}
+
+// Everything a shell that boots its own game needs for one loaded map (#569):
+// the NPC catalog, the per-target bundle above, and — on a multiplayer map —
+// the viewer's id + name for presence. Shared by MapPage and DiscordShell so
+// the two standalone entry paths load the same inputs. Best-effort reads: a
+// missing NPC catalog or /me degrades to none, never fails the map.
+export async function loadMapInputs(map: BakedMap) {
+  const npcs = await runEdge(NpcsService.list()).catch(() => [] as readonly Npc[])
+  const bundle = await loadMapBundle(map, npcs)
+  const viewer = map.multiplayer ? await runEdge(ViewerService.get()).catch(() => null) : null
+  return { npcs, ...bundle, ownId: viewer?.user.external_id ?? null, ownName: viewer?.user.name ?? null }
 }
 
 // The Standees for a map, each carrying its owner's rig resolved by reference
