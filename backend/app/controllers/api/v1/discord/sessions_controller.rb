@@ -22,15 +22,20 @@ module Api
         private
 
         # external_id = "discord:<id>" because presence, cable, /me and avatars
-        # all key on external_id. ponytail: a racing first launch hits the
-        # unique index and 500s once rather than duplicating.
+        # all key on external_id. `external: false`: Discord players carry no
+        # email to classify, and guild membership is this surface's scoping
+        # (ADR-0022), so they're Staff. A racing first launch loses on the
+        # unique index; the loser re-finds the winner's row.
         def find_or_create(me)
           ::Auth::User.find_or_create_by!(discord_id: me["id"]) do |u|
             u.external_id = "discord:#{me['id']}"
             u.name = me["global_name"].presence || me["username"]
             u.company = ::Org::Company.first!
             u.role = "branch_employee"
+            u.external = false
           end
+        rescue ActiveRecord::RecordNotUnique
+          ::Auth::User.find_by!(discord_id: me["id"])
         end
       end
     end

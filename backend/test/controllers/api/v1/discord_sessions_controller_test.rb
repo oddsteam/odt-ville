@@ -35,6 +35,26 @@ module Api
         assert_equal "Pim", json[:user][:name]
         assert_equal "at-1", json[:access_token]
         assert_equal "discord:4242", ::Discord::SessionToken.claims(json[:token]).subject
+        # Guild membership scopes this surface (ADR-0022), not an email domain:
+        # a Discord player is Staff, never auto-classified as a Client.
+        assert_equal false, user.external
+      end
+
+      test "a racing first launch re-finds the winner's row instead of 500ing" do
+        company = ::Org::Company.first!
+        ::Auth::User.define_singleton_method(:find_or_create_by!) do |*|
+          # The other launch's insert lands between our find and our create.
+          ::Auth::User.create!(discord_id: "4242", external_id: "discord:4242", name: "Pim", company: company,
+                               role: "branch_employee")
+          raise ActiveRecord::RecordNotUnique, "duplicate key value violates unique constraint"
+        end
+
+        post "/api/v1/discord/session", params: { code: "good" }, as: :json
+
+        assert_response :success
+        assert_equal "discord:4242", ::Discord::SessionToken.claims(json[:token]).subject
+      ensure
+        ::Auth::User.singleton_class.remove_method(:find_or_create_by!)
       end
 
       test "a second launch reuses the same row" do

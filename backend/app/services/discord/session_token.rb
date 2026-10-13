@@ -6,7 +6,9 @@
 module Discord
   module SessionToken
     PREFIX = "dsc.".freeze
-    TTL = 12.hours
+    # A week: covers keeping the Activity open across working days. Re-issued
+    # on every Activity launch; no refresh or revocation in v1 (only ours).
+    TTL = 7.days
 
     def self.issue(user)
       PREFIX + verifier.generate({ "sub" => user.external_id }, expires_in: TTL)

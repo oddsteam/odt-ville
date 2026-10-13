@@ -15,6 +15,14 @@ module Discord
       assert_equal [], SessionToken.claims(token).roles
     end
 
+    test "a session outlasts a working week of keeping the Activity open" do
+      token = SessionToken.issue(User.new("discord:42"))
+
+      travel 6.days do
+        assert_equal "discord:42", SessionToken.claims(token).subject
+      end
+    end
+
     test "a token that isn't ours is passed over (nil), so Keycloak gets it" do
       assert_nil SessionToken.claims("eyJhbGciOiJSUzI1NiJ9.x.y")
     end
@@ -23,7 +31,7 @@ module Discord
       token = SessionToken.issue(User.new("discord:42"))
 
       assert_raises(Auth::KeycloakAuthenticator::Error) { SessionToken.claims("#{token}x") }
-      travel 13.hours do
+      travel 8.days do
         assert_raises(Auth::KeycloakAuthenticator::Error) { SessionToken.claims(token) }
       end
     end

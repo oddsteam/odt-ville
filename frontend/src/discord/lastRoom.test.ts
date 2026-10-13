@@ -1,8 +1,10 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { LAST_ROOM_SPAWN, spawnInLastRoom } from './lastRoom'
 import { connectDiscordMeetings } from './meetingMove'
 import { spawnTile } from '../game/phaser/mapWalk.ts'
 import type { BakedMap, Zone } from '../kernel/schema.ts'
+
+afterEach(() => vi.unstubAllGlobals())
 
 const room = {
   x: 4,
@@ -34,9 +36,10 @@ describe('re-opening the Activity spawns you in your last room (#572)', () => {
 
   it('spawning inside the room neither moves you again nor re-records it', async () => {
     const fetchFn = vi.fn(async () => new Response(null, { status: 204 }))
+    vi.stubGlobal('fetch', fetchFn)
     const onRoom = vi.fn(async () => {})
     const { map: out, entrySpawnId } = spawnInLastRoom(map, 'meeting-1')
-    const voice = connectDiscordMeetings({ guildId: '1', zones: out.zones ?? [], notify: () => {}, onRoom, fetchFn })
+    const voice = connectDiscordMeetings({ guildId: '1', zones: out.zones ?? [], notify: () => {}, onRoom })
 
     voice.update(spawnTile(out, entrySpawnId)) // MapScene's first update = the spawn
     voice.update({ x: 6, y: 6 }) // walking around inside

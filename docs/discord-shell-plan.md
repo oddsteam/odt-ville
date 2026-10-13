@@ -79,8 +79,16 @@ build issues. Context: ADR-0022, issue #559 (staged pivot), `docs/handoff-discor
 ## 7. Deploy
 
 - Two Discord apps. **Dev**: the spike's app, URL mapping → local tunnel.
-  **Prod**: a new app, URL mapping → `odt-ville.p2d.uk/discord.html`, served
-  by the existing homeserver prod build (hashed assets, no cache mixing).
+  **Prod**: a new app, served by the existing homeserver prod build (hashed
+  assets, no cache mixing).
+- URL mapping: exactly one, PREFIX `/` → TARGET `odt-ville.p2d.uk` (the bare
+  host, no path). Discord appends the request path to the target, so a target
+  of `odt-ville.p2d.uk/discord.html` would send `/api/...`, `/api/cable` and
+  `/assets/...` to `/discord.html/api/...` and break. Discord launches the
+  Activity at `/?instance_id=…&frame_id=…`; `frontend/vite-discord-entry.js`
+  (dev server and `vite preview`) serves `discord.html` for `/` when `frame_id`
+  is present, and the web app's `/` otherwise. No new hostname, tunnel or
+  path rewriting of app URLs. Dev: same, mapping `/` → the dev tunnel host.
 - Each app has its own bot token + client secret in that box's `.env`.
 - Teammates stay on prod while we change dev.
 

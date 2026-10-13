@@ -36,34 +36,48 @@ type State =
   | { kind: 'ready'; boot: Boot }
   | { kind: 'error'; message: string }
 
+// Sign in and load the server's map — once per page. <StrictMode> runs the
+// mount effect twice in dev; a second run would build a second SDK, authorize
+// twice and race two first-launch POST /discord/session calls.
+let booting: Promise<State> | undefined
+const bootOnce = () =>
+  (booting ??= signInAndLoad().catch((e: unknown): State => ({ kind: 'error', message: String((e as Error)?.message ?? e) })))
+
+async function signInAndLoad(): Promise<State> {
+  // `new DiscordSDK` throws outside Discord (no instance_id) — construct here
+  // so the failure lands in the error screen, not a blank page.
+  const sdk = new DiscordSDK(CLIENT_ID)
+  await signIn(sdk, CLIENT_ID)
+  // One map per server (plan decision 2/6).
+  const slug = await guildMapSlug(sdk.guildId)
+  if (!slug) return { kind: 'notSetUp' }
+  const [authored, manifest, lastRoom] = await Promise.all([
+    runEdge(MapsService.get(slug)),
+    loadMyManifest().catch(() => null),
+    runEdge(GameSessionService.get()).then((s) => s.last_room, () => null),
+  ])
+  // Presence and meeting moves both ride MapScene's presence path, which only
+  // runs on a multiplayer map — a solo map would silently never move anyone.
+  if (!authored.multiplayer) return { kind: 'error', message: "this server's map must be multiplayer." }
+  // Re-opened after a meeting move: land inside that room (#572).
+  const { map, entrySpawnId } = spawnInLastRoom(authored, lastRoom)
+  return {
+    kind: 'ready',
+    boot: { map, entrySpawnId, manifest, guildId: sdk.guildId as string, ...(await loadMapInputs(map)) },
+  }
+}
+
 export default function DiscordShell() {
   const [state, setState] = useState<State>({ kind: 'loading' })
   const hostRef = useRef<HTMLDivElement>(null)
   const [notice, setNotice] = useState<string | null>(null)
 
   useEffect(() => {
-    // `new DiscordSDK` throws outside Discord (no instance_id) — construct here
-    // so the failure lands in the error screen, not a blank page.
-    Promise.resolve()
-      .then(async () => {
-        const sdk = new DiscordSDK(CLIENT_ID)
-        await signIn(sdk, CLIENT_ID)
-        // One map per server (plan decision 2/6).
-        const slug = await guildMapSlug(sdk.guildId)
-        if (!slug) return setState({ kind: 'notSetUp' })
-        const [authored, manifest, lastRoom] = await Promise.all([
-          runEdge(MapsService.get(slug)),
-          loadMyManifest().catch(() => null),
-          runEdge(GameSessionService.get()).then((s) => s.last_room, () => null),
-        ])
-        // Re-opened after a meeting move: land inside that room (#572).
-        const { map, entrySpawnId } = spawnInLastRoom(authored, lastRoom)
-        setState({
-          kind: 'ready',
-          boot: { map, entrySpawnId, manifest, guildId: sdk.guildId as string, ...(await loadMapInputs(map)) },
-        })
-      })
-      .catch((e: unknown) => setState({ kind: 'error', message: String((e as Error)?.message ?? e) }))
+    let active = true
+    void bootOnce().then((s) => active && setState(s))
+    return () => {
+      active = false
+    }
   }, [])
 
   const boot = state.kind === 'ready' ? state.boot : null

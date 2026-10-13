@@ -4,6 +4,7 @@ import { rm } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { execFile } from 'node:child_process'
 import { backendWarmupGate } from './vite-backend-warmup'
+import { discordEntry } from './vite-discord-entry'
 
 // The Tiled project under public/maps is intentionally self-contained (Tiled
 // needs source + tilesets together — see DISCUSSION-domains-and-workflow.md).
@@ -137,10 +138,11 @@ const serve = {
 export default defineConfig({
   server: serve,
   preview: serve,
-  plugins: [react(), stripMapAuthoringFiles(), archScoreEndpoint()],
+  plugins: [react(), stripMapAuthoringFiles(), archScoreEndpoint(), discordEntry()],
   // Prod build ships both shells: the web app and the Discord Activity
-  // (ADR-0022, #568 — the prod Discord app's URL mapping points at
-  // /discord.html). The *-mapper.html authoring pages stay dev-server-only.
+  // (ADR-0022, #568). The Discord app's URL mapping points at the bare host;
+  // discordEntry() serves discord.html for the Activity launch at `/`. The
+  // *-mapper.html authoring pages stay dev-server-only.
   build: {
     rolldownOptions: {
       input: { main: resolve('index.html'), discord: resolve('discord.html') },
