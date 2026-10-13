@@ -45,11 +45,15 @@ existing_tables=(
 prefixes=(
   org_ catalog_ communities_ maps_ auth_ viewer_ game_session_ character_ posture_
   standees_
+  # The Discord shell module (ADR-0022): server-side of the second shell.
+  discord_
 )
 
 # Today's nine foreign keys, as "from_table|to_table". Adding a legitimate FK
 # means adding its pair here in the same PR — a deliberate act, not a default.
 fk_allowlist=(
+  # Discord shell (#569): a server runs one map — game-side, not across the org seam.
+  "discord_guilds|maps"
   "auth_user_roles|users"
   "boards|houses"
   "catalog_npcs|character_manifests"
