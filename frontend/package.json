@@ -20,6 +20,7 @@
     "map:palette": "node scripts/curate-palette.mjs"
   },
   "dependencies": {
+    "@discord/embedded-app-sdk": "2.5.0",
     "@rails/actioncable": "^8.1.300",
     "effect": "^3.21.4",
     "keycloak-js": "^26.2.4",

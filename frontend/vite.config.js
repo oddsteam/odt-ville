@@ -138,4 +138,12 @@ export default defineConfig({
   server: serve,
   preview: serve,
   plugins: [react(), stripMapAuthoringFiles(), archScoreEndpoint()],
+  // Prod build ships both shells: the web app and the Discord Activity
+  // (ADR-0022, #568 — the prod Discord app's URL mapping points at
+  // /discord.html). The *-mapper.html authoring pages stay dev-server-only.
+  build: {
+    rolldownOptions: {
+      input: { main: resolve('index.html'), discord: resolve('discord.html') },
+    },
+  },
 })
