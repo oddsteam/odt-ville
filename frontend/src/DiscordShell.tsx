@@ -3,10 +3,12 @@ import Phaser from 'phaser'
 import { DiscordSDK } from '@discord/embedded-app-sdk'
 import { signIn } from './discord/signIn'
 import { guildMapSlug } from './discord/guildMap'
+import { mapPresence } from './discord/presence'
+import { connectPresence } from './game-session/presenceClient.ts'
 import { bootMapGame } from './game/phaser/mapGame.ts'
 import { MapsService } from './maps/service.ts'
 import { loadMapInputs } from './maps/target.ts'
-import { loadMyManifest } from './character/service.ts'
+import { loadManifestById, loadMyManifest } from './character/service.ts'
 import { runEdge } from './lib/runEdge.ts'
 import type { BakedMap } from './kernel/schema.ts'
 
@@ -55,6 +57,7 @@ export default function DiscordShell() {
   const boot = state.kind === 'ready' ? state.boot : null
   useEffect(() => {
     if (!boot || !hostRef.current) return undefined
+    const presence = mapPresence(boot.map, boot.ownId, boot.ownName, connectPresence, loadManifestById)
     const game = bootMapGame(
       hostRef.current,
       // CANVAS: Discord's webview never composites WebGL (spike lesson).
@@ -68,13 +71,16 @@ export default function DiscordShell() {
         bakedStandees: [],
         entrySpawnId: undefined,
         fromSlug: undefined,
-        // ponytail: presence lands in #570, the bot-move voice handle in #571.
+        // ponytail: the bot-move voice handle lands in #571.
         // No onZone either — portals/links/encounters are cut from v1.
-        presence: null,
+        presence,
         voice: null,
       },
     )
-    return () => game.destroy(true)
+    return () => {
+      presence?.disconnect()
+      game.destroy(true)
+    }
   }, [boot])
 
   if (state.kind === 'loading') return <p>Signing in with Discord…</p>
