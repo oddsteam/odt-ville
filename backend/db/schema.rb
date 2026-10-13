@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_22_000001) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_13_000001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -264,6 +264,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_22_000001) do
     t.string "client_site"
     t.bigint "company_id", null: false
     t.datetime "created_at", null: false
+    t.string "discord_id"
     t.string "email"
     t.bigint "employee_id"
     t.boolean "external"
@@ -273,6 +274,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_22_000001) do
     t.datetime "updated_at", null: false
     t.index ["character_manifest_id"], name: "index_users_on_character_manifest_id"
     t.index ["company_id"], name: "index_users_on_company_id"
+    t.index ["discord_id"], name: "index_users_on_discord_id", unique: true
     t.index ["email"], name: "index_users_on_email", unique: true
     t.index ["employee_id"], name: "index_users_on_employee_id"
     t.index ["external_id"], name: "index_users_on_external_id", unique: true

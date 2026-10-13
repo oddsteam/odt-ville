@@ -5,8 +5,10 @@ class ApplicationController < ActionController::API
   # Resolves a bearer token to its verified claims (subject + roles + groups).
   # A class-level seam so request specs can swap in a fake resolver instead of
   # minting real Keycloak JWTs (see test/test_helper.rb) — issues #92, #94.
+  # A Discord-shell session token (`dsc.…`, #568) is tried first; anything
+  # else falls through to Keycloak.
   class_attribute :claims_resolver, instance_writer: false,
-    default: ->(token) { Auth::KeycloakAuthenticator.instance.claims(token) }
+    default: ->(token) { Discord::SessionToken.claims(token) || Auth::KeycloakAuthenticator.instance.claims(token) }
 
   private
 
