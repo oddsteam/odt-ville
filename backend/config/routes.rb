@@ -76,6 +76,8 @@ Rails.application.routes.draw do
         post "discord/session", to: "sessions#create"
         # Which map this server runs (#569); 404 = not set up yet.
         get "discord/guilds/:guild_id/map", to: "guilds#map"
+        # Walked into a meeting zone (#571): the bot moves the SESSION user only.
+        post "discord/move", to: "moves#create"
       end
 
       # The Posture domain (ADR-0010) — controller under Api::V1::Posture::,

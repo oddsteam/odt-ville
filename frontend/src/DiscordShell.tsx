@@ -5,6 +5,7 @@ import { signIn } from './discord/signIn'
 import { guildMapSlug } from './discord/guildMap'
 import { mapPresence } from './discord/presence'
 import { connectPresence } from './game-session/presenceClient.ts'
+import { connectDiscordMeetings } from './discord/meetingMove'
 import { bootMapGame } from './game/phaser/mapGame.ts'
 import { MapsService } from './maps/service.ts'
 import { loadMapInputs } from './maps/target.ts'
@@ -24,7 +25,7 @@ import type { BakedMap } from './kernel/schema.ts'
 
 const CLIENT_ID = import.meta.env.VITE_DISCORD_CLIENT_ID as string
 
-type Boot = { map: BakedMap; manifest: unknown } & Awaited<ReturnType<typeof loadMapInputs>>
+type Boot = { map: BakedMap; manifest: unknown; guildId: string } & Awaited<ReturnType<typeof loadMapInputs>>
 type State =
   | { kind: 'loading' }
   | { kind: 'notSetUp' }
@@ -34,6 +35,7 @@ type State =
 export default function DiscordShell() {
   const [state, setState] = useState<State>({ kind: 'loading' })
   const hostRef = useRef<HTMLDivElement>(null)
+  const [notice, setNotice] = useState<string | null>(null)
 
   useEffect(() => {
     // `new DiscordSDK` throws outside Discord (no instance_id) — construct here
@@ -49,7 +51,7 @@ export default function DiscordShell() {
           runEdge(MapsService.get(slug)),
           loadMyManifest().catch(() => null),
         ])
-        setState({ kind: 'ready', boot: { map, manifest, ...(await loadMapInputs(map)) } })
+        setState({ kind: 'ready', boot: { map, manifest, guildId: sdk.guildId as string, ...(await loadMapInputs(map)) } })
       })
       .catch((e: unknown) => setState({ kind: 'error', message: String((e as Error)?.message ?? e) }))
   }, [])
@@ -71,10 +73,10 @@ export default function DiscordShell() {
         bakedStandees: [],
         entrySpawnId: undefined,
         fromSlug: undefined,
-        // ponytail: the bot-move voice handle lands in #571.
-        // No onZone either — portals/links/encounters are cut from v1.
+        // No onZone — portals/links/encounters are cut from v1.
         presence,
-        voice: null,
+        // Meeting zones move you to their Discord voice channel (#571).
+        voice: connectDiscordMeetings({ guildId: boot.guildId, zones: boot.map.zones ?? [], notify: setNotice }),
       },
     )
     return () => {
@@ -86,5 +88,18 @@ export default function DiscordShell() {
   if (state.kind === 'loading') return <p>Signing in with Discord…</p>
   if (state.kind === 'notSetUp') return <p role="status">This server is not set up yet.</p>
   if (state.kind === 'error') return <p role="alert">Could not load: {state.message}</p>
-  return <div ref={hostRef} style={{ position: 'fixed', inset: 0, background: '#000' }} />
+  return (
+    <>
+      <div ref={hostRef} style={{ position: 'fixed', inset: 0, background: '#000' }} />
+      {notice && (
+        <p
+          role="status"
+          style={{ position: 'fixed', top: 12, left: 12, right: 12, margin: 0, padding: '8px 12px', textAlign: 'center',
+            color: '#fff', background: 'rgba(0,0,0,0.75)', borderRadius: 6, font: '14px system-ui, sans-serif' }}
+        >
+          {notice}
+        </p>
+      )}
+    </>
+  )
 }
